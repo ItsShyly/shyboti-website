@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ShyBoti.de</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: black; color: white; height: 100vh; font-family: monospace; }
+    #center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+    #logs { position: fixed; bottom: 20px; right: 20px; text-align: right; }
+    .msg { margin-top: 6px; }
+    .msg img { height: 28px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+  <div id="center">ShyBoti ist auf dem Weg...</div>
+  <div id="logs"></div>
+  <script>
+    const CHANNEL = "shyboti";
+    const EMOTE_SET = "01JX3CEKZYVQ7JMZTWW638XWG1";
+    const emotes = {};
+
+    fetch("https://7tv.io/v3/emote-sets/" + EMOTE_SET)
+      .then(r => r.json())
+      .then(data => {
+        for (const e of (data.emotes || [])) {
+          const id = e.data ? e.data.id : e.id;
+          const name = e.name || (e.data && e.data.name);
+          if (id && name) emotes[name] = "https://cdn.7tv.app/emote/" + id + "/2x.webp";
+        }
+        console.log("7TV emotes loaded:", Object.keys(emotes).length);
+      })
+      .catch(err => console.warn("7TV fetch failed:", err));
+
+    function addMessage(user, text) {
+      const el = document.createElement("div");
+      el.className = "msg";
+      const words = text.trim().split(" ").map(w => {
+        if (emotes[w]) return '<img src="' + emotes[w] + '" title="' + w + '">';
+        return w;
+      });
+      el.innerHTML = user + ": " + words.join(" ");
+      document.getElementById("logs").appendChild(el);
+      setTimeout(() => el.remove(), 10000);
+    }
+
+    const ws = new WebSocket("wss://irc-ws.chat.twitch.tv");
+
+    ws.onopen = function() {
+      ws.send("PASS oauth:x");
+      ws.send("NICK justinfan22");
+      ws.send("JOIN #" + CHANNEL);
+      console.log("Connected to Twitch IRC");
+    };
+
+    ws.onmessage = function(event) {
+      const lines = event.data.split("\r\n");
+      for (const line of lines) {
+        if (!line) continue;
+        if (line.startsWith("PING")) { ws.send("PONG :tmi.twitch.tv"); continue; }
+        const match = line.match(/^:(\w+)!\w+@\S+ PRIVMSG #\S+ :(.+)/);
+        if (match) addMessage(match[1], match[2]);
+      }
+    };
+
+    ws.onerror = function(e) { console.error("WS error:", e); };
+    ws.onclose = function() { console.warn("WS closed"); };
+  </script>
+</body>
+</html>
