@@ -76,6 +76,16 @@ async function load() {
 watch(() => props.open, (v) => { if (v) load() })
 onMounted(() => { if (props.open) load() })
 
+// After load(), seed the editor DOM with the loaded rule.
+// The _userIsTyping flag prevents this from firing during normal typing
+// (onEditorInput manages DOM directly when typing).
+watch(() => form.value.rule, (newRule) => {
+  if (_userIsTyping) return
+  const el = editorRef.value
+  if (!el) return
+  el.innerHTML = highlight(newRule)
+}, { flush: 'post' })
+
 // ─── Save ────────────────────────────────────────────────────────────────────
 
 async function save() {
@@ -111,7 +121,8 @@ async function deleteCmd() {
 
 // ─── Rule editor ─────────────────────────────────────────────────────────────
 
-const editorRef   = ref<HTMLDivElement | null>(null)
+const editorRef      = ref<HTMLDivElement | null>(null)
+let   _userIsTyping  = false  // prevents watcher re-seeding DOM while user types
 const acRef       = ref<HTMLDivElement | null>(null)
 const acItems     = ref<string[]>([])
 const acIndex     = ref(0)
@@ -273,9 +284,11 @@ function getPlainText(el: HTMLElement): string {
 function onEditorInput() {
   const el = editorRef.value
   if (!el) return
+  _userIsTyping = true
   form.value.rule = getPlainText(el)
   applyHighlight()
   checkAutocomplete()
+  _userIsTyping = false
 }
 
 function onEditorKeydown(e: KeyboardEvent) {
