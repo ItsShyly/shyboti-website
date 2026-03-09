@@ -193,6 +193,46 @@ function toggle(cmd: Command, field: 'isActive' | 'modOnly' | 'broadcasterOnly')
   updateCommand(cmd)
 }
 
+const deletingName = ref<string | null>(null)
+const deleteConfirmName = ref<string | null>(null)
+
+function deleteCustom(name: string) {
+  if (deleteConfirmName.value === name) {
+    // second click — confirmed
+    doDeleteCustom(name)
+  } else {
+    deleteConfirmName.value = name
+    // auto-cancel after 3s
+    setTimeout(() => { if (deleteConfirmName.value === name) deleteConfirmName.value = null }, 3000)
+  }
+}
+
+async function doDeleteCustom(name: string) {
+  if (!session.value) return
+  deletingName.value = name
+  deleteConfirmName.value = null
+  try {
+    await fetch(`${API}/custom-commands/${session.value.channel}/${name}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    })
+    await fetchCustomCommands()
+  } catch {}
+  deletingName.value = null
+}
+
+const customCdTimers = ref<Record<string, ReturnType<typeof setTimeout>>>({})
+
+function onCustomCooldownInput(cmd: CustomCommand, field: 'cooldown' | 'userCooldown', raw: string) {
+  if (!canCooldown.value) return
+  const val = parseInt(raw)
+  if (isNaN(val) || val < 0) return
+  cmd[field] = val
+  const key = `custom_${cmd.name}_${field}`
+  clearTimeout(customCdTimers.value[key])
+  customCdTimers.value[key] = setTimeout(() => updateCustomActive(cmd), 600)
+}
+
 async function updateCustomActive(cmd: CustomCommand) {
   if (!session.value) return
   await fetch(`${API}/custom-commands/${session.value.channel}/${cmd.name}`, {
@@ -335,8 +375,38 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
             <span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
           </div>
           <div class="custom-response-preview">{{ cmd.response || '\u2014' }}</div>
+          <!-- mod only (n/a for custom) -->
+          <div><span class="na-cell">—</span></div>
+          <!-- broadcaster only (n/a for custom) -->
+          <div><span class="na-cell">—</span></div>
+          <!-- global CD -->
           <div>
+            <div class="cd-input-wrap" :class="{ disabled: !canCooldown }">
+              <input type="number" min="0" class="cd-input"
+                :disabled="!canCooldown"
+                :value="cmd.cooldown"
+                @change="onCustomCooldownInput(cmd, 'cooldown', ($event.target as HTMLInputElement).value)" />
+              <span class="cd-unit">s</span>
+            </div>
+          </div>
+          <!-- user CD -->
+          <div>
+            <div class="cd-input-wrap user" :class="{ disabled: !canCooldown }">
+              <input type="number" min="0" class="cd-input"
+                :disabled="!canCooldown"
+                :value="cmd.userCooldown"
+                @change="onCustomCooldownInput(cmd, 'userCooldown', ($event.target as HTMLInputElement).value)" />
+              <span class="cd-unit">s</span>
+            </div>
+          </div>
+          <div class="custom-actions">
             <button class="edit-btn" @click="openEdit(cmd.name, false)">Edit</button>
+            <button
+              class="del-btn"
+              :class="{ confirm: deleteConfirmName === cmd.name, deleting: deletingName === cmd.name }"
+              @click="deleteCustom(cmd.name)"
+              :title="deleteConfirmName === cmd.name ? 'Click again to confirm' : 'Delete'"
+            >{{ deletingName === cmd.name ? '…' : deleteConfirmName === cmd.name ? 'Sure?' : '✕' }}</button>
           </div>
         </div>
       </div>
@@ -450,12 +520,18 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .empty-title { font-size: 14px; font-weight: 700; color: #555; margin-bottom: 6px; }
 .empty-sub   { font-size: 12px; color: #444; }
 
-.custom-row { grid-template-columns: 70px 1fr 1fr 110px; }
+.custom-row { grid-template-columns: 70px 1fr 100px 160px 90px 90px 160px; }
 .custom-response-preview {
   font-size: 12px; color: #555; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; padding-right: 12px;
 }
 .cmd-alias { font-size: 11px; color: #6f2bff; font-weight: 400; margin-left: 6px; }
+.na-cell { font-size: 11px; color: #333; }
+.custom-actions { display: flex; align-items: center; gap: 6px; }
+.del-btn { height: 34px; padding: 0 10px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 11px; cursor: pointer; transition: background .15s, border-color .15s, color .15s; white-space: nowrap; }
+.del-btn:hover { background: #f1494911; }
+.del-btn.confirm { border-color: #f14949aa; color: #ff6b6b; background: #f1494922; }
+.del-btn.deleting { opacity: .5; cursor: not-allowed; }
 
 .new-cmd-row {
   display: flex; align-items: center; gap: 6px;

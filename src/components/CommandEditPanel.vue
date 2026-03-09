@@ -15,10 +15,13 @@ const props = defineProps<Props>()
 const emit  = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
 const { session } = useAuth()
 
-const loading  = ref(true)
-const saving   = ref(false)
-const saved    = ref(false)
-const deleting = ref(false)
+const loading       = ref(true)
+const saving        = ref(false)
+const saved         = ref(false)
+const deleting      = ref(false)
+const deleteConfirm = ref(false)
+const ruleOpen      = ref(false)
+const ruleTarget    = ref<'output' | 'input'>('output')
 const form = ref<CustomCommand>({
   name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
   regex1: '', regex2: '', text1: '', text2: '', isActive: true, cooldown: 0, userCooldown: 0,
@@ -79,7 +82,7 @@ async function load() {
   if (rel) rel.innerHTML = highlightResponse(form.value.response)
 }
 
-watch(() => props.open, v => { if (v) load() })
+watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; ruleOpen.value = false } })
 onMounted(() => { if (props.open) load() })
 
 let _applyingHighlight = false
@@ -109,7 +112,8 @@ async function save() {
 
 async function deleteCmd() {
   if (!session.value) return
-  if (!confirm(`Delete "${props.cmdName}"?`)) return
+  if (!deleteConfirm.value) { deleteConfirm.value = true; setTimeout(() => { deleteConfirm.value = false }, 3000); return }
+  deleteConfirm.value = false
   deleting.value = true
   try {
     await fetch(`${API}/custom-commands/${props.channel}/${props.cmdName}`, {
@@ -866,77 +870,106 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             </template>
           </div>
 
-          <div class="field-group">
-            <label class="field-label">Rule <span class="field-hint">Click palette or type $ [ { — click a coloured slot to fill it</span></label>
-            <div class="rule-area">
+          <!-- ── Rule section (collapsible) ─────────────────────────── -->
+          <div class="rule-section">
+            <button class="rule-toggle" @click="ruleOpen = !ruleOpen">
+              <span class="rule-toggle-arrow">{{ ruleOpen ? '▼' : '►' }}</span>
+              Rule
+              <span class="rule-toggle-hint">
+                {{ ruleOpen ? 'click to collapse' : (form.rule.trim() ? '✔ rule set — click to edit' : 'click to add a rule') }}
+              </span>
+              <span v-if="!ruleValid && !!form.rule" class="rule-toggle-warn">⚠ invalid</span>
+            </button>
 
-              <div class="palette">
-                <div v-for="g in palette" :key="g.group" class="palette-group">
-                  <div class="palette-group-label" :class="g.cls">{{ g.group }}</div>
-                  <div v-for="tok in g.tokens" :key="tok"
-                    class="palette-token" :class="tokenClass(tok)"
-                    draggable="true"
-                    @dragstart="onDragStart($event, tok)"
-                    @click="onPaletteClick(tok)"
-                    title="Click or drag"
-                  >{{ tok }}</div>
-                </div>
+            <div v-if="ruleOpen" class="rule-section-body">
+
+              <!-- target toggle -->
+              <div class="rule-target-row">
+                <span class="rule-target-label">Apply rule to:</span>
+                <button class="rule-target-btn" :class="{ active: ruleTarget === 'output' }" @click="ruleTarget = 'output'">{output}</button>
+                <button class="rule-target-btn" :class="{ active: ruleTarget === 'input' }"  @click="ruleTarget = 'input'">{input}</button>
               </div>
 
-              <div class="editor-col">
-                <div class="editor-wrap">
-                  <div
-                    ref="editorRef"
-                    class="rule-editor"
-                    :class="{ invalid: !ruleValid && !!form.rule }"
-                    contenteditable="true"
-                    spellcheck="false"
-                    data-placeholder="e.g. $if({output}[has]{text1}<do [remove{text1}]>)"
-                    @input="onEditorInput"
-                    @keydown="onEditorKeydown"
-                    @click="onEditorClick"
-                    @drop="onEditorDrop"
-                    @dragover="onEditorDragover"
-                  ></div>
+              <div class="rule-area">
 
-                  <div v-if="form.rule && ruleWarnings.length" class="rule-warnings">
-                    <div v-for="w in ruleWarnings" :key="w" class="rule-warning-item">⚠ {{ w }}</div>
-                  </div>
-
-                  <div v-if="acVisible" ref="acRef" class="ac-dropdown"
-                    :style="{ top: acPos.top + 'px', left: acPos.left + 'px' }">
-                    <div v-for="(item, i) in acItems" :key="item"
-                      class="ac-item" :class="[tokenClass(item), { active: i === acIndex }]"
-                      @mousedown.prevent="acIndex = i; insertAcItem()"
-                    >{{ item }}</div>
+                <div class="palette">
+                  <div v-for="g in palette" :key="g.group" class="palette-group">
+                    <div class="palette-group-label" :class="g.cls">{{ g.group }}</div>
+                    <div v-for="tok in g.tokens" :key="tok"
+                      class="palette-token" :class="tokenClass(tok)"
+                      draggable="true"
+                      @dragstart="onDragStart($event, tok)"
+                      @click="onPaletteClick(tok)"
+                      title="Click or drag"
+                    >{{ tok }}</div>
                   </div>
                 </div>
 
-                <div class="params-section">
-                  <div class="params-header">
-                    <span class="params-label">Parameters</span>
-                    <div class="params-add-btns">
-                      <button class="btn-add-param" @click="addParam('text')">+ text</button>
-                      <button class="btn-add-param" @click="addParam('regex')">+ regex</button>
-                    </div>
-                  </div>
-                  <div class="params-list">
-                    <div v-for="p in userParams" :key="p.key" class="param-row">
-                      <span class="param-key tk-param">{{ '{' + p.key + '}' }}</span>
-                      <input v-model="p.value" class="field-input param-input"
-                        :placeholder="p.type === 'regex' ? 'pattern…' : 'text…'" />
-                      <button class="btn-remove-param"
-                        :disabled="form.rule.includes('{' + p.key + '}')"
-                        :title="form.rule.includes('{' + p.key + '}') ? 'Used in rule — cannot remove' : 'Remove'"
-                        @click="removeParam(p.key)">✕</button>
-                    </div>
-                    <div v-if="userParams.length === 0" class="params-empty">
-                      No parameters — click + text or + regex to add
-                    </div>
-                  </div>
-                </div>
+                <div class="editor-col">
 
-                <div class="sim-section">
+                  <!-- editor + { } label below -->
+                  <div class="rule-frame">
+                    <div class="editor-wrap">
+                      <div
+                        ref="editorRef"
+                        class="rule-editor"
+                        :class="{ invalid: !ruleValid && !!form.rule }"
+                        contenteditable="true"
+                        spellcheck="false"
+                        data-placeholder="e.g. $if({output}[has]{text1}<do [remove{text1}]>)"
+                        @input="onEditorInput"
+                        @keydown="onEditorKeydown"
+                        @click="onEditorClick"
+                        @drop="onEditorDrop"
+                        @dragover="onEditorDragover"
+                      ></div>
+
+                      <div v-if="form.rule && ruleWarnings.length" class="rule-warnings">
+                        <div v-for="w in ruleWarnings" :key="w" class="rule-warning-item">⚠ {{ w }}</div>
+                      </div>
+
+                      <div v-if="acVisible" ref="acRef" class="ac-dropdown"
+                        :style="{ top: acPos.top + 'px', left: acPos.left + 'px' }">
+                        <div v-for="(item, i) in acItems" :key="item"
+                          class="ac-item" :class="[tokenClass(item), { active: i === acIndex }]"
+                          @mousedown.prevent="acIndex = i; insertAcItem()"
+                        >{{ item }}</div>
+                      </div>
+                    </div>
+                    <!-- horizontal { rule } label under the editor -->
+                    <div class="rule-frame-label">
+                      <span class="rule-brace">{</span>
+                      <span class="rule-frame-target">{{ ruleTarget }}</span>
+                      <span class="rule-frame-dots"></span>
+                      <span class="rule-brace">}</span>
+                    </div>
+                  </div>
+
+                  <div class="params-section">
+                    <div class="params-header">
+                      <span class="params-label">Parameters</span>
+                      <div class="params-add-btns">
+                        <button class="btn-add-param" @click="addParam('text')">+ text</button>
+                        <button class="btn-add-param" @click="addParam('regex')">+ regex</button>
+                      </div>
+                    </div>
+                    <div class="params-list">
+                      <div v-for="p in userParams" :key="p.key" class="param-row">
+                        <span class="param-key tk-param">{{ '{' + p.key + '}' }}</span>
+                        <input v-model="p.value" class="field-input param-input"
+                          :placeholder="p.type === 'regex' ? 'pattern…' : 'text…'" />
+                        <button class="btn-remove-param"
+                          :disabled="form.rule.includes('{' + p.key + '}')"
+                          :title="form.rule.includes('{' + p.key + '}') ? 'Used in rule — cannot remove' : 'Remove'"
+                          @click="removeParam(p.key)">✕</button>
+                      </div>
+                      <div v-if="userParams.length === 0" class="params-empty">
+                        No parameters — click + text or + regex to add
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="sim-section">
                   <button class="btn-sim-toggle" @click="simExpanded = !simExpanded; simResult = null">
                     {{ simExpanded ? '▲ Hide checker' : '▼ Check rule' }}
                   </button>
@@ -959,12 +992,12 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                         <span v-if="simResult.send" class="sim-output-val">{{ simResult.output || '(empty)' }}</span>
                       </div>
                     </div>
-                  </div>
-                </div>
+                  </div><!-- /sim-section -->
 
-              </div>
-            </div>
-          </div>
+                </div><!-- /editor-col -->
+              </div><!-- /rule-area -->
+            </div><!-- /rule-section-body -->
+          </div><!-- /rule-section -->
 
           <div class="cond-row">
             <div class="field-group sm">
@@ -997,8 +1030,8 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
           </div>
 
           <div class="panel-footer">
-            <button v-if="!isBuiltIn" class="btn-delete" :disabled="deleting" @click="deleteCmd">
-              {{ deleting ? 'Deleting…' : 'Delete command' }}
+            <button v-if="!isBuiltIn" class="btn-delete" :class="{ confirm: deleteConfirm }" :disabled="deleting" @click="deleteCmd">
+              {{ deleting ? 'Deleting…' : deleteConfirm ? '⚠ Sure? Click again' : 'Delete command' }}
             </button>
             <div v-else></div>
             <div class="footer-right">
@@ -1103,9 +1136,35 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .btn-save.invalid { background: #2a1a0a; color: #e5c07b; border: 1px solid #e5c07b44; }
 .btn-cancel { height: 34px; padding: 0 16px; border: 1px solid #333; background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer; }
 .btn-cancel:hover { border-color: #555; color: #e0e0e0; }
-.btn-delete { height: 34px; padding: 0 14px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 12px; cursor: pointer; transition: background .15s; }
+.btn-delete { height: 34px; padding: 0 14px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 12px; cursor: pointer; transition: background .15s, border-color .15s; }
 .btn-delete:hover:not(:disabled) { background: #f1494911; }
 .btn-delete:disabled { opacity: .4; cursor: not-allowed; }
+.btn-delete.confirm { border-color: #f14949aa; background: #f1494922; font-weight: 700; }
+
+/* ── Rule section collapsible ── */
+.rule-section { border: 1px solid #222; background: #141418; }
+.rule-toggle { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: none; background: transparent; color: #888; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; text-align: left; transition: background .1s, color .1s; }
+.rule-toggle:hover { background: #1e1e22; color: #ccc; }
+.rule-toggle-arrow { font-size: 9px; color: #555; flex-shrink: 0; }
+.rule-toggle-hint { font-size: 10px; color: #444; font-weight: 400; margin-left: 2px; }
+.rule-toggle-hint.has-rule { color: #23d18b88; }
+.rule-toggle-warn { margin-left: auto; font-size: 10px; color: #f5a623; }
+.rule-section-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #222; }
+
+/* ── Rule target toggle ── */
+.rule-target-row { display: flex; align-items: center; gap: 8px; }
+.rule-target-label { font-size: 10px; color: #555; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0; }
+.rule-target-btn { height: 26px; padding: 0 10px; border: 1px solid #2a2a30; background: #111217; color: #555; font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
+.rule-target-btn:hover { color: #888; }
+.rule-target-btn.active { border-color: #4ec9b066; color: #4ec9b0; background: rgba(78,201,176,.08); }
+
+/* ── Rule frame { } ── */
+.rule-frame { display: flex; flex-direction: column; gap: 0; }
+.rule-frame .editor-wrap { width: 100%; }
+.rule-frame-label { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: #0a0a0d; border: 1px solid #1e1e24; border-top: none; }
+.rule-brace { font-family: 'Consolas','Fira Mono',monospace; font-size: 18px; color: #2a2a3a; line-height: 1; font-weight: 300; flex-shrink: 0; }
+.rule-frame-target { font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; color: #2a3a35; letter-spacing: .06em; flex-shrink: 0; }
+.rule-frame-dots { flex: 1; border-bottom: 1px dashed #1e1e28; margin: 0 4px; }
 
 .sim-section { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
 .btn-sim-toggle { align-self: flex-start; height: 24px; padding: 0 11px; border: 1px solid #2a2a30; background: #111217; color: #666; font-family: inherit; font-size: 10px; cursor: pointer; transition: border-color .15s, color .15s; }
