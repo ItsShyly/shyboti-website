@@ -203,7 +203,7 @@ const ruleValid = computed(() => ruleWarnings.value.length === 0)
 const editorRef     = ref<HTMLDivElement | null>(null)
 let   _userIsTyping = false
 
-// Walk DOM linearly: text nodes contribute their length, placeholder spans contribute 1
+// Walk DOM — text nodes contribute text, placeholder spans contribute their sentinel char
 function getPlainText(el: HTMLElement): string {
   function walk(node: Node): string {
     if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
@@ -216,86 +216,95 @@ function getPlainText(el: HTMLElement): string {
   return walk(el).replace(/\n\n/g, '\n')
 }
 
-// Walk DOM to get caret offset in plain-text space (placeholders = 1 char)
+// Read caret offset purely from the Selection API using a pre-range toString().
+// This is reliable regardless of span nesting because toString() on a Range
+// gives the plain text of all text nodes within it — and placeholder spans
+// are contenteditable=false so the browser treats them as atomic 1-char objects.
 function getCaretOffset(el: HTMLElement): number {
   const sel = window.getSelection()
   if (!sel || !sel.rangeCount) return 0
   const range = sel.getRangeAt(0)
   if (!el.contains(range.startContainer)) return 0
-
-  let offset = 0
-  let found  = false
-
-  function walk(node: Node): void {
-    if (found) return
+  // Build a range from the start of the editor to the caret
+  const pre = document.createRange()
+  pre.setStart(el, 0)
+  pre.setEnd(range.startContainer, range.startOffset)
+  // Walk the nodes in this pre-range ourselves so we count placeholder spans as 1
+  let count = 0
+  const iter = document.createNodeIterator(el, NodeFilter.SHOW_ALL)
+  let node: Node | null
+  outer: while ((node = iter.nextNode())) {
+    // Stop when we reach or pass the caret container
     if (node === range.startContainer) {
-      // For text nodes the offset is within the text; for element nodes it's a child index
-      if (node.nodeType === Node.TEXT_NODE) {
-        offset += range.startOffset
-      }
-      // if it's an element (e.g. the editor div itself), we've counted up to the child at startOffset
-      found = true
-      return
+      count += range.startOffset
+      break
     }
-    if (node instanceof HTMLElement && node.classList.contains('tk-placeholder')) {
-      offset += 1
-      return
+    if (node instanceof HTMLElement) {
+      if (node.classList.contains('tk-placeholder')) {
+        count += 1
+        // skip children of this span — it's atomic
+        continue
+      }
+      // skip non-text element nodes (spans, divs) — count their text children instead
+      continue
     }
     if (node.nodeType === Node.TEXT_NODE) {
-      offset += node.textContent?.length ?? 0
-      return
-    }
-    for (const child of Array.from(node.childNodes)) {
-      if (found) return
-      walk(child)
+      // Check if this text node is inside a placeholder span — if so skip it (already counted as 1)
+      let p = node.parentElement
+      let insidePh = false
+      while (p && p !== el) { if (p.classList.contains('tk-placeholder')) { insidePh = true; break }; p = p.parentElement }
+      if (insidePh) continue
+      // Check if this node comes AFTER the caret container — stop if so
+      const pos = range.startContainer.compareDocumentPosition(node)
+      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) break outer
+      count += node.textContent?.length ?? 0
     }
   }
-  walk(el)
-  return offset
+  return count
 }
 
-// Walk DOM to restore caret at plain-text offset (placeholders = 1 char)
+// Restore caret at a plain-text offset. Walk text nodes and placeholder spans linearly.
 function restoreCaret(el: HTMLElement, offset: number) {
   let remaining = offset
-  let placed    = false
-
-  function walk(node: Node): void {
-    if (placed) return
-    if (node instanceof HTMLElement && node.classList.contains('tk-placeholder')) {
-      if (remaining <= 0) {
-        const r = document.createRange()
-        r.setStartBefore(node); r.collapse(true)
-        window.getSelection()?.removeAllRanges()
-        window.getSelection()?.addRange(r)
-        placed = true; return
+  const iter    = document.createNodeIterator(el, NodeFilter.SHOW_ALL)
+  let node: Node | null
+  while ((node = iter.nextNode())) {
+    if (node instanceof HTMLElement) {
+      if (node.classList.contains('tk-placeholder')) {
+        if (remaining <= 0) {
+          const r = document.createRange()
+          r.setStartBefore(node); r.collapse(true)
+          window.getSelection()?.removeAllRanges()
+          window.getSelection()?.addRange(r)
+          return
+        }
+        remaining -= 1
       }
-      remaining -= 1; return
+      continue
     }
     if (node.nodeType === Node.TEXT_NODE) {
+      // Skip text inside placeholder spans
+      let p = node.parentElement
+      let insidePh = false
+      while (p && p !== el) { if (p.classList.contains('tk-placeholder')) { insidePh = true; break }; p = p.parentElement }
+      if (insidePh) continue
+
       const len = node.textContent?.length ?? 0
       if (remaining <= len) {
         const r = document.createRange()
         r.setStart(node, remaining); r.collapse(true)
         window.getSelection()?.removeAllRanges()
         window.getSelection()?.addRange(r)
-        placed = true; return
+        return
       }
-      remaining -= len; return
-    }
-    for (const child of Array.from(node.childNodes)) {
-      if (placed) return
-      walk(child)
+      remaining -= len
     }
   }
-
-  walk(el)
-  if (!placed) {
-    // fallback: end of content
-    const r = document.createRange()
-    r.selectNodeContents(el); r.collapse(false)
-    window.getSelection()?.removeAllRanges()
-    window.getSelection()?.addRange(r)
-  }
+  // Fallback: end of content
+  const r = document.createRange()
+  r.selectNodeContents(el); r.collapse(false)
+  window.getSelection()?.removeAllRanges()
+  window.getSelection()?.addRange(r)
 }
 
 function applyHighlight() {
@@ -421,13 +430,27 @@ function checkAutocomplete() {
   const sel = window.getSelection()
   if (!sel || !sel.rangeCount) return
 
-  // Get text before caret in the current text node only
-  const range    = sel.getRangeAt(0).cloneRange()
-  range.collapse(true)
-  const preRange = document.createRange()
-  preRange.setStart(el, 0)
-  preRange.setEnd(range.startContainer, range.startOffset)
-  const textBefore = preRange.toString()
+  // Build plain text before caret by walking nodes (same as getCaretOffset logic)
+  const range = sel.getRangeAt(0)
+  if (!el.contains(range.startContainer)) return
+  let textBefore = ''
+  const iter2 = document.createNodeIterator(el, NodeFilter.SHOW_ALL)
+  let n2: Node | null
+  outer2: while ((n2 = iter2.nextNode())) {
+    if (n2 === range.startContainer) {
+      if (n2.nodeType === Node.TEXT_NODE) textBefore += (n2.textContent ?? '').slice(0, range.startOffset)
+      break outer2
+    }
+    if (n2 instanceof HTMLElement) continue
+    if (n2.nodeType === Node.TEXT_NODE) {
+      let p2 = n2.parentElement; let inPh2 = false
+      while (p2 && p2 !== el) { if (p2.classList.contains('tk-placeholder')) { inPh2 = true; break }; p2 = p2.parentElement }
+      if (inPh2) continue
+      const pos2 = range.startContainer.compareDocumentPosition(n2)
+      if (pos2 & Node.DOCUMENT_POSITION_FOLLOWING) break outer2
+      textBefore += n2.textContent ?? ''
+    }
+  }
 
   const partial    = textBefore.match(/(\$[\w]*|\[[\w=<>]*|\{[\w]*)$/)
   if (!partial) { acVisible.value = false; return }
