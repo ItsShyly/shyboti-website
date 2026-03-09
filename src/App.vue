@@ -46,8 +46,11 @@ function toggleCommands() {
 function canAccess(item: NavItem): boolean {
   if (!session.value) return false
   if (channelRole.value?.role === 'broadcaster') return true
-  const p = channelRole.value?.permissions
-  if (!p) return false
+  // While role is still loading, show everything (avoids flicker hiding items)
+  if (!channelRole.value) return true
+  const p = channelRole.value.permissions
+  // If mods are globally disabled, they can only see Home, Dashboard, Logs
+  if (!p.modsEnabled) return false
   if (item === 'Default' || item === 'Custom') return p.canToggleCommands || p.canEditCooldowns
   if (item === '7TV') return p.canManage7TV
   if (item === 'Roles') return false // broadcaster only

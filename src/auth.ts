@@ -11,6 +11,7 @@ export interface RolePermissions {
   canToggleCommands: boolean
   canEditCooldowns: boolean
   canManage7TV: boolean
+  modsEnabled: boolean
 }
 
 export interface ChannelRole {
