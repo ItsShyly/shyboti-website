@@ -779,7 +779,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 
           <div class="field-group">
             <template v-if="!isBuiltIn">
-              <label class="field-label">Response <span class="field-hint">Use {user} {channel} {args}</span></label>
+              <label class="field-label">Response <span class="field-hint">= <code class="hint-code">{output}</code> &nbsp;·&nbsp; also use {user} {channel} {args}</span></label>
               <textarea v-model="form.response" class="field-textarea" rows="2" placeholder="Hello {user}! You said: {args}" />
             </template>
             <template v-else>
@@ -959,6 +959,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .field-group.sm { flex: 1; min-width: 0; }
 .field-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; }
 .field-hint  { font-size: 10px; color: #555; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.hint-code   { font-family: 'Consolas','Fira Mono',monospace; color: #4ec9b0; font-style: normal; font-size: 10px; background: rgba(78,201,176,.1); padding: 1px 4px; border-radius: 2px; }
 .field-input, .field-textarea, .field-select { background: #111217; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 13px; padding: 7px 10px; outline: none; transition: border-color .15s; }
 .field-input:focus, .field-textarea:focus, .field-select:focus { border-color: #6f2bff55; }
 .field-textarea { resize: vertical; min-height: 52px; }
