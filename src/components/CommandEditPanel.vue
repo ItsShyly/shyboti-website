@@ -629,7 +629,6 @@ function onEditorDragover(e: DragEvent) {
 const simInput    = ref('')
 const simOutput   = ref('')
 const simUser     = ref('testuser')
-const simArgs     = ref('')
 const simResult   = ref<{ output: string; send: boolean; errors: string[] } | null>(null)
 const simExpanded = ref(false)
 
@@ -639,15 +638,15 @@ function simulateRule() {
   if (!rule.trim()) { simResult.value = { output: '', send: true, errors: ['No rule to simulate'] }; return }
 
   const ctx = {
-    input:   simInput.value,
-    // For built-in commands, {output} is bot-generated — use a descriptive placeholder so rules
-    // that reference {output} still exercise the condition logic in the simulator.
-    output:  props.isBuiltIn ? '{output}' : (simOutput.value || form.value.response || ''),
-    user:    simUser.value   || 'testuser',
-    channel: props.channel   || 'testchannel',
-    args:    simArgs.value,
-    ...Object.fromEntries(userParams.value.map(p => [p.key, p.value])),
-  }
+  input:   simInput.value,
+  // For built-in commands, {output} is bot-generated — use a descriptive placeholder so rules
+  // that reference {output} still exercise the condition logic in the simulator.
+  output:  props.isBuiltIn ? '{output}' : (simOutput.value || form.value.response || ''),
+  user:    simUser.value   || 'testuser',
+  channel: props.channel   || 'testchannel',
+  args:    simInput.value,  // {args} == {input} — same value
+  ...Object.fromEntries(userParams.value.map(p => [p.key, p.value])),
+    }
 
   try {
     let vars: Record<string, string> = { output: ctx.output }
@@ -869,7 +868,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                   <div v-if="simExpanded" class="sim-body">
                     <div class="sim-row">
                       <label class="sim-label">input</label>
-                      <input v-model="simInput" class="field-input sim-input" placeholder="raw message after command" />
+                      <input v-model="simInput" class="field-input sim-input" placeholder="raw message after command ({args} is the same)" />
                     </div>
                     <div class="sim-row">
                       <label class="sim-label">output</label>
@@ -880,10 +879,6 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                       <template v-else>
                         <input v-model="simOutput" class="field-input sim-input" :placeholder="form.response || '(command response)'" />
                       </template>
-                    </div>
-                    <div class="sim-row">
-                      <label class="sim-label">args</label>
-                      <input v-model="simArgs" class="field-input sim-input" placeholder="space-separated args" />
                     </div>
                     <div class="sim-row">
                       <label class="sim-label">user</label>
