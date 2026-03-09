@@ -12,6 +12,7 @@ interface Command {
   name: string
   isActive: boolean
   cooldown: number
+  userCooldown: number
   modOnly: boolean
   broadcasterOnly: boolean
 }
@@ -83,7 +84,7 @@ async function updateCommand(cmd: Command) {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
       body: JSON.stringify({
-        isActive: cmd.isActive, cooldown: cmd.cooldown,
+        isActive: cmd.isActive, cooldown: cmd.cooldown, userCooldown: cmd.userCooldown,
         modOnly: cmd.modOnly, broadcasterOnly: cmd.broadcasterOnly,
       }),
     })
@@ -98,11 +99,12 @@ function toggle(cmd: Command, field: 'isActive' | 'modOnly' | 'broadcasterOnly')
   updateCommand(cmd)
 }
 
-function setCooldown(cmd: Command) {
+function setCooldown(cmd: Command, field: 'cooldown' | 'userCooldown') {
   if (!canCooldown.value) return
-  const val = prompt(`Cooldown for ${prefix.value}${cmd.name} (seconds):`, String(cmd.cooldown))
+  const label = field === 'cooldown' ? 'Global cooldown' : 'User cooldown'
+  const val = prompt(`${label} for ${prefix.value}${cmd.name} (seconds):`, String(cmd[field]))
   if (val !== null && !isNaN(Number(val))) {
-    cmd.cooldown = Number(val)
+    cmd[field] = Number(val)
     updateCommand(cmd)
   }
 }
@@ -129,7 +131,8 @@ onMounted(fetchCommands)
         <div>Name</div>
         <div>Mod Only</div>
         <div>Broadcaster Only</div>
-        <div>Cooldown</div>
+        <div>Global CD</div>
+        <div>User CD</div>
         <div>Features</div>
       </div>
 
@@ -146,7 +149,9 @@ onMounted(fetchCommands)
 
           <div><div class="square" :class="cmd.broadcasterOnly ? 'on' : 'off'" @click="toggle(cmd, 'broadcasterOnly')"></div></div>
 
-          <div><div class="cooldown-box" :class="{ disabled: !canCooldown }" @click="setCooldown(cmd)">{{ cmd.cooldown }}s</div></div>
+          <div><div class="cooldown-box" :class="{ disabled: !canCooldown }" @click="setCooldown(cmd, 'cooldown')">{{ cmd.cooldown }}s</div></div>
+
+          <div><div class="cooldown-box user" :class="{ disabled: !canCooldown }" @click="setCooldown(cmd, 'userCooldown')">{{ cmd.userCooldown }}s</div></div>
 
           <div>
             <button class="edit-btn" :class="{ blocked: BLOCKED.includes(cmd.name) }">
@@ -174,7 +179,7 @@ onMounted(fetchCommands)
 .state-msg { color: #555; padding: 40px; text-align: center; font-size: 14px; }
 
 .table-header,
-.table-row { display: grid; grid-template-columns: 70px 1fr 100px 160px 100px 110px; align-items: center; }
+.table-row { display: grid; grid-template-columns: 70px 1fr 100px 160px 90px 90px 110px; align-items: center; }
 
 .table-header {
   padding: 0 16px 10px;
@@ -211,7 +216,9 @@ onMounted(fetchCommands)
   min-width: 48px; height: 28px; padding: 0 8px;
   background: #111217; font-size: 13px; cursor: pointer; transition: background 0.1s;
 }
-.cooldown-box:hover { background: #1e1e26; }
+.cooldown-box:hover:not(.disabled) { background: #1e1e26; }
+.cooldown-box.user { background: #111e26; }
+.cooldown-box.user:hover:not(.disabled) { background: #1a2a36; }
 
 .edit-btn {
   width: 76px; height: 34px;
