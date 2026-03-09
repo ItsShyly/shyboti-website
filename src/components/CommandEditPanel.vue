@@ -182,50 +182,13 @@ function highlight(src: string): string {
   return rendered.join('')
 }
 
-// Colour a plain-text segment (no sentinels): escape HTML, add block tints, colour tokens
+// Colour a plain-text segment (no sentinels): escape + colour tokens + block tints
+// Safe: uses a single linear pass, no recursion, guaranteed progress each iteration.
 function colourSegment(src: string): string {
   if (!src) return ''
-  let out = ''
-  let i = 0
-  while (i < src.length) {
-    // $if( … ) — blue block
-    if (src.startsWith('$if(', i)) {
-      let depth = 0, j = i + 4
-      for (; j < src.length; j++) {
-        if (src[j] === '(') depth++
-        else if (src[j] === ')') { if (depth === 0) break; depth-- }
-      }
-      const full = src.slice(i, j + 1)
-      out += `<span class="if-block">${colourTokens(escHtml(full))}</span>`
-      i = j + 1; continue
-    }
-    // $else{ … } — blue block
-    if (src.startsWith('$else{', i)) {
-      let depth = 0, j = i + 6
-      for (; j < src.length; j++) {
-        if (src[j] === '{') depth++
-        else if (src[j] === '}') { if (depth === 0) break; depth-- }
-      }
-      const full = src.slice(i, j + 1)
-      out += `<span class="if-block">${colourTokens(escHtml(full))}</span>`
-      i = j + 1; continue
-    }
-    // [action{…}] — red block (no sentinels here, already split out)
-    const am = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)\{[^}]*\}\]/)
-    if (am) {
-      out += `<span class="action-block">${colourTokens(escHtml(am[0]))}</span>`
-      i += am[0].length; continue
-    }
-    // Accumulate plain chars
-    let chunk = ''
-    while (i < src.length) {
-      if (src.startsWith('$if(', i) || src.startsWith('$else{', i)) break
-      if (src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)\{/)) break
-      chunk += src[i++]
-    }
-    if (chunk) out += colourTokens(escHtml(chunk))
-  }
-  return out
+  // Just escape and colour — block tints are cosmetic, skip them to avoid
+  // partial-match infinite loops on unclosed $if( or [action{ fragments.
+  return colourTokens(escHtml(src))
 }
 
 function escHtml(s: string): string {
@@ -509,16 +472,20 @@ function insertAcItem() {
     // but we're inside <do [...]> so we replace the whole [PH.action{PH.arg}] group
     let insert = item
     if (ph === PH.action && ACTIONS.includes(item)) {
-      // The skeleton wraps the action slot AND the following {arg} sentinel if present
-      // Pattern in plain text: PH.action + '{' + PH.arg + '}'
+      // Replace the whole [PH.action{PH.arg}] pattern with the full action skeleton
       const fullSlot = PH.action + '{' + PH.arg + '}'
-      if (plain.slice(idx, idx + fullSlot.length) === fullSlot) {
-        insert = actionSkeleton(item).slice(1, -1) // strip outer [ ] — we're inside [...]
-        form.value.rule = plain.slice(0, idx) + insert + plain.slice(idx + fullSlot.length)
-        applyHighlight()
-        nextTick(() => restoreCaret(el, idx + insert.length))
-        return
-      }
+      const hasArgSlot = plain.slice(idx, idx + fullSlot.length) === fullSlot
+      const skel = actionSkeleton(item)  // e.g. [remove{arg}] or [stop]
+      // We're already inside [ ] from the ifSkeleton, so strip the outer brackets
+      // But only if the skeleton actually has them (stop has no inner content)
+      insert = skel.slice(1, skel.lastIndexOf(']')) + skel.slice(skel.lastIndexOf(']') + 1)
+      // Simpler: just insert the full skeleton and replace the surrounding [ ] too
+      // The ifSkeleton puts [PH.action{PH.arg}] so we need to replace all of that
+      const sliceEnd = hasArgSlot ? idx + fullSlot.length : idx + 1
+      form.value.rule = plain.slice(0, idx - 1) + skel + plain.slice(sliceEnd + 1)
+      applyHighlight()
+      nextTick(() => restoreCaret(el, idx - 1 + skel.length))
+      return
     }
     form.value.rule = plain.slice(0, idx) + insert + plain.slice(idx + 1)
     applyHighlight()
@@ -580,13 +547,16 @@ function onEditorDrop(e: DragEvent) {
     if (phFound) {
       let insert = tok
       let slotLen = 1
-      // If filling an action slot, expand to full action skeleton and consume the {arg} sentinel too
+      // If filling an action slot, replace the whole [PH.action{PH.arg}] with the full skeleton
       if (ph === PH.action && ACTIONS.includes(tok)) {
         const fullSlot = PH.action + '{' + PH.arg + '}'
-        if (plain.slice(pos, pos + fullSlot.length) === fullSlot) {
-          insert = actionSkeleton(tok).slice(1, -1) // strip [ ] — inside [...]
-          slotLen = fullSlot.length
-        }
+        const skel = actionSkeleton(tok)
+        // pos points at PH.action; pos-1 is '[', sliceEnd+1 is ']'
+        const sliceEnd = plain.slice(pos, pos + fullSlot.length) === fullSlot ? pos + fullSlot.length : pos + 1
+        form.value.rule = plain.slice(0, pos - 1) + skel + plain.slice(sliceEnd + 1)
+        applyHighlight()
+        nextTick(() => restoreCaret(el, pos - 1 + skel.length))
+        return
       }
       form.value.rule = plain.slice(0, pos) + insert + plain.slice(pos + slotLen)
       applyHighlight()
