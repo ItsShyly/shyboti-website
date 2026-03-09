@@ -150,9 +150,9 @@ function tokenClass(tok: string): string {
   return ''
 }
 
-// Sentinel placeholder — null char as sentinel (never typed naturally)
-// Rendered as an empty yellow span with min-width via CSS
-const PLACEHOLDER = '\x00'
+// Sentinel placeholder — private-use Unicode char, survives DOM round-trips
+// Never appears in normal text, not stripped by innerText/textContent
+const PLACEHOLDER = '\uE000'
 
 // Syntax highlight: returns HTML string
 function highlight(src: string): string {
@@ -198,7 +198,7 @@ function highlight(src: string): string {
       }
       // [action{args}] or [action]{args} — red tint
       // Match [actionName followed by optional {args} then ]
-      const actionMatch = s.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)((?:\{[\w\u25C6]+\})*)\]/)
+      const actionMatch = s.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)((?:\{[\w\uE000]+\})*)\]/)
       if (actionMatch) {
         out += `<span class="action-block">${actionMatch[0]}</span>`
         i += actionMatch[0].length; continue
@@ -211,7 +211,7 @@ function highlight(src: string): string {
   const wrapped = wrapRegions(esc)
 
   // 3. Colorise individual tokens
-  const pat = /(\$if|\$else|\[(?:replace|remove|delete|prepend|append|send|stop|has|=|starts|ends)\]|\{(?:output|input|user|channel|args|regex1|regex2|text1|text2)\}|&lt;do|&gt;|\x00)/g
+  const pat = /(\$if|\$else|\[(?:replace|remove|delete|prepend|append|send|stop|has|=|starts|ends)\]|\{(?:output|input|user|channel|args|regex1|regex2|text1|text2)\}|&lt;do|&gt;|\uE000)/g
 
   return wrapped.replace(pat, (m) => {
     const raw = m.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')
@@ -221,7 +221,7 @@ function highlight(src: string): string {
     else if (/^\[(replace|remove|delete|prepend|append|send|stop)\]$/.test(raw))  cls = 'tk-action'
     else if (['{output}','{input}','{user}','{channel}','{args}'].includes(raw))  cls = 'tk-value'
     else if (['{regex1}','{regex2}','{text1}','{text2}'].includes(raw))           cls = 'tk-param'
-    else if (raw === PLACEHOLDER)                                                  return `<span class="tk-placeholder"> </span>`
+    else if (raw === '\uE000')                                                     return `<span class="tk-placeholder">\uE000</span>`
     return cls ? `<span class="${cls}">${m}</span>` : m
   })
 }
@@ -232,7 +232,7 @@ const ruleWarnings = computed((): string[] => {
   if (!r.trim()) return []
   const warnings: string[] = []
   // Unfilled placeholders
-  const phCount = (r.match(/\x00/g) || []).length
+  const phCount = (r.match(/\uE000/g) || []).length
   if (phCount > 0) warnings.push(`${phCount} unfilled placeholder${phCount > 1 ? 's' : ''} (yellow spaces) in rule`)
   // Mismatched $if / <do>
   const ifCount  = (r.match(/\$if\(/g) || []).length
@@ -286,16 +286,13 @@ function restoreCaret(el: HTMLElement, offset: number) {
 }
 
 function getPlainText(el: HTMLElement): string {
-  // Recover placeholder sentinels from spans before reading text
-  const html = el.innerHTML.replace(/<span class="tk-placeholder">[^<]*<\/span>/g, PLACEHOLDER)
-  const tmp  = document.createElement('div')
-  tmp.innerHTML = html
-  return (tmp.innerText || tmp.textContent || '').replace(/\n\n/g, '\n')
+  // \uE000 survives innerText round-trips natively — no special recovery needed
+  return el.innerText.replace(/\n\n/g, '\n')
 }
 
-// Strip sentinels before saving
+// Strip sentinels before saving — placeholders not filled = removed from saved rule
 function ruleForSave(rule: string): string {
-  return rule.replace(/\x00/g, '')
+  return rule.replace(/\uE000/g, '')
 }
 
 function onEditorInput() {
@@ -561,7 +558,7 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
                   @keydown="onEditorKeydown"
                   @drop="onEditorDrop"
                   @dragover="onEditorDragover"
-                  :data-placeholder="'[prepend]{output}{text1}  or  $if({output}[has]{regex1}<do [delete]{output}>)'"
+                  :data-placeholder="'[remove{text1}]  or  $if({output}[has]{text1}<do [remove{text1}]>)'"
                 ></div>
                 <div v-if="ruleWarnings.length" class="rule-warnings">
                   <div v-for="w in ruleWarnings" :key="w" class="rule-warning-item">⚠ {{ w }}</div>
@@ -634,8 +631,14 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
             <div v-else></div>
             <div class="footer-right">
               <button class="btn-cancel" @click="emit('close')">Cancel</button>
-              <button class="btn-save" :class="{ saved }" :disabled="saving || !ruleValid" @click="save">
-                {{ saved ? '✓ Saved' : saving ? 'Saving…' : 'Save' }}
+              <button
+                class="btn-save"
+                :class="{ saved, invalid: !ruleValid && !!form.rule }"
+                :disabled="saving || !ruleValid"
+                :title="ruleWarnings.join(' · ')"
+                @click="save"
+              >
+                {{ saved ? '✓ Saved' : saving ? 'Saving…' : !ruleValid ? '⚠ Fix rule' : 'Save' }}
               </button>
             </div>
           </div>
@@ -778,7 +781,8 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 }
 .btn-save:hover:not(:disabled) { background: #7f3fff; }
 .btn-save:disabled { opacity: .4; cursor: not-allowed; }
-.btn-save.saved { background: #1a3d2a; color: #23d18b; }
+.btn-save.saved    { background: #1a3d2a; color: #23d18b; }
+.btn-save.invalid  { background: #2a1a0a; color: #e5c07b; border: 1px solid #e5c07b44; }
 .btn-cancel {
   height: 34px; padding: 0 16px; border: 1px solid #333; background: transparent;
   color: #888; font-family: inherit; font-size: 12px; cursor: pointer;
