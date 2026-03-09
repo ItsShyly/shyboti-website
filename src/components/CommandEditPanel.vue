@@ -140,23 +140,77 @@ function tokenClass(tok: string): string {
 }
 
 // Syntax highlight: returns HTML string
+// Strategy: escape first, then wrap structural brackets ($if(...), $else{...}, <do ...>)
+// with .if-block tint spans, then colorise individual tokens inside.
 function highlight(src: string): string {
-  // Escape HTML first
-  const esc = src.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  // 1. Escape HTML
+  const esc = src
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
 
-  // Token pattern
-  const pat = /(\$if|\$else|\[(?:replace|remove|delete|prepend|append|send|stop|has|=|starts|ends)\]|\{(?:output|input|user|channel|args|regex1|regex2|text1|text2)\}|<do|>)/g
+  // 2. Wrap the entire $if(...) block — which contains <do>, $else{} etc inside —
+  //    with a single .if-block tint span. Only match the outermost $if( ... ) paren.
+  // Wrap structural regions: $if(...), $else{...}, <do ...>
+  // Each gets a .if-block tint span. Works on escaped HTML so we match
+  // &lt;do and &gt; as the delimiters for <do ...>.
+  function wrapRegions(s: string): string {
+    let out = ''
+    let i = 0
+    while (i < s.length) {
+      // $if( ... ) — match closing ) at depth 0
+      if (s.startsWith('$if(', i)) {
+        let depth = 0, j = i + 4, inner = '$if('
+        for (; j < s.length; j++) {
+          inner += s[j]
+          if (s[j] === '(')      depth++
+          else if (s[j] === ')') { if (depth === 0) break; depth-- }
+        }
+        out += `<span class="if-block">${inner}</span>`
+        i = j + 1
+        continue
+      }
+      // $else{ ... } — match closing } at depth 0
+      if (s.startsWith('$else{', i)) {
+        let depth = 0, j = i + 6, inner = '$else{'
+        for (; j < s.length; j++) {
+          inner += s[j]
+          if (s[j] === '{')      depth++
+          else if (s[j] === '}') { if (depth === 0) break; depth-- }
+        }
+        out += `<span class="if-block">${inner}</span>`
+        i = j + 1
+        continue
+      }
+      // &lt;do ... &gt; (HTML-escaped <do ... >)
+      if (s.startsWith('&lt;do', i)) {
+        const end = s.indexOf('&gt;', i)
+        if (end !== -1) {
+          const inner = s.slice(i, end + 4) // include &gt;
+          out += `<span class="if-block">${inner}</span>`
+          i = end + 4
+          continue
+        }
+      }
+      out += s[i]
+      i++
+    }
+    return out
+  }
 
-  return esc.replace(pat, (m) => {
-    // un-escape to check class
+  const wrapped = wrapRegions(esc)
+
+  // 3. Colorise individual tokens inside (and outside) the tint spans
+  const pat = /(\$if|\$else|\[(?:replace|remove|delete|prepend|append|send|stop|has|=|starts|ends)\]|\{(?:output|input|user|channel|args|regex1|regex2|text1|text2)\}|&lt;do|&gt;)/g
+
+  return wrapped.replace(pat, (m) => {
     const raw = m.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')
     let cls = ''
-    if (['$if','$else'].includes(raw))                                          cls = 'tk-wrapper'
-    else if (['[has]','[=]','[starts]','[ends]'].includes(raw))                 cls = 'tk-op'
-    else if (/^\[(replace|remove|delete|prepend|append|send|stop)\]$/.test(raw)) cls = 'tk-action'
-    else if (['{output}','{input}','{user}','{channel}','{args}'].includes(raw)) cls = 'tk-value'
-    else if (['{regex1}','{regex2}','{text1}','{text2}'].includes(raw))         cls = 'tk-param'
-    else if (raw === '<do' || raw === '>')                                       cls = 'tk-do'
+    if (['$if','$else'].includes(raw) || raw === '<do' || raw === '>')            cls = 'tk-wrapper'
+    else if (['[has]','[=]','[starts]','[ends]'].includes(raw))                   cls = 'tk-op'
+    else if (/^\[(replace|remove|delete|prepend|append|send|stop)\]$/.test(raw))  cls = 'tk-action'
+    else if (['{output}','{input}','{user}','{channel}','{args}'].includes(raw))  cls = 'tk-value'
+    else if (['{regex1}','{regex2}','{text1}','{text2}'].includes(raw))           cls = 'tk-param'
     return cls ? `<span class="${cls}">${m}</span>` : m
   })
 }
@@ -677,4 +731,13 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 }
 .op-brace { font-size: 20px; color: #2a2a35; line-height: 1; font-weight: 300; }
 .op-label { font-size: 13px; color: #333; letter-spacing: .06em; padding: 0 4px; }
+
+/* $if / $else{ / <do > block tint — applied inside contenteditable via JS innerHTML */
+.if-block {
+  background: rgba(86, 156, 214, 0.09);
+  border: 1px solid rgba(86, 156, 214, 0.18);
+  border-radius: 2px;
+  padding: 1px 3px;
+  display: inline;
+}
 </style>
