@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import CommandEditPanel from './CommandEditPanel.vue'
@@ -45,6 +45,12 @@ const editOpen      = ref(false)
 const editingCmd    = ref('')
 const editIsBuiltIn = ref(true)
 
+// New command name input state
+const creatingNew   = ref(false)
+const newCmdName    = ref('')
+const newCmdError   = ref('')
+const newCmdInput   = ref<HTMLInputElement | null>(null)
+
 function openEdit(name: string, builtIn: boolean) {
   editingCmd.value    = name
   editIsBuiltIn.value = builtIn
@@ -54,6 +60,35 @@ function openEdit(name: string, builtIn: boolean) {
 function onEditSaved() {
   fetchCommands()
   fetchCustomCommands()
+}
+
+function startCreate() {
+  creatingNew.value = true
+  newCmdName.value  = ''
+  newCmdError.value = ''
+  nextTick(() => newCmdInput.value?.focus())
+}
+
+function cancelCreate() {
+  creatingNew.value = false
+  newCmdName.value  = ''
+  newCmdError.value = ''
+}
+
+async function confirmCreate() {
+  const name = newCmdName.value.trim().toLowerCase().replace(/^\+/, '')
+  if (!name) { newCmdError.value = 'Enter a name'; return }
+  if (!/^[a-z0-9_]+$/.test(name)) { newCmdError.value = 'Only letters, numbers, _'; return }
+  if (customCommands.value.some(c => c.name === name)) { newCmdError.value = 'Already exists'; return }
+  if (!session.value) return
+  creatingNew.value = false
+  await fetch(`${API}/custom-commands/${session.value.channel}/${name}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+    body: JSON.stringify({ response: '', rule: '', isActive: true }),
+  })
+  await fetchCustomCommands()
+  openEdit(name, false)
 }
 
 const CATEGORIES: Record<string, string[]> = {
@@ -115,18 +150,7 @@ async function fetchCustomCommands() {
   }
 }
 
-async function createCustomCommand() {
-  const name = prompt('Command name (no prefix):')?.trim().toLowerCase()
-  if (!name || !/^[a-z0-9_]+$/.test(name)) return
-  if (!session.value) return
-  await fetch(`${API}/custom-commands/${session.value.channel}/${name}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
-    body: JSON.stringify({ response: '', rule: '', isActive: true }),
-  })
-  await fetchCustomCommands()
-  openEdit(name, false)
-}
+
 
 async function fetchCommands() {
   if (!session.value) return
@@ -270,7 +294,24 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
     <template v-if="activeNav === 'Custom'">
       <div class="custom-header">
         <span class="custom-count">{{ customCommands.length }} custom command{{ customCommands.length !== 1 ? 's' : '' }}</span>
-        <button class="create-btn" @click="createCustomCommand">+ New command</button>
+        <div v-if="!creatingNew">
+          <button class="create-btn" @click="startCreate">+ New command</button>
+        </div>
+        <div v-else class="new-cmd-row">
+          <span class="new-cmd-prefix">+</span>
+          <input
+            ref="newCmdInput"
+            v-model="newCmdName"
+            class="new-cmd-input"
+            placeholder="commandname"
+            maxlength="32"
+            @keydown.enter="confirmCreate"
+            @keydown.escape="cancelCreate"
+          />
+          <button class="create-btn" @click="confirmCreate">Create</button>
+          <button class="cancel-btn" @click="cancelCreate">✕</button>
+          <span v-if="newCmdError" class="new-cmd-error">{{ newCmdError }}</span>
+        </div>
       </div>
 
       <div v-if="customLoading" class="state-msg">Loading…</div>
@@ -279,7 +320,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
         <div class="empty-icon">✦</div>
         <div class="empty-title">No custom commands yet</div>
         <div class="empty-sub">Create your first command with the builder above.</div>
-        <button class="create-btn mt" @click="createCustomCommand">+ New command</button>
+        <button class="create-btn mt" @click="startCreate">+ New command</button>
       </div>
 
       <div v-else class="rows">
@@ -415,4 +456,25 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
   text-overflow: ellipsis; white-space: nowrap; padding-right: 12px;
 }
 .cmd-alias { font-size: 11px; color: #6f2bff; font-weight: 400; margin-left: 6px; }
+
+.new-cmd-row {
+  display: flex; align-items: center; gap: 6px;
+}
+.new-cmd-prefix {
+  font-size: 14px; font-weight: 700; color: #9d6cff;
+}
+.new-cmd-input {
+  height: 32px; padding: 0 10px;
+  background: #111217; border: 1px solid #6f2bff55; color: #e0e0e0;
+  font-family: inherit; font-size: 13px; outline: none; width: 160px;
+}
+.new-cmd-input:focus { border-color: #9d6cff; }
+.cancel-btn {
+  height: 32px; width: 32px; border: 1px solid #333; background: transparent;
+  color: #666; font-size: 12px; cursor: pointer;
+}
+.cancel-btn:hover { color: #e0e0e0; border-color: #555; }
+.new-cmd-error {
+  font-size: 11px; color: #f14949;
+}
 </style>
