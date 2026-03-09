@@ -626,9 +626,8 @@ function onEditorDragover(e: DragEvent) {
 
 // ─── Rule Simulator ───────────────────────────────────────────────────────────
 
-const simInput    = ref('')
-const simOutput   = ref('')
-const simUser     = ref('testuser')
+const simInput  = ref('')
+const simUser   = ref('testuser')
 const simResult   = ref<{ output: string; send: boolean; errors: string[] } | null>(null)
 const simExpanded = ref(false)
 
@@ -641,7 +640,7 @@ function simulateRule() {
   input:   simInput.value,
   // For built-in commands, {output} is bot-generated — use a descriptive placeholder so rules
   // that reference {output} still exercise the condition logic in the simulator.
-  output:  props.isBuiltIn ? '{output}' : (simOutput.value || form.value.response || ''),
+  output:  props.isBuiltIn ? '{output}' : (form.value.response || ''),
   user:    simUser.value   || 'testuser',
   channel: props.channel   || 'testchannel',
   args:    simInput.value,  // {args} == {input} — same value
@@ -870,15 +869,9 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                       <label class="sim-label">input</label>
                       <input v-model="simInput" class="field-input sim-input" placeholder="raw message after command ({args} is the same)" />
                     </div>
-                    <div class="sim-row">
+                    <div v-if="isBuiltIn" class="sim-row">
                       <label class="sim-label">output</label>
-                      <!-- Built-in commands: output is bot-generated, cannot be set manually -->
-                      <template v-if="isBuiltIn">
-                        <span class="sim-builtin-note">bot-generated — use <code>{output}</code> in your rule to reference it</span>
-                      </template>
-                      <template v-else>
-                        <input v-model="simOutput" class="field-input sim-input" :placeholder="form.response || '(command response)'" />
-                      </template>
+                      <span class="sim-builtin-note">bot-generated — use <code>{output}</code> in your rule to reference it</span>
                     </div>
                     <div class="sim-row">
                       <label class="sim-label">user</label>
