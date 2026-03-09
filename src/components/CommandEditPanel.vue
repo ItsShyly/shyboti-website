@@ -95,7 +95,7 @@ async function save() {
     await fetch(`${API}/custom-commands/${props.channel}/${props.cmdName}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
-      body: JSON.stringify(form.value),
+      body: JSON.stringify({ ...form.value, rule: ruleForSave(form.value.rule) }),
     })
     saved.value = true
     setTimeout(() => { saved.value = false }, 2000)
@@ -150,9 +150,11 @@ function tokenClass(tok: string): string {
   return ''
 }
 
+// Sentinel placeholder — null char as sentinel (never typed naturally)
+// Rendered as an empty yellow span with min-width via CSS
+const PLACEHOLDER = '\x00'
+
 // Syntax highlight: returns HTML string
-// Strategy: escape first, then wrap structural brackets ($if(...), $else{...}, <do ...>)
-// with .if-block tint spans, then colorise individual tokens inside.
 function highlight(src: string): string {
   // 1. Escape HTML
   const esc = src
@@ -160,59 +162,56 @@ function highlight(src: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
 
-  // 2. Wrap the entire $if(...) block — which contains <do>, $else{} etc inside —
-  //    with a single .if-block tint span. Only match the outermost $if( ... ) paren.
-  // Wrap structural regions: $if(...), $else{...}, <do ...>
-  // Each gets a .if-block tint span. Works on escaped HTML so we match
-  // &lt;do and &gt; as the delimiters for <do ...>.
+  // 2. Wrap structural regions with tinted spans
   function wrapRegions(s: string): string {
-    let out = ''
-    let i = 0
+    let out = '', i = 0
     while (i < s.length) {
-      // $if( ... ) — match closing ) at depth 0
+      // $if( ... ) — blue tint
       if (s.startsWith('$if(', i)) {
         let depth = 0, j = i + 4, inner = '$if('
         for (; j < s.length; j++) {
           inner += s[j]
-          if (s[j] === '(')      depth++
+          if (s[j] === '(') depth++
           else if (s[j] === ')') { if (depth === 0) break; depth-- }
         }
         out += `<span class="if-block">${inner}</span>`
-        i = j + 1
-        continue
+        i = j + 1; continue
       }
-      // $else{ ... } — match closing } at depth 0
+      // $else{ ... } — blue tint
       if (s.startsWith('$else{', i)) {
         let depth = 0, j = i + 6, inner = '$else{'
         for (; j < s.length; j++) {
           inner += s[j]
-          if (s[j] === '{')      depth++
+          if (s[j] === '{') depth++
           else if (s[j] === '}') { if (depth === 0) break; depth-- }
         }
         out += `<span class="if-block">${inner}</span>`
-        i = j + 1
-        continue
+        i = j + 1; continue
       }
-      // &lt;do ... &gt; (HTML-escaped <do ... >)
+      // &lt;do ... &gt; — blue tint
       if (s.startsWith('&lt;do', i)) {
         const end = s.indexOf('&gt;', i)
         if (end !== -1) {
-          const inner = s.slice(i, end + 4) // include &gt;
-          out += `<span class="if-block">${inner}</span>`
-          i = end + 4
-          continue
+          out += `<span class="if-block">${s.slice(i, end + 4)}</span>`
+          i = end + 4; continue
         }
       }
-      out += s[i]
-      i++
+      // [action{args}] or [action]{args} — red tint
+      // Match [actionName followed by optional {args} then ]
+      const actionMatch = s.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)((?:\{[\w\u25C6]+\})*)\]/)
+      if (actionMatch) {
+        out += `<span class="action-block">${actionMatch[0]}</span>`
+        i += actionMatch[0].length; continue
+      }
+      out += s[i]; i++
     }
     return out
   }
 
   const wrapped = wrapRegions(esc)
 
-  // 3. Colorise individual tokens inside (and outside) the tint spans
-  const pat = /(\$if|\$else|\[(?:replace|remove|delete|prepend|append|send|stop|has|=|starts|ends)\]|\{(?:output|input|user|channel|args|regex1|regex2|text1|text2)\}|&lt;do|&gt;)/g
+  // 3. Colorise individual tokens
+  const pat = /(\$if|\$else|\[(?:replace|remove|delete|prepend|append|send|stop|has|=|starts|ends)\]|\{(?:output|input|user|channel|args|regex1|regex2|text1|text2)\}|&lt;do|&gt;|\x00)/g
 
   return wrapped.replace(pat, (m) => {
     const raw = m.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')
@@ -222,18 +221,27 @@ function highlight(src: string): string {
     else if (/^\[(replace|remove|delete|prepend|append|send|stop)\]$/.test(raw))  cls = 'tk-action'
     else if (['{output}','{input}','{user}','{channel}','{args}'].includes(raw))  cls = 'tk-value'
     else if (['{regex1}','{regex2}','{text1}','{text2}'].includes(raw))           cls = 'tk-param'
+    else if (raw === PLACEHOLDER)                                                  return `<span class="tk-placeholder"> </span>`
     return cls ? `<span class="${cls}">${m}</span>` : m
   })
 }
 
-// Validate: every $if must have <do ...>
-const ruleValid = computed(() => {
-  const r = form.value.rule.trim()
-  if (!r) return true // empty rule is valid (no rule = just say response)
+// Detailed rule warnings — always visible, blocks save if non-empty
+const ruleWarnings = computed((): string[] => {
+  const r = form.value.rule
+  if (!r.trim()) return []
+  const warnings: string[] = []
+  // Unfilled placeholders
+  const phCount = (r.match(/\x00/g) || []).length
+  if (phCount > 0) warnings.push(`${phCount} unfilled placeholder${phCount > 1 ? 's' : ''} (yellow spaces) in rule`)
+  // Mismatched $if / <do>
   const ifCount  = (r.match(/\$if\(/g) || []).length
-  const doCount  = (r.match(/<do/g)    || []).length
-  return ifCount === doCount
+  const doCount  = (r.match(/<do/g)   || []).length
+  if (ifCount !== doCount) warnings.push(`${ifCount} $if block${ifCount !== 1 ? 's' : ''} but ${doCount} <do> block${doCount !== 1 ? 's' : ''} — must match`)
+  return warnings
 })
+
+const ruleValid = computed(() => ruleWarnings.value.length === 0)
 
 // Re-render highlighted content while preserving caret
 function applyHighlight() {
@@ -278,7 +286,16 @@ function restoreCaret(el: HTMLElement, offset: number) {
 }
 
 function getPlainText(el: HTMLElement): string {
-  return el.innerText.replace(/\n\n/g, '\n')
+  // Recover placeholder sentinels from spans before reading text
+  const html = el.innerHTML.replace(/<span class="tk-placeholder">[^<]*<\/span>/g, PLACEHOLDER)
+  const tmp  = document.createElement('div')
+  tmp.innerHTML = html
+  return (tmp.innerText || tmp.textContent || '').replace(/\n\n/g, '\n')
+}
+
+// Strip sentinels before saving
+function ruleForSave(rule: string): string {
+  return rule.replace(/\x00/g, '')
 }
 
 function onEditorInput() {
@@ -298,10 +315,11 @@ function onEditorKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertAcItem(); return }
     if (e.key === 'Escape')     { acVisible.value = false; return }
   }
-  // Auto-insert $if skeleton
+  // Auto-insert $if skeleton with ◆ placeholders for required slots
   if (e.key === '(' && form.value.rule.endsWith('$if')) {
     e.preventDefault()
-    insertText('({output}[has]{regex1}<do >)')
+    // ◆ marks "fill this in" spots — yellow bg in highlight
+    insertText(`({output}[has]${PLACEHOLDER}<do [${PLACEHOLDER}]>)`)
   }
 }
 
@@ -387,15 +405,52 @@ function onDragStart(e: DragEvent, token: string) {
   e.dataTransfer?.setData('text/plain', token)
 }
 
+// Build the insertion string for a dragged token, optionally wrapping selected text
+function buildDropInsert(token: string, selected: string): string {
+  const sel = selected.trim()
+  // Wrappers
+  if (token === '$if') {
+    return sel
+      ? `$if(${sel}[has]${PLACEHOLDER}<do [${PLACEHOLDER}]>)`
+      : `$if(${PLACEHOLDER}[has]${PLACEHOLDER}<do [${PLACEHOLDER}]>)`
+  }
+  if (token === '$else') {
+    return sel ? `$else{${sel}}` : `$else{[${PLACEHOLDER}]}`
+  }
+  // Actions — wrap selected text as the arg
+  const isAction = ACTIONS.includes(token)
+  if (isAction) {
+    const name = token.slice(1, -1) // strip [ ]
+    return sel ? `[${name}{${sel}}]` : `[${name}{${PLACEHOLDER}}]`
+  }
+  return token
+}
+
 function onEditorDrop(e: DragEvent) {
   e.preventDefault()
   const token = e.dataTransfer?.getData('text/plain')
   if (!token) return
-  editorRef.value?.focus()
-  // Insert at drop position using caretRangeFromPoint
   const el = editorRef.value!
-  let dropOffset = 0
-  if ((document as any).caretRangeFromPoint) {
+  el.focus()
+
+  // Capture any currently selected text inside the editor
+  const sel     = window.getSelection()
+  let selText   = ''
+  let selStart  = 0
+  let selEnd    = 0
+  if (sel && sel.rangeCount && el.contains(sel.anchorNode)) {
+    const r    = sel.getRangeAt(0)
+    selText    = r.toString()
+    const pre  = document.createRange()
+    pre.setStart(el, 0)
+    pre.setEnd(r.startContainer, r.startOffset)
+    selStart   = pre.toString().length
+    selEnd     = selStart + selText.length
+  }
+
+  // Find drop caret position
+  let dropOffset = selStart // default: insert at selection start if wrapping
+  if (!selText && (document as any).caretRangeFromPoint) {
     const r = (document as any).caretRangeFromPoint(e.clientX, e.clientY)
     if (r) {
       const pre = document.createRange()
@@ -404,13 +459,16 @@ function onEditorDrop(e: DragEvent) {
       dropOffset = pre.toString().length
     }
   }
-  const plain = getPlainText(el)
-  let insert  = token
-  // Auto-wrap $if
-  if (token === '$if') insert = '$if({output}[has]{regex1}<do >)'
-  form.value.rule = plain.slice(0, dropOffset) + insert + plain.slice(dropOffset)
+
+  const plain  = getPlainText(el)
+  const insert = buildDropInsert(token, selText)
+
+  // Replace selection (if any) or insert at cursor
+  const before = plain.slice(0, selText ? selStart : dropOffset)
+  const after  = plain.slice(selText ? selEnd : dropOffset)
+  form.value.rule = before + insert + after
   applyHighlight()
-  nextTick(() => restoreCaret(el, dropOffset + insert.length))
+  nextTick(() => restoreCaret(el, before.length + insert.length))
 }
 
 function onEditorDragover(e: DragEvent) { e.preventDefault() }
@@ -505,8 +563,8 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
                   @dragover="onEditorDragover"
                   :data-placeholder="'[prepend]{output}{text1}  or  $if({output}[has]{regex1}<do [delete]{output}>)'"
                 ></div>
-                <div v-if="!ruleValid" class="rule-error">
-                  Every $if( must have a matching &lt;do ...&gt; block
+                <div v-if="ruleWarnings.length" class="rule-warnings">
+                  <div v-for="w in ruleWarnings" :key="w" class="rule-warning-item">⚠ {{ w }}</div>
                 </div>
 
                 <!-- Autocomplete dropdown -->
@@ -675,7 +733,8 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 .rule-editor:empty::before {
   content: attr(data-placeholder); color: #333; pointer-events: none;
 }
-.rule-error { font-size: 11px; color: #f14949; margin-top: 4px; }
+.rule-warnings { margin-top: 5px; display: flex; flex-direction: column; gap: 2px; }
+.rule-warning-item { font-size: 11px; color: #e5c07b; background: rgba(229,192,123,.08); border-left: 2px solid #e5c07b66; padding: 3px 7px; }
 
 /* Autocomplete */
 .ac-dropdown {
@@ -745,12 +804,29 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 .op-brace { font-size: 20px; color: #2a2a35; line-height: 1; font-weight: 300; }
 .op-label { font-size: 13px; color: #333; letter-spacing: .06em; padding: 0 4px; }
 
-/* $if / $else{ / <do > block tint — applied inside contenteditable via JS innerHTML */
+/* $if / $else{ / <do > block tint */
 .if-block {
   background: rgba(86, 156, 214, 0.09);
   border: 1px solid rgba(86, 156, 214, 0.18);
   border-radius: 2px;
   padding: 1px 3px;
   display: inline;
+}
+/* [action{args}] block tint */
+.action-block {
+  background: rgba(241, 73, 73, 0.08);
+  border: 1px solid rgba(241, 73, 73, 0.2);
+  border-radius: 2px;
+  padding: 1px 3px;
+  display: inline;
+}
+/* placeholder — empty yellow space */
+.tk-placeholder {
+  display: inline-block;
+  min-width: 14px;
+  background: rgba(229, 192, 123, 0.28);
+  border: 1px solid rgba(229, 192, 123, 0.5);
+  border-radius: 2px;
+  cursor: text;
 }
 </style>
