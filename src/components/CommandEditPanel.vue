@@ -25,7 +25,7 @@ interface Props {
   cmdName:    string
   channel:    string
   open:       boolean
-  isBuiltIn?: boolean   // true = hardcoded bot command, no Response field
+  isBuiltIn?: boolean
 }
 
 const props  = defineProps<Props>()
@@ -76,9 +76,6 @@ async function load() {
 watch(() => props.open, (v) => { if (v) load() })
 onMounted(() => { if (props.open) load() })
 
-// After load(), seed the editor DOM with the loaded rule.
-// The _userIsTyping flag prevents this from firing during normal typing
-// (onEditorInput manages DOM directly when typing).
 watch(() => form.value.rule, (newRule) => {
   if (_userIsTyping) return
   const el = editorRef.value
@@ -119,26 +116,40 @@ async function deleteCmd() {
   deleting.value = false
 }
 
-// ─── Rule editor ─────────────────────────────────────────────────────────────
+// ─── Token definitions ───────────────────────────────────────────────────────
 
-const editorRef      = ref<HTMLDivElement | null>(null)
-let   _userIsTyping  = false  // prevents watcher re-seeding DOM while user types
-const acRef       = ref<HTMLDivElement | null>(null)
-const acItems     = ref<string[]>([])
-const acIndex     = ref(0)
-const acPos       = ref({ top: 0, left: 0 })
-const acVisible   = ref(false)
-const acTrigger   = ref('')   // the partial token being typed
+// Slot types — what kind of token each placeholder expects
+// 'value'  = teal  — {output},{input},{user},{channel},{args}
+// 'param'  = yellow — {regex1},{regex2},{text1},{text2}
+// 'op'     = purple — [has],[=],[<],[>],[<=],[>=],[starts],[ends]
+// 'action' = red   — [replace],[remove],[delete],[prepend],[append],[send],[stop]
 
-// Token groups & their colors (CSS vars defined in style)
-const WRAPPERS    = ['$if']
-const OPERATORS   = ['[has]','[=]','[starts]','[ends]']
-const ACTIONS     = ['[replace]','[remove]','[delete]','[prepend]','[append]','[send]','[stop]']
-const VALUES      = ['{output}','{input}','{user}','{channel}','{args}']
-const PARAMS_BASE = ['{regex1}','{regex2}','{text1}','{text2}']
+const OPERATORS = ['[has]','[=]','[<]','[>]','[<=]','[>=]','[starts]','[ends]']
+const ACTIONS   = ['[replace]','[remove]','[delete]','[prepend]','[append]','[send]','[stop]']
+const VALUES    = ['{output}','{input}','{user}','{channel}','{args}']
+const PARAMS    = ['{regex1}','{regex2}','{text1}','{text2}']
+const WRAPPERS  = ['$if']
 
-function allTokens() {
-  return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES, ...PARAMS_BASE]
+// Placeholder sentinels — each encodes expected slot type
+// \uE001 = value slot (teal)   \uE002 = param slot (yellow)
+// \uE003 = op slot (purple)    \uE004 = action slot (red)
+const PH_VALUE  = '\uE001'
+const PH_PARAM  = '\uE002'
+const PH_OP     = '\uE003'
+const PH_ACTION = '\uE004'
+
+const PH_CHARS  = [PH_VALUE, PH_PARAM, PH_OP, PH_ACTION]
+const PH_LABELS: Record<string, string> = {
+  [PH_VALUE]:  'value',
+  [PH_PARAM]:  'param',
+  [PH_OP]:     'op',
+  [PH_ACTION]: 'action',
+}
+const PH_CLASSES: Record<string, string> = {
+  [PH_VALUE]:  'tk-value',
+  [PH_PARAM]:  'tk-param',
+  [PH_OP]:     'tk-op',
+  [PH_ACTION]: 'tk-action',
 }
 
 function tokenClass(tok: string): string {
@@ -146,129 +157,127 @@ function tokenClass(tok: string): string {
   if (OPERATORS.includes(tok))   return 'tk-op'
   if (ACTIONS.includes(tok))     return 'tk-action'
   if (VALUES.includes(tok))      return 'tk-value'
-  if (PARAMS_BASE.includes(tok)) return 'tk-param'
+  if (PARAMS.includes(tok))      return 'tk-param'
   return ''
 }
 
-// Sentinel placeholder — private-use Unicode char, survives DOM round-trips
-// Never appears in normal text, not stripped by innerText/textContent
-const PLACEHOLDER = '\uE000'
+function tokenSlotType(tok: string): string {
+  if (VALUES.includes(tok))    return 'value'
+  if (PARAMS.includes(tok))    return 'param'
+  if (OPERATORS.includes(tok)) return 'op'
+  if (ACTIONS.includes(tok))   return 'action'
+  return ''
+}
 
-// Syntax highlight: returns HTML string
+function allTokens() {
+  return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES, ...PARAMS]
+}
+
+// ─── Syntax highlight ────────────────────────────────────────────────────────
+
 function highlight(src: string): string {
-  // 1. Escape HTML
-  const esc = src
+  // Escape HTML first
+  let s = src
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
 
-  // 2. Wrap structural regions with tinted spans
-  function wrapRegions(s: string): string {
-    let out = '', i = 0
-    while (i < s.length) {
-      // $if( ... ) — blue tint
-      if (s.startsWith('$if(', i)) {
-        let depth = 0, j = i + 4, inner = '$if('
-        for (; j < s.length; j++) {
-          inner += s[j]
-          if (s[j] === '(') depth++
-          else if (s[j] === ')') { if (depth === 0) break; depth-- }
-        }
-        out += `<span class="if-block">${inner}</span>`
-        i = j + 1; continue
-      }
-      // $else{ ... } — blue tint
-      if (s.startsWith('$else{', i)) {
-        let depth = 0, j = i + 6, inner = '$else{'
-        for (; j < s.length; j++) {
-          inner += s[j]
-          if (s[j] === '{') depth++
-          else if (s[j] === '}') { if (depth === 0) break; depth-- }
-        }
-        out += `<span class="if-block">${inner}</span>`
-        i = j + 1; continue
-      }
-      // &lt;do ... &gt; — blue tint
-      if (s.startsWith('&lt;do', i)) {
-        const end = s.indexOf('&gt;', i)
-        if (end !== -1) {
-          out += `<span class="if-block">${s.slice(i, end + 4)}</span>`
-          i = end + 4; continue
-        }
-      }
-      // [action{args}] or [action]{args} — red tint
-      // Match [actionName followed by optional {args} then ]
-      const actionMatch = s.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)((?:\{[\w\uE000]+\})*)\]/)
-      if (actionMatch) {
-        out += `<span class="action-block">${actionMatch[0]}</span>`
-        i += actionMatch[0].length; continue
-      }
-      out += s[i]; i++
-    }
-    return out
+  // Replace typed placeholders with coloured non-editable spans
+  for (const ph of PH_CHARS) {
+    const cls   = PH_CLASSES[ph]
+    const label = PH_LABELS[ph]
+    // Use a regex to replace all occurrences
+    s = s.split(ph).join(
+      `<span class="tk-placeholder ${cls}" data-ph="${ph}" contenteditable="false">${label}</span>`
+    )
   }
 
-  const wrapped = wrapRegions(esc)
+  // Wrap $if(...) regions — blue tint
+  s = s.replace(/\$if\(([^)]*)\)/g, (m) => `<span class="if-block">${m}</span>`)
+  s = s.replace(/\$else\{([^}]*)\}/g, (m) => `<span class="if-block">${m}</span>`)
 
-  // 3. Colorise individual tokens
-  const pat = /(\$if|\$else|\[(?:replace|remove|delete|prepend|append|send|stop|has|=|starts|ends)\]|\{(?:output|input|user|channel|args|regex1|regex2|text1|text2)\}|&lt;do|&gt;|\uE000)/g
-
-  return wrapped.replace(pat, (m) => {
+  // Colorise tokens
+  const pat = /(\$if|\$else|\[(?:replace|remove|delete|prepend|append|send|stop|has|=|&lt;=|&gt;=|&lt;|&gt;|starts|ends)\]|\{(?:output|input|user|channel|args|regex1|regex2|text1|text2)\})/g
+  s = s.replace(pat, (m) => {
     const raw = m.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')
     let cls = ''
-    if (['$if','$else'].includes(raw) || raw === '<do' || raw === '>')            cls = 'tk-wrapper'
-    else if (['[has]','[=]','[starts]','[ends]'].includes(raw))                   cls = 'tk-op'
-    else if (/^\[(replace|remove|delete|prepend|append|send|stop)\]$/.test(raw))  cls = 'tk-action'
-    else if (['{output}','{input}','{user}','{channel}','{args}'].includes(raw))  cls = 'tk-value'
-    else if (['{regex1}','{regex2}','{text1}','{text2}'].includes(raw))           cls = 'tk-param'
-    else if (raw === '\uE000')                                                     return `<span class="tk-placeholder" contenteditable="false">◆</span>`
+    if (['$if','$else'].includes(raw))                                             cls = 'tk-wrapper'
+    else if (OPERATORS.includes(raw))                                              cls = 'tk-op'
+    else if (ACTIONS.includes(raw))                                                cls = 'tk-action'
+    else if (VALUES.includes(raw))                                                 cls = 'tk-value'
+    else if (PARAMS.includes(raw))                                                 cls = 'tk-param'
     return cls ? `<span class="${cls}">${m}</span>` : m
   })
+
+  return s
 }
 
-// Detailed rule warnings — always visible, blocks save if non-empty
+// ─── Validation ──────────────────────────────────────────────────────────────
+
 const ruleWarnings = computed((): string[] => {
   const r = form.value.rule
   if (!r.trim()) return []
   const warnings: string[] = []
-  // Unfilled placeholders
-  const phCount = (r.match(/\uE000/g) || []).length
-  if (phCount > 0) warnings.push(`${phCount} unfilled placeholder${phCount > 1 ? 's' : ''} (yellow spaces) in rule`)
-  // Mismatched $if / <do>
-  const ifCount  = (r.match(/\$if\(/g) || []).length
-  const doCount  = (r.match(/<do/g)   || []).length
-  if (ifCount !== doCount) warnings.push(`${ifCount} $if block${ifCount !== 1 ? 's' : ''} but ${doCount} <do> block${doCount !== 1 ? 's' : ''} — must match`)
+  let phCount = 0
+  for (const ph of PH_CHARS) phCount += (r.split(ph).length - 1)
+  if (phCount > 0) warnings.push(`${phCount} unfilled placeholder${phCount > 1 ? 's' : ''} — click ◆ to replace`)
   return warnings
 })
 
 const ruleValid = computed(() => ruleWarnings.value.length === 0)
 
-// Re-render highlighted content while preserving caret
+// ─── Editor helpers ──────────────────────────────────────────────────────────
+
+const editorRef     = ref<HTMLDivElement | null>(null)
+let   _userIsTyping = false
+
+const acRef     = ref<HTMLDivElement | null>(null)
+const acItems   = ref<string[]>([])
+const acIndex   = ref(0)
+const acPos     = ref({ top: 0, left: 0 })
+const acVisible = ref(false)
+const acTrigger = ref('')
+
+// Walk DOM, converting placeholder spans back to their sentinel characters
+function getPlainText(el: HTMLElement): string {
+  function walk(node: Node): string {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
+    if (node instanceof HTMLElement) {
+      if (node.classList.contains('tk-placeholder')) {
+        return node.dataset.ph ?? ''
+      }
+      return Array.from(node.childNodes).map(walk).join('')
+    }
+    return ''
+  }
+  return walk(el).replace(/\n\n/g, '\n')
+}
+
+function ruleForSave(rule: string): string {
+  // Strip unfilled placeholders before saving
+  let r = rule
+  for (const ph of PH_CHARS) r = r.split(ph).join('')
+  return r
+}
+
 function applyHighlight() {
   const el = editorRef.value
   if (!el) return
   const sel   = window.getSelection()
   const range = sel && sel.rangeCount ? sel.getRangeAt(0) : null
-
-  // Get plain text offset
-  let offset = 0
+  let offset  = 0
   if (range && el.contains(range.startContainer)) {
-    const preRange = document.createRange()
-    preRange.setStart(el, 0)
-    preRange.setEnd(range.startContainer, range.startOffset)
-    offset = preRange.toString().length
+    const pre = document.createRange()
+    pre.setStart(el, 0)
+    pre.setEnd(range.startContainer, range.startOffset)
+    offset = pre.toString().length
   }
-
   el.innerHTML = highlight(form.value.rule)
-
-  // Restore caret
-  if (range) {
-    restoreCaret(el, offset)
-  }
+  if (range) restoreCaret(el, offset)
 }
 
 function restoreCaret(el: HTMLElement, offset: number) {
-  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+  const walker  = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
   let remaining = offset
   while (walker.nextNode()) {
     const node = walker.currentNode as Text
@@ -283,24 +292,6 @@ function restoreCaret(el: HTMLElement, offset: number) {
     }
     remaining -= node.length
   }
-}
-
-function getPlainText(el: HTMLElement): string {
-  // Walk the DOM to build plain text, converting ◆ placeholder spans back to \uE000
-  function walk(node: Node): string {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
-    if (node instanceof HTMLElement) {
-      if (node.classList.contains('tk-placeholder')) return '\uE000'
-      return Array.from(node.childNodes).map(walk).join('')
-    }
-    return ''
-  }
-  return walk(el).replace(/\n\n/g, '\n')
-}
-
-// Strip sentinels before saving — placeholders not filled = removed from saved rule
-function ruleForSave(rule: string): string {
-  return rule.replace(/\uE000/g, '')
 }
 
 function onEditorInput() {
@@ -321,76 +312,66 @@ function onEditorKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape')     { acVisible.value = false; return }
   }
 
-  // Prevent deleting placeholder spans — they must be replaced by typing, not deleted
+  // Block deletion of placeholder spans
   if (e.key === 'Backspace' || e.key === 'Delete') {
     const sel = window.getSelection()
     if (sel && sel.rangeCount) {
       const range = sel.getRangeAt(0)
       if (range.collapsed) {
-        // Check adjacent node is a placeholder span
-        const node = e.key === 'Backspace' ? range.startContainer : range.endContainer
-        const offset = e.key === 'Backspace' ? range.startOffset - 1 : range.endOffset
-        const parent = node.parentElement
-        if (parent?.classList.contains('tk-placeholder')) { e.preventDefault(); return }
-        // Check sibling
+        const checkNode = (n: Node | null) =>
+          n instanceof HTMLElement && n.classList.contains('tk-placeholder')
         const sib = e.key === 'Backspace'
           ? range.startContainer.childNodes[range.startOffset - 1]
           : range.endContainer.childNodes[range.endOffset]
-        if (sib instanceof HTMLElement && sib.classList.contains('tk-placeholder')) { e.preventDefault(); return }
+        if (checkNode(sib) || checkNode(range.startContainer.parentElement)) {
+          e.preventDefault(); return
+        }
       }
     }
   }
 
-  // Auto-insert $if skeleton with ◆ placeholders for required slots
+  // Auto-insert typed $if( skeleton
   if (e.key === '(' && form.value.rule.endsWith('$if')) {
     e.preventDefault()
-    insertText(`({output}[has]${PLACEHOLDER}<do [${PLACEHOLDER}]>)`)
+    insertText(`(${PH_VALUE}${PH_OP}${PH_PARAM}<do [${PH_ACTION}]>)`)
   }
 }
 
+// ─── Autocomplete ─────────────────────────────────────────────────────────────
+
 function checkAutocomplete() {
-  const el  = editorRef.value
+  const el = editorRef.value
   if (!el) return
   const sel = window.getSelection()
   if (!sel || !sel.rangeCount) return
-
   const range    = sel.getRangeAt(0).cloneRange()
   range.collapse(true)
   const preRange = document.createRange()
   preRange.setStart(el, 0)
   preRange.setEnd(range.startContainer, range.startOffset)
   const textBefore = preRange.toString()
-
-  // Find partial token at cursor
-  const partial = textBefore.match(/(\$[\w]*|\[[\w=]*|\{[\w]*)$/)
+  const partial    = textBefore.match(/(\$[\w]*|\[[\w=<>]*|\{[\w]*)$/)
   if (!partial) { acVisible.value = false; return }
-
-  const p = partial[0]
+  const p          = partial[0]
   const candidates = allTokens().filter(t => t.startsWith(p) && t !== p)
   if (!candidates.length) { acVisible.value = false; return }
-
   acTrigger.value = p
   acItems.value   = candidates
   acIndex.value   = 0
   acVisible.value = true
-
-  // Position dropdown near cursor
-  const rect = range.getBoundingClientRect()
+  const rect       = range.getBoundingClientRect()
   const editorRect = el.getBoundingClientRect()
-  acPos.value = { top: rect.bottom - editorRect.top + 4, left: rect.left - editorRect.left }
+  acPos.value      = { top: rect.bottom - editorRect.top + 4, left: rect.left - editorRect.left }
 }
 
 function insertAcItem() {
   const item = acItems.value[acIndex.value]
   if (!item) return
   acVisible.value = false
-
-  const el  = editorRef.value
+  const el = editorRef.value
   if (!el) return
   const sel = window.getSelection()
   if (!sel || !sel.rangeCount) return
-
-  // Delete the partial trigger text, insert full token
   const range    = sel.getRangeAt(0)
   const preRange = document.createRange()
   preRange.setStart(el, 0)
@@ -398,55 +379,44 @@ function insertAcItem() {
   const full  = preRange.toString()
   const after = full.slice(0, full.length - acTrigger.value.length)
   const rest  = getPlainText(el).slice(full.length)
-
   form.value.rule = after + item + rest
   applyHighlight()
-
-  // Move caret after inserted token
   nextTick(() => restoreCaret(el, (after + item).length))
 }
 
 function insertText(text: string) {
-  const el  = editorRef.value
+  const el = editorRef.value
   if (!el) return
   const sel = window.getSelection()
   if (!sel || !sel.rangeCount) return
-
   const range    = sel.getRangeAt(0)
   const preRange = document.createRange()
   preRange.setStart(el, 0)
   preRange.setEnd(range.startContainer, range.startOffset)
-  const before = preRange.toString()
+  const before  = preRange.toString()
   const allText = getPlainText(el)
   const after   = allText.slice(before.length)
-
   form.value.rule = before + text + after
   applyHighlight()
   nextTick(() => restoreCaret(el, (before + text).length))
 }
 
-// Drag token from palette into editor
+// ─── Drag & drop ─────────────────────────────────────────────────────────────
+
 function onDragStart(e: DragEvent, token: string) {
   e.dataTransfer?.setData('text/plain', token)
 }
 
-// Build the insertion string for a dragged token, optionally wrapping selected text
 function buildDropInsert(token: string, selected: string): string {
   const sel = selected.trim()
-  // Wrappers
   if (token === '$if') {
     return sel
-      ? `$if(${sel}[has]${PLACEHOLDER}<do [${PLACEHOLDER}]>)`
-      : `$if(${PLACEHOLDER}[has]${PLACEHOLDER}<do [${PLACEHOLDER}]>)`
+      ? `$if(${sel}${PH_OP}${PH_PARAM}<do [${PH_ACTION}]>)`
+      : `$if(${PH_VALUE}${PH_OP}${PH_PARAM}<do [${PH_ACTION}]>)`
   }
-  if (token === '$else') {
-    return sel ? `$else{${sel}}` : `$else{[${PLACEHOLDER}]}`
-  }
-  // Actions — wrap selected text as the arg
-  const isAction = ACTIONS.includes(token)
-  if (isAction) {
-    const name = token.slice(1, -1) // strip [ ]
-    return sel ? `[${name}{${sel}}]` : `[${name}{${PLACEHOLDER}}]`
+  if (ACTIONS.includes(token)) {
+    const name = token.slice(1,-1)
+    return sel ? `[${name}{${sel}}]` : `[${name}{${PH_PARAM}}]`
   }
   return token
 }
@@ -455,26 +425,63 @@ function onEditorDrop(e: DragEvent) {
   e.preventDefault()
   const token = e.dataTransfer?.getData('text/plain')
   if (!token) return
+
   const el = editorRef.value!
   el.focus()
 
-  // Capture any currently selected text inside the editor
-  const sel     = window.getSelection()
-  let selText   = ''
-  let selStart  = 0
-  let selEnd    = 0
-  if (sel && sel.rangeCount && el.contains(sel.anchorNode)) {
-    const r    = sel.getRangeAt(0)
-    selText    = r.toString()
-    const pre  = document.createRange()
-    pre.setStart(el, 0)
-    pre.setEnd(r.startContainer, r.startOffset)
-    selStart   = pre.toString().length
-    selEnd     = selStart + selText.length
+  // Check if dropping onto a placeholder span
+  const target = e.target as HTMLElement
+  const phSpan = target.classList?.contains('tk-placeholder') ? target
+    : target.closest?.('.tk-placeholder') as HTMLElement | null
+
+  if (phSpan) {
+    // Only allow drop if token type matches slot type
+    const slotType = phSpan.dataset.ph ? PH_LABELS[phSpan.dataset.ph] : ''
+    const tokType  = tokenSlotType(token)
+    if (tokType !== slotType) return  // wrong type — reject
+
+    // Replace the placeholder sentinel with the token
+    const plain = getPlainText(el)
+    const ph    = phSpan.dataset.ph ?? ''
+    // Replace only first occurrence of this ph that corresponds to this span
+    // Since we walk DOM, find position of this span
+    let pos = 0
+    let found = false
+    function findPos(node: Node): boolean {
+      if (node === phSpan) { found = true; return true }
+      if (node.nodeType === Node.TEXT_NODE) { if (!found) pos += (node.textContent?.length ?? 0); return false }
+      if (node instanceof HTMLElement) {
+        if (node.classList.contains('tk-placeholder')) {
+          if (node !== phSpan) { if (!found) pos += 1; return false }
+          else { found = true; return true }
+        }
+        for (const child of Array.from(node.childNodes)) { if (findPos(child)) return true }
+      }
+      return false
+    }
+    findPos(el)
+    const before = plain.slice(0, pos)
+    const after  = plain.slice(pos + 1)
+    form.value.rule = before + token + after
+    applyHighlight()
+    nextTick(() => restoreCaret(el, before.length + token.length))
+    return
   }
 
-  // Find drop caret position
-  let dropOffset = selStart // default: insert at selection start if wrapping
+  // Normal drop — insert at caret position
+  const sel    = window.getSelection()
+  let selText  = ''
+  let selStart = 0, selEnd = 0
+  if (sel && sel.rangeCount && el.contains(sel.anchorNode)) {
+    const r   = sel.getRangeAt(0)
+    selText   = r.toString()
+    const pre = document.createRange()
+    pre.setStart(el, 0)
+    pre.setEnd(r.startContainer, r.startOffset)
+    selStart  = pre.toString().length
+    selEnd    = selStart + selText.length
+  }
+  let dropOffset = selStart
   if (!selText && (document as any).caretRangeFromPoint) {
     const r = (document as any).caretRangeFromPoint(e.clientX, e.clientY)
     if (r) {
@@ -484,11 +491,8 @@ function onEditorDrop(e: DragEvent) {
       dropOffset = pre.toString().length
     }
   }
-
   const plain  = getPlainText(el)
   const insert = buildDropInsert(token, selText)
-
-  // Replace selection (if any) or insert at cursor
   const before = plain.slice(0, selText ? selStart : dropOffset)
   const after  = plain.slice(selText ? selEnd : dropOffset)
   form.value.rule = before + insert + after
@@ -496,15 +500,26 @@ function onEditorDrop(e: DragEvent) {
   nextTick(() => restoreCaret(el, before.length + insert.length))
 }
 
-function onEditorDragover(e: DragEvent) { e.preventDefault() }
+function onEditorDragover(e: DragEvent) {
+  e.preventDefault()
+  // Show visual rejection on wrong-type placeholder
+  const target  = e.target as HTMLElement
+  const phSpan  = target.classList?.contains('tk-placeholder') ? target
+    : target.closest?.('.tk-placeholder') as HTMLElement | null
+  if (phSpan) {
+    const token   = e.dataTransfer?.types.includes('text/plain') ? '' : ''
+    phSpan.classList.add('drag-over')
+  }
+}
 
-// Palette drag items
+// ─── Palette ──────────────────────────────────────────────────────────────────
+
 const palette = [
-  { group: 'Wrappers',   tokens: WRAPPERS },
-  { group: 'Operators',  tokens: OPERATORS },
-  { group: 'Actions',    tokens: ACTIONS },
-  { group: 'Values',     tokens: VALUES },
-  { group: 'Parameters', tokens: PARAMS_BASE },
+  { group: 'Wrappers',   cls: 'tk-wrapper', tokens: WRAPPERS   },
+  { group: 'Operators',  cls: 'tk-op',      tokens: OPERATORS  },
+  { group: 'Actions',    cls: 'tk-action',  tokens: ACTIONS    },
+  { group: 'Values',     cls: 'tk-value',   tokens: VALUES     },
+  { group: 'Parameters', cls: 'tk-param',   tokens: PARAMS     },
 ]
 
 // Click outside autocomplete
@@ -513,8 +528,8 @@ function onClickOutside(e: MouseEvent) {
     acVisible.value = false
   }
 }
-onMounted(()    => document.addEventListener('mousedown', onClickOutside))
-onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
+onMounted(()   => document.addEventListener('mousedown', onClickOutside))
+onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 </script>
 
 <template>
@@ -535,7 +550,7 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 
         <div v-else class="panel-body">
 
-          <!-- Response: editable for custom commands, locked placeholder for built-ins -->
+          <!-- Response field -->
           <div class="field-group">
             <template v-if="!isBuiltIn">
               <label class="field-label">Response <span class="field-hint">Use {user} {channel} {args}</span></label>
@@ -556,20 +571,40 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
           <div class="field-group">
             <label class="field-label">
               Rule
-              <span class="field-hint">Modifies {output} before it's sent. Drag tokens or type $, [, {</span>
+              <span class="field-hint">Drag tokens or type $, [, { — drop onto ◆ slots to fill them</span>
             </label>
+
+            <!-- Slot legend -->
+            <div class="slot-legend">
+              <span class="legend-item tk-value">value</span>
+              <span class="legend-sep">—</span>
+              <span class="legend-desc">what to check ({output}, {input}…)</span>
+              <span class="legend-sep">·</span>
+              <span class="legend-item tk-op">op</span>
+              <span class="legend-sep">—</span>
+              <span class="legend-desc">comparison operator</span>
+              <span class="legend-sep">·</span>
+              <span class="legend-item tk-param">param</span>
+              <span class="legend-sep">—</span>
+              <span class="legend-desc">pattern/text to match</span>
+              <span class="legend-sep">·</span>
+              <span class="legend-item tk-action">action</span>
+              <span class="legend-sep">—</span>
+              <span class="legend-desc">what to do</span>
+            </div>
+
             <div class="rule-area">
               <!-- Palette -->
               <div class="palette">
                 <div v-for="group in palette" :key="group.group" class="palette-group">
-                  <div class="palette-group-label">{{ group.group }}</div>
+                  <div class="palette-group-label" :class="group.cls">{{ group.group }}</div>
                   <div
                     v-for="tok in group.tokens" :key="tok"
                     class="palette-token" :class="tokenClass(tok)"
                     draggable="true"
                     @dragstart="onDragStart($event, tok)"
                     @click="insertText(tok)"
-                    :title="'Click or drag to insert'"
+                    title="Click or drag to insert"
                   >{{ tok }}</div>
                 </div>
               </div>
@@ -586,13 +621,13 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
                   @keydown="onEditorKeydown"
                   @drop="onEditorDrop"
                   @dragover="onEditorDragover"
-                  :data-placeholder="'[remove{text1}]  or  $if({output}[has]{text1}<do [remove{text1}]>)'"
+                  :data-placeholder="'e.g.  $if({output}[has]{regex1}<do [remove{regex1}]>)'"
                 ></div>
                 <div v-if="ruleWarnings.length" class="rule-warnings">
                   <div v-for="w in ruleWarnings" :key="w" class="rule-warning-item">⚠ {{ w }}</div>
                 </div>
 
-                <!-- Autocomplete dropdown -->
+                <!-- Autocomplete -->
                 <div
                   v-if="acVisible"
                   ref="acRef"
@@ -613,9 +648,10 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
           <div class="params-row">
             <div class="field-group sm" v-for="p in ['regex1','regex2','text1','text2']" :key="p">
               <label class="field-label">
-                <span :class="'tk-param inline'">{{ '{' + p + '}' }}</span>
+                <span class="tk-param inline">{{ '{' + p + '}' }}</span>
               </label>
-              <input v-model="(form as any)[p]" class="field-input" :placeholder="p === 'regex1' || p === 'regex2' ? 'pattern…' : 'text…'" />
+              <input v-model="(form as any)[p]" class="field-input"
+                :placeholder="p.startsWith('regex') ? 'pattern…' : 'text…'" />
             </div>
           </div>
 
@@ -651,7 +687,7 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
             </div>
           </div>
 
-          <!-- Footer actions -->
+          <!-- Footer -->
           <div class="panel-footer">
             <button v-if="!isBuiltIn" class="btn-delete" :disabled="deleting" @click="deleteCmd">
               {{ deleting ? 'Deleting…' : 'Delete command' }}
@@ -678,14 +714,13 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 </template>
 
 <style scoped>
-/* ── Overlay & panel ─────────────────────────────────────────────────────── */
 .panel-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,.65);
   display: flex; align-items: flex-start; justify-content: flex-end;
   z-index: 1000; padding: 0;
 }
 .panel {
-  width: 680px; max-width: 100vw; height: 100vh;
+  width: 700px; max-width: 100vw; height: 100vh;
   background: #1a1a1e; border-left: 1px solid #2a2a30;
   display: flex; flex-direction: column; overflow: hidden;
   animation: slideIn .2s ease;
@@ -694,8 +729,7 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 
 .panel-header {
   display: flex; align-items: flex-start; justify-content: space-between;
-  padding: 20px 24px 16px; border-bottom: 1px solid #222;
-  flex-shrink: 0;
+  padding: 20px 24px 16px; border-bottom: 1px solid #222; flex-shrink: 0;
 }
 .panel-title { font-size: 16px; font-weight: 700; color: #e0e0e0; }
 .panel-cmd   { color: #9d6cff; }
@@ -710,14 +744,14 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 .panel-loading { padding: 40px; text-align: center; color: #555; font-size: 13px; }
 .panel-body    { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
 
-/* ── Fields ──────────────────────────────────────────────────────────────── */
+/* Fields */
 .field-group { display: flex; flex-direction: column; gap: 5px; }
 .field-group.sm { flex: 1; min-width: 0; }
 .field-label {
   font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .05em;
   display: flex; align-items: center; gap: 6px;
 }
-.field-hint  { font-size: 10px; color: #555; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.field-hint { font-size: 10px; color: #555; font-weight: 400; text-transform: none; letter-spacing: 0; }
 .field-input, .field-textarea, .field-select {
   background: #111217; border: 1px solid #2a2a30; color: #e0e0e0;
   font-family: inherit; font-size: 13px; padding: 7px 10px; outline: none;
@@ -727,29 +761,31 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 .field-textarea { resize: vertical; min-height: 52px; }
 .field-select   { appearance: none; cursor: pointer; }
 
-/* output-placeholder styles are in global <style> block below due to Teleport */
-
-/* ── Rule area ───────────────────────────────────────────────────────────── */
-.rule-area {
-  display: flex; gap: 10px; align-items: flex-start;
+/* Slot legend */
+.slot-legend {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+  font-size: 10px; padding: 5px 0 2px;
 }
+.legend-item {
+  font-family: 'Consolas','Fira Mono',monospace; font-size: 10px;
+  padding: 1px 5px; border: 1px solid; border-radius: 2px;
+}
+.legend-sep  { color: #333; }
+.legend-desc { color: #444; }
+
+/* Rule area */
+.rule-area { display: flex; gap: 10px; align-items: flex-start; }
 
 /* Palette */
-.palette {
-  width: 138px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px;
-}
+.palette { width: 138px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
+.palette-group { display: flex; flex-direction: column; gap: 2px; }
 .palette-group-label {
   font-size: 9px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .06em; margin-bottom: 3px;
+  letter-spacing: .06em; margin-bottom: 3px; opacity: .7;
 }
-.palette-group:nth-child(1) .palette-group-label { color: #569cd6aa; } /* Wrappers  — blue   */
-.palette-group:nth-child(2) .palette-group-label { color: #c792eaaa; } /* Operators — purple */
-.palette-group:nth-child(3) .palette-group-label { color: #f14949aa; } /* Actions   — red    */
-.palette-group:nth-child(4) .palette-group-label { color: #4ec9b0aa; } /* Values    — teal   */
-.palette-group:nth-child(5) .palette-group-label { color: #e5c07baa; } /* Params    — yellow */
-.palette-group { display: flex; flex-direction: column; gap: 2px; }
 .palette-token {
-  display: inline-block; padding: 3px 7px; font-size: 11px; font-family: 'Consolas','Fira Mono',monospace;
+  display: inline-block; padding: 3px 7px; font-size: 11px;
+  font-family: 'Consolas','Fira Mono',monospace;
   cursor: grab; border: 1px solid transparent; transition: opacity .1s;
   user-select: none; white-space: nowrap;
 }
@@ -761,16 +797,20 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
   min-height: 110px; max-height: 260px; overflow-y: auto;
   background: #0d0d10; border: 1px solid #2a2a30;
   padding: 10px 12px; font-family: 'Consolas','Fira Mono',monospace; font-size: 13px;
-  line-height: 1.6; color: #c0c0c0; outline: none; white-space: pre-wrap; word-break: break-all;
+  line-height: 1.8; color: #c0c0c0; outline: none; white-space: pre-wrap; word-break: break-all;
   transition: border-color .15s;
 }
-.rule-editor:focus { border-color: #6f2bff55; }
-.rule-editor.invalid { border-color: #f1494966; }
+.rule-editor:focus        { border-color: #6f2bff55; }
+.rule-editor.invalid      { border-color: #f1494966; }
 .rule-editor:empty::before {
-  content: attr(data-placeholder); color: #333; pointer-events: none;
+  content: attr(data-placeholder); color: #2a2a35; pointer-events: none;
 }
-.rule-warnings { margin-top: 5px; display: flex; flex-direction: column; gap: 2px; }
-.rule-warning-item { font-size: 11px; color: #e5c07b; background: rgba(229,192,123,.08); border-left: 2px solid #e5c07b66; padding: 3px 7px; }
+
+.rule-warnings     { margin-top: 5px; display: flex; flex-direction: column; gap: 2px; }
+.rule-warning-item {
+  font-size: 11px; color: #e5c07b;
+  background: rgba(229,192,123,.08); border-left: 2px solid #e5c07b66; padding: 3px 7px;
+}
 
 /* Autocomplete */
 .ac-dropdown {
@@ -784,29 +824,29 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 }
 .ac-item:hover, .ac-item.active { background: #2a2a35; }
 
-/* ── Token colours ───────────────────────────────────────────────────────── */
-/* Deep (global) selectors needed because they're injected into contenteditable innerHTML */
-:deep(.tk-wrapper), .palette-token.tk-wrapper, .ac-item.tk-wrapper { color: #569cd6; border-color: #569cd633; }
-:deep(.tk-op),      .palette-token.tk-op,      .ac-item.tk-op      { color: #c792ea; border-color: #c792ea33; }
-:deep(.tk-action),  .palette-token.tk-action,  .ac-item.tk-action  { color: #f14949; border-color: #f1494933; }
-:deep(.tk-value),   .palette-token.tk-value,   .ac-item.tk-value   { color: #4ec9b0; border-color: #4ec9b033; }
-:deep(.tk-param),   .palette-token.tk-param,   .ac-item.tk-param   { color: #e5c07b; border-color: #e5c07b33; }
-:deep(.tk-do)                                                        { color: #666; }
+/* Token colours — scoped + :deep for contenteditable innerHTML */
+:deep(.tk-wrapper), .palette-token.tk-wrapper, .ac-item.tk-wrapper,
+.palette-group-label.tk-wrapper, .legend-item.tk-wrapper { color: #569cd6; border-color: #569cd633; }
+:deep(.tk-op),      .palette-token.tk-op,      .ac-item.tk-op,
+.palette-group-label.tk-op,      .legend-item.tk-op      { color: #c792ea; border-color: #c792ea33; }
+:deep(.tk-action),  .palette-token.tk-action,  .ac-item.tk-action,
+.palette-group-label.tk-action,  .legend-item.tk-action  { color: #f14949; border-color: #f1494933; }
+:deep(.tk-value),   .palette-token.tk-value,   .ac-item.tk-value,
+.palette-group-label.tk-value,   .legend-item.tk-value   { color: #4ec9b0; border-color: #4ec9b033; }
+:deep(.tk-param),   .palette-token.tk-param,   .ac-item.tk-param,
+.palette-group-label.tk-param,   .legend-item.tk-param   { color: #e5c07b; border-color: #e5c07b33; }
 
 .tk-param.inline { font-size: 11px; font-family: 'Consolas','Fira Mono',monospace; }
 
-/* ── Params / conditions rows ────────────────────────────────────────────── */
-.params-row, .cond-row {
-  display: flex; gap: 10px;
-}
+/* Params / conditions rows */
+.params-row, .cond-row { display: flex; gap: 10px; }
 
-/* ── Footer ──────────────────────────────────────────────────────────────── */
+/* Footer */
 .panel-footer {
   display: flex; align-items: center; justify-content: space-between;
   padding-top: 16px; border-top: 1px solid #222; margin-top: 4px;
 }
 .footer-right { display: flex; gap: 8px; }
-
 .btn-save {
   height: 34px; padding: 0 20px; border: none;
   background: #6f2bff; color: #fff; font-family: inherit; font-size: 12px; font-weight: 600;
@@ -814,8 +854,8 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 }
 .btn-save:hover:not(:disabled) { background: #7f3fff; }
 .btn-save:disabled { opacity: .4; cursor: not-allowed; }
-.btn-save.saved    { background: #1a3d2a; color: #23d18b; }
-.btn-save.invalid  { background: #2a1a0a; color: #e5c07b; border: 1px solid #e5c07b44; }
+.btn-save.saved   { background: #1a3d2a; color: #23d18b; }
+.btn-save.invalid { background: #2a1a0a; color: #e5c07b; border: 1px solid #e5c07b44; }
 .btn-cancel {
   height: 34px; padding: 0 16px; border: 1px solid #333; background: transparent;
   color: #888; font-family: inherit; font-size: 12px; cursor: pointer;
@@ -823,8 +863,7 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 .btn-cancel:hover { border-color: #555; color: #e0e0e0; }
 .btn-delete {
   height: 34px; padding: 0 14px; border: 1px solid #f1494944; background: transparent;
-  color: #f14949; font-family: inherit; font-size: 12px; cursor: pointer;
-  transition: background .15s;
+  color: #f14949; font-family: inherit; font-size: 12px; cursor: pointer; transition: background .15s;
 }
 .btn-delete:hover:not(:disabled) { background: #f1494911; }
 .btn-delete:disabled { opacity: .4; cursor: not-allowed; }
@@ -841,33 +880,35 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 .op-brace { font-size: 20px; color: #2a2a35; line-height: 1; font-weight: 300; }
 .op-label { font-size: 13px; color: #333; letter-spacing: .06em; padding: 0 4px; }
 
-/* $if / $else{ / <do > block tint */
+/* Structural block tints */
 .if-block {
-  background: rgba(86, 156, 214, 0.09);
-  border: 1px solid rgba(86, 156, 214, 0.18);
-  border-radius: 2px;
-  padding: 1px 3px;
-  display: inline;
+  background: rgba(86,156,214,.09); border: 1px solid rgba(86,156,214,.18);
+  border-radius: 2px; padding: 1px 3px; display: inline;
 }
-/* [action{args}] block tint */
 .action-block {
-  background: rgba(241, 73, 73, 0.08);
-  border: 1px solid rgba(241, 73, 73, 0.2);
-  border-radius: 2px;
-  padding: 1px 3px;
-  display: inline;
+  background: rgba(241,73,73,.08); border: 1px solid rgba(241,73,73,.2);
+  border-radius: 2px; padding: 1px 3px; display: inline;
 }
-/* placeholder — ◆ fill-me marker */
+
+/* Typed placeholder slots */
 .tk-placeholder {
   display: inline-block;
-  padding: 0 4px;
-  background: rgba(229, 192, 123, 0.18);
-  border: 1px solid rgba(229, 192, 123, 0.55);
+  padding: 0 5px;
   border-radius: 2px;
-  color: #e5c07b;
   font-size: 10px;
-  line-height: 1.5;
+  font-style: italic;
+  line-height: 1.6;
   cursor: pointer;
   user-select: none;
+  vertical-align: middle;
+  opacity: .85;
 }
+/* Each slot type gets its own color, matching the token palette */
+.tk-placeholder.tk-value  { color: #4ec9b0; background: rgba(78,201,176,.14); border: 1px solid rgba(78,201,176,.4);  }
+.tk-placeholder.tk-param  { color: #e5c07b; background: rgba(229,192,123,.14); border: 1px solid rgba(229,192,123,.4); }
+.tk-placeholder.tk-op     { color: #c792ea; background: rgba(199,146,234,.14); border: 1px solid rgba(199,146,234,.4); }
+.tk-placeholder.tk-action { color: #f14949; background: rgba(241,73,73,.14);  border: 1px solid rgba(241,73,73,.4);  }
+
+/* Drag-over highlight */
+.tk-placeholder.drag-over { opacity: 1; filter: brightness(1.3); }
 </style>
