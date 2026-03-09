@@ -130,7 +130,7 @@ onMounted(() => { load(); loadMods() })
           <div
             class="toggle sm"
             :class="{ on: modRole[perm.key] && modRole.modsEnabled }"
-            @click="if (modRole.modsEnabled) modRole[perm.key] = !modRole[perm.key]"
+            @click="modRole.modsEnabled && (modRole[perm.key] = !modRole[perm.key])"
           >
             <div class="toggle-knob"></div>
           </div>
