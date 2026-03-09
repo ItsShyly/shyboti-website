@@ -637,15 +637,15 @@ function simulateRule() {
   if (!rule.trim()) { simResult.value = { output: '', send: true, errors: ['No rule to simulate'] }; return }
 
   const ctx = {
-  input:   simInput.value,
-  // For built-in commands, {output} is bot-generated — use a descriptive placeholder so rules
-  // that reference {output} still exercise the condition logic in the simulator.
-  output:  props.isBuiltIn ? '{output}' : (form.value.response || ''),
-  user:    simUser.value   || 'testuser',
-  channel: props.channel   || 'testchannel',
-  args:    simInput.value,  // {args} == {input} — same value
-  ...Object.fromEntries(userParams.value.map(p => [p.key, p.value])),
-    }
+    input:   simInput.value,
+    // output: for custom commands use the response template; for built-ins it's whatever the bot generates
+    // (not knowable here, so we use input as a reasonable stand-in — e.g. +say echoes input)
+    output:  form.value.response || simInput.value,
+    user:    simUser.value || 'testuser',
+    channel: props.channel || 'testchannel',
+    args:    simInput.value,
+    ...Object.fromEntries(userParams.value.map(p => [p.key, p.value])),
+  }
 
   try {
     let vars: Record<string, string> = { output: ctx.output }
