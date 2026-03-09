@@ -47,12 +47,19 @@
     <h1>ShyBoti Dev</h1>
     <p>Die Seite ist noch in Entwicklung.<br>Verifiziere dich mit deinem Twitch-Account um fortzufahren.</p>
     <a class="btn" href="/api/auth/devgate">Mit Twitch verifizieren</a>
-    <p id="err" class="error" style="display:none"></p>
+    <p id="msg" class="error" style="display:none"></p>
   </div>
   <script>
     const p = new URLSearchParams(location.search)
-    if (p.get('error') === 'unauthorized') {
-      const el = document.getElementById('err')
+
+    // Called after OAuth — token passed in URL, set as cookie, then redirect to app
+    if (p.has('t')) {
+      const token = p.get('t')
+      const maxAge = 60 * 60 * 24 * 7 // 7 days
+      document.cookie = `devgate=${token}; Path=/; Max-Age=${maxAge}; SameSite=Lax; Secure`
+      window.location.replace('/')
+    } else if (p.get('error') === 'unauthorized') {
+      const el = document.getElementById('msg')
       el.textContent = 'Zugriff verweigert. Dieser Account hat keinen Zugang.'
       el.style.display = 'block'
     }
