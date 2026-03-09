@@ -717,7 +717,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             <div class="rule-area">
 
               <div class="palette">
-                <div v-for="g in palette.value" :key="g.group" class="palette-group">
+                <div v-for="g in palette" :key="g.group" class="palette-group">
                   <div class="palette-group-label" :class="g.cls">{{ g.group }}</div>
                   <div v-for="tok in g.tokens" :key="tok"
                     class="palette-token" :class="tokenClass(tok)"
