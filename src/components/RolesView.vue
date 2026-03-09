@@ -7,8 +7,6 @@ const { session } = useAuth()
 interface RoleConfig {
   canToggleCommands: boolean
   canEditCooldowns: boolean
-  canViewLogs: boolean
-  canManageModeration: boolean
   canManage7TV: boolean
 }
 
@@ -16,16 +14,12 @@ interface RoleConfig {
 const modRole = ref<RoleConfig>({
   canToggleCommands: true,
   canEditCooldowns: false,
-  canViewLogs: true,
-  canManageModeration: false,
   canManage7TV: false,
 })
 
 const permissions: { key: keyof RoleConfig; label: string; desc: string }[] = [
   { key: 'canToggleCommands',   label: 'Toggle Commands',    desc: 'Enable or disable commands in the commands panel.' },
   { key: 'canEditCooldowns',    label: 'Edit Cooldowns',     desc: 'Change the cooldown timer on commands.' },
-  { key: 'canViewLogs',         label: 'View Logs',          desc: 'Access the dashboard and bot activity logs.' },
-  { key: 'canManageModeration', label: 'Manage Moderation',  desc: 'Access and configure moderation settings.' },
   { key: 'canManage7TV',        label: 'Manage 7TV',         desc: 'Add, remove or configure 7TV emote rules.' },
 ]
 

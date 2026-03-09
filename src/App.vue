@@ -40,6 +40,12 @@ function toggleCommands() {
   activeNav.value = commandsOpen.value ? 'Dashboard' : 'Default'
 }
 
+// Only show channels where the user is broadcaster (channel name === their login)
+// TODO: extend when the API returns per-channel role info (e.g. mod list)
+const authorizedChannels = computed(() =>
+  availableChannels.value.filter(ch => ch === session.value?.login)
+)
+
 const showAddBanner = ref(false)
 const toast = ref('')
 function showToast(msg: string) {
@@ -61,7 +67,8 @@ onMounted(async () => {
 
   if (status === 'loggedin' && channel) {
     showToast(`Logged in as ${channel}`)
-    showAddBanner.value = true
+    // Only show the "add bot" banner if the bot is NOT already in their channel
+    showAddBanner.value = !availableChannels.value.includes(channel)
     activeNav.value = 'Dashboard'
   } else if (status === 'added' && channel) {
     showToast(`✓ ShyBoti added to #${channel}`)
@@ -87,13 +94,13 @@ function addBot() { window.location.href = `${API}/auth/add` }
         <span v-if="toast" class="toast">{{ toast }}</span>
         <template v-if="session">
           <!-- Channel switcher -->
-          <div class="channel-switcher" v-if="availableChannels.length > 1">
+          <div class="channel-switcher" v-if="authorizedChannels.length > 1">
             <button class="channel-btn" @click="showChannelMenu = !showChannelMenu">
               #{{ session.channel }} ▾
             </button>
             <div v-if="showChannelMenu" class="channel-menu">
               <button
-                v-for="ch in availableChannels" :key="ch"
+                v-for="ch in authorizedChannels" :key="ch"
                 class="channel-menu-item"
                 :class="{ active: ch === session.channel }"
                 @click="selectChannel(ch)"
@@ -152,6 +159,13 @@ function addBot() { window.location.href = `${API}/auth/add` }
         <HomeView      v-if="activeNav === 'Home'"           @navigate="setNav($event as NavItem)" />
         <DashboardView v-else-if="activeNav === 'Dashboard'" />
         <RolesView     v-else-if="activeNav === 'Roles'" />
+        <div v-else-if="['7TV', 'APIs', 'Moderation', 'Logs'].includes(activeNav)" class="coming-soon-panel">
+          <span class="cs-icon">🛠</span>
+          <div>
+            <div class="cs-title">{{ activeNav }}</div>
+            <div class="cs-sub">This feature is coming soon.</div>
+          </div>
+        </div>
         <CommandsView  v-else                                :activeNav="activeNav" />
       </main>
 
@@ -283,6 +297,16 @@ body {
 .bot-btn { width: 100%; height: 32px; border: none; font-family: inherit; font-size: 12px; cursor: pointer; }
 .bot-btn.add { background: #6f2bff; color: #fff; }
 .bot-btn.add:hover { background: #7f3fff; }
+
+/* ── Coming soon panel ── */
+.coming-soon-panel {
+  display: flex; align-items: center; gap: 18px;
+  padding: 28px 24px; background: #1a1a1e; border: 1px dashed #333;
+  align-self: flex-start;
+}
+.coming-soon-panel .cs-icon { font-size: 1.6rem; }
+.coming-soon-panel .cs-title { font-size: 15px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
+.coming-soon-panel .cs-sub { font-size: 12px; color: #555; }
 
 /* ── Main panel ── */
 .main-panel {
