@@ -318,7 +318,7 @@ function onEditorKeydown(e: KeyboardEvent) {
     if (sel && sel.rangeCount) {
       const range = sel.getRangeAt(0)
       if (range.collapsed) {
-        const checkNode = (n: Node | null) =>
+        const checkNode = (n: Node | null | undefined) =>
           n instanceof HTMLElement && n.classList.contains('tk-placeholder')
         const sib = e.key === 'Backspace'
           ? range.startContainer.childNodes[range.startOffset - 1]
