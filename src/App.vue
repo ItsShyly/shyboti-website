@@ -1,297 +1,292 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { API } from './api'
+import { useAuth } from './auth'
+import HomeView      from './components/HomeView.vue'
+import DashboardView from './components/DashboardView.vue'
+import CommandsView  from './components/CommandsView.vue'
+import RolesView     from './components/RolesView.vue'
 
-// --- Types ---
-interface ChatMessage {
-  id: number
-  user: string
-  color: string
-  text: string
-  parts: MessagePart[]
-  timer: ReturnType<typeof setTimeout>
+const { session, availableChannels, restoreSession, switchChannel, logout, login } = useAuth()
+
+type NavItem = 'Home' | 'Dashboard' | 'Default' | 'Custom' | '7TV' | 'APIs' | 'Logs' | 'Moderation' | 'Roles'
+const activeNav = ref<NavItem>('Home')
+
+const commandsOpen = computed(() => activeNav.value === 'Default' || activeNav.value === 'Custom')
+
+const loginShaking = ref(false)
+function shakeLogin() {
+  if (loginShaking.value) return
+  loginShaking.value = true
+  setTimeout(() => (loginShaking.value = false), 600)
 }
 
-interface MessagePart {
-  type: 'text' | 'emote'
-  value: string
-  url?: string
+const PUBLIC_PAGES: NavItem[] = ['Home', 'Logs']
+
+// --- Channel switcher ---
+const showChannelMenu = ref(false)
+function selectChannel(ch: string) {
+  switchChannel(ch)
+  showChannelMenu.value = false
 }
 
-// --- State ---
-const route = useRoute()
-const messages = ref<ChatMessage[]>([])
-const emoteMap = ref<Record<string, string>>({})
-let ws: WebSocket | null = null
-let msgId = 0
-
-// --- Status from OAuth redirect ---
-const statusMsg = ref('')
-
-// --- 7TV Emotes ---
-const EMOTE_SET_ID = '01JX3CEKZYVQ7JMZTWW638XWG1'
-
-async function loadEmotes() {
-  try {
-    const res = await fetch(`https://7tv.io/v3/emote-sets/${EMOTE_SET_ID}`)
-    const data = await res.json()
-    const map: Record<string, string> = {}
-    for (const emote of (data.emotes ?? []) as Array<{ name: string; id: string }>) {
-      map[emote.name] = `https://cdn.7tv.app/emote/${emote.id}/1x.webp`
-    }
-    emoteMap.value = map
-  } catch (e) {
-    console.error('Failed to load 7TV emotes', e)
-  }
+function setNav(item: NavItem) {
+  if (!PUBLIC_PAGES.includes(item) && !session.value) { shakeLogin(); return }
+  activeNav.value = item
 }
 
-// --- Parse message into text/emote parts ---
-function parseMessage(text: string): MessagePart[] {
-  return text.split(' ').map((word) => {
-    const url = emoteMap.value[word]
-    if (url) {
-      return { type: 'emote' as const, value: word, url }
-    }
-    return { type: 'text' as const, value: word }
-  })
+function toggleCommands() {
+  if (!session.value) { shakeLogin(); return }
+  activeNav.value = commandsOpen.value ? 'Dashboard' : 'Default'
 }
 
-// --- Twitch IRC (anonymous) ---
-const CHANNEL = 'itsshyly'
-
-function connectIRC() {
-  ws = new WebSocket('wss://irc-ws.chat.twitch.tv:443')
-
-  ws.onopen = () => {
-    ws!.send('CAP REQ :twitch.tv/tags twitch.tv/commands')
-    ws!.send('NICK justinfan12345')
-    ws!.send(`JOIN #${CHANNEL}`)
-  }
-
-  ws.onmessage = (event: MessageEvent) => {
-    const raw: string = event.data
-    const lines = raw.split('\r\n').filter(Boolean)
-
-    for (const line of lines) {
-      // PING keepalive
-      if (line.startsWith('PING')) {
-        ws!.send('PONG :tmi.twitch.tv')
-        continue
-      }
-
-      if (!line.includes('PRIVMSG')) continue
-
-      const tagSection = line.startsWith('@') ? line.slice(1, line.indexOf(' ')) : ''
-      const tags: Record<string, string> = {}
-      for (const part of tagSection.split(';')) {
-        const eqIdx = part.indexOf('=')
-        if (eqIdx !== -1) {
-          tags[part.slice(0, eqIdx)] = part.slice(eqIdx + 1)
-        }
-      }
-
-      const msgMatch = line.match(/PRIVMSG #\w+ :(.+)$/)
-      if (!msgMatch || msgMatch[1] == null) continue
-      const text = msgMatch[1]
-
-      const displayName = tags['display-name'] ?? 'anonymous'
-      const color = tags['color'] ?? '#ffffff'
-
-      addMessage(displayName, color, text)
-    }
-  }
-
-  ws.onclose = () => {
-    setTimeout(connectIRC, 3000)
-  }
+const showAddBanner = ref(false)
+const toast = ref('')
+function showToast(msg: string) {
+  toast.value = msg
+  setTimeout(() => (toast.value = ''), 5000)
 }
 
-function addMessage(user: string, color: string, text: string) {
-  const id = ++msgId
-  const parts = parseMessage(text)
-
-  const timer = setTimeout(() => {
-    messages.value = messages.value.filter((m) => m.id !== id)
-  }, 10000)
-
-  messages.value.push({ id, user, color, text, parts, timer })
-
-  if (messages.value.length > 50) {
-    const oldest = messages.value.shift()
-    if (oldest) clearTimeout(oldest.timer)
-  }
-}
-
-// --- Auth ---
-const API_BASE = 'https://shyboti.de/api'
-
-function addBot() {
-  window.location.href = `${API_BASE}/auth/add`
-}
-
-function removeBot() {
-  window.location.href = `${API_BASE}/auth/remove`
-}
-
-// --- Lifecycle ---
 onMounted(async () => {
-  // Handle OAuth redirect status
-  const status = route.query['status'] as string | undefined
-  const channel = route.query['channel'] as string | undefined
-  if (status === 'added' && channel) {
-    statusMsg.value = `✓ ShyBoti wurde zu #${channel} hinzugefügt!`
+  const params  = new URLSearchParams(window.location.search)
+  const token   = params.get('token') ?? localStorage.getItem('shyboti_token') ?? null
+  const status  = params.get('status')
+  const channel = params.get('channel')
+
+  if (params.has('token') || params.has('status')) {
+    window.history.replaceState({}, '', window.location.pathname)
+  }
+
+  if (token) await restoreSession(token)
+
+  if (status === 'loggedin' && channel) {
+    showToast(`Logged in as ${channel}`)
+    showAddBanner.value = true
+    activeNav.value = 'Dashboard'
+  } else if (status === 'added' && channel) {
+    showToast(`✓ ShyBoti added to #${channel}`)
+    showAddBanner.value = false
+    activeNav.value = 'Dashboard'
   } else if (status === 'removed' && channel) {
-    statusMsg.value = `✓ ShyBoti hat #${channel} verlassen.`
-  } else if (status === 'error') {
-    statusMsg.value = '✗ Fehler beim Authentifizieren.'
+    showToast(`✓ ShyBoti left #${channel}`)
   }
-  if (statusMsg.value) {
-    setTimeout(() => (statusMsg.value = ''), 8000)
-  }
-
-  // Load emotes then connect IRC
-  await loadEmotes()
-  connectIRC()
 })
 
-onUnmounted(() => {
-  ws?.close()
-})
+function addBot() { window.location.href = `${API}/auth/add` }
 </script>
 
 <template>
   <div class="page">
-    <header>
-      <h1>ShyBoti ist auf dem Weg&hellip;</h1>
-      <div class="buttons">
-        <button class="btn btn-add" @click="addBot">+ Hinzufügen</button>
-        <button class="btn btn-remove" @click="removeBot">– Entfernen</button>
+
+    <div class="topbar">
+      <div class="topbar-brand" @click="setNav('Home')" style="cursor:pointer">
+        <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/1x.gif" alt="shy" class="brand-emote" />
+        <span class="brand-name">ShyBoti</span>
       </div>
-    </header>
+      <div class="topbar-right">
+        <span v-if="toast" class="toast">{{ toast }}</span>
+        <template v-if="session">
+          <!-- Channel switcher -->
+          <div class="channel-switcher" v-if="availableChannels.length > 1">
+            <button class="channel-btn" @click="showChannelMenu = !showChannelMenu">
+              #{{ session.channel }} ▾
+            </button>
+            <div v-if="showChannelMenu" class="channel-menu">
+              <button
+                v-for="ch in availableChannels" :key="ch"
+                class="channel-menu-item"
+                :class="{ active: ch === session.channel }"
+                @click="selectChannel(ch)"
+              >#{{ ch }}</button>
+            </div>
+          </div>
+          <span v-else class="logged-in-as">#{{ session.channel }}</span>
+          <span class="logged-in-as" style="color:#555">·</span>
+          <span class="logged-in-as">{{ session.login }}</span>
+          <button class="auth-btn logout-btn" @click="logout">Log out</button>
+        </template>
+        <button v-else class="auth-btn login-btn" :class="{ shake: loginShaking }" @click="login">
+          Login with Twitch
+        </button>
+      </div>
+    </div>
 
-    <p v-if="statusMsg" class="status-msg">{{ statusMsg }}</p>
+    <div v-if="session && showAddBanner" class="add-banner">
+      <span>👋 Welcome! Add ShyBoti to your channel to get started.</span>
+      <div class="banner-actions">
+        <button class="banner-btn add" @click="addBot">+ Add ShyBoti</button>
+        <button class="banner-dismiss" @click="showAddBanner = false">✕</button>
+      </div>
+    </div>
 
-    <section class="chat">
-      <TransitionGroup name="fade" tag="div" class="chat-inner">
-        <div v-for="msg in messages" :key="msg.id" class="chat-line">
-          <span class="username" :style="{ color: msg.color }">{{ msg.user }}</span>
-          <span class="colon">: </span>
-          <span class="message-body">
-            <template v-for="(part, i) in msg.parts" :key="i">
-              <img
-                v-if="part.type === 'emote'"
-                :src="part.url"
-                :alt="part.value"
-                class="emote"
-              />
-              <span v-else>{{ part.value }} </span>
-            </template>
-          </span>
+    <div class="body">
+
+      <aside class="sidebar">
+        <button class="sidebar-btn" :class="{ active: activeNav === 'Home' }" @click="setNav('Home')">Home</button>
+        <div class="sidebar-divider"></div>
+        <button class="sidebar-btn" :class="{ active: activeNav === 'Dashboard', locked: !session }" @click="setNav('Dashboard')">
+          Dashboard <span v-if="!session" class="lock-icon">🔒</span>
+        </button>
+        <button class="sidebar-btn sidebar-group-toggle" :class="{ 'group-open': commandsOpen, locked: !session }" @click="toggleCommands">
+          Commands <span v-if="!session" class="lock-icon">🔒</span>
+        </button>
+        <div v-if="commandsOpen" class="sidebar-sub-group">
+          <button v-for="item in ['Default', 'Custom'] as NavItem[]" :key="item"
+            class="sidebar-btn sidebar-sub-btn" :class="{ active: activeNav === item }" @click="setNav(item)">
+            {{ item }}
+          </button>
         </div>
-      </TransitionGroup>
-    </section>
+        <button v-for="item in ['7TV', 'APIs', 'Moderation', 'Roles'] as NavItem[]" :key="item"
+          class="sidebar-btn" :class="{ active: activeNav === item, locked: !session }" @click="setNav(item)">
+          {{ item }} <span v-if="!session" class="lock-icon">🔒</span>
+        </button>
+        <button class="sidebar-btn" :class="{ active: activeNav === 'Logs' }" @click="setNav('Logs')">
+          Logs
+        </button>
+        <div v-if="session" class="sidebar-bottom">
+          <button class="bot-btn add" @click="addBot">+ Add to channel</button>
+        </div>
+      </aside>
+
+      <main class="main-panel">
+        <HomeView      v-if="activeNav === 'Home'"           @navigate="setNav($event as NavItem)" />
+        <DashboardView v-else-if="activeNav === 'Dashboard'" />
+        <RolesView     v-else-if="activeNav === 'Roles'" />
+        <CommandsView  v-else                                :activeNav="activeNav" />
+      </main>
+
+    </div>
   </div>
 </template>
 
 <style>
-/* Reset */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+html, body { height: 100%; }
+
 body {
-  background: #000;
-  color: #fff;
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 15px;
-  min-height: 100vh;
+  background: #02030a; color: #fff;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
 }
 
-.page {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+.page { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Topbar ── */
+.topbar {
+  height: 52px; flex-shrink: 0;
+  background: #0e0e12; border-bottom: 1px solid #1e1e24;
+  display: flex; align-items: center; padding: 0 32px; gap: 16px;
 }
+.topbar-brand { display: flex; align-items: center; gap: 8px; flex: 1; }
+.brand-emote  { width: 28px; height: 28px; image-rendering: pixelated; }
+.brand-name   { font-size: 1rem; font-weight: 700; color: #bf94ff; letter-spacing: 0.04em; }
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.logged-in-as { font-size: 12px; color: #9d6cff; font-weight: 600; }
 
-header {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
+/* ── Channel switcher ── */
+.channel-switcher { position: relative; }
+.channel-btn {
+  height: 30px; padding: 0 12px; border: 1px solid #333;
+  background: #1e1e26; color: #9d6cff; font-family: inherit;
+  font-size: 12px; font-weight: 600; cursor: pointer; letter-spacing: 0.02em;
 }
-
-h1 {
-  font-size: 1.6rem;
-  font-weight: normal;
-  letter-spacing: 0.04em;
+.channel-btn:hover { background: #252530; border-color: #6f2bff55; }
+.channel-menu {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  background: #1b1b1d; border: 1px solid #2a2a30;
+  min-width: 160px; z-index: 100;
+  display: flex; flex-direction: column;
+  box-shadow: 0 8px 24px #00000066;
 }
-
-.buttons {
-  display: flex;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+.channel-menu-item {
+  padding: 9px 16px; border: none; background: transparent;
+  color: #888; font-family: inherit; font-size: 12px;
+  text-align: left; cursor: pointer; transition: background 0.1s, color 0.1s;
 }
+.channel-menu-item:hover { background: #222; color: #fff; }
+.channel-menu-item.active { color: #9d6cff; font-weight: 700; }
 
-.btn {
-  font-family: inherit;
-  font-size: 0.9rem;
-  padding: 0.4rem 1rem;
-  border: 1px solid #fff;
-  background: transparent;
-  color: #fff;
-  cursor: pointer;
-  letter-spacing: 0.05em;
-  transition: background 0.15s, color 0.15s;
+.toast {
+  font-size: 12px; color: #23d18b; background: #0e2a1e;
+  border: 1px solid #23d18b44; padding: 4px 12px; border-radius: 3px;
 }
-
-.btn:hover { background: #fff; color: #000; }
-.btn-remove { border-color: #888; color: #888; }
-.btn-remove:hover { background: #888; color: #000; }
-
-.status-msg {
-  border: 1px solid #555;
-  padding: 0.5rem 0.75rem;
-  color: #aaffaa;
-  font-size: 0.9rem;
+.auth-btn {
+  height: 34px; padding: 0 16px; border: none;
+  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
 }
+.login-btn  { background: #6f2bff; color: #fff; }
+.login-btn:hover { background: #7f3fff; }
+.logout-btn { background: #2c2c2e; color: #aaa; border: 1px solid #333; }
+.logout-btn:hover { background: #3a3a3e; color: #fff; }
 
-/* Chat */
-.chat {
-  width: 100%;
+@keyframes shake {
+  0%   { transform: translateX(0); }
+  15%  { transform: translateX(-5px); }
+  30%  { transform: translateX(5px); }
+  45%  { transform: translateX(-4px); }
+  60%  { transform: translateX(4px); }
+  75%  { transform: translateX(-2px); }
+  90%  { transform: translateX(2px); }
+  100% { transform: translateX(0); }
 }
+.shake { animation: shake 0.6s ease; }
 
-.chat-inner {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
+/* ── Banner ── */
+.add-banner {
+  background: #1a1025; border-bottom: 1px solid #6f2bff44;
+  padding: 10px 32px; display: flex; align-items: center;
+  justify-content: space-between; gap: 12px; font-size: 13px; color: #ccc; flex-shrink: 0;
 }
-
-.chat-line {
-  line-height: 1.5;
-  word-break: break-word;
+.banner-actions { display: flex; align-items: center; gap: 8px; }
+.banner-btn.add {
+  height: 32px; padding: 0 16px; background: #6f2bff; border: none;
+  color: #fff; font-family: inherit; font-size: 12px; cursor: pointer;
 }
+.banner-btn.add:hover { background: #7f3fff; }
+.banner-dismiss { background: transparent; border: none; color: #666; font-size: 14px; cursor: pointer; padding: 0 6px; }
+.banner-dismiss:hover { color: #aaa; }
 
-.username {
-  font-weight: bold;
+/* ── Body ── */
+.body { display: flex; flex: 1; padding: 24px 32px; gap: 24px; min-height: 0; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 260px; flex-shrink: 0; background: #1b1b1d;
+  display: flex; flex-direction: column; padding: 16px 0;
 }
-
-.colon {
-  color: #ccc;
+.sidebar-divider { height: 1px; background: #222; margin: 8px 0; }
+.sidebar-btn {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; padding: 8px 20px; border: none; background: transparent;
+  color: #888; text-align: left; font-family: inherit; font-size: 13px;
+  cursor: pointer; transition: color 0.1s, background 0.1s;
 }
-
-.message-body {
-  color: #eee;
+.sidebar-btn:hover { color: #fff; background: #222; }
+.sidebar-btn.active { color: #9d6cff; font-weight: 700; }
+.sidebar-btn.locked { opacity: 0.5; }
+.sidebar-btn.locked:hover { opacity: 0.8; }
+.lock-icon { font-size: 10px; opacity: 0.6; }
+.sidebar-group-toggle { color: #888; }
+.sidebar-group-toggle:hover { color: #fff; }
+.sidebar-group-toggle.group-open { color: #9d6cff; font-weight: 700; }
+.sidebar-sub-group { border-left: 2px solid #7c3aed; margin: 0 0 4px 20px; }
+.sidebar-sub-btn { padding: 6px 14px; font-size: 12px; color: #777; }
+.sidebar-sub-btn:hover { color: #fff; }
+.sidebar-sub-btn.active { color: #9d6cff; font-weight: 700; }
+.sidebar-bottom {
+  margin-top: auto; padding: 16px;
+  display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #222;
 }
+.bot-btn { width: 100%; height: 32px; border: none; font-family: inherit; font-size: 12px; cursor: pointer; }
+.bot-btn.add { background: #6f2bff; color: #fff; }
+.bot-btn.add:hover { background: #7f3fff; }
 
-.emote {
-  display: inline-block;
-  vertical-align: middle;
-  height: 1.6em;
-  margin: 0 1px;
+/* ── Main panel ── */
+.main-panel {
+  flex: 1; background: #1b1b1d; padding: 20px 24px;
+  display: flex; flex-direction: column; overflow-y: auto; min-height: 0;
 }
-
-/* Fade transition */
-.fade-enter-active { transition: opacity 0.3s; }
-.fade-leave-active { transition: opacity 0.5s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>
