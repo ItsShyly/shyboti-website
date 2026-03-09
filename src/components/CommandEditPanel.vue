@@ -75,6 +75,8 @@ async function load() {
   await nextTick()
   const el = editorRef.value
   if (el) el.innerHTML = highlight(form.value.rule)
+  const rel = responseRef.value
+  if (rel) rel.innerHTML = highlightResponse(form.value.response)
 }
 
 watch(() => props.open, v => { if (v) load() })
@@ -626,6 +628,73 @@ function onEditorDragover(e: DragEvent) {
 
 // ─── Rule Simulator ───────────────────────────────────────────────────────────
 
+// ─── Response field highlighting ───────────────────────────────────────────
+const responseRef = ref<HTMLDivElement | null>(null)
+let _applyingResponseHighlight = false
+
+function highlightResponse(src: string): string {
+  const paramKeys = userParams.value.map(p => p.key).join('|')
+  const paramPat  = paramKeys ? `|\\{(?:${paramKeys})\\}` : ''
+  const pat = new RegExp(
+    `(\\{(?:output|input|user|channel|args)\\}` + paramPat + `)`, 'g'
+  )
+  return escHtml(src).replace(pat, m => {
+    const raw = m.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    const cls = VALUES.includes(raw) ? 'tk-value' : PARAMS.value.includes(raw) ? 'tk-param' : ''
+    return cls ? `<span class="${cls}">${m}</span>` : m
+  })
+}
+
+function getResponseCaretOffset(el: HTMLElement): number {
+  const sel = window.getSelection()
+  if (!sel || !sel.rangeCount) return 0
+  const range = sel.getRangeAt(0)
+  if (!el.contains(range.startContainer)) return 0
+  const pre = document.createRange()
+  pre.setStart(el, 0)
+  pre.setEnd(range.startContainer, range.startOffset)
+  return pre.toString().length
+}
+
+function restoreResponseCaret(el: HTMLElement, offset: number) {
+  let remaining = offset, placed = false
+  function walk(node: Node): void {
+    if (placed) return
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = node.textContent?.length ?? 0
+      if (remaining <= len) {
+        const r = document.createRange(); r.setStart(node, remaining); r.collapse(true)
+        window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(r)
+        placed = true; return
+      }
+      remaining -= len; return
+    }
+    for (const c of Array.from(node.childNodes)) { if (!placed) walk(c) }
+  }
+  walk(el)
+  if (!placed) {
+    const r = document.createRange(); r.selectNodeContents(el); r.collapse(false)
+    window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(r)
+  }
+}
+
+function onResponseInput() {
+  const el = responseRef.value; if (!el) return
+  const offset = getResponseCaretOffset(el)
+  const text = el.innerText.replace(/\n$/, '') // contenteditable adds trailing newline
+  form.value.response = text
+  _applyingResponseHighlight = true
+  el.innerHTML = highlightResponse(text)
+  _applyingResponseHighlight = false
+  nextTick(() => restoreResponseCaret(el, offset))
+}
+
+watch(() => form.value.response, val => {
+  if (_applyingResponseHighlight) return
+  const el = responseRef.value; if (!el) return
+  el.innerHTML = highlightResponse(val)
+}, { flush: 'post' })
+
 const simInput  = ref('')
 const simUser   = ref('testuser')
 const simResult   = ref<{ output: string; send: boolean; errors: string[] } | null>(null)
@@ -780,7 +849,14 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
           <div class="field-group">
             <template v-if="!isBuiltIn">
               <label class="field-label">Response <span class="field-hint">= <code class="hint-code">{output}</code> &nbsp;·&nbsp; also use {user} {channel} {args}</span></label>
-              <textarea v-model="form.response" class="field-textarea" rows="2" placeholder="Hello {user}! You said: {args}" />
+              <div
+                ref="responseRef"
+                class="field-textarea response-editor"
+                contenteditable="true"
+                spellcheck="false"
+                data-placeholder="Hello {user}! You said: {args}"
+                @input="onResponseInput"
+              ></div>
             </template>
             <template v-else>
               <label class="field-label">Output <span class="field-hint">Hardcoded — the bot generates this</span></label>
@@ -960,6 +1036,15 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .field-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; }
 .field-hint  { font-size: 10px; color: #555; font-weight: 400; text-transform: none; letter-spacing: 0; }
 .hint-code   { font-family: 'Consolas','Fira Mono',monospace; color: #4ec9b0; font-style: normal; font-size: 10px; background: rgba(78,201,176,.1); padding: 1px 4px; border-radius: 2px; }
+.response-editor {
+  min-height: 52px; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+  cursor: text; outline: none;
+}
+.response-editor:empty:before {
+  content: attr(data-placeholder);
+  color: #3a3a40; pointer-events: none;
+}
+.response-editor:focus { border-color: #6f2bff55; }
 .field-input, .field-textarea, .field-select { background: #111217; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 13px; padding: 7px 10px; outline: none; transition: border-color .15s; }
 .field-input:focus, .field-textarea:focus, .field-select:focus { border-color: #6f2bff55; }
 .field-textarea { resize: vertical; min-height: 52px; }

@@ -48,10 +48,9 @@ function canAccess(item: NavItem): boolean {
   if (channelRole.value?.role === 'broadcaster') return true
   // While role is still loading, show everything (avoids flicker hiding items)
   if (!channelRole.value) return true
+  // Commands are always visible — permissions only control what actions are enabled inside
+  if (item === 'Default' || item === 'Custom') return true
   const p = channelRole.value.permissions
-  // If mods are globally disabled, they can only see Home, Dashboard, Logs
-  if (!p.modsEnabled) return false
-  if (item === 'Default' || item === 'Custom') return p.canToggleCommands || p.canEditCooldowns
   if (item === '7TV') return p.canManage7TV
   if (item === 'Roles') return false // broadcaster only
   return true // Dashboard, Logs, etc.
@@ -169,8 +168,8 @@ function addBot() { window.location.href = `${API}/auth/add` }
         <button class="sidebar-btn" :class="{ active: activeNav === 'Logs' }" @click="setNav('Logs')">
           Logs
         </button>
-        <div v-if="session" class="sidebar-bottom">
-          <button class="bot-btn add" @click="addBot">+ Add to channel</button>
+        <div v-if="session && !availableChannels.includes(session.login)" class="sidebar-bottom">
+          <button class="bot-btn add" @click="addBot">+ Add to your channel</button>
         </div>
       </aside>
 
