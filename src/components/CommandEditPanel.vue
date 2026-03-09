@@ -168,7 +168,7 @@ function highlight(src: string): string {
   let i = 0
 
   while (i < src.length) {
-    const ch = src[i]
+    const ch = src[i] as string
 
     // ── Placeholder sentinel → atomic coloured span ──────────────────────────
     if (PH_ALL.includes(ch)) {
@@ -199,7 +199,7 @@ function highlight(src: string): string {
         else if (src[j] === '}') { if (depth === 0) break; depth-- }
         inner += src[j]
       }
-      const full = src.slice(i, j + 1)
+      const full = src.slice(i, j + 1) as string
       out += `<span class="if-block">${highlightTokens(escHtml(full))}</span>`
       i = j + 1; continue
     }
@@ -215,7 +215,7 @@ function highlight(src: string): string {
     // Collect plain chars until next special boundary
     let chunk = ''
     while (i < src.length) {
-      const c = src[i]
+      const c = src[i] as string
       if (PH_ALL.includes(c)) break
       if (src.startsWith('$if(', i) || src.startsWith('$else{', i)) break
       const am = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)\{/)
@@ -316,7 +316,10 @@ function getCaretOffset(el: HTMLElement): number {
     // Element node: check if caret is between children
     if (node === range.startContainer) {
       const children = Array.from(node.childNodes)
-      for (let i = 0; i < range.startOffset && !found; i++) walk(children[i])
+      for (let i = 0; i < range.startOffset && !found; i++) {
+        const child = children[i]
+        if (child) walk(child)
+      }
       found = true; return
     }
     for (const child of Array.from(node.childNodes)) { if (!found) walk(child) }
