@@ -869,10 +869,6 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                       <label class="sim-label">input</label>
                       <input v-model="simInput" class="field-input sim-input" placeholder="raw message after command ({args} is the same)" />
                     </div>
-                    <div v-if="isBuiltIn" class="sim-row">
-                      <label class="sim-label">output</label>
-                      <span class="sim-builtin-note">bot-generated — use <code>{output}</code> in your rule to reference it</span>
-                    </div>
                     <div class="sim-row">
                       <label class="sim-label">user</label>
                       <input v-model="simUser" class="field-input sim-input" placeholder="testuser" />
