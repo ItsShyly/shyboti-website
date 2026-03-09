@@ -22,9 +22,10 @@ export interface CustomCommand {
 }
 
 interface Props {
-  cmdName:   string         // built-in command name being edited
-  channel:   string
-  open:      boolean
+  cmdName:    string
+  channel:    string
+  open:       boolean
+  isBuiltIn?: boolean   // true = hardcoded bot command, no Response field
 }
 
 const props  = defineProps<Props>()
@@ -384,11 +385,21 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 
         <div v-else class="panel-body">
 
-          <!-- Response -->
+          <!-- Response: editable for custom commands, locked placeholder for built-ins -->
           <div class="field-group">
-            <label class="field-label">Response <span class="field-hint">Use {user} {channel} {args}</span></label>
-            <textarea v-model="form.response" class="field-textarea" rows="2"
-              placeholder="Hello {user}! You said: {args}" />
+            <template v-if="!isBuiltIn">
+              <label class="field-label">Response <span class="field-hint">Use {user} {channel} {args}</span></label>
+              <textarea v-model="form.response" class="field-textarea" rows="2"
+                placeholder="Hello {user}! You said: {args}" />
+            </template>
+            <template v-else>
+              <label class="field-label">Output <span class="field-hint">Hardcoded — the bot generates this</span></label>
+              <div class="output-placeholder">
+                <span class="op-brace">{</span>
+                <span class="op-label">output</span>
+                <span class="op-brace">}</span>
+              </div>
+            </template>
           </div>
 
           <!-- Rule editor + palette -->
@@ -492,9 +503,10 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 
           <!-- Footer actions -->
           <div class="panel-footer">
-            <button class="btn-delete" :disabled="deleting" @click="deleteCmd">
+            <button v-if="!isBuiltIn" class="btn-delete" :disabled="deleting" @click="deleteCmd">
               {{ deleting ? 'Deleting…' : 'Delete command' }}
             </button>
+            <div v-else></div>
             <div class="footer-right">
               <button class="btn-cancel" @click="emit('close')">Cancel</button>
               <button class="btn-save" :class="{ saved }" :disabled="saving || !ruleValid" @click="save">
@@ -558,6 +570,16 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 .field-input:focus, .field-textarea:focus, .field-select:focus { border-color: #6f2bff55; }
 .field-textarea { resize: vertical; min-height: 52px; }
 .field-select   { appearance: none; cursor: pointer; }
+
+/* ── Built-in output placeholder ────────────────────────────────────────── */
+.output-placeholder {
+  display: inline-flex; align-items: center; gap: 1px;
+  background: #0d0d10; border: 1px dashed #2a2a30;
+  padding: 8px 14px; font-family: 'Consolas','Fira Mono',monospace;
+  user-select: none; cursor: default;
+}
+.op-brace { font-size: 18px; color: #333; line-height: 1; }
+.op-label { font-size: 13px; color: #3a3a3a; letter-spacing: .04em; padding: 0 2px; }
 
 /* ── Rule area ───────────────────────────────────────────────────────────── */
 .rule-area {
