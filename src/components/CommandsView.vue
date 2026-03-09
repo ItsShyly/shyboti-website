@@ -29,6 +29,8 @@ interface CustomCommand {
   isActive: boolean
   cooldown: number
   userCooldown: number
+  modOnly: boolean
+  broadcasterOnly: boolean
 }
 
 const commands       = ref<Command[]>([])
@@ -142,7 +144,7 @@ async function fetchCustomCommands() {
     })
     if (!res.ok) throw new Error()
     const data = await res.json() as { commands: CustomCommand[] }
-    customCommands.value = data.commands.map(c => ({ ...c, isActive: !!c.isActive }))
+    customCommands.value = data.commands.map(c => ({ ...c, isActive: !!c.isActive, modOnly: !!c.modOnly, broadcasterOnly: !!c.broadcasterOnly }))
   } catch {
     customCommands.value = []
   } finally {
@@ -187,10 +189,12 @@ async function updateCommand(cmd: Command) {
   }
 }
 
-function toggle(cmd: Command, field: 'isActive' | 'modOnly' | 'broadcasterOnly') {
+function toggle(cmd: Command | CustomCommand, field: 'isActive' | 'modOnly' | 'broadcasterOnly') {
   if (!canToggle.value) return
-  cmd[field] = !cmd[field]
-  updateCommand(cmd)
+  ;(cmd as any)[field] = !(cmd as any)[field]
+  // route to correct save function
+  if (customCommands.value.includes(cmd as CustomCommand)) updateCustomActive(cmd as CustomCommand)
+  else updateCommand(cmd as Command)
 }
 
 const deletingName = ref<string | null>(null)
@@ -364,41 +368,40 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       </div>
 
       <div v-else class="rows">
-        <div v-for="cmd in filteredCustom()" :key="cmd.name" class="table-row custom-row">
-          <div>
-            <div class="square" :class="cmd.isActive ? 'on' : 'off'"
-              @click="cmd.isActive = !cmd.isActive; updateCustomActive(cmd)"></div>
-          </div>
+        <div v-for="cmd in filteredCustom()" :key="cmd.name" class="table-row">
+          <div><div class="square" :class="cmd.isActive ? 'on' : 'off'"
+            @click="cmd.isActive = !cmd.isActive; updateCustomActive(cmd)"></div></div>
+
           <div class="cmd-name">
             <span class="cmd-cat-dot" style="background:#9d6cff"></span>
             {{ prefix }}{{ cmd.name }}
             <span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
           </div>
-          <div class="custom-response-preview">{{ cmd.response || '\u2014' }}</div>
-          <!-- mod only (n/a for custom) -->
-          <div><span class="na-cell">—</span></div>
-          <!-- broadcaster only (n/a for custom) -->
-          <div><span class="na-cell">—</span></div>
-          <!-- global CD -->
+
+          <div><div class="square" :class="[cmd.modOnly ? 'on' : 'off', { disabled: !canToggle }]"
+            @click="toggle(cmd as any, 'modOnly')"></div></div>
+
+          <div><div class="square" :class="[cmd.broadcasterOnly ? 'on' : 'off', { disabled: !canToggle }]"
+            @click="toggle(cmd as any, 'broadcasterOnly')"></div></div>
+
           <div>
             <div class="cd-input-wrap" :class="{ disabled: !canCooldown }">
               <input type="number" min="0" class="cd-input"
-                :disabled="!canCooldown"
-                :value="cmd.cooldown"
+                :disabled="!canCooldown" :value="cmd.cooldown"
                 @change="onCustomCooldownInput(cmd, 'cooldown', ($event.target as HTMLInputElement).value)" />
               <span class="cd-unit">s</span>
             </div>
           </div>
-          <!-- user CD -->
+
           <div>
             <div class="cd-input-wrap user" :class="{ disabled: !canCooldown }">
               <input type="number" min="0" class="cd-input"
-                :disabled="!canCooldown"
-                :value="cmd.userCooldown"
+                :disabled="!canCooldown" :value="cmd.userCooldown"
                 @change="onCustomCooldownInput(cmd, 'userCooldown', ($event.target as HTMLInputElement).value)" />
               <span class="cd-unit">s</span>
             </div>
           </div>
+
           <div class="custom-actions">
             <button class="edit-btn" @click="openEdit(cmd.name, false)">Edit</button>
             <button
@@ -520,14 +523,8 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .empty-title { font-size: 14px; font-weight: 700; color: #555; margin-bottom: 6px; }
 .empty-sub   { font-size: 12px; color: #444; }
 
-.custom-row { grid-template-columns: 70px 1fr 100px 160px 90px 90px 160px; }
-.custom-response-preview {
-  font-size: 12px; color: #555; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap; padding-right: 12px;
-}
-.cmd-alias { font-size: 11px; color: #6f2bff; font-weight: 400; margin-left: 6px; }
-.na-cell { font-size: 11px; color: #333; }
 .custom-actions { display: flex; align-items: center; gap: 6px; }
+.cmd-alias { font-size: 11px; color: #6f2bff; font-weight: 400; margin-left: 6px; }
 .del-btn { height: 34px; padding: 0 10px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 11px; cursor: pointer; transition: background .15s, border-color .15s, color .15s; white-space: nowrap; }
 .del-btn:hover { background: #f1494911; }
 .del-btn.confirm { border-color: #f14949aa; color: #ff6b6b; background: #f1494922; }
