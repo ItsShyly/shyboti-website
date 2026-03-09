@@ -28,7 +28,12 @@ const cdTimers = ref<Record<string, ReturnType<typeof setTimeout>>>({})
 // Edit panel
 const editOpen    = ref(false)
 const editingCmd  = ref('')
-function openEdit(name: string) { editingCmd.value = name; editOpen.value = true }
+// All commands in the commands table are hardcoded bot commands (built-in)
+// Custom commands created via the panel are separate
+function openEdit(name: string) {
+  editingCmd.value = name
+  editOpen.value   = true
+}
 function onEditSaved() { fetchCommands() }
 
 const CATEGORIES: Record<string, string[]> = {
@@ -41,11 +46,11 @@ const CATEGORIES: Record<string, string[]> = {
 
 const props = defineProps<{ activeNav: string }>()
 
-const BLOCKED = ['join','leave','pm2','refresh','say','to','whitelist','git']
+const BLOCKED = ['join','leave','pm2','refresh','whitelist','git']
 
 function inferCategory(name: string): string {
-  const utility = ['ping','commands','join','leave','pm2','refresh','say','to','user','whitelist','git','cmd','message']
-  const chat    = ['ask','song','gpt','7tv','talk','verify','shyboti']
+  const utility = ['ping','commands','join','leave','pm2','refresh','say','to','user','whitelist','git','cmd','message', 'to']
+  const chat    = ['ask','song','gpt','7tv','talk','verify','shyboti','say']
   const games   = ['66','ssp','sw','bottle']
   if (utility.includes(name)) return 'utility'
   if (chat.includes(name))    return 'chat'
@@ -198,6 +203,7 @@ onMounted(fetchCommands)
     :cmdName="editingCmd"
     :channel="session?.channel ?? ''"
     :open="editOpen"
+    :isBuiltIn="true"
     @close="editOpen = false"
     @saved="onEditSaved"
   />
