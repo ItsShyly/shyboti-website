@@ -41,6 +41,14 @@ async function load() {
         : { name: props.cmdName, response: '', rule: '', alias: '', enabled_when: 'always',
             required_game: '', regex1: '', regex2: '', text1: '', text2: '',
             isActive: true, cooldown: 0, userCooldown: 0 }
+      // Populate userParams values from loaded data
+      if (ex) {
+        userParams.value = userParams.value.map(p => ({
+          ...p, value: (ex as any)[p.key] ?? ''
+        }))
+      } else {
+        userParams.value = userParams.value.map(p => ({ ...p, value: '' }))
+      }
     }
   } catch {}
   loading.value = false
@@ -65,7 +73,12 @@ async function save() {
     await fetch(`${API}/custom-commands/${props.channel}/${props.cmdName}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
-      body: JSON.stringify({ ...form.value, rule: ruleForSave(form.value.rule) }),
+      body: JSON.stringify({
+          ...form.value,
+          rule: ruleForSave(form.value.rule),
+          // Include all dynamic param values by key
+          ...Object.fromEntries(userParams.value.map(p => [p.key, p.value]))
+        }),
     })
     saved.value = true; setTimeout(() => { saved.value = false }, 2000); emit('saved')
   } catch {}
@@ -90,9 +103,49 @@ async function deleteCmd() {
 const OPERATORS = ['[has]','[=]','[starts]','[ends]']
 const ACTIONS   = ['[replace]','[remove]','[delete]','[prepend]','[append]','[send]','[stop]']
 const VALUES    = ['{output}','{input}','{user}','{channel}','{args}']
-const PARAMS    = ['{regex1}','{regex2}','{text1}','{text2}']
 const WRAPPERS  = ['$if']
-const ARG_TOKENS = [...VALUES, ...PARAMS]
+const ARG_TOKENS = computed(() => [...VALUES, ...userParams.value.map(p => `{${p.key}}`)])
+
+// ─── Dynamic parameters (regex/text slots) ───────────────────────────────────
+// Each entry: { key: 'text1', label: 'text1', type: 'text'|'regex', value: '' }
+interface ParamEntry { key: string; label: string; type: 'text' | 'regex'; value: string }
+const userParams = ref<ParamEntry[]>([
+  { key: 'regex1', label: 'regex1', type: 'regex', value: '' },
+  { key: 'regex2', label: 'regex2', type: 'regex', value: '' },
+  { key: 'text1',  label: 'text1',  type: 'text',  value: '' },
+  { key: 'text2',  label: 'text2',  type: 'text',  value: '' },
+])
+
+// Keep PARAMS in sync with userParams for palette/autocomplete
+const PARAMS = computed(() => userParams.value.map(p => `{${p.key}}`))
+
+function addParam(type: 'text' | 'regex') {
+  // Find next available slot name
+  const prefix = type === 'regex' ? 'regex' : 'text'
+  const existing = userParams.value.filter(p => p.type === type).map(p => p.key)
+  let n = 1
+  while (existing.includes(`${prefix}${n}`)) n++
+  const key = `${prefix}${n}`
+  userParams.value.push({ key, label: key, type, value: '' })
+  // Update PH_CANDIDATES for the arg slot
+  PH_CANDIDATES[PH.arg] = ARG_TOKENS.value
+  PH_CANDIDATES[PH.param] = PARAMS.value
+}
+
+function removeParam(key: string) {
+  // Don't allow removing if key is used in rule
+  if (form.value.rule.includes(`{${key}}`)) return
+  userParams.value = userParams.value.filter(p => p.key !== key)
+  PH_CANDIDATES[PH.arg] = ARG_TOKENS.value
+  PH_CANDIDATES[PH.param] = PARAMS.value
+}
+
+// Sync form fields from userParams
+watch(userParams, (params) => {
+  for (const p of params) {
+    (form.value as any)[p.key] = p.value
+  }
+}, { deep: true })
 
 // Placeholder sentinels — private use Unicode, survive DOM round-trips
 // Each is a single char that represents an "unfilled slot" of a specific type
@@ -107,10 +160,10 @@ const PH_ALL = Object.values(PH)
 
 const PH_CANDIDATES: Record<string, string[]> = {
   [PH.value]:  VALUES,
-  [PH.param]:  PARAMS,
+  get [PH.param]()  { return PARAMS.value },
   [PH.op]:     OPERATORS,
   [PH.action]: ACTIONS,
-  [PH.arg]:    ARG_TOKENS,
+  get [PH.arg]()    { return ARG_TOKENS.value },
 }
 const PH_CLASS: Record<string, string> = {
   [PH.value]: 'tk-value', [PH.param]: 'tk-param', [PH.op]: 'tk-op',
@@ -122,18 +175,20 @@ const PH_LABEL: Record<string, string> = {
 }
 
 function tokenClass(tok: string) {
-  if (WRAPPERS.includes(tok))  return 'tk-wrapper'
-  if (OPERATORS.includes(tok)) return 'tk-op'
-  if (ACTIONS.includes(tok))   return 'tk-action'
-  if (VALUES.includes(tok))    return 'tk-value'
-  if (PARAMS.includes(tok))    return 'tk-param'
+  if (WRAPPERS.includes(tok))        return 'tk-wrapper'
+  if (OPERATORS.includes(tok))       return 'tk-op'
+  if (ACTIONS.includes(tok))         return 'tk-action'
+  if (VALUES.includes(tok))          return 'tk-value'
+  if (PARAMS.value.includes(tok))    return 'tk-param'
   return ''
 }
-function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES, ...PARAMS] }
+function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES, ...PARAMS.value] }
 
 // $if skeleton — placeholders mark fill-in spots
 function ifSkeleton() {
-  return `$if(${PH.value}${PH.op}${PH.param}<do [${PH.action}{${PH.arg}}]>)`
+  // PH.value/param fill with full tokens like {output}, {text1} — no extra braces needed
+  // PH.arg likewise fills with {text1} etc — no wrapping braces
+  return `$if(${PH.value}${PH.op}${PH.param}<do [${PH.action}${PH.arg}]>)`
 }
 // Action skeletons — each action gets the right number of typed placeholder slots
 // Single-arg actions default target to {output}, so only the value slot is needed.
@@ -144,15 +199,19 @@ function actionSkeleton(tok: string, selectedText = ''): string {
     // If text was selected/dragged, use it as the first arg
     return `[${name}{${selectedText}}]`
   }
+  // IMPORTANT: arg slots have NO surrounding {} in the skeleton.
+  // The user fills PH.arg with a full token like {text1} (braces included).
+  // If we wrote [remove{PH.arg}] and user fills with {text1} we'd get [remove{{text1}}].
+  // Correct skeleton: [removePH.arg] — user fills → [remove{text1}] ✓
   switch (name) {
     case 'stop':    return `[stop]`
-    case 'delete':  return `[delete{${PH.arg}}]`   // {target}
-    case 'remove':  return `[remove{${PH.arg}}]`   // {value}  (removes from output)
-    case 'prepend': return `[prepend{${PH.arg}}]`  // {text}   (prepends to output)
-    case 'append':  return `[append{${PH.arg}}]`   // {text}   (appends to output)
-    case 'send':    return `[send{${PH.arg}}]`     // {target}
-    case 'replace': return `[replace{${PH.arg}}{${PH.arg}}]`  // {from}{to}  (in output)
-    default:        return `[${name}{${PH.arg}}]`
+    case 'delete':  return `[delete${PH.arg}]`
+    case 'remove':  return `[remove${PH.arg}]`
+    case 'prepend': return `[prepend${PH.arg}]`
+    case 'append':  return `[append${PH.arg}]`
+    case 'send':    return `[send${PH.arg}]`
+    case 'replace': return `[replace${PH.arg}${PH.arg}]`
+    default:        return `[${name}${PH.arg}]`
   }
 }
 
@@ -197,15 +256,26 @@ function escHtml(s: string): string {
 
 // Colour individual DSL tokens in an already-HTML-escaped string
 function colourTokens(s: string): string {
-  const pat = /(\$if|\$else|\[(?:replace|remove|delete|prepend|append|send|stop|has|=|starts|ends)\]|\{(?:output|input|user|channel|args|regex1|regex2|text1|text2)\}|&lt;do|&gt;)/g
+  // Build dynamic param pattern from current userParams
+  const paramKeys = userParams.value.map(p => p.key).join('|')
+  const paramPat  = paramKeys ? `|\\{(?:${paramKeys})\\}` : ''
+  const pat = new RegExp(
+    `(\\$if|\\$else|` +
+    // Actions with args e.g. [remove{text1}] — colour whole block
+    `\\[(?:replace|remove|delete|prepend|append|send|stop)(?:\\{[\\w]+\\})*\\]|` +
+    `\\{(?:output|input|user|channel|args)\\}` +
+    paramPat +
+    `|&lt;do|&gt;)`,
+    'g'
+  )
   return s.replace(pat, m => {
     const raw = m.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')
     let cls = ''
     if (['$if','$else'].includes(raw) || raw === '<do' || raw === '>') cls = 'tk-wrapper'
-    else if (OPERATORS.includes(raw)) cls = 'tk-op'
-    else if (ACTIONS.includes(raw))   cls = 'tk-action'
-    else if (VALUES.includes(raw))    cls = 'tk-value'
-    else if (PARAMS.includes(raw))    cls = 'tk-param'
+    else if (OPERATORS.includes(raw))           cls = 'tk-op'
+    else if (/^\[(?:replace|remove|delete|prepend|append|send|stop)/.test(raw)) cls = 'tk-action'
+    else if (VALUES.includes(raw))              cls = 'tk-value'
+    else if (PARAMS.value.includes(raw))        cls = 'tk-param'
     return cls ? `<span class="${cls}">${m}</span>` : m
   })
 }
@@ -472,16 +542,11 @@ function insertAcItem() {
     // but we're inside <do [...]> so we replace the whole [PH.action{PH.arg}] group
     let insert = item
     if (ph === PH.action && ACTIONS.includes(item)) {
-      // Replace the whole [PH.action{PH.arg}] pattern with the full action skeleton
-      const fullSlot = PH.action + '{' + PH.arg + '}'
-      const hasArgSlot = plain.slice(idx, idx + fullSlot.length) === fullSlot
-      const skel = actionSkeleton(item)  // e.g. [remove{arg}] or [stop]
-      // We're already inside [ ] from the ifSkeleton, so strip the outer brackets
-      // But only if the skeleton actually has them (stop has no inner content)
-      insert = skel.slice(1, skel.lastIndexOf(']')) + skel.slice(skel.lastIndexOf(']') + 1)
-      // Simpler: just insert the full skeleton and replace the surrounding [ ] too
-      // The ifSkeleton puts [PH.action{PH.arg}] so we need to replace all of that
-      const sliceEnd = hasArgSlot ? idx + fullSlot.length : idx + 1
+      // ifSkeleton puts [PH.action PH.arg] (no braces around slots)
+      // pos-1 = '[', pos = PH.action, pos+1 = PH.arg (if present), pos+2 = ']'
+      const skel = actionSkeleton(item)
+      const hasArgSlot = plain[idx + 1] === PH.arg
+      const sliceEnd = hasArgSlot ? idx + 2 : idx + 1  // past PH.arg if present
       form.value.rule = plain.slice(0, idx - 1) + skel + plain.slice(sliceEnd + 1)
       applyHighlight()
       nextTick(() => restoreCaret(el, idx - 1 + skel.length))
@@ -547,12 +612,11 @@ function onEditorDrop(e: DragEvent) {
     if (phFound) {
       let insert = tok
       let slotLen = 1
-      // If filling an action slot, replace the whole [PH.action{PH.arg}] with the full skeleton
+      // If filling an action slot, replace whole [PH.action PH.arg] with full skeleton
       if (ph === PH.action && ACTIONS.includes(tok)) {
-        const fullSlot = PH.action + '{' + PH.arg + '}'
         const skel = actionSkeleton(tok)
-        // pos points at PH.action; pos-1 is '[', sliceEnd+1 is ']'
-        const sliceEnd = plain.slice(pos, pos + fullSlot.length) === fullSlot ? pos + fullSlot.length : pos + 1
+        const hasArgSlot = plain[pos + 1] === PH.arg
+        const sliceEnd = hasArgSlot ? pos + 2 : pos + 1
         form.value.rule = plain.slice(0, pos - 1) + skel + plain.slice(sliceEnd + 1)
         applyHighlight()
         nextTick(() => restoreCaret(el, pos - 1 + skel.length))
@@ -601,13 +665,13 @@ function onEditorDragover(e: DragEvent) {
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
 
-const palette = [
-  { group: 'Wrappers',   cls: 'tk-wrapper', tokens: WRAPPERS  },
-  { group: 'Operators',  cls: 'tk-op',      tokens: OPERATORS },
-  { group: 'Actions',    cls: 'tk-action',  tokens: ACTIONS   },
-  { group: 'Values',     cls: 'tk-value',   tokens: VALUES    },
-  { group: 'Parameters', cls: 'tk-param',   tokens: PARAMS    },
-]
+const palette = computed(() => [
+  { group: 'Wrappers',   cls: 'tk-wrapper', tokens: WRAPPERS       },
+  { group: 'Operators',  cls: 'tk-op',      tokens: OPERATORS      },
+  { group: 'Actions',    cls: 'tk-action',  tokens: ACTIONS        },
+  { group: 'Values',     cls: 'tk-value',   tokens: VALUES         },
+  { group: 'Parameters', cls: 'tk-param',   tokens: PARAMS.value   },
+])
 
 function onClickOutside(e: MouseEvent) {
   if (!acVisible.value) return
@@ -653,7 +717,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             <div class="rule-area">
 
               <div class="palette">
-                <div v-for="g in palette" :key="g.group" class="palette-group">
+                <div v-for="g in palette.value" :key="g.group" class="palette-group">
                   <div class="palette-group-label" :class="g.cls">{{ g.group }}</div>
                   <div v-for="tok in g.tokens" :key="tok"
                     class="palette-token" :class="tokenClass(tok)"
@@ -695,10 +759,31 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             </div>
           </div>
 
-          <div class="params-row">
-            <div class="field-group sm" v-for="p in ['regex1','regex2','text1','text2']" :key="p">
-              <label class="field-label"><span class="tk-param inline">{{ '{' + p + '}' }}</span></label>
-              <input v-model="(form as any)[p]" class="field-input" :placeholder="p.startsWith('regex') ? 'pattern…' : 'text…'" />
+          <!-- Dynamic params: live below the rule editor -->
+          <div class="params-section">
+            <div class="params-header">
+              <span class="field-label">Parameters <span class="field-hint">used in rule as &#123;text1&#125; etc</span></span>
+              <div class="params-add-btns">
+                <button class="btn-add-param" @click="addParam('text')" title="Add text slot">+ text</button>
+                <button class="btn-add-param" @click="addParam('regex')" title="Add regex slot">+ regex</button>
+              </div>
+            </div>
+            <div class="params-list">
+              <div v-for="p in userParams" :key="p.key" class="param-row">
+                <span class="param-key tk-param">{{ '{' + p.key + '}' }}</span>
+                <input
+                  v-model="p.value"
+                  class="field-input param-input"
+                  :placeholder="p.type === 'regex' ? 'pattern…' : 'text…'"
+                />
+                <button
+                  class="btn-remove-param"
+                  :disabled="form.rule.includes('{' + p.key + '}')"
+                  :title="form.rule.includes('{' + p.key + '}') ? 'Used in rule — cannot remove' : 'Remove'"
+                  @click="removeParam(p.key)"
+                >&#x2715;</button>
+              </div>
+              <div v-if="userParams.length === 0" class="params-empty">No parameters — click + text or + regex to add</div>
             </div>
           </div>
 
@@ -802,7 +887,21 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 :deep(.tk-param),   .palette-token.tk-param,   .ac-item.tk-param,   .palette-group-label.tk-param   { color: #e5c07b; border-color: #e5c07b33; }
 :deep(.tk-action-arg) { color: #7ec8a0; border-color: #7ec8a033; }
 .tk-param.inline { font-size: 11px; font-family: 'Consolas','Fira Mono',monospace; }
-.params-row, .cond-row { display: flex; gap: 10px; }
+.cond-row { display: flex; gap: 10px; }
+
+.params-section { display: flex; flex-direction: column; gap: 6px; }
+.params-header { display: flex; align-items: center; justify-content: space-between; }
+.params-add-btns { display: flex; gap: 6px; }
+.btn-add-param { height: 24px; padding: 0 10px; border: 1px solid #2a2a30; background: #111217; color: #888; font-family: inherit; font-size: 11px; cursor: pointer; transition: border-color .15s, color .15s; }
+.btn-add-param:hover { border-color: #e5c07b55; color: #e5c07b; }
+.params-list { display: flex; flex-direction: column; gap: 4px; }
+.param-row { display: flex; align-items: center; gap: 8px; }
+.param-key { font-size: 11px; font-family: 'Consolas','Fira Mono',monospace; min-width: 64px; flex-shrink: 0; }
+.param-input { flex: 1; min-width: 0; }
+.btn-remove-param { width: 24px; height: 24px; flex-shrink: 0; border: 1px solid #f1494933; background: transparent; color: #f14949; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .1s; }
+.btn-remove-param:hover:not(:disabled) { background: #f1494922; }
+.btn-remove-param:disabled { opacity: .25; cursor: not-allowed; }
+.params-empty { font-size: 11px; color: #444; font-style: italic; padding: 4px 0; }
 
 .panel-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 16px; border-top: 1px solid #222; margin-top: 4px; }
 .footer-right { display: flex; gap: 8px; }
