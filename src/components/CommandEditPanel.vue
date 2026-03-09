@@ -630,8 +630,6 @@ function onEditorDragover(e: DragEvent) {
   getPhSpanAt(e)?.classList.add('drag-over')
 }
 
-// ─── Rule Simulator ───────────────────────────────────────────────────────────
-
 // ─── Response field highlighting ───────────────────────────────────────────
 const responseRef = ref<HTMLDivElement | null>(null)
 let _applyingResponseHighlight = false
@@ -685,7 +683,7 @@ function restoreResponseCaret(el: HTMLElement, offset: number) {
 function onResponseInput() {
   const el = responseRef.value; if (!el) return
   const offset = getResponseCaretOffset(el)
-  const text = el.innerText.replace(/\n$/, '') // contenteditable adds trailing newline
+  const text = el.innerText.replace(/\n$/, '')
   form.value.response = text
   _applyingResponseHighlight = true
   el.innerHTML = highlightResponse(text)
@@ -699,8 +697,8 @@ watch(() => form.value.response, val => {
   el.innerHTML = highlightResponse(val)
 }, { flush: 'post' })
 
-const simInput  = ref('')
-const simUser   = ref('testuser')
+const simInput    = ref('')
+const simUser     = ref('testuser')
 const simResult   = ref<{ output: string; send: boolean; errors: string[] } | null>(null)
 const simExpanded = ref(false)
 
@@ -711,8 +709,6 @@ function simulateRule() {
 
   const ctx = {
     input:   simInput.value,
-    // output: for custom commands use the response template; for built-ins it's whatever the bot generates
-    // (not knowable here, so we use input as a reasonable stand-in — e.g. +say echoes input)
     output:  form.value.response || simInput.value,
     user:    simUser.value || 'testuser',
     channel: props.channel || 'testchannel',
@@ -870,7 +866,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             </template>
           </div>
 
-          <!-- ── Rule section (collapsible) ─────────────────────────── -->
+          <!-- ── Rule section (collapsible) ────────────────────────────────────────── -->
           <div class="rule-section">
             <button class="rule-toggle" @click="ruleOpen = !ruleOpen">
               <span class="rule-toggle-arrow">{{ ruleOpen ? '▼' : '►' }}</span>
@@ -906,45 +902,35 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                 </div>
 
                 <div class="editor-col">
+                  <div class="editor-wrap">
+                    <div
+                      ref="editorRef"
+                      class="rule-editor"
+                      :class="{ invalid: !ruleValid && !!form.rule }"
+                      contenteditable="true"
+                      spellcheck="false"
+                      data-placeholder="e.g. $if({output}[has]{text1}&lt;do [remove{text1}]&gt;)"
+                      @input="onEditorInput"
+                      @keydown="onEditorKeydown"
+                      @click="onEditorClick"
+                      @drop="onEditorDrop"
+                      @dragover="onEditorDragover"
+                    ></div>
 
-                  <!-- editor + { } label below -->
-                  <div class="rule-frame">
-                    <div class="editor-wrap">
-                      <div
-                        ref="editorRef"
-                        class="rule-editor"
-                        :class="{ invalid: !ruleValid && !!form.rule }"
-                        contenteditable="true"
-                        spellcheck="false"
-                        data-placeholder="e.g. $if({output}[has]{text1}<do [remove{text1}]>)"
-                        @input="onEditorInput"
-                        @keydown="onEditorKeydown"
-                        @click="onEditorClick"
-                        @drop="onEditorDrop"
-                        @dragover="onEditorDragover"
-                      ></div>
-
-                      <div v-if="form.rule && ruleWarnings.length" class="rule-warnings">
-                        <div v-for="w in ruleWarnings" :key="w" class="rule-warning-item">⚠ {{ w }}</div>
-                      </div>
-
-                      <div v-if="acVisible" ref="acRef" class="ac-dropdown"
-                        :style="{ top: acPos.top + 'px', left: acPos.left + 'px' }">
-                        <div v-for="(item, i) in acItems" :key="item"
-                          class="ac-item" :class="[tokenClass(item), { active: i === acIndex }]"
-                          @mousedown.prevent="acIndex = i; insertAcItem()"
-                        >{{ item }}</div>
-                      </div>
+                    <div v-if="form.rule && ruleWarnings.length" class="rule-warnings">
+                      <div v-for="w in ruleWarnings" :key="w" class="rule-warning-item">⚠ {{ w }}</div>
                     </div>
-                    <!-- horizontal { rule } label under the editor -->
-                    <div class="rule-frame-label">
-                      <span class="rule-brace">{</span>
-                      <span class="rule-frame-target">{{ ruleTarget }}</span>
-                      <span class="rule-frame-dots"></span>
-                      <span class="rule-brace">}</span>
+
+                    <div v-if="acVisible" ref="acRef" class="ac-dropdown"
+                      :style="{ top: acPos.top + 'px', left: acPos.left + 'px' }">
+                      <div v-for="(item, i) in acItems" :key="item"
+                        class="ac-item" :class="[tokenClass(item), { active: i === acIndex }]"
+                        @mousedown.prevent="acIndex = i; insertAcItem()"
+                      >{{ item }}</div>
                     </div>
                   </div>
 
+                  <!-- Params: below the editor -->
                   <div class="params-section">
                     <div class="params-header">
                       <span class="params-label">Parameters</span>
@@ -969,30 +955,36 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                     </div>
                   </div>
 
+                  <!-- Simulator -->
                   <div class="sim-section">
-                  <button class="btn-sim-toggle" @click="simExpanded = !simExpanded; simResult = null">
-                    {{ simExpanded ? '▲ Hide checker' : '▼ Check rule' }}
-                  </button>
-                  <div v-if="simExpanded" class="sim-body">
-                    <div class="sim-row">
-                      <label class="sim-label">input</label>
-                      <input v-model="simInput" class="field-input sim-input" placeholder="raw message after command ({args} is the same)" />
-                    </div>
-                    <div class="sim-row">
-                      <label class="sim-label">user</label>
-                      <input v-model="simUser" class="field-input sim-input" placeholder="testuser" />
-                    </div>
-                    <button class="btn-run-sim" :disabled="!ruleValid" @click="simulateRule">▶ Run</button>
-                    <div v-if="simResult" class="sim-result">
-                      <div v-if="simResult.errors.length" class="sim-errors">
-                        <div v-for="e in simResult.errors" :key="e" class="sim-error-item">✖ {{ e }}</div>
+                    <button class="btn-sim-toggle" @click="simExpanded = !simExpanded">
+                      {{ simExpanded ? '▾ hide simulator' : '▸ test rule' }}
+                    </button>
+                    <div v-if="simExpanded" class="sim-body">
+                      <div class="sim-row">
+                        <span class="sim-label">Input</span>
+                        <input v-model="simInput" class="field-input sim-input" placeholder="test input…" />
                       </div>
-                      <div v-if="!simResult.errors.length || simResult.output" class="sim-output">
-                        <span class="sim-output-label">{{ simResult.send ? 'Output:' : '🔇 Stopped — no message sent' }}</span>
-                        <span v-if="simResult.send" class="sim-output-val">{{ simResult.output || '(empty)' }}</span>
+                      <div class="sim-row">
+                        <span class="sim-label">User</span>
+                        <input v-model="simUser" class="field-input sim-input" placeholder="testuser" />
+                      </div>
+                      <div v-if="isBuiltIn" class="sim-row">
+                        <span class="sim-label">Output</span>
+                        <span class="sim-builtin-note">bot-generated — uses <code>{output}</code> placeholder</span>
+                      </div>
+                      <button class="btn-run-sim" :disabled="!form.rule.trim()" @click="simulateRule">Run</button>
+                      <div v-if="simResult" class="sim-result">
+                        <div v-if="simResult.errors.length" class="sim-errors">
+                          <div v-for="e in simResult.errors" :key="e" class="sim-error-item">{{ e }}</div>
+                        </div>
+                        <div v-if="!simResult.errors.length" class="sim-output">
+                          <span class="sim-output-label">Output</span>
+                          <span class="sim-output-val">{{ simResult.output }}</span>
+                        </div>
                       </div>
                     </div>
-                  </div><!-- /sim-section -->
+                  </div>
 
                 </div><!-- /editor-col -->
               </div><!-- /rule-area -->
@@ -1031,7 +1023,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 
           <div class="panel-footer">
             <button v-if="!isBuiltIn" class="btn-delete" :class="{ confirm: deleteConfirm }" :disabled="deleting" @click="deleteCmd">
-              {{ deleting ? 'Deleting…' : deleteConfirm ? '⚠ Sure? Click again' : 'Delete command' }}
+              {{ deleting ? 'Deleting…' : deleteConfirm ? 'Confirm delete?' : 'Delete command' }}
             </button>
             <div v-else></div>
             <div class="footer-right">
@@ -1157,14 +1149,6 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .rule-target-btn { height: 26px; padding: 0 10px; border: 1px solid #2a2a30; background: #111217; color: #555; font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
 .rule-target-btn:hover { color: #888; }
 .rule-target-btn.active { border-color: #4ec9b066; color: #4ec9b0; background: rgba(78,201,176,.08); }
-
-/* ── Rule frame { } ── */
-.rule-frame { display: flex; flex-direction: column; gap: 0; }
-.rule-frame .editor-wrap { width: 100%; }
-.rule-frame-label { display: flex; align-items: center; gap: 6px; padding: 4px 10px; background: #0a0a0d; border: 1px solid #1e1e24; border-top: none; }
-.rule-brace { font-family: 'Consolas','Fira Mono',monospace; font-size: 18px; color: #2a2a3a; line-height: 1; font-weight: 300; flex-shrink: 0; }
-.rule-frame-target { font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; color: #2a3a35; letter-spacing: .06em; flex-shrink: 0; }
-.rule-frame-dots { flex: 1; border-bottom: 1px dashed #1e1e28; margin: 0 4px; }
 
 .sim-section { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
 .btn-sim-toggle { align-self: flex-start; height: 24px; padding: 0 11px; border: 1px solid #2a2a30; background: #111217; color: #666; font-family: inherit; font-size: 10px; cursor: pointer; transition: border-color .15s, color .15s; }
