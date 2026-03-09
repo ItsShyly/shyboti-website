@@ -24,14 +24,11 @@ const form = ref<CustomCommand>({
   regex1: '', regex2: '', text1: '', text2: '', isActive: true, cooldown: 0, userCooldown: 0,
 })
 
-// ─── Token definitions ────────────────────────────────────────────────────────
-
 const OPERATORS = ['[has]','[hasnot]','[=]','[starts]','[ends]']
 const ACTIONS   = ['[replace]','[remove]','[delete]','[prepend]','[append]','[send]','[stop]']
 const VALUES    = ['{output}','{input}','{user}','{channel}','{args}']
 const WRAPPERS  = ['$if']
 
-// ─── Dynamic parameters ───────────────────────────────────────────────────────
 interface ParamEntry { key: string; type: 'text' | 'regex'; value: string }
 const userParams = ref<ParamEntry[]>([
   { key: 'regex1', type: 'regex', value: '' },
@@ -52,12 +49,9 @@ function removeParam(key: string) {
   if (form.value.rule.includes(`{${key}}`)) return
   userParams.value = userParams.value.filter(p => p.key !== key)
 }
-// Keep form fields in sync with userParams values
 watch(userParams, params => {
   for (const p of params) (form.value as any)[p.key] = p.value
 }, { deep: true })
-
-// ─── Load / Save ──────────────────────────────────────────────────────────────
 
 async function load() {
   if (!session.value || !props.cmdName) return
@@ -124,7 +118,6 @@ async function deleteCmd() {
   deleting.value = false
 }
 
-// ─── Placeholder sentinels ────────────────────────────────────────────────────
 const PH = {
   value:  '\uE001',
   param:  '\uE002',
@@ -159,8 +152,6 @@ function tokenClass(tok: string): string {
 }
 function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES, ...PARAMS.value] }
 
-// ─── Skeletons ────────────────────────────────────────────────────────────────
-
 function ifSkeleton() {
   return `$if(${PH.value}${PH.op}${PH.param}<do [${PH.action}${PH.arg}]>)`
 }
@@ -174,12 +165,6 @@ function actionSkeleton(tok: string, selectedText = ''): string {
     default:        return `[${name}${PH.arg}]`
   }
 }
-
-// ─── Highlight ────────────────────────────────────────────────────────────────
-// Unified character walk — fixes double-] bug where the old sentinel-split approach
-// broke action blocks across segments: [remove\uE005] → '[remove' + chip + ']'
-// causing a stray ] after the placeholder chip.
-// All string indexing uses .charAt() to satisfy noUncheckedIndexedAccess.
 
 function highlight(src: string): string {
   const PH_SET = new Set(PH_ALL)
@@ -196,12 +181,10 @@ function highlight(src: string): string {
   while (i < src.length) {
     const ch = src.charAt(i)
 
-    // ── Sentinel → placeholder chip ───────────────────────────────────────
     if (PH_SET.has(ch)) {
       out += renderPH(ch); i++; continue
     }
 
-    // ── $if(...) block ─────────────────────────────────────────────────────
     if (src.startsWith('$if(', i)) {
       let depth = 0, j = i + 4, inner = ''
       while (j < src.length) {
@@ -214,7 +197,6 @@ function highlight(src: string): string {
       i = j + 1; continue
     }
 
-    // ── $else{...} block ───────────────────────────────────────────────────
     if (src.startsWith('$else{', i)) {
       let depth = 0, j = i + 6, inner = ''
       while (j < src.length) {
@@ -227,7 +209,6 @@ function highlight(src: string): string {
       i = j + 1; continue
     }
 
-    // ── [action...] block — may contain sentinel chips ─────────────────────
     const actionMatch = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)
     if (actionMatch) {
       const name = actionMatch[1] ?? ''
@@ -257,7 +238,6 @@ function highlight(src: string): string {
       i = j; continue
     }
 
-    // ── Plain text run ─────────────────────────────────────────────────────
     let chunk = ''
     while (i < src.length) {
       if (PH_SET.has(src.charAt(i))) break
@@ -271,8 +251,6 @@ function highlight(src: string): string {
   return out
 }
 
-// Colour a sentinel-free plain-text segment.
-// Uses .charAt() throughout to satisfy noUncheckedIndexedAccess.
 function colourSegment(src: string): string {
   if (!src) return ''
   let out = '', i = 0
@@ -361,8 +339,6 @@ function colourTokens(s: string): string {
   })
 }
 
-// ─── Validation ───────────────────────────────────────────────────────────────
-
 const ruleWarnings = computed((): string[] => {
   const r = form.value.rule
   if (!r.trim()) return []
@@ -382,8 +358,6 @@ const ruleWarnings = computed((): string[] => {
   return w
 })
 const ruleValid = computed(() => ruleWarnings.value.length === 0)
-
-// ─── DOM helpers ──────────────────────────────────────────────────────────────
 
 function getPlainText(el: HTMLElement): string {
   function walk(node: Node): string {
@@ -464,8 +438,6 @@ function ruleForSave(rule: string) {
   let r = rule; for (const p of PH_ALL) r = r.split(p).join(''); return r
 }
 
-// ─── Editor state ─────────────────────────────────────────────────────────────
-
 const editorRef  = ref<HTMLDivElement | null>(null)
 const acRef      = ref<HTMLDivElement | null>(null)
 const acItems    = ref<string[]>([])
@@ -474,8 +446,6 @@ const acPos      = ref({ top: 0, left: 0 })
 const acVisible  = ref(false)
 const acTrigger  = ref('')
 const acActivePh = ref<string | null>(null)
-
-// ─── Insert ───────────────────────────────────────────────────────────────────
 
 function insertAtCaret(text: string) {
   const el = editorRef.value; if (!el) return
@@ -492,8 +462,6 @@ function onPaletteClick(tok: string) {
   if (ACTIONS.includes(tok))  { insertAtCaret(actionSkeleton(tok)); return }
   insertAtCaret(tok)
 }
-
-// ─── Editor events ────────────────────────────────────────────────────────────
 
 function onEditorInput() {
   const el = editorRef.value; if (!el) return
@@ -539,8 +507,6 @@ function onEditorClick(e: MouseEvent) {
   const er   = editorRef.value!.getBoundingClientRect()
   acPos.value = { top: rect.bottom - er.top + 4, left: rect.left - er.left }
 }
-
-// ─── Autocomplete ─────────────────────────────────────────────────────────────
 
 function checkAutocomplete() {
   if (acActivePh.value) return
@@ -596,8 +562,6 @@ function insertAcItem() {
   applyHighlight()
   nextTick(() => restoreCaret(el, before.length + insert.length))
 }
-
-// ─── Drag & drop ─────────────────────────────────────────────────────────────
 
 function onDragStart(e: DragEvent, tok: string) { e.dataTransfer?.setData('text/plain', tok) }
 
@@ -660,7 +624,7 @@ function onEditorDragover(e: DragEvent) {
   getPhSpanAt(e)?.classList.add('drag-over')
 }
 
-// ─── Rule Simulator ─────────────────────────────────────────────────────────
+// ─── Rule Simulator ───────────────────────────────────────────────────────────
 
 const simInput    = ref('')
 const simOutput   = ref('')
@@ -676,7 +640,9 @@ function simulateRule() {
 
   const ctx = {
     input:   simInput.value,
-    output:  simOutput.value || form.value.response || '',
+    // For built-in commands, {output} is bot-generated — use a descriptive placeholder so rules
+    // that reference {output} still exercise the condition logic in the simulator.
+    output:  props.isBuiltIn ? '{output}' : (simOutput.value || form.value.response || ''),
     user:    simUser.value   || 'testuser',
     channel: props.channel   || 'testchannel',
     args:    simArgs.value,
@@ -694,7 +660,6 @@ function simulateRule() {
     }
 
     function execActs(actSrc: string): boolean {
-      // Normalize [action{arg1}{arg2}] → [action]{arg1}{arg2}
       const normalized = actSrc.replace(/\[(replace|remove|delete|prepend|append|send|stop)((?:\{[\w]+\})*)\]/g, '[$1]$2')
       const ACTION_RE = /\[(replace|remove|delete|prepend|append|send|stop)\]((?:\{[\w]+\})*)/g
       for (const m of normalized.matchAll(ACTION_RE)) {
@@ -779,8 +744,6 @@ function simulateRule() {
     simResult.value = { output: '', send: false, errors: [`Runtime error: ${e?.message ?? e}`] }
   }
 }
-
-// ─── Palette ──────────────────────────────────────────────────────────────────
 
 const palette = computed(() => [
   { group: 'Wrappers',   cls: 'tk-wrapper', tokens: WRAPPERS     },
@@ -910,7 +873,13 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                     </div>
                     <div class="sim-row">
                       <label class="sim-label">output</label>
-                      <input v-model="simOutput" class="field-input sim-input" :placeholder="form.response || '(command response)'" />
+                      <!-- Built-in commands: output is bot-generated, cannot be set manually -->
+                      <template v-if="isBuiltIn">
+                        <span class="sim-builtin-note">bot-generated — use <code>{output}</code> in your rule to reference it</span>
+                      </template>
+                      <template v-else>
+                        <input v-model="simOutput" class="field-input sim-input" :placeholder="form.response || '(command response)'" />
+                      </template>
                     </div>
                     <div class="sim-row">
                       <label class="sim-label">args</label>
@@ -1075,6 +1044,8 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .sim-row { display: flex; align-items: center; gap: 8px; }
 .sim-label { font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .05em; min-width: 46px; flex-shrink: 0; }
 .sim-input { flex: 1; font-size: 12px !important; padding: 5px 8px !important; }
+.sim-builtin-note { flex: 1; font-size: 11px; color: #383838; font-style: italic; }
+.sim-builtin-note code { font-family: 'Consolas','Fira Mono',monospace; color: #4ec9b0; font-style: normal; }
 .btn-run-sim { align-self: flex-start; height: 26px; padding: 0 14px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; margin-top: 2px; transition: background .15s; }
 .btn-run-sim:hover:not(:disabled) { background: #7f3fff; }
 .btn-run-sim:disabled { opacity: .35; cursor: not-allowed; }
