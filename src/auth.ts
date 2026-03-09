@@ -7,8 +7,20 @@ interface Session {
   token: string
 }
 
+export interface RolePermissions {
+  canToggleCommands: boolean
+  canEditCooldowns: boolean
+  canManage7TV: boolean
+}
+
+export interface ChannelRole {
+  role: 'broadcaster' | 'mod'
+  permissions: RolePermissions
+}
+
 const session = ref<Session | null>(null)
 const availableChannels = ref<string[]>([])
+const channelRole = ref<ChannelRole | null>(null)
 
 export function useAuth() {
   async function restoreSession(token: string) {
@@ -21,6 +33,7 @@ export function useAuth() {
       session.value = { login: data.login, channel: data.channel, token }
       localStorage.setItem('shyboti_token', token)
       await fetchChannels()
+      await fetchRole(data.channel)
     } catch {
       session.value = null
       localStorage.removeItem('shyboti_token')
@@ -39,9 +52,21 @@ export function useAuth() {
     } catch {}
   }
 
-  function switchChannel(channel: string) {
+  async function fetchRole(channel: string) {
+    if (!session.value) return
+    try {
+      const res = await fetch(`${API}/role/${channel}`, {
+        headers: { Authorization: `Bearer ${session.value.token}` }
+      })
+      if (!res.ok) return
+      channelRole.value = await res.json() as ChannelRole
+    } catch {}
+  }
+
+  async function switchChannel(channel: string) {
     if (!session.value) return
     session.value = { ...session.value, channel }
+    await fetchRole(channel)
   }
 
   async function logout() {
@@ -52,6 +77,7 @@ export function useAuth() {
     }).catch(() => {})
     session.value = null
     availableChannels.value = []
+    channelRole.value = null
     localStorage.removeItem('shyboti_token')
   }
 
@@ -62,6 +88,7 @@ export function useAuth() {
   return {
     session: readonly(session),
     availableChannels: readonly(availableChannels),
+    channelRole: readonly(channelRole),
     restoreSession,
     switchChannel,
     logout,

@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 
-const { session } = useAuth()
+const { session, channelRole } = useAuth()
+
+const canToggle   = computed(() => channelRole.value?.permissions.canToggleCommands ?? false)
+const canCooldown = computed(() => channelRole.value?.permissions.canEditCooldowns ?? false)
 
 interface Command {
   name: string
@@ -90,11 +93,13 @@ async function updateCommand(cmd: Command) {
 }
 
 function toggle(cmd: Command, field: 'isActive' | 'modOnly' | 'broadcasterOnly') {
+  if (!canToggle.value) return
   cmd[field] = !cmd[field]
   updateCommand(cmd)
 }
 
 function setCooldown(cmd: Command) {
+  if (!canCooldown.value) return
   const val = prompt(`Cooldown for ${prefix.value}${cmd.name} (seconds):`, String(cmd.cooldown))
   if (val !== null && !isNaN(Number(val))) {
     cmd.cooldown = Number(val)
@@ -130,7 +135,7 @@ onMounted(fetchCommands)
 
       <div class="rows">
         <div v-for="cmd in filtered()" :key="cmd.name" class="table-row" :class="{ saving: saving === cmd.name }">
-          <div><div class="square" :class="cmd.isActive ? 'on' : 'off'" @click="toggle(cmd, 'isActive')"></div></div>
+          <div><div class="square" :class="[cmd.isActive ? 'on' : 'off', { disabled: !canToggle }]" @click="toggle(cmd, 'isActive')"></div></div>
 
           <div class="cmd-name">
             <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
@@ -141,7 +146,7 @@ onMounted(fetchCommands)
 
           <div><div class="square" :class="cmd.broadcasterOnly ? 'on' : 'off'" @click="toggle(cmd, 'broadcasterOnly')"></div></div>
 
-          <div><div class="cooldown-box" @click="setCooldown(cmd)">{{ cmd.cooldown }}s</div></div>
+          <div><div class="cooldown-box" :class="{ disabled: !canCooldown }" @click="setCooldown(cmd)">{{ cmd.cooldown }}s</div></div>
 
           <div>
             <button class="edit-btn" :class="{ blocked: BLOCKED.includes(cmd.name) }">
@@ -192,6 +197,8 @@ onMounted(fetchCommands)
 .square.on  { background: #6b35d4; }
 .square.off { background: #111217; }
 .square:hover { opacity: 0.8; }
+.square.disabled { opacity: 0.3; cursor: not-allowed; }
+.cooldown-box.disabled { opacity: 0.3; cursor: not-allowed; }
 
 .cmd-name {
   font-size: 14px; font-weight: 700; color: #e0e0e0;

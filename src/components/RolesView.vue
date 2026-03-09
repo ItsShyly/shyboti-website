@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { API } from '../api'
 import { useAuth } from '../auth'
 
 const { session } = useAuth()
@@ -23,12 +24,37 @@ const permissions: { key: keyof RoleConfig; label: string; desc: string }[] = [
   { key: 'canManage7TV',        label: 'Manage 7TV',         desc: 'Add, remove or configure 7TV emote rules.' },
 ]
 
-const saved = ref(false)
-function save() {
-  // TODO: persist to bot API when endpoint exists
-  saved.value = true
-  setTimeout(() => (saved.value = false), 2000)
+const saved  = ref(false)
+const saving = ref(false)
+
+async function load() {
+  if (!session.value) return
+  try {
+    const res = await fetch(`${API}/role/${session.value.channel}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    if (!res.ok) return
+    const data = await res.json() as { role: string; permissions: typeof modRole.value }
+    modRole.value = data.permissions
+  } catch {}
 }
+
+async function save() {
+  if (!session.value) return
+  saving.value = true
+  try {
+    await fetch(`${API}/roles/${session.value.channel}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify(modRole.value),
+    })
+    saved.value = true
+    setTimeout(() => (saved.value = false), 2000)
+  } catch {}
+  saving.value = false
+}
+
+onMounted(load)
 </script>
 
 <template>
@@ -38,8 +64,8 @@ function save() {
         <h2 class="roles-title">Roles</h2>
         <p class="roles-sub">Control what mods can access in <span class="chan">#{{ session?.channel }}</span>.</p>
       </div>
-      <button class="save-btn" :class="{ saved }" @click="save">
-        {{ saved ? '✓ Saved' : 'Save changes' }}
+      <button class="save-btn" :class="{ saved }" :disabled="saving" @click="save">
+        {{ saved ? '✓ Saved' : saving ? 'Saving…' : 'Save changes' }}
       </button>
     </div>
 

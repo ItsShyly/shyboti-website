@@ -7,7 +7,7 @@ import DashboardView from './components/DashboardView.vue'
 import CommandsView  from './components/CommandsView.vue'
 import RolesView     from './components/RolesView.vue'
 
-const { session, availableChannels, restoreSession, switchChannel, logout, login } = useAuth()
+const { session, availableChannels, channelRole, restoreSession, switchChannel, logout, login } = useAuth()
 
 type NavItem = 'Home' | 'Dashboard' | 'Default' | 'Custom' | '7TV' | 'APIs' | 'Logs' | 'Moderation' | 'Roles'
 const activeNav = ref<NavItem>('Home')
@@ -32,19 +32,27 @@ function selectChannel(ch: string) {
 
 function setNav(item: NavItem) {
   if (!PUBLIC_PAGES.includes(item) && !session.value) { shakeLogin(); return }
+  if (session.value && !PUBLIC_PAGES.includes(item) && !canAccess(item)) return
   activeNav.value = item
 }
 
 function toggleCommands() {
   if (!session.value) { shakeLogin(); return }
+  if (!canAccess('Default')) return
   activeNav.value = commandsOpen.value ? 'Dashboard' : 'Default'
 }
 
-// Only show channels where the user is broadcaster (channel name === their login)
-// TODO: extend when the API returns per-channel role info (e.g. mod list)
-const authorizedChannels = computed(() =>
-  availableChannels.value.filter(ch => ch === session.value?.login)
-)
+// Which nav items a mod can access based on their permissions
+function canAccess(item: NavItem): boolean {
+  if (!session.value) return false
+  if (channelRole.value?.role === 'broadcaster') return true
+  const p = channelRole.value?.permissions
+  if (!p) return false
+  if (item === 'Default' || item === 'Custom') return p.canToggleCommands || p.canEditCooldowns
+  if (item === '7TV') return p.canManage7TV
+  if (item === 'Roles') return false // broadcaster only
+  return true // Dashboard, Logs, etc.
+}
 
 const showAddBanner = ref(false)
 const toast = ref('')
@@ -94,13 +102,13 @@ function addBot() { window.location.href = `${API}/auth/add` }
         <span v-if="toast" class="toast">{{ toast }}</span>
         <template v-if="session">
           <!-- Channel switcher -->
-          <div class="channel-switcher" v-if="authorizedChannels.length > 1">
+          <div class="channel-switcher" v-if="availableChannels.length > 1">
             <button class="channel-btn" @click="showChannelMenu = !showChannelMenu">
               #{{ session.channel }} ▾
             </button>
             <div v-if="showChannelMenu" class="channel-menu">
               <button
-                v-for="ch in authorizedChannels" :key="ch"
+                v-for="ch in availableChannels" :key="ch"
                 class="channel-menu-item"
                 :class="{ active: ch === session.channel }"
                 @click="selectChannel(ch)"
@@ -134,18 +142,26 @@ function addBot() { window.location.href = `${API}/auth/add` }
         <button class="sidebar-btn" :class="{ active: activeNav === 'Dashboard', locked: !session }" @click="setNav('Dashboard')">
           Dashboard <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <button class="sidebar-btn sidebar-group-toggle" :class="{ 'group-open': commandsOpen, locked: !session }" @click="toggleCommands">
-          Commands <span v-if="!session" class="lock-icon">🔒</span>
-        </button>
-        <div v-if="commandsOpen" class="sidebar-sub-group">
-          <button v-for="item in ['Default', 'Custom'] as NavItem[]" :key="item"
-            class="sidebar-btn sidebar-sub-btn" :class="{ active: activeNav === item }" @click="setNav(item)">
-            {{ item }}
+        <template v-if="!session || canAccess('Default')">
+          <button class="sidebar-btn sidebar-group-toggle" :class="{ 'group-open': commandsOpen, locked: !session }" @click="toggleCommands">
+            Commands <span v-if="!session" class="lock-icon">🔒</span>
           </button>
-        </div>
-        <button v-for="item in ['7TV', 'APIs', 'Moderation', 'Roles'] as NavItem[]" :key="item"
-          class="sidebar-btn" :class="{ active: activeNav === item, locked: !session }" @click="setNav(item)">
-          {{ item }} <span v-if="!session" class="lock-icon">🔒</span>
+          <div v-if="commandsOpen" class="sidebar-sub-group">
+            <button v-for="item in ['Default', 'Custom'] as NavItem[]" :key="item"
+              class="sidebar-btn sidebar-sub-btn" :class="{ active: activeNav === item }" @click="setNav(item)">
+              {{ item }}
+            </button>
+          </div>
+        </template>
+        <template v-for="item in ['7TV', 'APIs', 'Moderation'] as NavItem[]" :key="item">
+          <button v-if="!session || canAccess(item)"
+            class="sidebar-btn" :class="{ active: activeNav === item, locked: !session }" @click="setNav(item)">
+            {{ item }} <span v-if="!session" class="lock-icon">🔒</span>
+          </button>
+        </template>
+        <button v-if="!session || channelRole?.role === 'broadcaster'"
+          class="sidebar-btn" :class="{ active: activeNav === 'Roles', locked: !session }" @click="setNav('Roles')">
+          Roles <span v-if="!session" class="lock-icon">🔒</span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeNav === 'Logs' }" @click="setNav('Logs')">
           Logs
