@@ -26,7 +26,7 @@ const form = ref<CustomCommand>({
 
 // ─── Token definitions ────────────────────────────────────────────────────────
 
-const OPERATORS = ['[has]','[=]','[starts]','[ends]']
+const OPERATORS = ['[has]','[hasnot]','[=]','[starts]','[ends]']
 const ACTIONS   = ['[replace]','[remove]','[delete]','[prepend]','[append]','[send]','[stop]']
 const VALUES    = ['{output}','{input}','{user}','{channel}','{args}']
 const WRAPPERS  = ['$if']
@@ -74,12 +74,10 @@ async function load() {
         : { name: props.cmdName, response: '', rule: '', alias: '', enabled_when: 'always',
             required_game: '', regex1: '', regex2: '', text1: '', text2: '',
             isActive: true, cooldown: 0, userCooldown: 0 }
-      // Seed userParams values from loaded data
       userParams.value = userParams.value.map(p => ({ ...p, value: ex ? ((ex as any)[p.key] ?? '') : '' }))
     }
   } catch {}
   loading.value = false
-  // Seed the editor DOM after load (watcher may have missed it while el was unmounted)
   await nextTick()
   const el = editorRef.value
   if (el) el.innerHTML = highlight(form.value.rule)
@@ -88,7 +86,6 @@ async function load() {
 watch(() => props.open, v => { if (v) load() })
 onMounted(() => { if (props.open) load() })
 
-// Seed editor DOM when rule changes externally (not during typing)
 let _applyingHighlight = false
 watch(() => form.value.rule, newRule => {
   if (_applyingHighlight) return
@@ -128,13 +125,12 @@ async function deleteCmd() {
 }
 
 // ─── Placeholder sentinels ────────────────────────────────────────────────────
-// Private-use Unicode chars — survive DOM round-trips, never confused with real text
 const PH = {
-  value:  '\uE001',  // fills with: {output} {input} etc
-  param:  '\uE002',  // fills with: {text1} {regex1} etc
-  op:     '\uE003',  // fills with: [has] [=] etc
-  action: '\uE004',  // fills with: [remove] [replace] etc  (inside skeleton [ ])
-  arg:    '\uE005',  // fills with: {text1} {output} etc    (NO surrounding {} in skeleton)
+  value:  '\uE001',
+  param:  '\uE002',
+  op:     '\uE003',
+  action: '\uE004',
+  arg:    '\uE005',
 }
 const PH_ALL = Object.values(PH)
 const PH_CLASS: Record<string, string> = {
@@ -145,7 +141,6 @@ const PH_LABEL: Record<string, string> = {
   [PH.value]: 'value', [PH.param]: 'param', [PH.op]: 'op',
   [PH.action]: 'action', [PH.arg]: 'arg',
 }
-// Getter-based so they always reflect current PARAMS/ARG_TOKENS
 const PH_CANDIDATES: Record<string, string[]> = {
   [PH.value]:                VALUES,
   get [PH.param]()  { return PARAMS.value },
@@ -165,8 +160,6 @@ function tokenClass(tok: string): string {
 function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES, ...PARAMS.value] }
 
 // ─── Skeletons ────────────────────────────────────────────────────────────────
-// PH.arg has NO surrounding {} — user fills it with a full token like {text1}
-// so we get [remove{text1}] not [remove{{text1}}]
 
 function ifSkeleton() {
   return `$if(${PH.value}${PH.op}${PH.param}<do [${PH.action}${PH.arg}]>)`
@@ -177,79 +170,164 @@ function actionSkeleton(tok: string, selectedText = ''): string {
   if (selectedText) return `[${name}{${selectedText}}]`
   switch (name) {
     case 'stop':    return `[stop]`
-    case 'replace': return `[replace${PH.arg}${PH.arg}]`  // [replace{from}{to}]
-    default:        return `[${name}${PH.arg}]`            // [remove{val}] etc
+    case 'replace': return `[replace${PH.arg}${PH.arg}]`
+    default:        return `[${name}${PH.arg}]`
   }
 }
 
 // ─── Highlight ────────────────────────────────────────────────────────────────
-// Split on sentinels first (so they never get HTML-escaped or regex-matched),
-// then colour each plain-text segment with block tints + token colours.
+// Unified character walk — fixes double-] bug where the old sentinel-split approach
+// broke action blocks across segments: [remove\uE005] → '[remove' + chip + ']'
+// causing a stray ] after the placeholder chip.
+// All string indexing uses .charAt() to satisfy noUncheckedIndexedAccess.
 
 function highlight(src: string): string {
-  const PH_RE = new RegExp(`([${PH_ALL.join('')}])`, 'g')
-  return src.split(PH_RE).map(part => {
-    if (PH_ALL.includes(part)) {
-      const cls = PH_CLASS[part] ?? '', label = PH_LABEL[part] ?? '?'
-      return `<span class="tk-placeholder ${cls}" data-ph="${part}" contenteditable="false">${label}</span>`
+  const PH_SET = new Set(PH_ALL)
+
+  function renderPH(ph: string): string {
+    const cls   = PH_CLASS[ph] ?? ''
+    const label = PH_LABEL[ph] ?? '?'
+    return `<span class="tk-placeholder ${cls}" data-ph="${ph}" contenteditable="false">${label}</span>`
+  }
+
+  let out = ''
+  let i   = 0
+
+  while (i < src.length) {
+    const ch = src.charAt(i)
+
+    // ── Sentinel → placeholder chip ───────────────────────────────────────
+    if (PH_SET.has(ch)) {
+      out += renderPH(ch); i++; continue
     }
-    return colourSegment(part)
-  }).join('')
+
+    // ── $if(...) block ─────────────────────────────────────────────────────
+    if (src.startsWith('$if(', i)) {
+      let depth = 0, j = i + 4, inner = ''
+      while (j < src.length) {
+        const cj = src.charAt(j)
+        if (cj === '(') depth++
+        else if (cj === ')') { if (depth === 0) break; depth-- }
+        inner += cj; j++
+      }
+      out += `<span class="if-block"><span class="tk-wrapper">$if(</span>${highlight(inner)}<span class="tk-wrapper">)</span></span>`
+      i = j + 1; continue
+    }
+
+    // ── $else{...} block ───────────────────────────────────────────────────
+    if (src.startsWith('$else{', i)) {
+      let depth = 0, j = i + 6, inner = ''
+      while (j < src.length) {
+        const cj = src.charAt(j)
+        if (cj === '{') depth++
+        else if (cj === '}') { if (depth === 0) break; depth-- }
+        inner += cj; j++
+      }
+      out += `<span class="if-block"><span class="tk-wrapper">$else{</span>${highlight(inner)}<span class="tk-wrapper">}</span></span>`
+      i = j + 1; continue
+    }
+
+    // ── [action...] block — may contain sentinel chips ─────────────────────
+    const actionMatch = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)
+    if (actionMatch) {
+      const name = actionMatch[1] ?? ''
+      let j = i + 1 + name.length
+      let innerHtml = ''
+      let foundClose = false
+      while (j < src.length) {
+        const c = src.charAt(j)
+        if (PH_SET.has(c)) {
+          innerHtml += renderPH(c); j++
+        } else if (c === '{') {
+          let tok = ''; j++
+          while (j < src.length && src.charAt(j) !== '}' && !PH_SET.has(src.charAt(j))) {
+            tok += src.charAt(j); j++
+          }
+          if (j < src.length && src.charAt(j) === '}') j++
+          innerHtml += colourTokens(escHtml(`{${tok}}`))
+        } else if (c === ']') {
+          foundClose = true; j++; break
+        } else {
+          innerHtml += escHtml(c); j++
+        }
+      }
+      const nameHtml  = `<span class="tk-action">[${escHtml(name)}</span>`
+      const closeHtml = foundClose ? `<span class="tk-action">]</span>` : ''
+      out += `<span class="action-block">${nameHtml}${innerHtml}${closeHtml}</span>`
+      i = j; continue
+    }
+
+    // ── Plain text run ─────────────────────────────────────────────────────
+    let chunk = ''
+    while (i < src.length) {
+      if (PH_SET.has(src.charAt(i))) break
+      if (src.startsWith('$if(', i) || src.startsWith('$else{', i)) break
+      if (src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)) break
+      chunk += src.charAt(i); i++
+    }
+    if (chunk) out += colourSegment(chunk)
+  }
+
+  return out
 }
 
-// Colour a sentinel-free segment: escape → block tints → token colours
+// Colour a sentinel-free plain-text segment.
+// Uses .charAt() throughout to satisfy noUncheckedIndexedAccess.
 function colourSegment(src: string): string {
   if (!src) return ''
   let out = '', i = 0
   while (i < src.length) {
-    // $if(…) — blue tint wrapper. Inner content gets full colourSegment treatment.
     if (src.startsWith('$if(', i)) {
       let depth = 0, j = i + 4
-      while (j < src.length && !(src[j] === ')' && depth === 0)) {
-        if (src[j] === '(') depth++; else if (src[j] === ')') depth--; j++
+      while (j < src.length) {
+        const cj = src.charAt(j)
+        if (cj === ')' && depth === 0) break
+        if (cj === '(') depth++; else if (cj === ')') depth--
+        j++
       }
-      // Render prefix '$if(' and suffix ')' as wrapper tokens; inner content recursively
       const inner = src.slice(i + 4, j)
       out += `<span class="if-block"><span class="tk-wrapper">$if(</span>${colourSegment(inner)}<span class="tk-wrapper">)</span></span>`
       i = j + 1; continue
     }
-    // $else{…} — blue tint wrapper
     if (src.startsWith('$else{', i)) {
       let depth = 0, j = i + 6
-      while (j < src.length && !(src[j] === '}' && depth === 0)) {
-        if (src[j] === '{') depth++; else if (src[j] === '}') depth--; j++
+      while (j < src.length) {
+        const cj = src.charAt(j)
+        if (cj === '}' && depth === 0) break
+        if (cj === '{') depth++; else if (cj === '}') depth--
+        j++
       }
       const inner = src.slice(i + 6, j)
       out += `<span class="if-block"><span class="tk-wrapper">$else{</span>${colourSegment(inner)}<span class="tk-wrapper">}</span></span>`
       i = j + 1; continue
     }
-    // [action…] — red tint wrapper. Inner args get token colours.
     const actionStart = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)
     if (actionStart) {
       let depth = 0, j = i + 1
       while (j < src.length) {
-        if (src[j] === '{') depth++
-        else if (src[j] === '}') depth--
-        else if (src[j] === ']' && depth === 0) { j++; break }
+        const cj = src.charAt(j)
+        if (cj === '{') depth++
+        else if (cj === '}') depth--
+        else if (cj === ']' && depth === 0) { j++; break }
         j++
       }
-      // Colour the action name red, args individually (values/params keep their colour)
-      const actionFull = src.slice(i, j)  // e.g. [replace{text1}{text2}]
-      // Split into: [name, {arg1}, {arg2}, ]
+      const actionFull = src.slice(i, j)
+      const foundClose = src.charAt(j - 1) === ']'
       const actionName = actionFull.match(/^\[([\w]+)/)?.[1] ?? ''
-      const argsStr = actionFull.slice(1 + actionName.length, -1)  // {text1}{text2}
-      const nameHtml = `<span class="tk-action">[${escHtml(actionName)}</span>`
-      const argsHtml = colourTokens(escHtml(argsStr))
-      const closeHtml = `<span class="tk-action">]</span>`
+      const argsStr = foundClose
+        ? actionFull.slice(1 + actionName.length, -1)
+        : actionFull.slice(1 + actionName.length)
+      const nameHtml  = `<span class="tk-action">[${escHtml(actionName)}</span>`
+      const argsHtml  = colourTokens(escHtml(argsStr))
+      const closeHtml = foundClose ? `<span class="tk-action">]</span>` : ''
       out += `<span class="action-block">${nameHtml}${argsHtml}${closeHtml}</span>`
       i = j; continue
     }
-    // Plain chars up to next special start
     let chunk = ''
     while (i < src.length) {
       if (src.startsWith('$if(', i) || src.startsWith('$else{', i)) break
       if (src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)) break
-      chunk += src[i++]
+      chunk += src.charAt(i); i++
     }
     if (chunk) out += colourTokens(escHtml(chunk))
   }
@@ -260,21 +338,14 @@ function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-// Token-colour an already-escaped HTML string (no sentinels present).
-// Does NOT match actions-with-args like [remove{text1}] — those are wrapped
-// in .action-block by colourSegment. Only colours bare tokens individually.
 function colourTokens(s: string): string {
   const paramKeys = userParams.value.map(p => p.key).join('|')
   const paramPat  = paramKeys ? `|\\{(?:${paramKeys})\\}` : ''
   const pat = new RegExp(
     `(\\$if|\\$else` +
-    // bare actions only (no args) — actions WITH args get their tint from action-block
     `|\\[(?:replace|remove|delete|prepend|append|send|stop)\\]` +
-    // operators
-    `|\\[(?:has|=|starts|ends)\\]` +
-    // values
+    `|\\[(?:has|hasnot|=|starts|ends)\\]` +
     `|\\{(?:output|input|user|channel|args)\\}` +
-    // dynamic params
     paramPat +
     `|&lt;do|&gt;)`, 'g'
   )
@@ -438,7 +509,6 @@ function onEditorKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertAcItem(); return }
     if (e.key === 'Escape')    { acVisible.value = false; acActivePh.value = null; return }
   }
-  // $if + ( → expand immediately
   if (e.key === '(') {
     const el = editorRef.value; if (!el) return
     const before = getPlainText(el).slice(0, getCaretOffset(el))
@@ -481,7 +551,6 @@ function checkAutocomplete() {
   const partial = before.match(/(\$[\w]*|\[[\w=]*|\{[\w]*)$/)
   if (!partial) { acVisible.value = false; return }
   const p = partial[0]
-  // Include exact matches too ($if typed fully → offer to expand)
   const candidates = allTokens().filter(t => t.startsWith(p))
   if (!candidates.length) { acVisible.value = false; return }
   acTrigger.value = p; acItems.value = candidates; acIndex.value = 0; acVisible.value = true
@@ -498,15 +567,13 @@ function insertAcItem() {
   acVisible.value = false
   const el = editorRef.value; if (!el) return
 
-  // ── Placeholder fill mode ─────────────────────────────────────────────────
   if (acActivePh.value) {
     const ph = acActivePh.value; acActivePh.value = null
     const plain = getPlainText(el)
     const idx   = plain.indexOf(ph); if (idx === -1) return
     if (ph === PH.action && ACTIONS.includes(item)) {
-      // Replace [PH.action PH.arg] (pos-1='[', pos=PH.action, pos+1=PH.arg?, pos+?=']')
       const skel = actionSkeleton(item)
-      const hasArg = plain[idx + 1] === PH.arg
+      const hasArg = plain.charAt(idx + 1) === PH.arg
       const sliceEnd = hasArg ? idx + 2 : idx + 1
       form.value.rule = plain.slice(0, idx - 1) + skel + plain.slice(sliceEnd + 1)
       applyHighlight(); nextTick(() => restoreCaret(el, idx - 1 + skel.length))
@@ -517,15 +584,13 @@ function insertAcItem() {
     return
   }
 
-  // ── Typing mode ───────────────────────────────────────────────────────────
   const plain   = getPlainText(el)
   const offset  = getCaretOffset(el)
   const trigLen = acTrigger.value.length
   const before  = plain.slice(0, offset - trigLen)
   const after   = plain.slice(offset)
   let insert = item
-  // Expand $if and actions to skeletons (even when exact token typed)
-  if (item === '$if')           insert = ifSkeleton()
+  if (item === '$if')              insert = ifSkeleton()
   else if (ACTIONS.includes(item)) insert = actionSkeleton(item)
   form.value.rule = before + insert + after
   applyHighlight()
@@ -564,7 +629,7 @@ function onEditorDrop(e: DragEvent) {
     if (!phFound) return
     if (ph === PH.action && ACTIONS.includes(tok)) {
       const skel = actionSkeleton(tok)
-      const hasArg = plain[pos + 1] === PH.arg
+      const hasArg = plain.charAt(pos + 1) === PH.arg
       const sliceEnd = hasArg ? pos + 2 : pos + 1
       form.value.rule = plain.slice(0, pos - 1) + skel + plain.slice(sliceEnd + 1)
       applyHighlight(); nextTick(() => restoreCaret(el, pos - 1 + skel.length))
@@ -575,7 +640,6 @@ function onEditorDrop(e: DragEvent) {
     return
   }
 
-  // Drop at cursor
   let dropOff = 0
   if ((document as any).caretRangeFromPoint) {
     const r = (document as any).caretRangeFromPoint(e.clientX, e.clientY)
@@ -585,7 +649,7 @@ function onEditorDrop(e: DragEvent) {
     }
   }
   const plain = getPlainText(el)
-  let insert = tok === '$if' ? ifSkeleton() : ACTIONS.includes(tok) ? actionSkeleton(tok) : tok
+  const insert = tok === '$if' ? ifSkeleton() : ACTIONS.includes(tok) ? actionSkeleton(tok) : tok
   form.value.rule = plain.slice(0, dropOff) + insert + plain.slice(dropOff)
   applyHighlight(); nextTick(() => restoreCaret(el, dropOff + insert.length))
 }
@@ -594,6 +658,126 @@ function onEditorDragover(e: DragEvent) {
   e.preventDefault()
   document.querySelectorAll('.tk-placeholder.drag-over').forEach(el => el.classList.remove('drag-over'))
   getPhSpanAt(e)?.classList.add('drag-over')
+}
+
+// ─── Rule Simulator ─────────────────────────────────────────────────────────
+
+const simInput    = ref('')
+const simOutput   = ref('')
+const simUser     = ref('testuser')
+const simArgs     = ref('')
+const simResult   = ref<{ output: string; send: boolean; errors: string[] } | null>(null)
+const simExpanded = ref(false)
+
+function simulateRule() {
+  const errors: string[] = []
+  const rule = ruleForSave(form.value.rule)
+  if (!rule.trim()) { simResult.value = { output: '', send: true, errors: ['No rule to simulate'] }; return }
+
+  const ctx = {
+    input:   simInput.value,
+    output:  simOutput.value || form.value.response || '',
+    user:    simUser.value   || 'testuser',
+    channel: props.channel   || 'testchannel',
+    args:    simArgs.value,
+    ...Object.fromEntries(userParams.value.map(p => [p.key, p.value])),
+  }
+
+  try {
+    let vars: Record<string, string> = { output: ctx.output }
+    let src = rule.trim()
+    let send = true
+
+    function resolveVal(name: string): string {
+      if (name in vars) return vars[name] ?? ''
+      return (ctx as any)[name] ?? ''
+    }
+
+    function execActs(actSrc: string): boolean {
+      // Normalize [action{arg1}{arg2}] → [action]{arg1}{arg2}
+      const normalized = actSrc.replace(/\[(replace|remove|delete|prepend|append|send|stop)((?:\{[\w]+\})*)\]/g, '[$1]$2')
+      const ACTION_RE = /\[(replace|remove|delete|prepend|append|send|stop)\]((?:\{[\w]+\})*)/g
+      for (const m of normalized.matchAll(ACTION_RE)) {
+        const action   = m[1] ?? ''
+        const argNames = [...(m[2] ?? '').matchAll(/\{([\w]+)\}/g)].map((a: RegExpMatchArray) => a[1] ?? '')
+        const args     = argNames.map(resolveVal)
+        const twoArg   = ['remove','replace','prepend','append']
+        const target   = (twoArg.includes(action) && argNames.length === 1) ? 'output' : (argNames[0] ?? 'output')
+        const val0 = args[0] ?? '', val1 = args[1] ?? ''
+        if (action === 'stop') return true
+        switch (action) {
+          case 'delete':  vars[target] = ''; break
+          case 'prepend': vars[target] = (argNames.length === 1 ? val0 : val1) + (vars[target] ?? ''); break
+          case 'append':  vars[target] = (vars[target] ?? '') + (argNames.length === 1 ? val0 : val1); break
+          case 'remove': { const rv = argNames.length === 1 ? val0 : val1; vars[target] = (vars[target] ?? resolveVal(target)).split(rv).join(''); break }
+          case 'replace':
+            if (argNames.length <= 2) vars['output'] = (vars['output'] ?? ctx.output).split(val0).join(val1)
+            else vars[target] = (vars[target] ?? '').split(val1).join(args[2] ?? '')
+            break
+          case 'send': vars['__send__'] = resolveVal(argNames[0] ?? 'output'); break
+        }
+      }
+      return false
+    }
+
+    function evalCond(cond: string): boolean {
+      const cm = cond.match(/^\{([\w]+)\}\[([\w=<>]+)\]\{([\w]+)\}$/)
+      if (!cm) { errors.push(`Invalid condition syntax: "${cond}"`); return false }
+      const left = resolveVal(cm[1] ?? ''), op = cm[2] ?? '', right = resolveVal(cm[3] ?? '')
+      const lN = parseFloat(left), rN = parseFloat(right), num = !isNaN(lN) && !isNaN(rN)
+      switch (op) {
+        case 'has':    return left.includes(right)
+        case 'hasnot': return !left.includes(right)
+        case '=':      return left === right
+        case 'starts': return left.startsWith(right)
+        case 'ends':   return left.endsWith(right)
+        case '<':  return num ? lN < rN  : left < right
+        case '>':  return num ? lN > rN  : left > right
+        case '<=': return num ? lN <= rN : left <= right
+        case '>=': return num ? lN >= rN : left >= right
+        default: errors.push(`Unknown operator: [${op}]`); return false
+      }
+    }
+
+    let safety = 0
+    while (src.includes('$if(') && safety++ < 20) {
+      const start = src.indexOf('$if(')
+      let depth = 0, idx = start + 4, inner = ''
+      for (; idx < src.length; idx++) {
+        const ci = src.charAt(idx)
+        if (ci === '(') depth++
+        else if (ci === ')') { if (depth === 0) break; depth-- }
+        inner += ci
+      }
+      const full = src.slice(start, idx + 1)
+      const doStart = inner.indexOf('<do')
+      if (doStart === -1) { errors.push('Missing <do> in $if'); break }
+      let doEnd = -1, bd = 0
+      for (let k = doStart + 3; k < inner.length; k++) {
+        const ck = inner.charAt(k)
+        if (ck === '[') bd++
+        else if (ck === ']') bd--
+        else if (ck === '>' && bd === 0) { doEnd = k; break }
+      }
+      if (doEnd === -1) { errors.push('Unclosed <do> in $if'); break }
+      const condition = inner.slice(0, doStart).trim()
+      const doBlock   = inner.slice(doStart + 3, doEnd).trim()
+      const rest      = inner.slice(doEnd + 1).trim()
+      const elseMatch = rest.match(/^\$else\{(.*)\}$/)
+      const elseBlock = elseMatch ? (elseMatch[1] ?? '').trim() : ''
+      const condTrue  = evalCond(condition)
+      const block     = condTrue ? doBlock : elseBlock
+      if (block) { if (execActs(block)) { send = false; break } }
+      src = src.replace(full, '').trim()
+    }
+
+    if (send && src.trim()) { if (execActs(src)) send = false }
+
+    const finalOutput = vars['__send__'] ?? vars['output'] ?? ctx.output
+    simResult.value = { output: finalOutput, send, errors }
+  } catch (e: any) {
+    simResult.value = { output: '', send: false, errors: [`Runtime error: ${e?.message ?? e}`] }
+  }
 }
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -632,7 +816,6 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
         <div v-if="loading" class="panel-loading">Loading…</div>
         <div v-else class="panel-body">
 
-          <!-- Response / Output -->
           <div class="field-group">
             <template v-if="!isBuiltIn">
               <label class="field-label">Response <span class="field-hint">Use {user} {channel} {args}</span></label>
@@ -646,12 +829,10 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             </template>
           </div>
 
-          <!-- Rule + palette + params -->
           <div class="field-group">
             <label class="field-label">Rule <span class="field-hint">Click palette or type $ [ { — click a coloured slot to fill it</span></label>
             <div class="rule-area">
 
-              <!-- Left: palette -->
               <div class="palette">
                 <div v-for="g in palette" :key="g.group" class="palette-group">
                   <div class="palette-group-label" :class="g.cls">{{ g.group }}</div>
@@ -665,7 +846,6 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                 </div>
               </div>
 
-              <!-- Right: editor + params -->
               <div class="editor-col">
                 <div class="editor-wrap">
                   <div
@@ -695,7 +875,6 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                   </div>
                 </div>
 
-                <!-- Params: directly below the editor, same column -->
                 <div class="params-section">
                   <div class="params-header">
                     <span class="params-label">Parameters</span>
@@ -719,12 +898,45 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                     </div>
                   </div>
                 </div>
-              </div><!-- /editor-col -->
 
-            </div><!-- /rule-area -->
-          </div><!-- /field-group Rule -->
+                <div class="sim-section">
+                  <button class="btn-sim-toggle" @click="simExpanded = !simExpanded; simResult = null">
+                    {{ simExpanded ? '▲ Hide checker' : '▼ Check rule' }}
+                  </button>
+                  <div v-if="simExpanded" class="sim-body">
+                    <div class="sim-row">
+                      <label class="sim-label">input</label>
+                      <input v-model="simInput" class="field-input sim-input" placeholder="raw message after command" />
+                    </div>
+                    <div class="sim-row">
+                      <label class="sim-label">output</label>
+                      <input v-model="simOutput" class="field-input sim-input" :placeholder="form.response || '(command response)'" />
+                    </div>
+                    <div class="sim-row">
+                      <label class="sim-label">args</label>
+                      <input v-model="simArgs" class="field-input sim-input" placeholder="space-separated args" />
+                    </div>
+                    <div class="sim-row">
+                      <label class="sim-label">user</label>
+                      <input v-model="simUser" class="field-input sim-input" placeholder="testuser" />
+                    </div>
+                    <button class="btn-run-sim" :disabled="!ruleValid" @click="simulateRule">▶ Run</button>
+                    <div v-if="simResult" class="sim-result">
+                      <div v-if="simResult.errors.length" class="sim-errors">
+                        <div v-for="e in simResult.errors" :key="e" class="sim-error-item">✖ {{ e }}</div>
+                      </div>
+                      <div v-if="!simResult.errors.length || simResult.output" class="sim-output">
+                        <span class="sim-output-label">{{ simResult.send ? 'Output:' : '🔇 Stopped — no message sent' }}</span>
+                        <span v-if="simResult.send" class="sim-output-val">{{ simResult.output || '(empty)' }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
-          <!-- Settings row -->
+              </div>
+            </div>
+          </div>
+
           <div class="cond-row">
             <div class="field-group sm">
               <label class="field-label">Active when</label>
@@ -755,7 +967,6 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             </div>
           </div>
 
-          <!-- Footer -->
           <div class="panel-footer">
             <button v-if="!isBuiltIn" class="btn-delete" :disabled="deleting" @click="deleteCmd">
               {{ deleting ? 'Deleting…' : 'Delete command' }}
@@ -800,7 +1011,6 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .field-textarea { resize: vertical; min-height: 52px; }
 .field-select   { appearance: none; cursor: pointer; }
 
-/* Rule layout: palette left | editor+params right */
 .rule-area { display: flex; flex-direction: row; gap: 10px; align-items: flex-start; }
 .palette { width: 130px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
 .palette-group { display: flex; flex-direction: column; gap: 2px; }
@@ -808,7 +1018,6 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .palette-token { display: inline-block; padding: 3px 7px; font-size: 11px; font-family: 'Consolas','Fira Mono',monospace; cursor: grab; border: 1px solid transparent; transition: opacity .1s; user-select: none; white-space: nowrap; }
 .palette-token:hover { opacity: .75; }
 
-/* editor-col: right column containing both editor and params stacked vertically */
 .editor-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; overflow: visible; }
 .editor-wrap { position: relative; width: 100%; }
 
@@ -823,7 +1032,6 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .ac-item { padding: 5px 10px; font-size: 12px; font-family: 'Consolas','Fira Mono',monospace; cursor: pointer; transition: background .1s; }
 .ac-item:hover, .ac-item.active { background: #2a2a35; }
 
-/* Params below editor */
 .params-section { display: flex; flex-direction: column; gap: 5px; }
 .params-header { display: flex; align-items: center; justify-content: space-between; }
 .params-label { font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .05em; }
@@ -859,19 +1067,33 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .btn-delete { height: 34px; padding: 0 14px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 12px; cursor: pointer; transition: background .15s; }
 .btn-delete:hover:not(:disabled) { background: #f1494911; }
 .btn-delete:disabled { opacity: .4; cursor: not-allowed; }
+
+.sim-section { display: flex; flex-direction: column; gap: 0; margin-top: 2px; }
+.btn-sim-toggle { align-self: flex-start; height: 24px; padding: 0 11px; border: 1px solid #2a2a30; background: #111217; color: #666; font-family: inherit; font-size: 10px; cursor: pointer; transition: border-color .15s, color .15s; }
+.btn-sim-toggle:hover { border-color: #6f2bff55; color: #9d6cff; }
+.sim-body { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; background: #0d0d10; border: 1px solid #2a2a30; padding: 10px 12px; }
+.sim-row { display: flex; align-items: center; gap: 8px; }
+.sim-label { font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .05em; min-width: 46px; flex-shrink: 0; }
+.sim-input { flex: 1; font-size: 12px !important; padding: 5px 8px !important; }
+.btn-run-sim { align-self: flex-start; height: 26px; padding: 0 14px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; margin-top: 2px; transition: background .15s; }
+.btn-run-sim:hover:not(:disabled) { background: #7f3fff; }
+.btn-run-sim:disabled { opacity: .35; cursor: not-allowed; }
+.sim-result { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.sim-errors { display: flex; flex-direction: column; gap: 2px; }
+.sim-error-item { font-size: 11px; color: #f14949; background: rgba(241,73,73,.08); border-left: 2px solid #f1494966; padding: 3px 7px; }
+.sim-output { display: flex; align-items: baseline; gap: 8px; }
+.sim-output-label { font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0; }
+.sim-output-val { font-size: 13px; font-family: 'Consolas','Fira Mono',monospace; color: #23d18b; background: rgba(35,209,139,.08); border: 1px solid rgba(35,209,139,.25); padding: 4px 10px; word-break: break-all; flex: 1; }
 </style>
 
 <style>
-/* Global: affects :deep rule-editor content */
 .output-placeholder { display: inline-flex; align-items: center; gap: 2px; background: #0d0d10; border: 1px dashed #252530; padding: 8px 14px; font-family: 'Consolas','Fira Mono',monospace; user-select: none; cursor: default; }
 .op-brace { font-size: 20px; color: #2a2a35; line-height: 1; font-weight: 300; }
 .op-label { font-size: 13px; color: #333; letter-spacing: .06em; padding: 0 4px; }
 
-/* Block tints rendered inside the contenteditable */
 .if-block     { background: rgba(86,156,214,.10); border: 1px solid rgba(86,156,214,.22); border-radius: 3px; padding: 1px 3px; display: inline; }
 .action-block { background: rgba(241,73,73,.10);  border: 1px solid rgba(241,73,73,.25);  border-radius: 3px; padding: 1px 3px; display: inline; }
 
-/* Placeholder slot chips */
 .tk-placeholder {
   display: inline-block; padding: 0 5px; border-radius: 3px;
   font-size: 10px; font-style: italic; line-height: 1.6;
