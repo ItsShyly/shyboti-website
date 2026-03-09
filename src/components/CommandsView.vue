@@ -192,9 +192,24 @@ async function updateCommand(cmd: Command) {
 function toggle(cmd: Command | CustomCommand, field: 'isActive' | 'modOnly' | 'broadcasterOnly') {
   if (!canToggle.value) return
   ;(cmd as any)[field] = !(cmd as any)[field]
-  // route to correct save function
   if (customCommands.value.includes(cmd as CustomCommand)) updateCustomActive(cmd as CustomCommand)
   else updateCommand(cmd as Command)
+}
+
+function cycleRestriction(cmd: Command | CustomCommand) {
+  if (!canToggle.value) return
+  const c = cmd as any
+  if (!c.modOnly && !c.broadcasterOnly) { c.modOnly = true;  c.broadcasterOnly = false }
+  else if (c.modOnly)                   { c.modOnly = false; c.broadcasterOnly = true  }
+  else                                  { c.modOnly = false; c.broadcasterOnly = false }
+  if (customCommands.value.includes(cmd as CustomCommand)) updateCustomActive(cmd as CustomCommand)
+  else updateCommand(cmd as Command)
+}
+
+function restrictionLabel(cmd: { modOnly: boolean; broadcasterOnly: boolean }): string {
+  if (cmd.broadcasterOnly) return 'BC only'
+  if (cmd.modOnly)         return 'Mod only'
+  return 'Everyone'
 }
 
 const deletingName = ref<string | null>(null)
@@ -277,8 +292,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       <div class="table-header">
         <div>On/Off</div>
         <div>Name</div>
-        <div>Mod Only</div>
-        <div>Broadcaster Only</div>
+        <div>Access</div>
         <div>Global CD</div>
         <div>User CD</div>
         <div>Features</div>
@@ -293,9 +307,9 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
             {{ prefix }}{{ cmd.name }}
           </div>
 
-          <div><div class="square" :class="cmd.modOnly ? 'on' : 'off'" @click="toggle(cmd, 'modOnly')"></div></div>
-
-          <div><div class="square" :class="cmd.broadcasterOnly ? 'on' : 'off'" @click="toggle(cmd, 'broadcasterOnly')"></div></div>
+          <div>
+            <button class="access-btn" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly, disabled: !canToggle }" @click="cycleRestriction(cmd)">{{ restrictionLabel(cmd) }}</button>
+          </div>
 
           <div>
             <div class="cd-input-wrap" :class="{ disabled: !canCooldown }">
@@ -378,11 +392,9 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
             <span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
           </div>
 
-          <div><div class="square" :class="[cmd.modOnly ? 'on' : 'off', { disabled: !canToggle }]"
-            @click="toggle(cmd as any, 'modOnly')"></div></div>
-
-          <div><div class="square" :class="[cmd.broadcasterOnly ? 'on' : 'off', { disabled: !canToggle }]"
-            @click="toggle(cmd as any, 'broadcasterOnly')"></div></div>
+          <div>
+            <button class="access-btn" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly, disabled: !canToggle }" @click="cycleRestriction(cmd)">{{ restrictionLabel(cmd) }}</button>
+          </div>
 
           <div>
             <div class="cd-input-wrap" :class="{ disabled: !canCooldown }">
@@ -440,7 +452,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .state-msg { color: #555; padding: 40px; text-align: center; font-size: 14px; }
 
 .table-header,
-.table-row { display: grid; grid-template-columns: 70px 1fr 100px 160px 90px 90px 110px; align-items: center; }
+.table-row { display: grid; grid-template-columns: 70px 1fr 110px 90px 90px 110px; align-items: center; }
 
 .table-header {
   padding: 0 16px 10px;
@@ -499,6 +511,20 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 }
 .edit-btn:hover:not(.blocked) { background: #6f2bff; color: #fff; }
 .edit-btn.blocked { border-color: #333; color: #444; cursor: default; }
+
+.access-btn {
+  height: 26px; padding: 0 8px; min-width: 76px;
+  border: 1px solid #333; background: #111217;
+  color: #555; font-family: inherit; font-size: 11px; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+  white-space: nowrap;
+}
+.access-btn:hover:not(.disabled) { border-color: #555; color: #aaa; }
+.access-btn.access-mod  { border-color: #c792ea55; color: #c792ea; background: rgba(199,146,234,.08); }
+.access-btn.access-mod:hover { background: rgba(199,146,234,.15); }
+.access-btn.access-bc   { border-color: #f1494955; color: #f14949; background: rgba(241,73,73,.08); }
+.access-btn.access-bc:hover  { background: rgba(241,73,73,.15); }
+.access-btn.disabled    { opacity: .35; cursor: not-allowed; pointer-events: none; }
 
 /* ── Custom tab ─────────────────────────────────────────────────── */
 .custom-header {
