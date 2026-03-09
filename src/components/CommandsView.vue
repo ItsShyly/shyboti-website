@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
+import CommandEditPanel from './CommandEditPanel.vue'
 
 const { session, channelRole } = useAuth()
 
@@ -22,6 +23,13 @@ const prefix   = ref('+')
 const loading  = ref(true)
 const search   = ref('')
 const saving   = ref<string | null>(null)
+const cdTimers = ref<Record<string, ReturnType<typeof setTimeout>>>({})
+
+// Edit panel
+const editOpen    = ref(false)
+const editingCmd  = ref('')
+function openEdit(name: string) { editingCmd.value = name; editOpen.value = true }
+function onEditSaved() { fetchCommands() }
 
 const CATEGORIES: Record<string, string[]> = {
   Default:    [],
@@ -99,14 +107,14 @@ function toggle(cmd: Command, field: 'isActive' | 'modOnly' | 'broadcasterOnly')
   updateCommand(cmd)
 }
 
-function setCooldown(cmd: Command, field: 'cooldown' | 'userCooldown') {
+function onCooldownInput(cmd: Command, field: 'cooldown' | 'userCooldown', raw: string) {
   if (!canCooldown.value) return
-  const label = field === 'cooldown' ? 'Global cooldown' : 'User cooldown'
-  const val = prompt(`${label} for ${prefix.value}${cmd.name} (seconds):`, String(cmd[field]))
-  if (val !== null && !isNaN(Number(val))) {
-    cmd[field] = Number(val)
-    updateCommand(cmd)
-  }
+  const val = parseInt(raw)
+  if (isNaN(val) || val < 0) return
+  cmd[field] = val
+  const key = `${cmd.name}_${field}`
+  clearTimeout(cdTimers.value[key])
+  cdTimers.value[key] = setTimeout(() => updateCommand(cmd), 600)
 }
 
 onMounted(fetchCommands)
@@ -149,12 +157,36 @@ onMounted(fetchCommands)
 
           <div><div class="square" :class="cmd.broadcasterOnly ? 'on' : 'off'" @click="toggle(cmd, 'broadcasterOnly')"></div></div>
 
-          <div><div class="cooldown-box" :class="{ disabled: !canCooldown }" @click="setCooldown(cmd, 'cooldown')">{{ cmd.cooldown }}s</div></div>
-
-          <div><div class="cooldown-box user" :class="{ disabled: !canCooldown }" @click="setCooldown(cmd, 'userCooldown')">{{ cmd.userCooldown }}s</div></div>
+          <div>
+            <div class="cd-input-wrap" :class="{ disabled: !canCooldown }">
+              <input
+                type="number" min="0" class="cd-input"
+                :disabled="!canCooldown"
+                :value="cmd.cooldown"
+                @change="onCooldownInput(cmd, 'cooldown', ($event.target as HTMLInputElement).value)"
+              />
+              <span class="cd-unit">s</span>
+            </div>
+          </div>
 
           <div>
-            <button class="edit-btn" :class="{ blocked: BLOCKED.includes(cmd.name) }">
+            <div class="cd-input-wrap user" :class="{ disabled: !canCooldown }">
+              <input
+                type="number" min="0" class="cd-input"
+                :disabled="!canCooldown"
+                :value="cmd.userCooldown"
+                @change="onCooldownInput(cmd, 'userCooldown', ($event.target as HTMLInputElement).value)"
+              />
+              <span class="cd-unit">s</span>
+            </div>
+          </div>
+
+          <div>
+            <button
+              class="edit-btn"
+              :class="{ blocked: BLOCKED.includes(cmd.name) }"
+              @click="!BLOCKED.includes(cmd.name) && openEdit(cmd.name)"
+            >
               {{ BLOCKED.includes(cmd.name) ? 'Blocked' : 'Edit' }}
             </button>
           </div>
@@ -162,6 +194,13 @@ onMounted(fetchCommands)
       </div>
     </template>
   </div>
+<CommandEditPanel
+    :cmdName="editingCmd"
+    :channel="session?.channel ?? ''"
+    :open="editOpen"
+    @close="editOpen = false"
+    @saved="onEditSaved"
+  />
 </template>
 
 <style scoped>
@@ -211,14 +250,24 @@ onMounted(fetchCommands)
 }
 .cmd-cat-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
 
-.cooldown-box {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 48px; height: 28px; padding: 0 8px;
-  background: #111217; font-size: 13px; cursor: pointer; transition: background 0.1s;
+.cd-input-wrap {
+  display: inline-flex; align-items: center;
+  height: 28px; background: #111217; padding: 0 6px 0 8px;
+  transition: background 0.15s, opacity 0.15s;
 }
-.cooldown-box:hover:not(.disabled) { background: #1e1e26; }
-.cooldown-box.user { background: #111e26; }
-.cooldown-box.user:hover:not(.disabled) { background: #1a2a36; }
+.cd-input-wrap:focus-within { background: #1a1a24; outline: 1px solid #6f2bff55; }
+.cd-input-wrap.user { background: #111e26; }
+.cd-input-wrap.user:focus-within { background: #141f2e; }
+.cd-input-wrap.disabled { opacity: 0.3; pointer-events: none; }
+.cd-input {
+  width: 38px; background: transparent; border: none; outline: none;
+  color: #e0e0e0; font-family: inherit; font-size: 13px;
+  text-align: right;
+  -moz-appearance: textfield;
+}
+.cd-input::-webkit-outer-spin-button,
+.cd-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.cd-unit { font-size: 11px; color: #555; margin-left: 2px; }
 
 .edit-btn {
   width: 76px; height: 34px;
