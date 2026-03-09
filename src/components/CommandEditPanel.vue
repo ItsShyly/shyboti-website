@@ -202,26 +202,28 @@ function colourSegment(src: string): string {
   if (!src) return ''
   let out = '', i = 0
   while (i < src.length) {
-    // $if(…) — blue block. We scan for closing ')' at depth 0.
+    // $if(…) — blue tint wrapper. Inner content gets full colourSegment treatment.
     if (src.startsWith('$if(', i)) {
       let depth = 0, j = i + 4
       while (j < src.length && !(src[j] === ')' && depth === 0)) {
         if (src[j] === '(') depth++; else if (src[j] === ')') depth--; j++
       }
-      const full = src.slice(i, j + 1)
-      out += `<span class="if-block">${colourTokens(escHtml(full))}</span>`
+      // Render prefix '$if(' and suffix ')' as wrapper tokens; inner content recursively
+      const inner = src.slice(i + 4, j)
+      out += `<span class="if-block"><span class="tk-wrapper">$if(</span>${colourSegment(inner)}<span class="tk-wrapper">)</span></span>`
       i = j + 1; continue
     }
-    // $else{…} — blue block
+    // $else{…} — blue tint wrapper
     if (src.startsWith('$else{', i)) {
       let depth = 0, j = i + 6
       while (j < src.length && !(src[j] === '}' && depth === 0)) {
         if (src[j] === '{') depth++; else if (src[j] === '}') depth--; j++
       }
-      out += `<span class="if-block">${colourTokens(escHtml(src.slice(i, j + 1)))}</span>`
+      const inner = src.slice(i + 6, j)
+      out += `<span class="if-block"><span class="tk-wrapper">$else{</span>${colourSegment(inner)}<span class="tk-wrapper">}</span></span>`
       i = j + 1; continue
     }
-    // [action{…}{…}] — red block. Collect up to the first ] not inside {}
+    // [action…] — red tint wrapper. Inner args get token colours.
     const actionStart = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)
     if (actionStart) {
       let depth = 0, j = i + 1
@@ -231,7 +233,15 @@ function colourSegment(src: string): string {
         else if (src[j] === ']' && depth === 0) { j++; break }
         j++
       }
-      out += `<span class="action-block">${colourTokens(escHtml(src.slice(i, j)))}</span>`
+      // Colour the action name red, args individually (values/params keep their colour)
+      const actionFull = src.slice(i, j)  // e.g. [replace{text1}{text2}]
+      // Split into: [name, {arg1}, {arg2}, ]
+      const actionName = actionFull.match(/^\[([\w]+)/)?.[1] ?? ''
+      const argsStr = actionFull.slice(1 + actionName.length, -1)  // {text1}{text2}
+      const nameHtml = `<span class="tk-action">[${escHtml(actionName)}</span>`
+      const argsHtml = colourTokens(escHtml(argsStr))
+      const closeHtml = `<span class="tk-action">]</span>`
+      out += `<span class="action-block">${nameHtml}${argsHtml}${closeHtml}</span>`
       i = j; continue
     }
     // Plain chars up to next special start
@@ -250,15 +260,21 @@ function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-// Token-colour an already-escaped HTML string (no sentinels present)
+// Token-colour an already-escaped HTML string (no sentinels present).
+// Does NOT match actions-with-args like [remove{text1}] — those are wrapped
+// in .action-block by colourSegment. Only colours bare tokens individually.
 function colourTokens(s: string): string {
   const paramKeys = userParams.value.map(p => p.key).join('|')
   const paramPat  = paramKeys ? `|\\{(?:${paramKeys})\\}` : ''
   const pat = new RegExp(
     `(\\$if|\\$else` +
-    `|\\[(?:replace|remove|delete|prepend|append|send|stop)(?:\\{[\\w]+\\})*\\]` +
+    // bare actions only (no args) — actions WITH args get their tint from action-block
+    `|\\[(?:replace|remove|delete|prepend|append|send|stop)\\]` +
+    // operators
     `|\\[(?:has|=|starts|ends)\\]` +
+    // values
     `|\\{(?:output|input|user|channel|args)\\}` +
+    // dynamic params
     paramPat +
     `|&lt;do|&gt;)`, 'g'
   )
@@ -266,10 +282,10 @@ function colourTokens(s: string): string {
     const raw = m.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
     let cls = ''
     if (['$if','$else'].includes(raw) || raw === '<do' || raw === '>') cls = 'tk-wrapper'
-    else if (OPERATORS.includes(raw))                                   cls = 'tk-op'
-    else if (/^\[(?:replace|remove|delete|prepend|append|send|stop)/.test(raw)) cls = 'tk-action'
-    else if (VALUES.includes(raw))                                      cls = 'tk-value'
-    else if (PARAMS.value.includes(raw))                                cls = 'tk-param'
+    else if (OPERATORS.includes(raw))           cls = 'tk-op'
+    else if (ACTIONS.includes(raw))             cls = 'tk-action'
+    else if (VALUES.includes(raw))              cls = 'tk-value'
+    else if (PARAMS.value.includes(raw))        cls = 'tk-param'
     return cls ? `<span class="${cls}">${m}</span>` : m
   })
 }
@@ -326,7 +342,7 @@ function getCaretOffset(el: HTMLElement): number {
     }
     if (node === range.startContainer) {
       const ch = Array.from(node.childNodes)
-      for (let i = 0; i < range.startOffset && !found; i++) { if (ch[i]) walk(ch[i]) }
+      for (let i = 0; i < range.startOffset && !found; i++) { if (ch[i]) walk(ch[i]!) }
       found = true; return
     }
     for (const c of Array.from(node.childNodes)) { if (!found) walk(c) }
@@ -785,15 +801,16 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .field-select   { appearance: none; cursor: pointer; }
 
 /* Rule layout: palette left | editor+params right */
-.rule-area { display: flex; gap: 10px; align-items: flex-start; }
+.rule-area { display: flex; flex-direction: row; gap: 10px; align-items: flex-start; }
 .palette { width: 130px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
 .palette-group { display: flex; flex-direction: column; gap: 2px; }
 .palette-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; opacity: .7; }
 .palette-token { display: inline-block; padding: 3px 7px; font-size: 11px; font-family: 'Consolas','Fira Mono',monospace; cursor: grab; border: 1px solid transparent; transition: opacity .1s; user-select: none; white-space: nowrap; }
 .palette-token:hover { opacity: .75; }
 
-.editor-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-.editor-wrap { position: relative; }
+/* editor-col: right column containing both editor and params stacked vertically */
+.editor-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; overflow: visible; }
+.editor-wrap { position: relative; width: 100%; }
 
 .rule-editor { min-height: 100px; max-height: 220px; overflow-y: auto; background: #0d0d10; border: 1px solid #2a2a30; padding: 10px 12px; font-family: 'Consolas','Fira Mono',monospace; font-size: 13px; line-height: 1.8; color: #c0c0c0; outline: none; white-space: pre-wrap; word-break: break-all; transition: border-color .15s; }
 .rule-editor:focus   { border-color: #6f2bff55; }
