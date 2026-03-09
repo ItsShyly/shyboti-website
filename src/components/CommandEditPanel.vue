@@ -4,27 +4,12 @@ import { API } from '../api'
 import { useAuth } from '../auth'
 
 export interface CustomCommand {
-  name:          string
-  response:      string
-  rule:          string
-  alias:         string
-  enabled_when:  string
-  required_game: string
-  regex1:        string
-  regex2:        string
-  text1:         string
-  text2:         string
-  isActive:      boolean | number
-  cooldown:      number
-  userCooldown:  number
+  name: string; response: string; rule: string; alias: string
+  enabled_when: string; required_game: string
+  regex1: string; regex2: string; text1: string; text2: string
+  isActive: boolean | number; cooldown: number; userCooldown: number
 }
-
-interface Props {
-  cmdName:    string
-  channel:    string
-  open:       boolean
-  isBuiltIn?: boolean
-}
+interface Props { cmdName: string; channel: string; open: boolean; isBuiltIn?: boolean }
 
 const props = defineProps<Props>()
 const emit  = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
@@ -34,13 +19,12 @@ const loading  = ref(true)
 const saving   = ref(false)
 const saved    = ref(false)
 const deleting = ref(false)
-
 const form = ref<CustomCommand>({
-  name: '', response: '', rule: '', alias: '',
-  enabled_when: 'always', required_game: '',
-  regex1: '', regex2: '', text1: '', text2: '',
-  isActive: true, cooldown: 0, userCooldown: 0,
+  name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
+  regex1: '', regex2: '', text1: '', text2: '', isActive: true, cooldown: 0, userCooldown: 0,
 })
+
+// ─── Load / Save ──────────────────────────────────────────────────────────────
 
 async function load() {
   if (!session.value || !props.cmdName) return
@@ -51,28 +35,24 @@ async function load() {
     })
     if (res.ok) {
       const data = await res.json() as { commands: CustomCommand[] }
-      const existing = data.commands.find(c => c.name === props.cmdName)
-      if (existing) {
-        form.value = { ...existing, isActive: !!existing.isActive }
-      } else {
-        form.value = {
-          name: props.cmdName, response: '', rule: '', alias: '',
-          enabled_when: 'always', required_game: '',
-          regex1: '', regex2: '', text1: '', text2: '',
-          isActive: true, cooldown: 0, userCooldown: 0,
-        }
-      }
+      const ex = data.commands.find(c => c.name === props.cmdName)
+      form.value = ex
+        ? { ...ex, isActive: !!ex.isActive }
+        : { name: props.cmdName, response: '', rule: '', alias: '', enabled_when: 'always',
+            required_game: '', regex1: '', regex2: '', text1: '', text2: '',
+            isActive: true, cooldown: 0, userCooldown: 0 }
     }
   } catch {}
   loading.value = false
 }
 
-watch(() => props.open, (v) => { if (v) load() })
+watch(() => props.open, v => { if (v) load() })
 onMounted(() => { if (props.open) load() })
 
-// Seed the editor when rule changes externally (load/reset)
-watch(() => form.value.rule, (newRule) => {
-  if (_userIsTyping) return
+// Seed editor DOM when rule loads from server (not during user typing)
+let _applyingHighlight = false
+watch(() => form.value.rule, newRule => {
+  if (_applyingHighlight) return
   const el = editorRef.value
   if (!el) return
   el.innerHTML = highlight(newRule)
@@ -87,61 +67,61 @@ async function save() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
       body: JSON.stringify({ ...form.value, rule: ruleForSave(form.value.rule) }),
     })
-    saved.value = true
-    setTimeout(() => { saved.value = false }, 2000)
-    emit('saved')
+    saved.value = true; setTimeout(() => { saved.value = false }, 2000); emit('saved')
   } catch {}
   saving.value = false
 }
 
 async function deleteCmd() {
   if (!session.value) return
-  if (!confirm(`Delete custom command "${props.cmdName}"? This cannot be undone.`)) return
+  if (!confirm(`Delete "${props.cmdName}"?`)) return
   deleting.value = true
   try {
     await fetch(`${API}/custom-commands/${props.channel}/${props.cmdName}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${session.value.token}` },
+      method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
     })
-    emit('saved')
-    emit('close')
+    emit('saved'); emit('close')
   } catch {}
   deleting.value = false
 }
 
-// ─── Tokens ──────────────────────────────────────────────────────────────────
+// ─── Token definitions ────────────────────────────────────────────────────────
 
-const OPERATORS       = ['[has]','[=]','[<]','[>]','[<=]','[>=]','[starts]','[ends]']
-const ACTIONS         = ['[replace]','[remove]','[delete]','[prepend]','[append]','[send]','[stop]']
-const VALUES          = ['{output}','{input}','{user}','{channel}','{args}']
-const PARAMS          = ['{regex1}','{regex2}','{text1}','{text2}']
-const WRAPPERS        = ['$if']
-const ACTION_ARG_TOKENS = ['{output}','{input}','{args}','{regex1}','{regex2}','{text1}','{text2}']
+const OPERATORS = ['[has]','[=]','[starts]','[ends]']
+const ACTIONS   = ['[replace]','[remove]','[delete]','[prepend]','[append]','[send]','[stop]']
+const VALUES    = ['{output}','{input}','{user}','{channel}','{args}']
+const PARAMS    = ['{regex1}','{regex2}','{text1}','{text2}']
+const WRAPPERS  = ['$if']
+const ARG_TOKENS = [...VALUES, ...PARAMS]
 
-const PH_VALUE      = '\uE001'
-const PH_PARAM      = '\uE002'
-const PH_OP         = '\uE003'
-const PH_ACTION     = '\uE004'
-const PH_ACTION_ARG = '\uE005'
-const PH_CHARS      = [PH_VALUE, PH_PARAM, PH_OP, PH_ACTION, PH_ACTION_ARG]
-
-const PH_LABELS: Record<string, string> = {
-  [PH_VALUE]: 'value', [PH_PARAM]: 'param', [PH_OP]: 'op',
-  [PH_ACTION]: 'action', [PH_ACTION_ARG]: 'target',
+// Placeholder sentinels — private use Unicode, survive DOM round-trips
+// Each is a single char that represents an "unfilled slot" of a specific type
+const PH = {
+  value:  '\uE001',  // slot: value token  {output} etc
+  param:  '\uE002',  // slot: param token  {text1} etc
+  op:     '\uE003',  // slot: operator     [has] etc
+  action: '\uE004',  // slot: action name  [remove] etc
+  arg:    '\uE005',  // slot: action arg   {text1} etc
 }
-const PH_CLASSES: Record<string, string> = {
-  [PH_VALUE]: 'tk-value', [PH_PARAM]: 'tk-param', [PH_OP]: 'tk-op',
-  [PH_ACTION]: 'tk-action', [PH_ACTION_ARG]: 'tk-action-arg',
-}
+const PH_ALL = Object.values(PH)
+
 const PH_CANDIDATES: Record<string, string[]> = {
-  [PH_VALUE]:      VALUES,
-  [PH_PARAM]:      PARAMS,
-  [PH_OP]:         OPERATORS,
-  [PH_ACTION]:     ACTIONS,
-  [PH_ACTION_ARG]: ACTION_ARG_TOKENS,
+  [PH.value]:  VALUES,
+  [PH.param]:  PARAMS,
+  [PH.op]:     OPERATORS,
+  [PH.action]: ACTIONS,
+  [PH.arg]:    ARG_TOKENS,
+}
+const PH_CLASS: Record<string, string> = {
+  [PH.value]: 'tk-value', [PH.param]: 'tk-param', [PH.op]: 'tk-op',
+  [PH.action]: 'tk-action', [PH.arg]: 'tk-action-arg',
+}
+const PH_LABEL: Record<string, string> = {
+  [PH.value]: 'value', [PH.param]: 'param', [PH.op]: 'op',
+  [PH.action]: 'action', [PH.arg]: 'arg',
 }
 
-function tokenClass(tok: string): string {
+function tokenClass(tok: string) {
   if (WRAPPERS.includes(tok))  return 'tk-wrapper'
   if (OPERATORS.includes(tok)) return 'tk-op'
   if (ACTIONS.includes(tok))   return 'tk-action'
@@ -149,40 +129,123 @@ function tokenClass(tok: string): string {
   if (PARAMS.includes(tok))    return 'tk-param'
   return ''
 }
-function tokenMatchesPh(tok: string, ph: string): boolean {
-  return (PH_CANDIDATES[ph] ?? []).includes(tok)
+function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES, ...PARAMS] }
+
+// $if skeleton — placeholders mark fill-in spots
+function ifSkeleton() {
+  return `$if(${PH.value}${PH.op}${PH.param}<do [${PH.action}{${PH.arg}}]>)`
 }
-function allTokens() {
-  return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES, ...PARAMS]
+// Action skeletons — each action gets the right number of typed placeholder slots
+// Single-arg actions default target to {output}, so only the value slot is needed.
+// [replace] needs two args: {from}{to} (target defaults to output)
+function actionSkeleton(tok: string, selectedText = ''): string {
+  const name = tok.slice(1, -1) // strip [ ]
+  if (selectedText) {
+    // If text was selected/dragged, use it as the first arg
+    return `[${name}{${selectedText}}]`
+  }
+  switch (name) {
+    case 'stop':    return `[stop]`
+    case 'delete':  return `[delete{${PH.arg}}]`   // {target}
+    case 'remove':  return `[remove{${PH.arg}}]`   // {value}  (removes from output)
+    case 'prepend': return `[prepend{${PH.arg}}]`  // {text}   (prepends to output)
+    case 'append':  return `[append{${PH.arg}}]`   // {text}   (appends to output)
+    case 'send':    return `[send{${PH.arg}}]`     // {target}
+    case 'replace': return `[replace{${PH.arg}}{${PH.arg}}]`  // {from}{to}  (in output)
+    default:        return `[${name}{${PH.arg}}]`
+  }
 }
 
 // ─── Highlight ────────────────────────────────────────────────────────────────
+// Converts the plain-text rule (with sentinel chars) into coloured HTML.
+// Rules for correctness:
+//   - We do NOT use nested block-wrapper spans that can conflict with inline token spans
+//   - Placeholder sentinels → atomic contenteditable=false spans
+//   - Token colouring happens on the already-rendered string
 
 function highlight(src: string): string {
-  let s = src.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  let out = ''
+  let i = 0
 
-  for (const ph of PH_CHARS) {
-    const cls = PH_CLASSES[ph], label = PH_LABELS[ph]
-    s = s.split(ph).join(
-      `<span class="tk-placeholder ${cls}" data-ph="${ph}" contenteditable="false">${label}</span>`
-    )
+  while (i < src.length) {
+    const ch = src[i]
+
+    // ── Placeholder sentinel → atomic coloured span ──────────────────────────
+    if (PH_ALL.includes(ch)) {
+      const cls   = PH_CLASS[ch] ?? ''
+      const label = PH_LABEL[ch] ?? '?'
+      out += `<span class="tk-placeholder ${cls}" data-ph="${ch}" contenteditable="false">${label}</span>`
+      i++; continue
+    }
+
+    // ── $if( block → blue tinted span ───────────────────────────────────────
+    if (src.startsWith('$if(', i)) {
+      let depth = 0, j = i + 4, inner = ''
+      for (; j < src.length; j++) {
+        if (src[j] === '(') depth++
+        else if (src[j] === ')') { if (depth === 0) break; depth-- }
+        inner += src[j]
+      }
+      const full = src.slice(i, j + 1)
+      out += `<span class="if-block">${highlightTokens(escHtml(full))}</span>`
+      i = j + 1; continue
+    }
+
+    // ── $else{ block → blue tinted span ─────────────────────────────────────
+    if (src.startsWith('$else{', i)) {
+      let depth = 0, j = i + 6, inner = ''
+      for (; j < src.length; j++) {
+        if (src[j] === '{') depth++
+        else if (src[j] === '}') { if (depth === 0) break; depth-- }
+        inner += src[j]
+      }
+      const full = src.slice(i, j + 1)
+      out += `<span class="if-block">${highlightTokens(escHtml(full))}</span>`
+      i = j + 1; continue
+    }
+
+    // ── [action{...}] → red tinted span ─────────────────────────────────────
+    const actionM = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)\{[^}]*\}\]/)
+    if (actionM) {
+      out += `<span class="action-block">${highlightTokens(escHtml(actionM[0]))}</span>`
+      i += actionM[0].length; continue
+    }
+
+    // ── Everything else → pass to token colourer ─────────────────────────────
+    // Collect plain chars until next special boundary
+    let chunk = ''
+    while (i < src.length) {
+      const c = src[i]
+      if (PH_ALL.includes(c)) break
+      if (src.startsWith('$if(', i) || src.startsWith('$else{', i)) break
+      const am = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)\{/)
+      if (am) break
+      chunk += c; i++
+    }
+    if (chunk) out += highlightTokens(escHtml(chunk))
   }
 
-  s = s.replace(/\$if\(([^)]*)\)/g,   m => `<span class="if-block">${m}</span>`)
-  s = s.replace(/\$else\{([^}]*)\}/g, m => `<span class="if-block">${m}</span>`)
+  return out
+}
 
-  const pat = /(\$if|\$else|\[(?:replace|remove|delete|prepend|append|send|stop|has|=|&lt;=|&gt;=|&lt;|&gt;|starts|ends)\]|\{(?:output|input|user|channel|args|regex1|regex2|text1|text2)\})/g
-  s = s.replace(pat, m => {
+function escHtml(s: string) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+}
+
+// Colour individual tokens in an already-escaped HTML string
+// (does not handle placeholder sentinels — those are handled above)
+function highlightTokens(s: string): string {
+  const pat = /(\$if|\$else|\[(?:replace|remove|delete|prepend|append|send|stop|has|=|starts|ends)\]|\{(?:output|input|user|channel|args|regex1|regex2|text1|text2)\}|&lt;do|&gt;)/g
+  return s.replace(pat, m => {
     const raw = m.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')
     let cls = ''
-    if (['$if','$else'].includes(raw)) cls = 'tk-wrapper'
-    else if (OPERATORS.includes(raw))  cls = 'tk-op'
-    else if (ACTIONS.includes(raw))    cls = 'tk-action'
-    else if (VALUES.includes(raw))     cls = 'tk-value'
-    else if (PARAMS.includes(raw))     cls = 'tk-param'
+    if (['$if','$else'].includes(raw) || raw === '<do' || raw === '>') cls = 'tk-wrapper'
+    else if (OPERATORS.includes(raw)) cls = 'tk-op'
+    else if (ACTIONS.includes(raw))   cls = 'tk-action'
+    else if (VALUES.includes(raw))    cls = 'tk-value'
+    else if (PARAMS.includes(raw))    cls = 'tk-param'
     return cls ? `<span class="${cls}">${m}</span>` : m
   })
-  return s
 }
 
 // ─── Validation ───────────────────────────────────────────────────────────────
@@ -190,182 +253,175 @@ function highlight(src: string): string {
 const ruleWarnings = computed((): string[] => {
   const r = form.value.rule
   if (!r.trim()) return []
-  const warnings: string[] = []
-  let phCount = 0
-  for (const ph of PH_CHARS) phCount += (r.split(ph).length - 1)
-  if (phCount > 0) warnings.push(`${phCount} unfilled placeholder${phCount > 1 ? 's' : ''} remaining`)
-  return warnings
+  const w: string[] = []
+  // Count unfilled placeholder sentinels
+  let ph = 0; for (const p of PH_ALL) ph += (r.split(p).length - 1)
+  if (ph > 0) w.push(`${ph} unfilled slot${ph > 1 ? 's' : ''} remaining (coloured labels)`)
+  // $if must have matching <do>
+  const ifN = (r.match(/\$if\(/g) || []).length
+  const doN = (r.match(/<do/g)    || []).length
+  if (ifN !== doN) w.push(`${ifN} $if but ${doN} <do> — must match`)
+  // Unmatched [ ]
+  const bOpen  = (r.match(/\[/g) || []).length
+  const bClose = (r.match(/\]/g) || []).length
+  if (bOpen !== bClose) w.push(`Unmatched brackets: ${bOpen} [ vs ${bClose} ]`)
+  // Unmatched { }  (excluding PH sentinels — those are already counted)
+  const rNoSentinels = r.replace(/[\uE001-\uE005]/g, '')
+  const cOpen  = (rNoSentinels.match(/\{/g) || []).length
+  const cClose = (rNoSentinels.match(/\}/g) || []).length
+  if (cOpen !== cClose) w.push(`Unmatched braces: ${cOpen} { vs ${cClose} }`)
+  return w
 })
 const ruleValid = computed(() => ruleWarnings.value.length === 0)
 
-// ─── DOM helpers ──────────────────────────────────────────────────────────────
+// ─── Plain-text DOM helpers ───────────────────────────────────────────────────
+// Walk the editor DOM, recovering sentinel chars from placeholder spans
 
-const editorRef     = ref<HTMLDivElement | null>(null)
-let   _userIsTyping = false
-
-// Walk DOM — text nodes contribute text, placeholder spans contribute their sentinel char
 function getPlainText(el: HTMLElement): string {
   function walk(node: Node): string {
-    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
-    if (node instanceof HTMLElement) {
-      if (node.classList.contains('tk-placeholder')) return node.dataset.ph ?? ''
-      return Array.from(node.childNodes).map(walk).join('')
-    }
-    return ''
+    if (node instanceof HTMLElement && node.classList.contains('tk-placeholder'))
+      return node.dataset.ph ?? ''
+    if (node.nodeType === Node.TEXT_NODE)
+      return node.textContent ?? ''
+    return Array.from(node.childNodes).map(walk).join('')
   }
   return walk(el).replace(/\n\n/g, '\n')
 }
 
-// Read caret offset purely from the Selection API using a pre-range toString().
-// This is reliable regardless of span nesting because toString() on a Range
-// gives the plain text of all text nodes within it — and placeholder spans
-// are contenteditable=false so the browser treats them as atomic 1-char objects.
+// Get caret offset in plain-text terms (placeholder span = 1 char)
 function getCaretOffset(el: HTMLElement): number {
   const sel = window.getSelection()
   if (!sel || !sel.rangeCount) return 0
   const range = sel.getRangeAt(0)
   if (!el.contains(range.startContainer)) return 0
-  // Build a range from the start of the editor to the caret
-  const pre = document.createRange()
-  pre.setStart(el, 0)
-  pre.setEnd(range.startContainer, range.startOffset)
-  // Walk the nodes in this pre-range ourselves so we count placeholder spans as 1
+
   let count = 0
-  const iter = document.createNodeIterator(el, NodeFilter.SHOW_ALL)
-  let node: Node | null
-  outer: while ((node = iter.nextNode())) {
-    // Stop when we reach or pass the caret container
-    if (node === range.startContainer) {
-      count += range.startOffset
-      break
-    }
-    if (node instanceof HTMLElement) {
-      if (node.classList.contains('tk-placeholder')) {
-        count += 1
-        // skip children of this span — it's atomic
-        continue
+  let found = false
+
+  function walk(node: Node): void {
+    if (found) return
+    if (node instanceof HTMLElement && node.classList.contains('tk-placeholder')) {
+      if (node === range.startContainer || node.contains(range.startContainer)) {
+        // caret is at/inside the placeholder — count it as before
+        found = true; return
       }
-      // skip non-text element nodes (spans, divs) — count their text children instead
-      continue
+      count += 1; return
     }
     if (node.nodeType === Node.TEXT_NODE) {
-      // Check if this text node is inside a placeholder span — if so skip it (already counted as 1)
-      let p = node.parentElement
-      let insidePh = false
-      while (p && p !== el) { if (p.classList.contains('tk-placeholder')) { insidePh = true; break }; p = p.parentElement }
-      if (insidePh) continue
-      // Check if this node comes AFTER the caret container — stop if so
-      const pos = range.startContainer.compareDocumentPosition(node)
-      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) break outer
-      count += node.textContent?.length ?? 0
+      if (node === range.startContainer) {
+        count += range.startOffset; found = true; return
+      }
+      count += node.textContent?.length ?? 0; return
     }
+    // Element node: check if caret is between children
+    if (node === range.startContainer) {
+      const children = Array.from(node.childNodes)
+      for (let i = 0; i < range.startOffset && !found; i++) walk(children[i])
+      found = true; return
+    }
+    for (const child of Array.from(node.childNodes)) { if (!found) walk(child) }
   }
+
+  walk(el)
   return count
 }
 
-// Restore caret at a plain-text offset. Walk text nodes and placeholder spans linearly.
+// Restore caret to plain-text offset
 function restoreCaret(el: HTMLElement, offset: number) {
   let remaining = offset
-  const iter    = document.createNodeIterator(el, NodeFilter.SHOW_ALL)
-  let node: Node | null
-  while ((node = iter.nextNode())) {
-    if (node instanceof HTMLElement) {
-      if (node.classList.contains('tk-placeholder')) {
-        if (remaining <= 0) {
-          const r = document.createRange()
-          r.setStartBefore(node); r.collapse(true)
-          window.getSelection()?.removeAllRanges()
-          window.getSelection()?.addRange(r)
-          return
-        }
-        remaining -= 1
+  let placed    = false
+
+  function walk(node: Node): void {
+    if (placed) return
+    if (node instanceof HTMLElement && node.classList.contains('tk-placeholder')) {
+      if (remaining <= 0) {
+        const r = document.createRange()
+        r.setStartBefore(node); r.collapse(true)
+        window.getSelection()?.removeAllRanges()
+        window.getSelection()?.addRange(r)
+        placed = true; return
       }
-      continue
+      remaining -= 1; return
     }
     if (node.nodeType === Node.TEXT_NODE) {
-      // Skip text inside placeholder spans
-      let p = node.parentElement
-      let insidePh = false
-      while (p && p !== el) { if (p.classList.contains('tk-placeholder')) { insidePh = true; break }; p = p.parentElement }
-      if (insidePh) continue
-
       const len = node.textContent?.length ?? 0
       if (remaining <= len) {
         const r = document.createRange()
         r.setStart(node, remaining); r.collapse(true)
         window.getSelection()?.removeAllRanges()
         window.getSelection()?.addRange(r)
-        return
+        placed = true; return
       }
-      remaining -= len
+      remaining -= len; return
     }
+    for (const child of Array.from(node.childNodes)) { if (!placed) walk(child) }
   }
-  // Fallback: end of content
-  const r = document.createRange()
-  r.selectNodeContents(el); r.collapse(false)
-  window.getSelection()?.removeAllRanges()
-  window.getSelection()?.addRange(r)
+
+  walk(el)
+  if (!placed) {
+    // fallback: end of content
+    const r = document.createRange(); r.selectNodeContents(el); r.collapse(false)
+    window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(r)
+  }
 }
 
 function applyHighlight() {
-  const el = editorRef.value
-  if (!el) return
+  const el = editorRef.value; if (!el) return
   const offset = getCaretOffset(el)
+  _applyingHighlight = true
   el.innerHTML = highlight(form.value.rule)
-  restoreCaret(el, offset)
+  _applyingHighlight = false
+  nextTick(() => restoreCaret(el, offset))
 }
 
-function ruleForSave(rule: string): string {
-  let r = rule
-  for (const ph of PH_CHARS) r = r.split(ph).join('')
-  return r
+function ruleForSave(rule: string) {
+  let r = rule; for (const p of PH_ALL) r = r.split(p).join(''); return r
 }
 
-// ─── Autocomplete state ───────────────────────────────────────────────────────
+// ─── Editor refs & autocomplete ───────────────────────────────────────────────
 
+const editorRef  = ref<HTMLDivElement | null>(null)
 const acRef      = ref<HTMLDivElement | null>(null)
 const acItems    = ref<string[]>([])
 const acIndex    = ref(0)
 const acPos      = ref({ top: 0, left: 0 })
 const acVisible  = ref(false)
 const acTrigger  = ref('')
-const acActivePh = ref<string | null>(null)  // set when clicking a placeholder
+const acActivePh = ref<string | null>(null)  // which sentinel is being filled
 
-// ─── Insert helpers ───────────────────────────────────────────────────────────
+// ─── Insert at caret ──────────────────────────────────────────────────────────
 
-// Insert text at current caret position (used by palette click and $if auto-complete)
 function insertAtCaret(text: string) {
-  const el = editorRef.value
-  if (!el) return
-
-  // If editor isn't focused, insert at end
-  if (document.activeElement !== el) {
-    form.value.rule = form.value.rule + text
-    el.innerHTML = highlight(form.value.rule)
-    nextTick(() => restoreCaret(el, form.value.rule.length))
-    return
-  }
-
-  const offset = getCaretOffset(el)
+  const el = editorRef.value; if (!el) return
+  el.focus()
   const plain  = getPlainText(el)
+  const offset = getCaretOffset(el)
   form.value.rule = plain.slice(0, offset) + text + plain.slice(offset)
   applyHighlight()
   nextTick(() => restoreCaret(el, offset + text.length))
 }
 
+// Palette click — $if and actions expand to skeletons
+function onPaletteClick(tok: string) {
+  if (tok === '$if')            { insertAtCaret(ifSkeleton()); return }
+  if (ACTIONS.includes(tok))   { insertAtCaret(actionSkeleton(tok)); return }
+  insertAtCaret(tok)
+}
+
 // ─── Input & keyboard ─────────────────────────────────────────────────────────
 
 function onEditorInput() {
-  const el = editorRef.value
-  if (!el) return
-  _userIsTyping = true
+  const el = editorRef.value; if (!el) return
+  // Read current caret BEFORE we modify innerHTML
+  // (we need to do this before getPlainText, because after innerHTML is set the old
+  //  selection is gone — but we saved offset already inside applyHighlight)
   form.value.rule = getPlainText(el)
   applyHighlight()
   checkAutocomplete()
-  _userIsTyping = false
 }
 
 function onEditorKeydown(e: KeyboardEvent) {
+  // Autocomplete navigation
   if (acVisible.value) {
     if (e.key === 'ArrowDown') { e.preventDefault(); acIndex.value = Math.min(acIndex.value + 1, acItems.value.length - 1); return }
     if (e.key === 'ArrowUp')   { e.preventDefault(); acIndex.value = Math.max(acIndex.value - 1, 0); return }
@@ -373,214 +429,189 @@ function onEditorKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape')    { acVisible.value = false; acActivePh.value = null; return }
   }
 
-  // Block deletion of placeholder spans
-  if (e.key === 'Backspace' || e.key === 'Delete') {
-    const sel = window.getSelection()
-    if (sel && sel.rangeCount) {
-      const range = sel.getRangeAt(0)
-      if (range.collapsed) {
-        const checkNode = (n: Node | null | undefined) =>
-          n instanceof HTMLElement && n.classList.contains('tk-placeholder')
-        const sib = e.key === 'Backspace'
-          ? range.startContainer.childNodes[range.startOffset - 1]
-          : range.endContainer.childNodes[range.endOffset]
-        if (checkNode(sib) || checkNode(range.startContainer.parentElement)) {
-          e.preventDefault(); return
-        }
-      }
+  // $if( → replace with full skeleton
+  if (e.key === '(') {
+    const el = editorRef.value; if (!el) return
+    const plain  = getPlainText(el)
+    const offset = getCaretOffset(el)
+    const before = plain.slice(0, offset)
+    if (before.trimEnd().endsWith('$if')) {
+      e.preventDefault()
+      const trimmed = before.trimEnd()
+      const after   = plain.slice(offset)
+      form.value.rule = trimmed.slice(0, -3) + ifSkeleton() + after
+      applyHighlight()
+      nextTick(() => restoreCaret(el, trimmed.length - 3 + ifSkeleton().length))
+      return
     }
   }
 
-  // Auto-skeleton for $if(
-  if (e.key === '(' && getPlainText(editorRef.value!).trimEnd().endsWith('$if')) {
-    e.preventDefault()
-    insertAtCaret(`(${PH_VALUE}${PH_OP}${PH_PARAM}<do [${PH_ACTION}{${PH_ACTION_ARG}}]>)`)
-  }
+  // [ → if typing an action name, expand to skeleton on ]
+  // (handled naturally by autocomplete → insertAcItem expansion)
 }
 
-// Click on placeholder → open slot-specific suggestions
+// Click on a placeholder span → show slot suggestions dropdown
 function onEditorClick(e: MouseEvent) {
   const target = e.target as HTMLElement
   const phSpan = target.classList.contains('tk-placeholder') ? target
-    : (target.closest('.tk-placeholder') as HTMLElement | null)
-  if (!phSpan) return
-
+    : (target.closest?.('.tk-placeholder') as HTMLElement | null)
+  if (!phSpan) { acVisible.value = false; acActivePh.value = null; return }
   const ph = phSpan.dataset.ph ?? ''
   if (!ph || !PH_CANDIDATES[ph]?.length) return
-
   e.preventDefault()
-
   acActivePh.value = ph
   acItems.value    = PH_CANDIDATES[ph]
-  acIndex.value    = 0
-  acTrigger.value  = ''
-  acVisible.value  = true
-
-  const rect       = phSpan.getBoundingClientRect()
-  const editorRect = editorRef.value!.getBoundingClientRect()
-  acPos.value = { top: rect.bottom - editorRect.top + 4, left: rect.left - editorRect.left }
+  acIndex.value    = 0; acTrigger.value = ''; acVisible.value = true
+  const rect = phSpan.getBoundingClientRect()
+  const er   = editorRef.value!.getBoundingClientRect()
+  acPos.value = { top: rect.bottom - er.top + 4, left: rect.left - er.left }
 }
 
 // ─── Autocomplete ─────────────────────────────────────────────────────────────
 
 function checkAutocomplete() {
   if (acActivePh.value) return
-  const el = editorRef.value
-  if (!el) return
-  const sel = window.getSelection()
-  if (!sel || !sel.rangeCount) return
+  const el = editorRef.value; if (!el) return
+  const plain  = getPlainText(el)
+  const offset = getCaretOffset(el)
+  const before = plain.slice(0, offset)
 
-  // Build plain text before caret by walking nodes (same as getCaretOffset logic)
-  const range = sel.getRangeAt(0)
-  if (!el.contains(range.startContainer)) return
-  let textBefore = ''
-  const iter2 = document.createNodeIterator(el, NodeFilter.SHOW_ALL)
-  let n2: Node | null
-  outer2: while ((n2 = iter2.nextNode())) {
-    if (n2 === range.startContainer) {
-      if (n2.nodeType === Node.TEXT_NODE) textBefore += (n2.textContent ?? '').slice(0, range.startOffset)
-      break outer2
-    }
-    if (n2 instanceof HTMLElement) continue
-    if (n2.nodeType === Node.TEXT_NODE) {
-      let p2 = n2.parentElement; let inPh2 = false
-      while (p2 && p2 !== el) { if (p2.classList.contains('tk-placeholder')) { inPh2 = true; break }; p2 = p2.parentElement }
-      if (inPh2) continue
-      const pos2 = range.startContainer.compareDocumentPosition(n2)
-      if (pos2 & Node.DOCUMENT_POSITION_FOLLOWING) break outer2
-      textBefore += n2.textContent ?? ''
-    }
-  }
-
-  const partial    = textBefore.match(/(\$[\w]*|\[[\w=<>]*|\{[\w]*)$/)
+  const partial = before.match(/(\$[\w]*|\[[\w=]*|\{[\w]*)$/)
   if (!partial) { acVisible.value = false; return }
-
-  const p          = partial[0]
+  const p = partial[0]
   const candidates = allTokens().filter(t => t.startsWith(p) && t !== p)
   if (!candidates.length) { acVisible.value = false; return }
+  acTrigger.value = p; acItems.value = candidates; acIndex.value = 0; acVisible.value = true
 
-  acTrigger.value = p
-  acItems.value   = candidates
-  acIndex.value   = 0
-  acVisible.value = true
-
-  const rect       = range.getBoundingClientRect()
-  const editorRect = el.getBoundingClientRect()
-  acPos.value = { top: rect.bottom - editorRect.top + 4, left: rect.left - editorRect.left }
+  const sel = window.getSelection()
+  if (sel && sel.rangeCount) {
+    const rect = sel.getRangeAt(0).getBoundingClientRect()
+    const er   = el.getBoundingClientRect()
+    acPos.value = { top: rect.bottom - er.top + 4, left: rect.left - er.left }
+  }
 }
 
 function insertAcItem() {
-  const item = acItems.value[acIndex.value]
-  if (!item) return
+  const item = acItems.value[acIndex.value]; if (!item) return
   acVisible.value = false
+  const el = editorRef.value; if (!el) return
 
-  const el = editorRef.value
-  if (!el) return
-
-  // ── Placeholder-click mode ──
+  // Placeholder fill mode — replace the sentinel char at its position
   if (acActivePh.value) {
-    const ph = acActivePh.value
-    acActivePh.value = null
+    const ph    = acActivePh.value; acActivePh.value = null
     const plain = getPlainText(el)
-    const idx   = plain.indexOf(ph)
-    if (idx === -1) return
-    form.value.rule = plain.slice(0, idx) + item + plain.slice(idx + 1)
+    const idx   = plain.indexOf(ph); if (idx === -1) return
+    // If filling an action slot, expand to full skeleton (with its own arg placeholders)
+    // but we're inside <do [...]> so we replace the whole [PH.action{PH.arg}] group
+    let insert = item
+    if (ph === PH.action && ACTIONS.includes(item)) {
+      // The skeleton wraps the action slot AND the following {arg} sentinel if present
+      // Pattern in plain text: PH.action + '{' + PH.arg + '}'
+      const fullSlot = PH.action + '{' + PH.arg + '}'
+      if (plain.slice(idx, idx + fullSlot.length) === fullSlot) {
+        insert = actionSkeleton(item).slice(1, -1) // strip outer [ ] — we're inside [...]
+        form.value.rule = plain.slice(0, idx) + insert + plain.slice(idx + fullSlot.length)
+        applyHighlight()
+        nextTick(() => restoreCaret(el, idx + insert.length))
+        return
+      }
+    }
+    form.value.rule = plain.slice(0, idx) + insert + plain.slice(idx + 1)
     applyHighlight()
-    nextTick(() => restoreCaret(el, idx + item.length))
+    nextTick(() => restoreCaret(el, idx + insert.length))
     return
   }
 
-  // ── Typing mode: replace partial trigger at caret ──
+  // Typing mode — replace partial typed text with full token, expand $if/actions to skeletons
   acActivePh.value = null
-  const caretOffset = getCaretOffset(el)
-  const plain       = getPlainText(el)
-  const triggerLen  = acTrigger.value.length
-  const before      = plain.slice(0, caretOffset - triggerLen)
-  const after       = plain.slice(caretOffset)
-  form.value.rule   = before + item + after
+  const plain   = getPlainText(el)
+  const offset  = getCaretOffset(el)
+  const trigLen = acTrigger.value.length
+  const before  = plain.slice(0, offset - trigLen)
+  const after   = plain.slice(offset)
+  let insert = item
+  if (item === '$if')            insert = ifSkeleton()
+  else if (ACTIONS.includes(item)) insert = actionSkeleton(item)
+  form.value.rule = before + insert + after
   applyHighlight()
-  nextTick(() => restoreCaret(el, before.length + item.length))
+  nextTick(() => restoreCaret(el, before.length + insert.length))
 }
 
 // ─── Drag & drop ─────────────────────────────────────────────────────────────
 
-function onDragStart(e: DragEvent, token: string) {
-  e.dataTransfer?.setData('text/plain', token)
-}
+function onDragStart(e: DragEvent, tok: string) { e.dataTransfer?.setData('text/plain', tok) }
 
-function buildDropInsert(token: string, selected: string): string {
-  const sel = selected.trim()
-  if (token === '$if') {
-    return sel
-      ? `$if(${sel}${PH_OP}${PH_PARAM}<do [${PH_ACTION}{${PH_ACTION_ARG}}]>)`
-      : `$if(${PH_VALUE}${PH_OP}${PH_PARAM}<do [${PH_ACTION}{${PH_ACTION_ARG}}]>)`
-  }
-  if (ACTIONS.includes(token)) {
-    const name = token.slice(1, -1)
-    return sel ? `[${name}{${sel}}]` : `[${name}{${PH_ACTION_ARG}}]`
-  }
-  return token
-}
-
-function getPhSpanAtPoint(e: DragEvent): HTMLElement | null {
-  for (const el of document.elementsFromPoint(e.clientX, e.clientY)) {
+function getPhSpanAt(e: DragEvent | MouseEvent): HTMLElement | null {
+  const els = document.elementsFromPoint(
+    (e as DragEvent).clientX ?? (e as MouseEvent).clientX,
+    (e as DragEvent).clientY ?? (e as MouseEvent).clientY
+  )
+  for (const el of els)
     if (el instanceof HTMLElement && el.classList.contains('tk-placeholder')) return el
-  }
   return null
 }
 
 function onEditorDrop(e: DragEvent) {
   e.preventDefault()
-  const token = e.dataTransfer?.getData('text/plain')
-  if (!token) return
-  const el = editorRef.value!
-  el.focus()
+  const tok = e.dataTransfer?.getData('text/plain'); if (!tok) return
+  const el = editorRef.value!; el.focus()
 
-  const phSpan = getPhSpanAtPoint(e)
+  // Drop onto a placeholder slot → fill it
+  const phSpan = getPhSpanAt(e)
   if (phSpan) {
     const ph = phSpan.dataset.ph ?? ''
-    if (!tokenMatchesPh(token, ph)) return
-
+    if (!(PH_CANDIDATES[ph] ?? []).includes(tok)) return  // wrong type
     const plain = getPlainText(el)
+    // Find the position of this specific span in the plain text
     let pos = 0
-    function findSpanPos(node: Node): boolean {
+    function findPh(node: Node): boolean {
       if (node === phSpan) return true
       if (node instanceof HTMLElement && node.classList.contains('tk-placeholder')) { pos += 1; return false }
       if (node.nodeType === Node.TEXT_NODE) { pos += node.textContent?.length ?? 0; return false }
-      for (const child of Array.from(node.childNodes)) { if (findSpanPos(child)) return true }
+      for (const c of Array.from(node.childNodes)) { if (findPh(c)) return true }
       return false
     }
-    findSpanPos(el)
-    form.value.rule = plain.slice(0, pos) + token + plain.slice(pos + 1)
-    applyHighlight()
-    nextTick(() => restoreCaret(el, pos + token.length))
+    if (findPh(el)) {
+      let insert = tok
+      let slotLen = 1
+      // If filling an action slot, expand to full action skeleton and consume the {arg} sentinel too
+      if (ph === PH.action && ACTIONS.includes(tok)) {
+        const fullSlot = PH.action + '{' + PH.arg + '}'
+        if (plain.slice(pos, pos + fullSlot.length) === fullSlot) {
+          insert = actionSkeleton(tok).slice(1, -1) // strip [ ] — inside [...]
+          slotLen = fullSlot.length
+        }
+      }
+      form.value.rule = plain.slice(0, pos) + insert + plain.slice(pos + slotLen)
+      applyHighlight()
+      nextTick(() => restoreCaret(el, pos + insert.length))
+    }
     return
   }
 
-  // Normal drop at caret
-  const sel    = window.getSelection()
-  let selText  = '', selStart = 0, selEnd = 0
+  // Normal drop — insert at drop position, wrapping any selection
+  const sel = window.getSelection()
+  let selText = '', selStart = 0, selEnd = 0
   if (sel && sel.rangeCount && el.contains(sel.anchorNode)) {
-    const r   = sel.getRangeAt(0)
-    selText   = r.toString()
-    const pre = document.createRange()
-    pre.setStart(el, 0); pre.setEnd(r.startContainer, r.startOffset)
-    selStart  = pre.toString().length
-    selEnd    = selStart + selText.length
+    const r = sel.getRangeAt(0)
+    selText = r.toString()
+    const pre = document.createRange(); pre.setStart(el, 0); pre.setEnd(r.startContainer, r.startOffset)
+    selStart = pre.toString().length; selEnd = selStart + selText.length
   }
-  let dropOffset = selStart
+  let dropOff = selStart
   if (!selText && (document as any).caretRangeFromPoint) {
     const r = (document as any).caretRangeFromPoint(e.clientX, e.clientY)
-    if (r) {
-      const pre = document.createRange()
-      pre.setStart(el, 0); pre.setEnd(r.startContainer, r.startOffset)
-      dropOffset = pre.toString().length
-    }
+    if (r) { const pre = document.createRange(); pre.setStart(el,0); pre.setEnd(r.startContainer,r.startOffset); dropOff = pre.toString().length }
   }
+
+  let insert: string
+  if (tok === '$if')             insert = ifSkeleton()
+  else if (ACTIONS.includes(tok)) insert = actionSkeleton(tok, selText.trim())
+  else insert = tok
+
   const plain  = getPlainText(el)
-  const insert = buildDropInsert(token, selText)
-  const before = plain.slice(0, selText ? selStart : dropOffset)
-  const after  = plain.slice(selText ? selEnd : dropOffset)
+  const before = plain.slice(0, selText ? selStart : dropOff)
+  const after  = plain.slice(selText ? selEnd   : dropOff)
   form.value.rule = before + insert + after
   applyHighlight()
   nextTick(() => restoreCaret(el, before.length + insert.length))
@@ -589,8 +620,7 @@ function onEditorDrop(e: DragEvent) {
 function onEditorDragover(e: DragEvent) {
   e.preventDefault()
   document.querySelectorAll('.tk-placeholder.drag-over').forEach(el => el.classList.remove('drag-over'))
-  const phSpan = getPhSpanAtPoint(e)
-  if (phSpan) phSpan.classList.add('drag-over')
+  getPhSpanAt(e)?.classList.add('drag-over')
 }
 
 // ─── Palette ──────────────────────────────────────────────────────────────────
@@ -606,10 +636,8 @@ const palette = [
 function onClickOutside(e: MouseEvent) {
   if (!acVisible.value) return
   if (acRef.value?.contains(e.target as Node)) return
-  const target = e.target as HTMLElement
-  if (target.classList.contains('tk-placeholder')) return
-  acVisible.value  = false
-  acActivePh.value = null
+  if ((e.target as HTMLElement)?.classList?.contains('tk-placeholder')) return
+  acVisible.value = false; acActivePh.value = null
 }
 onMounted(()   => document.addEventListener('mousedown', onClickOutside))
 onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
@@ -623,13 +651,12 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
         <div class="panel-header">
           <div>
             <div class="panel-title">Edit <span class="panel-cmd">+{{ cmdName }}</span></div>
-            <div class="panel-sub">Custom response &amp; rule builder for #{{ channel }}</div>
+            <div class="panel-sub">Rule builder for #{{ channel }}</div>
           </div>
           <button class="panel-close" @click="emit('close')">✕</button>
         </div>
 
         <div v-if="loading" class="panel-loading">Loading…</div>
-
         <div v-else class="panel-body">
 
           <div class="field-group">
@@ -646,34 +673,18 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
           </div>
 
           <div class="field-group">
-            <label class="field-label">
-              Rule
-              <span class="field-hint">Drag tokens or type $, [, { — click a slot to fill it</span>
-            </label>
-
-            <div class="slot-legend">
-              <span class="legend-item tk-value">value</span><span class="legend-sep">—</span><span class="legend-desc">what to compare</span>
-              <span class="legend-sep">·</span>
-              <span class="legend-item tk-op">op</span><span class="legend-sep">—</span><span class="legend-desc">operator</span>
-              <span class="legend-sep">·</span>
-              <span class="legend-item tk-param">param</span><span class="legend-sep">—</span><span class="legend-desc">match against</span>
-              <span class="legend-sep">·</span>
-              <span class="legend-item tk-action">action</span><span class="legend-sep">—</span><span class="legend-desc">what to do</span>
-              <span class="legend-sep">·</span>
-              <span class="legend-item tk-action-arg">target</span><span class="legend-sep">—</span><span class="legend-desc">what to act on</span>
-            </div>
-
+            <label class="field-label">Rule <span class="field-hint">Click palette or type $ [ { — click a coloured slot to fill it</span></label>
             <div class="rule-area">
+
               <div class="palette">
-                <div v-for="group in palette" :key="group.group" class="palette-group">
-                  <div class="palette-group-label" :class="group.cls">{{ group.group }}</div>
-                  <div
-                    v-for="tok in group.tokens" :key="tok"
+                <div v-for="g in palette" :key="g.group" class="palette-group">
+                  <div class="palette-group-label" :class="g.cls">{{ g.group }}</div>
+                  <div v-for="tok in g.tokens" :key="tok"
                     class="palette-token" :class="tokenClass(tok)"
                     draggable="true"
                     @dragstart="onDragStart($event, tok)"
-                    @click="insertAtCaret(tok)"
-                    title="Click or drag to insert"
+                    @click="onPaletteClick(tok)"
+                    title="Click or drag"
                   >{{ tok }}</div>
                 </div>
               </div>
@@ -682,23 +693,24 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                 <div
                   ref="editorRef"
                   class="rule-editor"
-                  :class="{ invalid: !ruleValid }"
+                  :class="{ invalid: !ruleValid && !!form.rule }"
                   contenteditable="true"
                   spellcheck="false"
+                  data-placeholder="e.g. $if({output}[has]{text1}<do [remove{text1}]>)"
                   @input="onEditorInput"
                   @keydown="onEditorKeydown"
                   @click="onEditorClick"
                   @drop="onEditorDrop"
                   @dragover="onEditorDragover"
-                  data-placeholder="e.g.  $if({output}[has]{text1}<do [remove{output}]>)"
                 ></div>
-                <div v-if="ruleWarnings.length" class="rule-warnings">
+
+                <div v-if="form.rule && ruleWarnings.length" class="rule-warnings">
                   <div v-for="w in ruleWarnings" :key="w" class="rule-warning-item">⚠ {{ w }}</div>
                 </div>
+
                 <div v-if="acVisible" ref="acRef" class="ac-dropdown"
                   :style="{ top: acPos.top + 'px', left: acPos.left + 'px' }">
-                  <div
-                    v-for="(item, i) in acItems" :key="item"
+                  <div v-for="(item, i) in acItems" :key="item"
                     class="ac-item" :class="[tokenClass(item), { active: i === acIndex }]"
                     @mousedown.prevent="acIndex = i; insertAcItem()"
                   >{{ item }}</div>
@@ -735,11 +747,11 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 
           <div class="cond-row">
             <div class="field-group sm">
-              <label class="field-label">Global cooldown <span class="field-hint">seconds</span></label>
+              <label class="field-label">Global cooldown <span class="field-hint">s</span></label>
               <input v-model.number="form.cooldown" type="number" min="0" class="field-input" />
             </div>
             <div class="field-group sm">
-              <label class="field-label">User cooldown <span class="field-hint">seconds</span></label>
+              <label class="field-label">User cooldown <span class="field-hint">s</span></label>
               <input v-model.number="form.userCooldown" type="number" min="0" class="field-input" />
             </div>
           </div>
@@ -751,8 +763,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             <div v-else></div>
             <div class="footer-right">
               <button class="btn-cancel" @click="emit('close')">Cancel</button>
-              <button
-                class="btn-save"
+              <button class="btn-save"
                 :class="{ saved, invalid: !ruleValid && !!form.rule }"
                 :disabled="saving || !ruleValid"
                 :title="ruleWarnings.join(' · ')"
@@ -761,84 +772,46 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             </div>
           </div>
         </div>
-
       </div>
     </div>
   </Teleport>
 </template>
 
 <style scoped>
-.panel-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,.65);
-  display: flex; align-items: flex-start; justify-content: flex-end; z-index: 1000;
-}
-.panel {
-  width: 700px; max-width: 100vw; height: 100vh; background: #1a1a1e;
-  border-left: 1px solid #2a2a30; display: flex; flex-direction: column;
-  overflow: hidden; animation: slideIn .2s ease;
-}
+.panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: flex-start; justify-content: flex-end; z-index: 1000; }
+.panel { width: 700px; max-width: 100vw; height: 100vh; background: #1a1a1e; border-left: 1px solid #2a2a30; display: flex; flex-direction: column; overflow: hidden; animation: slideIn .2s ease; }
 @keyframes slideIn { from { transform: translateX(40px); opacity: 0 } to { transform: none; opacity: 1 } }
-.panel-header {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  padding: 20px 24px 16px; border-bottom: 1px solid #222; flex-shrink: 0;
-}
+.panel-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #222; flex-shrink: 0; }
 .panel-title { font-size: 16px; font-weight: 700; color: #e0e0e0; }
 .panel-cmd   { color: #9d6cff; }
 .panel-sub   { font-size: 11px; color: #555; margin-top: 3px; }
-.panel-close {
-  width: 28px; height: 28px; border: none; background: transparent;
-  color: #555; font-size: 14px; cursor: pointer; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-}
+.panel-close { width: 28px; height: 28px; border: none; background: transparent; color: #555; font-size: 14px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .panel-close:hover { color: #e0e0e0; }
 .panel-loading { padding: 40px; text-align: center; color: #555; font-size: 13px; }
 .panel-body { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
 
 .field-group { display: flex; flex-direction: column; gap: 5px; }
 .field-group.sm { flex: 1; min-width: 0; }
-.field-label {
-  font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase;
-  letter-spacing: .05em; display: flex; align-items: center; gap: 6px;
-}
-.field-hint { font-size: 10px; color: #555; font-weight: 400; text-transform: none; letter-spacing: 0; }
-.field-input, .field-textarea, .field-select {
-  background: #111217; border: 1px solid #2a2a30; color: #e0e0e0;
-  font-family: inherit; font-size: 13px; padding: 7px 10px; outline: none; transition: border-color .15s;
-}
+.field-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; }
+.field-hint  { font-size: 10px; color: #555; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.field-input, .field-textarea, .field-select { background: #111217; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 13px; padding: 7px 10px; outline: none; transition: border-color .15s; }
 .field-input:focus, .field-textarea:focus, .field-select:focus { border-color: #6f2bff55; }
 .field-textarea { resize: vertical; min-height: 52px; }
 .field-select   { appearance: none; cursor: pointer; }
-
-.slot-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; font-size: 10px; padding: 5px 0 2px; }
-.legend-item { font-family: 'Consolas','Fira Mono',monospace; font-size: 10px; padding: 1px 5px; border: 1px solid; border-radius: 2px; }
-.legend-sep  { color: #333; }
-.legend-desc { color: #444; }
 
 .rule-area { display: flex; gap: 10px; align-items: flex-start; }
 .palette { width: 138px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
 .palette-group { display: flex; flex-direction: column; gap: 2px; }
 .palette-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; opacity: .7; }
-.palette-token {
-  display: inline-block; padding: 3px 7px; font-size: 11px;
-  font-family: 'Consolas','Fira Mono',monospace;
-  cursor: pointer; border: 1px solid transparent; transition: opacity .1s;
-  user-select: none; white-space: nowrap;
-}
+.palette-token { display: inline-block; padding: 3px 7px; font-size: 11px; font-family: 'Consolas','Fira Mono',monospace; cursor: pointer; border: 1px solid transparent; transition: opacity .1s; user-select: none; white-space: nowrap; }
 .palette-token:hover { opacity: .75; }
 .palette-token[draggable="true"] { cursor: grab; }
 
 .editor-wrap { flex: 1; position: relative; }
-.rule-editor {
-  min-height: 110px; max-height: 260px; overflow-y: auto;
-  background: #0d0d10; border: 1px solid #2a2a30;
-  padding: 10px 12px; font-family: 'Consolas','Fira Mono',monospace; font-size: 13px;
-  line-height: 1.8; color: #c0c0c0; outline: none; white-space: pre-wrap; word-break: break-all;
-  transition: border-color .15s;
-}
+.rule-editor { min-height: 110px; max-height: 260px; overflow-y: auto; background: #0d0d10; border: 1px solid #2a2a30; padding: 10px 12px; font-family: 'Consolas','Fira Mono',monospace; font-size: 13px; line-height: 1.8; color: #c0c0c0; outline: none; white-space: pre-wrap; word-break: break-all; transition: border-color .15s; }
 .rule-editor:focus   { border-color: #6f2bff55; }
 .rule-editor.invalid { border-color: #f1494966; }
 .rule-editor:empty::before { content: attr(data-placeholder); color: #2a2a35; pointer-events: none; }
-
 .rule-warnings     { margin-top: 5px; display: flex; flex-direction: column; gap: 2px; }
 .rule-warning-item { font-size: 11px; color: #f5a623; background: rgba(245,166,35,.08); border-left: 2px solid #f5a62366; padding: 3px 7px; }
 
@@ -846,13 +819,12 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .ac-item { padding: 5px 10px; font-size: 12px; font-family: 'Consolas','Fira Mono',monospace; cursor: pointer; transition: background .1s; }
 .ac-item:hover, .ac-item.active { background: #2a2a35; }
 
-:deep(.tk-wrapper), .palette-token.tk-wrapper, .ac-item.tk-wrapper, .palette-group-label.tk-wrapper, .legend-item.tk-wrapper { color: #569cd6; border-color: #569cd633; }
-:deep(.tk-op),      .palette-token.tk-op,      .ac-item.tk-op,      .palette-group-label.tk-op,      .legend-item.tk-op      { color: #c792ea; border-color: #c792ea33; }
-:deep(.tk-action),  .palette-token.tk-action,  .ac-item.tk-action,  .palette-group-label.tk-action,  .legend-item.tk-action  { color: #f14949; border-color: #f1494933; }
-:deep(.tk-value),   .palette-token.tk-value,   .ac-item.tk-value,   .palette-group-label.tk-value,   .legend-item.tk-value   { color: #4ec9b0; border-color: #4ec9b033; }
-:deep(.tk-param),   .palette-token.tk-param,   .ac-item.tk-param,   .palette-group-label.tk-param,   .legend-item.tk-param   { color: #e5c07b; border-color: #e5c07b33; }
-:deep(.tk-action-arg), .legend-item.tk-action-arg { color: #7ec8a0; border-color: #7ec8a033; }
-
+:deep(.tk-wrapper), .palette-token.tk-wrapper, .ac-item.tk-wrapper, .palette-group-label.tk-wrapper { color: #569cd6; border-color: #569cd633; }
+:deep(.tk-op),      .palette-token.tk-op,      .ac-item.tk-op,      .palette-group-label.tk-op      { color: #c792ea; border-color: #c792ea33; }
+:deep(.tk-action),  .palette-token.tk-action,  .ac-item.tk-action,  .palette-group-label.tk-action  { color: #f14949; border-color: #f1494933; }
+:deep(.tk-value),   .palette-token.tk-value,   .ac-item.tk-value,   .palette-group-label.tk-value   { color: #4ec9b0; border-color: #4ec9b033; }
+:deep(.tk-param),   .palette-token.tk-param,   .ac-item.tk-param,   .palette-group-label.tk-param   { color: #e5c07b; border-color: #e5c07b33; }
+:deep(.tk-action-arg) { color: #7ec8a0; border-color: #7ec8a033; }
 .tk-param.inline { font-size: 11px; font-family: 'Consolas','Fira Mono',monospace; }
 .params-row, .cond-row { display: flex; gap: 10px; }
 
