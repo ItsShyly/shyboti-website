@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import CommandEditPanel from './CommandEditPanel.vue'
@@ -18,23 +18,43 @@ interface Command {
   broadcasterOnly: boolean
 }
 
-const commands = ref<Command[]>([])
-const prefix   = ref('+')
-const loading  = ref(true)
-const search   = ref('')
-const saving   = ref<string | null>(null)
-const cdTimers = ref<Record<string, ReturnType<typeof setTimeout>>>({})
-
-// Edit panel
-const editOpen    = ref(false)
-const editingCmd  = ref('')
-// All commands in the commands table are hardcoded bot commands (built-in)
-// Custom commands created via the panel are separate
-function openEdit(name: string) {
-  editingCmd.value = name
-  editOpen.value   = true
+interface CustomCommand {
+  name: string
+  response: string
+  rule: string
+  alias: string
+  enabled_when: string
+  required_game: string
+  regex1: string; regex2: string; text1: string; text2: string
+  isActive: boolean
+  cooldown: number
+  userCooldown: number
 }
-function onEditSaved() { fetchCommands() }
+
+const commands       = ref<Command[]>([])
+const customCommands = ref<CustomCommand[]>([])
+const prefix         = ref('+')
+const loading        = ref(true)
+const customLoading  = ref(false)
+const search         = ref('')
+const saving         = ref<string | null>(null)
+const cdTimers       = ref<Record<string, ReturnType<typeof setTimeout>>>({})
+
+// Edit panel — isBuiltIn=true for hardcoded commands, false for custom
+const editOpen      = ref(false)
+const editingCmd    = ref('')
+const editIsBuiltIn = ref(true)
+
+function openEdit(name: string, builtIn: boolean) {
+  editingCmd.value    = name
+  editIsBuiltIn.value = builtIn
+  editOpen.value      = true
+}
+
+function onEditSaved() {
+  fetchCommands()
+  fetchCustomCommands()
+}
 
 const CATEGORIES: Record<string, string[]> = {
   Default:    [],
@@ -63,12 +83,49 @@ const CAT_COLOR: Record<string, string> = {
 }
 
 function filtered() {
+  if (props.activeNav === 'Custom') return [] // custom tab handled separately
   const catNames = CATEGORIES[props.activeNav] ?? []
-  let list = (props.activeNav === 'Default' || props.activeNav === 'Custom')
+  let list = props.activeNav === 'Default'
     ? commands.value
     : commands.value.filter(c => catNames.includes(c.name))
   if (search.value.trim()) list = list.filter(c => c.name.includes(search.value.toLowerCase()))
   return list
+}
+
+function filteredCustom() {
+  let list = customCommands.value
+  if (search.value.trim()) list = list.filter(c => c.name.includes(search.value.toLowerCase()))
+  return list
+}
+
+async function fetchCustomCommands() {
+  if (!session.value) return
+  customLoading.value = true
+  try {
+    const res  = await fetch(`${API}/custom-commands/${session.value.channel}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    if (!res.ok) throw new Error()
+    const data = await res.json() as { commands: CustomCommand[] }
+    customCommands.value = data.commands.map(c => ({ ...c, isActive: !!c.isActive }))
+  } catch {
+    customCommands.value = []
+  } finally {
+    customLoading.value = false
+  }
+}
+
+async function createCustomCommand() {
+  const name = prompt('Command name (no prefix):')?.trim().toLowerCase()
+  if (!name || !/^[a-z0-9_]+$/.test(name)) return
+  if (!session.value) return
+  await fetch(`${API}/custom-commands/${session.value.channel}/${name}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+    body: JSON.stringify({ response: '', rule: '', isActive: true }),
+  })
+  await fetchCustomCommands()
+  openEdit(name, false)
 }
 
 async function fetchCommands() {
@@ -112,6 +169,15 @@ function toggle(cmd: Command, field: 'isActive' | 'modOnly' | 'broadcasterOnly')
   updateCommand(cmd)
 }
 
+async function updateCustomActive(cmd: CustomCommand) {
+  if (!session.value) return
+  await fetch(`${API}/custom-commands/${session.value.channel}/${cmd.name}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+    body: JSON.stringify({ ...cmd, isActive: cmd.isActive }),
+  })
+}
+
 function onCooldownInput(cmd: Command, field: 'cooldown' | 'userCooldown', raw: string) {
   if (!canCooldown.value) return
   const val = parseInt(raw)
@@ -122,7 +188,8 @@ function onCooldownInput(cmd: Command, field: 'cooldown' | 'userCooldown', raw: 
   cdTimers.value[key] = setTimeout(() => updateCommand(cmd), 600)
 }
 
-onMounted(fetchCommands)
+onMounted(() => { fetchCommands(); fetchCustomCommands() })
+watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands() })
 </script>
 
 <template>
@@ -190,10 +257,45 @@ onMounted(fetchCommands)
             <button
               class="edit-btn"
               :class="{ blocked: BLOCKED.includes(cmd.name) }"
-              @click="!BLOCKED.includes(cmd.name) && openEdit(cmd.name)"
+              @click="!BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)"
             >
               {{ BLOCKED.includes(cmd.name) ? 'Blocked' : 'Edit' }}
             </button>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ── Custom commands tab ─────────────────────────────────────── -->
+    <template v-if="activeNav === 'Custom'">
+      <div class="custom-header">
+        <span class="custom-count">{{ customCommands.length }} custom command{{ customCommands.length !== 1 ? 's' : '' }}</span>
+        <button class="create-btn" @click="createCustomCommand">+ New command</button>
+      </div>
+
+      <div v-if="customLoading" class="state-msg">Loading…</div>
+
+      <div v-else-if="filteredCustom().length === 0" class="custom-empty">
+        <div class="empty-icon">✦</div>
+        <div class="empty-title">No custom commands yet</div>
+        <div class="empty-sub">Create your first command with the builder above.</div>
+        <button class="create-btn mt" @click="createCustomCommand">+ New command</button>
+      </div>
+
+      <div v-else class="rows">
+        <div v-for="cmd in filteredCustom()" :key="cmd.name" class="table-row custom-row">
+          <div>
+            <div class="square" :class="cmd.isActive ? 'on' : 'off'"
+              @click="cmd.isActive = !cmd.isActive; updateCustomActive(cmd)"></div>
+          </div>
+          <div class="cmd-name">
+            <span class="cmd-cat-dot" style="background:#9d6cff"></span>
+            {{ prefix }}{{ cmd.name }}
+            <span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
+          </div>
+          <div class="custom-response-preview">{{ cmd.response || '\u2014' }}</div>
+          <div>
+            <button class="edit-btn" @click="openEdit(cmd.name, false)">Edit</button>
           </div>
         </div>
       </div>
@@ -203,7 +305,7 @@ onMounted(fetchCommands)
     :cmdName="editingCmd"
     :channel="session?.channel ?? ''"
     :open="editOpen"
-    :isBuiltIn="true"
+    :isBuiltIn="editIsBuiltIn"
     @close="editOpen = false"
     @saved="onEditSaved"
   />
@@ -283,4 +385,34 @@ onMounted(fetchCommands)
 }
 .edit-btn:hover:not(.blocked) { background: #6f2bff; color: #fff; }
 .edit-btn.blocked { border-color: #333; color: #444; cursor: default; }
+
+/* ── Custom tab ─────────────────────────────────────────────────── */
+.custom-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #222;
+}
+.custom-count { font-size: 11px; color: #555; }
+.create-btn {
+  height: 32px; padding: 0 14px; border: 1px solid #6f2bff66;
+  background: transparent; color: #9d6cff;
+  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s;
+}
+.create-btn:hover { background: #6f2bff22; }
+.create-btn.mt { margin-top: 16px; }
+
+.custom-empty {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 48px 24px; color: #444; text-align: center;
+}
+.empty-icon  { font-size: 24px; color: #333; margin-bottom: 12px; }
+.empty-title { font-size: 14px; font-weight: 700; color: #555; margin-bottom: 6px; }
+.empty-sub   { font-size: 12px; color: #444; }
+
+.custom-row { grid-template-columns: 70px 1fr 1fr 110px; }
+.custom-response-preview {
+  font-size: 12px; color: #555; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap; padding-right: 12px;
+}
+.cmd-alias { font-size: 11px; color: #6f2bff; font-weight: 400; margin-left: 6px; }
 </style>

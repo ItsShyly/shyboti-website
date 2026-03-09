@@ -571,15 +571,7 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 .field-textarea { resize: vertical; min-height: 52px; }
 .field-select   { appearance: none; cursor: pointer; }
 
-/* ── Built-in output placeholder ────────────────────────────────────────── */
-.output-placeholder {
-  display: inline-flex; align-items: center; gap: 1px;
-  background: #0d0d10; border: 1px dashed #2a2a30;
-  padding: 8px 14px; font-family: 'Consolas','Fira Mono',monospace;
-  user-select: none; cursor: default;
-}
-.op-brace { font-size: 18px; color: #333; line-height: 1; }
-.op-label { font-size: 13px; color: #3a3a3a; letter-spacing: .04em; padding: 0 2px; }
+/* output-placeholder styles are in global <style> block below due to Teleport */
 
 /* ── Rule area ───────────────────────────────────────────────────────────── */
 .rule-area {
@@ -673,4 +665,16 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
 }
 .btn-delete:hover:not(:disabled) { background: #f1494911; }
 .btn-delete:disabled { opacity: .4; cursor: not-allowed; }
+</style>
+
+<!-- Global styles for Teleport-rendered content -->
+<style>
+.output-placeholder {
+  display: inline-flex; align-items: center; gap: 2px;
+  background: #0d0d10; border: 1px dashed #252530;
+  padding: 8px 14px; font-family: 'Consolas','Fira Mono',monospace;
+  user-select: none; cursor: default;
+}
+.op-brace { font-size: 20px; color: #2a2a35; line-height: 1; font-weight: 300; }
+.op-label { font-size: 13px; color: #333; letter-spacing: .06em; padding: 0 4px; }
 </style>
