@@ -221,7 +221,7 @@ function highlight(src: string): string {
     else if (/^\[(replace|remove|delete|prepend|append|send|stop)\]$/.test(raw))  cls = 'tk-action'
     else if (['{output}','{input}','{user}','{channel}','{args}'].includes(raw))  cls = 'tk-value'
     else if (['{regex1}','{regex2}','{text1}','{text2}'].includes(raw))           cls = 'tk-param'
-    else if (raw === '\uE000')                                                     return `<span class="tk-placeholder">\uE000</span>`
+    else if (raw === '\uE000')                                                     return `<span class="tk-placeholder" contenteditable="false">◆</span>`
     return cls ? `<span class="${cls}">${m}</span>` : m
   })
 }
@@ -286,8 +286,16 @@ function restoreCaret(el: HTMLElement, offset: number) {
 }
 
 function getPlainText(el: HTMLElement): string {
-  // \uE000 survives innerText round-trips natively — no special recovery needed
-  return el.innerText.replace(/\n\n/g, '\n')
+  // Walk the DOM to build plain text, converting ◆ placeholder spans back to \uE000
+  function walk(node: Node): string {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
+    if (node instanceof HTMLElement) {
+      if (node.classList.contains('tk-placeholder')) return '\uE000'
+      return Array.from(node.childNodes).map(walk).join('')
+    }
+    return ''
+  }
+  return walk(el).replace(/\n\n/g, '\n')
 }
 
 // Strip sentinels before saving — placeholders not filled = removed from saved rule
@@ -312,10 +320,30 @@ function onEditorKeydown(e: KeyboardEvent) {
     if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); insertAcItem(); return }
     if (e.key === 'Escape')     { acVisible.value = false; return }
   }
+
+  // Prevent deleting placeholder spans — they must be replaced by typing, not deleted
+  if (e.key === 'Backspace' || e.key === 'Delete') {
+    const sel = window.getSelection()
+    if (sel && sel.rangeCount) {
+      const range = sel.getRangeAt(0)
+      if (range.collapsed) {
+        // Check adjacent node is a placeholder span
+        const node = e.key === 'Backspace' ? range.startContainer : range.endContainer
+        const offset = e.key === 'Backspace' ? range.startOffset - 1 : range.endOffset
+        const parent = node.parentElement
+        if (parent?.classList.contains('tk-placeholder')) { e.preventDefault(); return }
+        // Check sibling
+        const sib = e.key === 'Backspace'
+          ? range.startContainer.childNodes[range.startOffset - 1]
+          : range.endContainer.childNodes[range.endOffset]
+        if (sib instanceof HTMLElement && sib.classList.contains('tk-placeholder')) { e.preventDefault(); return }
+      }
+    }
+  }
+
   // Auto-insert $if skeleton with ◆ placeholders for required slots
   if (e.key === '(' && form.value.rule.endsWith('$if')) {
     e.preventDefault()
-    // ◆ marks "fill this in" spots — yellow bg in highlight
     insertText(`({output}[has]${PLACEHOLDER}<do [${PLACEHOLDER}]>)`)
   }
 }
@@ -711,9 +739,14 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
   width: 138px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px;
 }
 .palette-group-label {
-  font-size: 9px; font-weight: 700; color: #444; text-transform: uppercase;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .06em; margin-bottom: 3px;
 }
+.palette-group:nth-child(1) .palette-group-label { color: #569cd6aa; } /* Wrappers  — blue   */
+.palette-group:nth-child(2) .palette-group-label { color: #c792eaaa; } /* Operators — purple */
+.palette-group:nth-child(3) .palette-group-label { color: #f14949aa; } /* Actions   — red    */
+.palette-group:nth-child(4) .palette-group-label { color: #4ec9b0aa; } /* Values    — teal   */
+.palette-group:nth-child(5) .palette-group-label { color: #e5c07baa; } /* Params    — yellow */
 .palette-group { display: flex; flex-direction: column; gap: 2px; }
 .palette-token {
   display: inline-block; padding: 3px 7px; font-size: 11px; font-family: 'Consolas','Fira Mono',monospace;
@@ -824,13 +857,17 @@ onUnmounted(()  => document.removeEventListener('mousedown', onClickOutside))
   padding: 1px 3px;
   display: inline;
 }
-/* placeholder — empty yellow space */
+/* placeholder — ◆ fill-me marker */
 .tk-placeholder {
   display: inline-block;
-  min-width: 14px;
-  background: rgba(229, 192, 123, 0.28);
-  border: 1px solid rgba(229, 192, 123, 0.5);
+  padding: 0 4px;
+  background: rgba(229, 192, 123, 0.18);
+  border: 1px solid rgba(229, 192, 123, 0.55);
   border-radius: 2px;
-  cursor: text;
+  color: #e5c07b;
+  font-size: 10px;
+  line-height: 1.5;
+  cursor: pointer;
+  user-select: none;
 }
 </style>
