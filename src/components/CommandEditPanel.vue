@@ -157,84 +157,83 @@ function actionSkeleton(tok: string, selectedText = ''): string {
 }
 
 // ─── Highlight ────────────────────────────────────────────────────────────────
-// Converts the plain-text rule (with sentinel chars) into coloured HTML.
-// Rules for correctness:
-//   - We do NOT use nested block-wrapper spans that can conflict with inline token spans
-//   - Placeholder sentinels → atomic contenteditable=false spans
-//   - Token colouring happens on the already-rendered string
+// Strategy: split the source on sentinel chars first so they are never
+// passed through escHtml or regex matchers. Each segment between sentinels
+// is plain text that gets escaped + token-coloured, then wrapped in
+// block-tint spans where appropriate.
 
 function highlight(src: string): string {
+  // Split on sentinel chars, keeping the sentinels as their own elements
+  const PH_RE = new RegExp(`([${PH_ALL.join('')}])`, 'g')
+  const parts = src.split(PH_RE)  // alternates: plain-text, sentinel, plain-text, …
+
+  // Render each part
+  const rendered = parts.map(part => {
+    // Sentinel → atomic placeholder span
+    if (PH_ALL.includes(part)) {
+      const cls   = PH_CLASS[part] ?? ''
+      const label = PH_LABEL[part] ?? '?'
+      return `<span class="tk-placeholder ${cls}" data-ph="${part}" contenteditable="false">${label}</span>`
+    }
+    // Plain text segment → escape + colour tokens + wrap block tints
+    return colourSegment(part)
+  })
+
+  return rendered.join('')
+}
+
+// Colour a plain-text segment (no sentinels): escape HTML, add block tints, colour tokens
+function colourSegment(src: string): string {
+  if (!src) return ''
   let out = ''
   let i = 0
-
   while (i < src.length) {
-    const ch = src[i] as string
-
-    // ── Placeholder sentinel → atomic coloured span ──────────────────────────
-    if (PH_ALL.includes(ch)) {
-      const cls   = PH_CLASS[ch] ?? ''
-      const label = PH_LABEL[ch] ?? '?'
-      out += `<span class="tk-placeholder ${cls}" data-ph="${ch}" contenteditable="false">${label}</span>`
-      i++; continue
-    }
-
-    // ── $if( block → blue tinted span ───────────────────────────────────────
+    // $if( … ) — blue block
     if (src.startsWith('$if(', i)) {
-      let depth = 0, j = i + 4, inner = ''
+      let depth = 0, j = i + 4
       for (; j < src.length; j++) {
         if (src[j] === '(') depth++
         else if (src[j] === ')') { if (depth === 0) break; depth-- }
-        inner += src[j]
       }
       const full = src.slice(i, j + 1)
-      out += `<span class="if-block">${highlightTokens(escHtml(full))}</span>`
+      out += `<span class="if-block">${colourTokens(escHtml(full))}</span>`
       i = j + 1; continue
     }
-
-    // ── $else{ block → blue tinted span ─────────────────────────────────────
+    // $else{ … } — blue block
     if (src.startsWith('$else{', i)) {
-      let depth = 0, j = i + 6, inner = ''
+      let depth = 0, j = i + 6
       for (; j < src.length; j++) {
         if (src[j] === '{') depth++
         else if (src[j] === '}') { if (depth === 0) break; depth-- }
-        inner += src[j]
       }
-      const full = src.slice(i, j + 1) as string
-      out += `<span class="if-block">${highlightTokens(escHtml(full))}</span>`
+      const full = src.slice(i, j + 1)
+      out += `<span class="if-block">${colourTokens(escHtml(full))}</span>`
       i = j + 1; continue
     }
-
-    // ── [action{...}] → red tinted span ─────────────────────────────────────
-    const actionM = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)\{[^}]*\}\]/)
-    if (actionM) {
-      out += `<span class="action-block">${highlightTokens(escHtml(actionM[0]))}</span>`
-      i += actionM[0].length; continue
+    // [action{…}] — red block (no sentinels here, already split out)
+    const am = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)\{[^}]*\}\]/)
+    if (am) {
+      out += `<span class="action-block">${colourTokens(escHtml(am[0]))}</span>`
+      i += am[0].length; continue
     }
-
-    // ── Everything else → pass to token colourer ─────────────────────────────
-    // Collect plain chars until next special boundary
+    // Accumulate plain chars
     let chunk = ''
     while (i < src.length) {
-      const c = src[i] as string
-      if (PH_ALL.includes(c)) break
       if (src.startsWith('$if(', i) || src.startsWith('$else{', i)) break
-      const am = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)\{/)
-      if (am) break
-      chunk += c; i++
+      if (src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)\{/)) break
+      chunk += src[i++]
     }
-    if (chunk) out += highlightTokens(escHtml(chunk))
+    if (chunk) out += colourTokens(escHtml(chunk))
   }
-
   return out
 }
 
-function escHtml(s: string) {
+function escHtml(s: string): string {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
 }
 
-// Colour individual tokens in an already-escaped HTML string
-// (does not handle placeholder sentinels — those are handled above)
-function highlightTokens(s: string): string {
+// Colour individual DSL tokens in an already-HTML-escaped string
+function colourTokens(s: string): string {
   const pat = /(\$if|\$else|\[(?:replace|remove|delete|prepend|append|send|stop|has|=|starts|ends)\]|\{(?:output|input|user|channel|args|regex1|regex2|text1|text2)\}|&lt;do|&gt;)/g
   return s.replace(pat, m => {
     const raw = m.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&')
@@ -432,7 +431,7 @@ function onEditorKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape')    { acVisible.value = false; acActivePh.value = null; return }
   }
 
-  // $if( → replace with full skeleton
+  // $if + ( → expand to full skeleton immediately
   if (e.key === '(') {
     const el = editorRef.value; if (!el) return
     const plain  = getPlainText(el)
@@ -440,11 +439,13 @@ function onEditorKeydown(e: KeyboardEvent) {
     const before = plain.slice(0, offset)
     if (before.trimEnd().endsWith('$if')) {
       e.preventDefault()
+      acVisible.value = false
       const trimmed = before.trimEnd()
       const after   = plain.slice(offset)
-      form.value.rule = trimmed.slice(0, -3) + ifSkeleton() + after
+      const skel    = ifSkeleton()
+      form.value.rule = trimmed.slice(0, -3) + skel + after
       applyHighlight()
-      nextTick(() => restoreCaret(el, trimmed.length - 3 + ifSkeleton().length))
+      nextTick(() => restoreCaret(el, trimmed.length - 3 + skel.length))
       return
     }
   }
@@ -567,14 +568,16 @@ function onEditorDrop(e: DragEvent) {
     const plain = getPlainText(el)
     // Find the position of this specific span in the plain text
     let pos = 0
-    function findPh(node: Node): boolean {
-      if (node === phSpan) return true
-      if (node instanceof HTMLElement && node.classList.contains('tk-placeholder')) { pos += 1; return false }
-      if (node.nodeType === Node.TEXT_NODE) { pos += node.textContent?.length ?? 0; return false }
-      for (const c of Array.from(node.childNodes)) { if (findPh(c)) return true }
-      return false
+    let phFound = false
+    function findPh(node: Node): void {
+      if (phFound) return
+      if (node === phSpan) { phFound = true; return }
+      if (node instanceof HTMLElement && node.classList.contains('tk-placeholder')) { pos += 1; return }
+      if (node.nodeType === Node.TEXT_NODE) { pos += node.textContent?.length ?? 0; return }
+      for (const c of Array.from(node.childNodes)) { if (!phFound) findPh(c) }
     }
-    if (findPh(el)) {
+    findPh(el)
+    if (phFound) {
       let insert = tok
       let slotLen = 1
       // If filling an action slot, expand to full action skeleton and consume the {arg} sentinel too
