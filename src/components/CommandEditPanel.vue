@@ -170,12 +170,20 @@ function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES,
 // All pieces: tab-left (sticks OUT left), configurable right side
 // rightFlat: wrapper open/close pieces — they terminate, nothing slots into them
 // rightNotch (IN): value, operator, action, param — something can slot in from right
+// rightFlat overrides the right-side shape to flat (used for <do and >) wrapper tokens)
 function puzzleSVG(label: string, kind: PieceKind, rightFlat = false): string {
   const H = 28, R = 4, TW = 7, TH = 8, TR = 2.5, PX = 10, CW = 6.2
   const bw = Math.max(46, Math.ceil(label.length * CW) + PX * 2)
 
-  // All pieces have a left tab (protrudes left)
-  const bodyOffX = TH
+  // Restore original grammar:
+  // wrapper = flat-L | notch-R (unless rightFlat)
+  // value/operator/action = tab-L | notch-R
+  // param = tab-L | flat-R
+  const leftTab    = kind !== 'wrapper'
+  const rightNotch = rightFlat ? false : kind !== 'param'
+
+  const bodyOffX = leftTab ? TH : 0
+  const svgW = bw + bodyOffX
   const svgH = H
   const x0 = bodyOffX, y0 = 0, x1 = x0 + bw, y1 = H
   const midY = H / 2
@@ -189,23 +197,22 @@ function puzzleSVG(label: string, kind: PieceKind, rightFlat = false): string {
   }
   const col = COLS[kind]
 
-  // right side: notch IN unless rightFlat
-  const rightNotch = !rightFlat
   const top    = `M${x0+R},${y0} L${x1-R},${y0} Q${x1},${y0} ${x1},${y0+R}`
   const right  = rightNotch
     ? `L${x1},${midY-TW} L${x1-TH+TR},${midY-TW} Q${x1-TH},${midY-TW} ${x1-TH},${midY-TW+TR} L${x1-TH},${midY+TW-TR} Q${x1-TH},${midY+TW} ${x1-TH+TR},${midY+TW} L${x1},${midY+TW} L${x1},${y1-R} Q${x1},${y1} ${x1-R},${y1}`
     : `L${x1},${y1-R} Q${x1},${y1} ${x1-R},${y1}`
   const bottom = `L${x0+R},${y1} Q${x0},${y1} ${x0},${y1-R}`
-  // left tab always protrudes outward (leftward)
-  const left   = `L${x0},${midY+TW} L${x0-TH+TR},${midY+TW} Q${x0-TH},${midY+TW} ${x0-TH},${midY+TW-TR} L${x0-TH},${midY-TW+TR} Q${x0-TH},${midY-TW} ${x0-TH+TR},${midY-TW} L${x0},${midY-TW} L${x0},${y0+R} Q${x0},${y0} ${x0+R},${y0}`
+  const left   = leftTab
+    ? `L${x0},${midY+TW} L${x0-TH+TR},${midY+TW} Q${x0-TH},${midY+TW} ${x0-TH},${midY+TW-TR} L${x0-TH},${midY-TW+TR} Q${x0-TH},${midY-TW} ${x0-TH+TR},${midY-TW} L${x0},${midY-TW} L${x0},${y0+R} Q${x0},${y0} ${x0+R},${y0}`
+    : `L${x0},${y0+R} Q${x0},${y0} ${x0+R},${y0}`
   const d = `${top} ${right} ${bottom} ${left} Z`
 
-  const vbX = -TH
-  const vbW = bw + TH * 2  // room for left-tab and optional right overflow
+  const vbX = leftTab ? -TH : 0
+  const vbW = svgW + (leftTab ? TH : 0)
   const tx  = x0 + bw / 2
   const ty  = H / 2
 
-  return `<svg width="${bw + TH}" height="${svgH}" viewBox="${vbX} 0 ${vbW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;overflow:visible">`
+  return `<svg width="${vbW}" height="${svgH}" viewBox="${vbX} 0 ${vbW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;overflow:visible">`
     + `<path d="${d}" fill="${col.fill}" stroke="${col.stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`
     + `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" fill="${col.text}" font-size="10" font-family="Consolas,Fira Mono,monospace" font-weight="600" pointer-events="none">${label}</text>`
     + `</svg>`
