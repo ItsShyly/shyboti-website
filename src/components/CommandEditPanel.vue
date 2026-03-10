@@ -149,15 +149,72 @@ const PH_CANDIDATES: Record<string, string[]> = {
   get [PH.arg]()    { return ARG_TOKENS.value },
 }
 
+type PieceKind = 'value' | 'operator' | 'action' | 'param' | 'wrapper'
+
+function tokenKind(tok: string): PieceKind | null {
+  if (WRAPPERS.includes(tok))     return 'wrapper'
+  if (OPERATORS.includes(tok))    return 'operator'
+  if (ACTIONS.includes(tok))      return 'action'
+  if (VALUES.includes(tok))       return 'value'
+  if (PARAMS.value.includes(tok)) return 'param'
+  return null
+}
 function tokenClass(tok: string): string {
-  if (WRAPPERS.includes(tok))     return 'tk-wrapper'
-  if (OPERATORS.includes(tok))    return 'tk-op'
-  if (ACTIONS.includes(tok))      return 'tk-action'
-  if (VALUES.includes(tok))       return 'tk-value'
-  if (PARAMS.value.includes(tok)) return 'tk-param'
-  return ''
+  const k = tokenKind(tok)
+  if (!k) return ''
+  return { wrapper: 'tk-wrapper', operator: 'tk-op', action: 'tk-action', value: 'tk-value', param: 'tk-param' }[k]
 }
 function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES, ...PARAMS.value] }
+
+// ── Inline SVG puzzle piece (mirrors PuzzlePiece.vue, runs as a string builder) ──
+function puzzleSVG(label: string, kind: PieceKind): string {
+  const H = 28, R = 4, TW = 7, TH = 8, TR = 2.5, PX = 10, CW = 6.2
+  const bw = Math.max(46, Math.ceil(label.length * CW) + PX * 2)
+
+  const leftTab    = kind !== 'wrapper'
+  const rightNotch = kind !== 'param'
+
+  const bodyOffX = leftTab ? TH : 0
+  const svgW     = bw + bodyOffX
+  const svgH     = H
+  const x0 = bodyOffX, y0 = 0, x1 = x0 + bw, y1 = H
+  const midY = H / 2
+
+  const COLS: Record<PieceKind, { fill: string; stroke: string; text: string }> = {
+    value:    { fill: '#0d2520', stroke: '#4ec9b0', text: '#4ec9b0' },
+    operator: { fill: '#1c0f2e', stroke: '#c792ea', text: '#c792ea' },
+    action:   { fill: '#280b0b', stroke: '#f14949', text: '#f14949' },
+    param:    { fill: '#201808', stroke: '#e5c07b', text: '#e5c07b' },
+    wrapper:  { fill: '#0b1928', stroke: '#569cd6', text: '#569cd6' },
+  }
+  const col = COLS[kind]
+
+  const top    = `M${x0+R},${y0} L${x1-R},${y0} Q${x1},${y0} ${x1},${y0+R}`
+  const right  = rightNotch
+    ? `L${x1},${midY-TW} L${x1-TH+TR},${midY-TW} Q${x1-TH},${midY-TW} ${x1-TH},${midY-TW+TR} L${x1-TH},${midY+TW-TR} Q${x1-TH},${midY+TW} ${x1-TH+TR},${midY+TW} L${x1},${midY+TW} L${x1},${y1-R} Q${x1},${y1} ${x1-R},${y1}`
+    : `L${x1},${y1-R} Q${x1},${y1} ${x1-R},${y1}`
+  const bottom = `L${x0+R},${y1} Q${x0},${y1} ${x0},${y1-R}`
+  const left   = leftTab
+    ? `L${x0},${midY+TW} L${x0-TH+TR},${midY+TW} Q${x0-TH},${midY+TW} ${x0-TH},${midY+TW-TR} L${x0-TH},${midY-TW+TR} Q${x0-TH},${midY-TW} ${x0-TH+TR},${midY-TW} L${x0},${midY-TW} L${x0},${y0+R} Q${x0},${y0} ${x0+R},${y0}`
+    : `L${x0},${y0+R} Q${x0},${y0} ${x0+R},${y0}`
+  const d = `${top} ${right} ${bottom} ${left} Z`
+
+  const vbX = leftTab ? -TH : 0
+  const vbW = svgW + (leftTab ? TH : 0)
+  const tx  = x0 + bw / 2
+  const ty  = H / 2
+
+  return `<svg width="${vbW}" height="${svgH}" viewBox="${vbX} 0 ${vbW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;overflow:visible">`
+    + `<path d="${d}" fill="${col.fill}" stroke="${col.stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`
+    + `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" fill="${col.text}" font-size="10" font-family="Consolas,Fira Mono,monospace" font-weight="600" pointer-events="none">${label}</text>`
+    + `</svg>`
+}
+
+// Wrap a puzzle SVG as an atomic inline token (contenteditable=false, data-tok for plain-text recovery)
+function puzzleSpan(tok: string, kind: PieceKind): string {
+  const svg = puzzleSVG(tok, kind)
+  return `<span class="pz-tok" data-tok="${tok}" contenteditable="false" style="display:inline-block;vertical-align:middle;margin:0 1px;cursor:default">${svg}</span>`
+}
 
 function ifSkeleton() {
   return `$if(${PH.value}${PH.op}${PH.param}<do [${PH.action}${PH.arg}]>)`
@@ -179,6 +236,16 @@ function highlight(src: string): string {
   function renderPH(ph: string): string {
     const cls   = PH_CLASS[ph] ?? ''
     const label = PH_LABEL[ph] ?? '?'
+    // Render placeholder as a puzzle piece of appropriate kind
+    const kindMap: Record<string, PieceKind> = {
+      [PH.value]: 'value', [PH.param]: 'param', [PH.op]: 'operator',
+      [PH.action]: 'action', [PH.arg]: 'param',
+    }
+    const k = kindMap[ph]
+    if (k) {
+      const svg = puzzleSVG(label, k)
+      return `<span class="tk-placeholder pz-ph ${cls}" data-ph="${ph}" contenteditable="false" style="display:inline-block;vertical-align:middle;margin:0 1px;opacity:0.55;cursor:pointer">${svg}</span>`
+    }
     return `<span class="tk-placeholder ${cls}" data-ph="${ph}" contenteditable="false">${label}</span>`
   }
 
@@ -200,7 +267,7 @@ function highlight(src: string): string {
         else if (cj === ')') { if (depth === 0) break; depth-- }
         inner += cj; j++
       }
-      out += `<span class="if-block"><span class="tk-wrapper">$if(</span>${highlight(inner)}<span class="tk-wrapper">)</span></span>`
+      out += `<span class="if-block">${puzzleSpan('$if(', 'wrapper')}${highlight(inner)}${puzzleSpan(')', 'wrapper')}</span>`
       i = j + 1; continue
     }
 
@@ -212,7 +279,16 @@ function highlight(src: string): string {
         else if (cj === '}') { if (depth === 0) break; depth-- }
         inner += cj; j++
       }
-      out += `<span class="if-block"><span class="tk-wrapper">$else{</span>${highlight(inner)}<span class="tk-wrapper">}</span></span>`
+      out += `<span class="if-block">${puzzleSpan('$else{', 'wrapper')}${highlight(inner)}${puzzleSpan('}', 'wrapper')}</span>`
+      i = j + 1; continue
+    }
+
+    if (src.startsWith('<do', i)) {
+      // find closing >
+      let j = i + 3
+      while (j < src.length && src.charAt(j) !== '>') j++
+      const inner = src.slice(i + 3, j)
+      out += `<span class="do-block">${puzzleSpan('<do', 'wrapper')}${highlight(inner.trim())}${puzzleSpan('>', 'wrapper')}</span>`
       i = j + 1; continue
     }
 
@@ -220,129 +296,73 @@ function highlight(src: string): string {
     if (actionMatch) {
       const name = actionMatch[1] ?? ''
       let j = i + 1 + name.length
-      let innerHtml = ''
+      let args: string[] = []
       let foundClose = false
       while (j < src.length) {
         const c = src.charAt(j)
         if (PH_SET.has(c)) {
-          innerHtml += renderPH(c); j++
+          args.push(c); j++
         } else if (c === '{') {
-          let tok = ''; j++
+          let tok = '{'; j++
           while (j < src.length && src.charAt(j) !== '}' && !PH_SET.has(src.charAt(j))) {
             tok += src.charAt(j); j++
           }
-          if (j < src.length && src.charAt(j) === '}') j++
-          innerHtml += colourTokens(escHtml(`{${tok}}`))
+          if (j < src.length && src.charAt(j) === '}') { tok += '}'; j++ }
+          args.push(tok)
         } else if (c === ']') {
           foundClose = true; j++; break
-        } else {
-          innerHtml += escHtml(c); j++
-        }
+        } else { j++ }
       }
-      const nameHtml  = `<span class="tk-action">[${escHtml(name)}</span>`
-      const closeHtml = foundClose ? `<span class="tk-action">]</span>` : ''
-      out += `<span class="action-block">${nameHtml}${innerHtml}${closeHtml}</span>`
+      const actionPiece = puzzleSpan(`[${name}]`, 'action')
+      const argPieces   = args.map(a => {
+        if (PH_SET.has(a)) return renderPH(a)
+        const k = tokenKind(a)
+        return k ? puzzleSpan(a, k) : escHtml(a)
+      }).join('')
+      out += `<span class="action-block" style="display:inline-flex;align-items:center">${actionPiece}${argPieces}</span>`
+      if (!foundClose) { /* partial */ }
       i = j; continue
     }
 
+    // scan a plain chunk (no special tokens), then pass to colourTokens
     let chunk = ''
     while (i < src.length) {
       if (PH_SET.has(src.charAt(i))) break
-      if (src.startsWith('$if(', i) || src.startsWith('$else{', i)) break
+      if (src.startsWith('$if(', i) || src.startsWith('$else{', i) || src.startsWith('<do', i)) break
       if (src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)) break
       chunk += src.charAt(i); i++
     }
-    if (chunk) out += colourSegment(chunk)
+    if (chunk) out += colourTokens(chunk)
   }
 
   return out
 }
 
-function colourSegment(src: string): string {
-  if (!src) return ''
-  let out = '', i = 0
-  while (i < src.length) {
-    if (src.startsWith('$if(', i)) {
-      let depth = 0, j = i + 4
-      while (j < src.length) {
-        const cj = src.charAt(j)
-        if (cj === ')' && depth === 0) break
-        if (cj === '(') depth++; else if (cj === ')') depth--
-        j++
-      }
-      const inner = src.slice(i + 4, j)
-      out += `<span class="if-block"><span class="tk-wrapper">$if(</span>${colourSegment(inner)}<span class="tk-wrapper">)</span></span>`
-      i = j + 1; continue
-    }
-    if (src.startsWith('$else{', i)) {
-      let depth = 0, j = i + 6
-      while (j < src.length) {
-        const cj = src.charAt(j)
-        if (cj === '}' && depth === 0) break
-        if (cj === '{') depth++; else if (cj === '}') depth--
-        j++
-      }
-      const inner = src.slice(i + 6, j)
-      out += `<span class="if-block"><span class="tk-wrapper">$else{</span>${colourSegment(inner)}<span class="tk-wrapper">}</span></span>`
-      i = j + 1; continue
-    }
-    const actionStart = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)
-    if (actionStart) {
-      let depth = 0, j = i + 1
-      while (j < src.length) {
-        const cj = src.charAt(j)
-        if (cj === '{') depth++
-        else if (cj === '}') depth--
-        else if (cj === ']' && depth === 0) { j++; break }
-        j++
-      }
-      const actionFull = src.slice(i, j)
-      const foundClose = src.charAt(j - 1) === ']'
-      const actionName = actionFull.match(/^\[([\w]+)/)?.[1] ?? ''
-      const argsStr = foundClose
-        ? actionFull.slice(1 + actionName.length, -1)
-        : actionFull.slice(1 + actionName.length)
-      const nameHtml  = `<span class="tk-action">[${escHtml(actionName)}</span>`
-      const argsHtml  = colourTokens(escHtml(argsStr))
-      const closeHtml = foundClose ? `<span class="tk-action">]</span>` : ''
-      out += `<span class="action-block">${nameHtml}${argsHtml}${closeHtml}</span>`
-      i = j; continue
-    }
-    let chunk = ''
-    while (i < src.length) {
-      if (src.startsWith('$if(', i) || src.startsWith('$else{', i)) break
-      if (src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)) break
-      chunk += src.charAt(i); i++
-    }
-    if (chunk) out += colourTokens(escHtml(chunk))
-  }
-  return out
-}
+// colourSegment no longer needed separately — highlight() handles everything
+function colourSegment(src: string): string { return highlight(src) }
 
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-function colourTokens(s: string): string {
+// colourTokens: operates on RAW (un-escaped) source text now, returns HTML with puzzle spans
+function colourTokens(raw: string): string {
   const paramKeys = userParams.value.map(p => p.key).join('|')
   const paramPat  = paramKeys ? `|\\{(?:${paramKeys})\\}` : ''
   const pat = new RegExp(
-    `(\\$if|\\$else` +
+    `(\\$if(?:\\()?|\\$else(?:\{)?` +
     `|\\[(?:replace|remove|delete|prepend|append|send|stop)\\]` +
     `|\\[(?:has|hasnot|=|starts|ends)\\]` +
     `|\\{(?:output|input|user|channel|args)\\}` +
     paramPat +
-    `|&lt;do|&gt;)`, 'g'
+    `|<do>?|>)`, 'g'
   )
-  return s.replace(pat, m => {
-    const raw = m.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
-    let cls = ''
-    if (['$if','$else'].includes(raw) || raw === '<do' || raw === '>') cls = 'tk-wrapper'
-    else if (OPERATORS.includes(raw))           cls = 'tk-op'
-    else if (ACTIONS.includes(raw))             cls = 'tk-action'
-    else if (VALUES.includes(raw))              cls = 'tk-value'
-    else if (PARAMS.value.includes(raw))        cls = 'tk-param'
-    return cls ? `<span class="${cls}">${m}</span>` : m
+  return raw.replace(pat, tok => {
+    const k = tokenKind(tok)
+    if (k) return puzzleSpan(tok, k)
+    // structural punctuation: keep plain but styled
+    if (tok === '<do' || tok === '<do>' || tok === '>') return `<span class="tk-wrapper" style="vertical-align:middle">${escHtml(tok)}</span>`
+    return escHtml(tok)
   })
 }
 
@@ -368,12 +388,19 @@ const ruleValid = computed(() => ruleWarnings.value.length === 0)
 
 function getPlainText(el: HTMLElement): string {
   function walk(node: Node): string {
-    if (node instanceof HTMLElement && node.classList.contains('tk-placeholder'))
-      return node.dataset.ph ?? ''
+    if (node instanceof HTMLElement) {
+      if (node.classList.contains('tk-placeholder')) return node.dataset.ph ?? ''
+      if (node.classList.contains('pz-tok'))         return node.dataset.tok ?? ''
+    }
     if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? ''
     return Array.from(node.childNodes).map(walk).join('')
   }
   return walk(el).replace(/\n\n/g, '\n')
+}
+
+function isAtomic(node: Node): boolean {
+  return node instanceof HTMLElement &&
+    (node.classList.contains('tk-placeholder') || node.classList.contains('pz-tok'))
 }
 
 function getCaretOffset(el: HTMLElement): number {
@@ -384,9 +411,9 @@ function getCaretOffset(el: HTMLElement): number {
   let count = 0, found = false
   function walk(node: Node): void {
     if (found) return
-    if (node instanceof HTMLElement && node.classList.contains('tk-placeholder')) {
+    if (isAtomic(node)) {
       if (node === range.startContainer || node.contains(range.startContainer)) { found = true; return }
-      count += 1; return
+      count += (node as HTMLElement).dataset.tok?.length ?? (node as HTMLElement).dataset.ph?.length ?? 1; return
     }
     if (node.nodeType === Node.TEXT_NODE) {
       if (node === range.startContainer) { count += range.startOffset; found = true; return }
@@ -406,13 +433,14 @@ function restoreCaret(el: HTMLElement, offset: number) {
   let remaining = offset, placed = false
   function walk(node: Node): void {
     if (placed) return
-    if (node instanceof HTMLElement && node.classList.contains('tk-placeholder')) {
+    if (isAtomic(node)) {
+      const len = (node as HTMLElement).dataset.tok?.length ?? (node as HTMLElement).dataset.ph?.length ?? 1
       if (remaining <= 0) {
         const r = document.createRange(); r.setStartBefore(node); r.collapse(true)
         window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(r)
         placed = true; return
       }
-      remaining -= 1; return
+      remaining -= len; return
     }
     if (node.nodeType === Node.TEXT_NODE) {
       const len = node.textContent?.length ?? 0
@@ -1101,7 +1129,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .editor-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; overflow: visible; }
 .editor-wrap { position: relative; width: 100%; }
 
-.rule-editor { min-height: 100px; max-height: 220px; overflow-y: auto; background: #0d0d10; border: 1px solid #2a2a30; padding: 10px 12px; font-family: 'Consolas','Fira Mono',monospace; font-size: 13px; line-height: 1.8; color: #c0c0c0; outline: none; white-space: pre-wrap; word-break: break-all; transition: border-color .15s; }
+.rule-editor { min-height: 80px; max-height: 280px; overflow-y: auto; background: #0d0d10; border: 1px solid #2a2a30; padding: 12px 14px; font-family: 'Consolas','Fira Mono',monospace; font-size: 13px; line-height: 2.2; color: #c0c0c0; outline: none; white-space: normal; word-break: normal; transition: border-color .15s; display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
 .rule-editor:focus   { border-color: #6f2bff55; }
 .rule-editor.invalid { border-color: #f1494966; }
 .rule-editor:empty::before { content: attr(data-placeholder); color: #2a2a35; pointer-events: none; }
@@ -1191,8 +1219,13 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .op-brace { font-size: 20px; color: #2a2a35; line-height: 1; font-weight: 300; }
 .op-label { font-size: 13px; color: #333; letter-spacing: .06em; padding: 0 4px; }
 
-.if-block     { background: rgba(86,156,214,.10); border: 1px solid rgba(86,156,214,.22); border-radius: 3px; padding: 1px 3px; display: inline; }
-.action-block { background: rgba(241,73,73,.10);  border: 1px solid rgba(241,73,73,.25);  border-radius: 3px; padding: 1px 3px; display: inline; }
+.if-block     { background: rgba(86,156,214,.07);  border: 1px solid rgba(86,156,214,.18); border-radius: 4px; padding: 2px 4px; display: inline-flex; align-items: center; gap: 1px; flex-wrap: wrap; }
+.do-block     { background: rgba(86,156,214,.05);  border: 1px dashed rgba(86,156,214,.20); border-radius: 4px; padding: 2px 4px; display: inline-flex; align-items: center; gap: 1px; flex-wrap: wrap; }
+.action-block { background: rgba(241,73,73,.07);   border: 1px solid rgba(241,73,73,.18);  border-radius: 4px; padding: 2px 4px; display: inline-flex; align-items: center; gap: 1px; }
+
+.pz-tok:hover > svg { filter: brightness(1.3) drop-shadow(0 0 3px currentColor); }
+.pz-ph { opacity: 0.5; transition: opacity .15s; }
+.pz-ph:hover { opacity: 0.85; }
 
 .tk-placeholder {
   display: inline-block; padding: 0 5px; border-radius: 3px;

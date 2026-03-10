@@ -1,13 +1,21 @@
 <script setup lang="ts">
 /**
- * PuzzlePiece — SVG puzzle piece shaped by token category.
+ * PuzzlePiece — SVG puzzle piece shaped by token role in the rule DSL.
  *
- * Connection grammar (left→right rule flow):
- *   VALUES    flat-L | tab-R       "I produce a value"
- *   OPERATORS notch-L | tab-R      "I consume a value, output a result"
- *   ACTIONS   notch-L | flat-R     "I consume a result, terminal"
- *   PARAMS    tab-T  | flat-B      "I plug upward into an action arg"
- *   WRAPPERS  flat-L | tab-R       "I wrap / enclose"
+ * Connector grammar (what each side means):
+ *
+ *   Tab   (bump sticking OUT) = "I connect outward / I plug into something"
+ *   Notch (indent cut IN)     = "Something plugs into me here"
+ *
+ * Shapes per kind:
+ *   wrapper   $if(…)     flat-L  | notch-R    → container, things go inside its right
+ *   value     {output}   tab-L   | notch-R    → plugs left into wrapper, accepts operator on right
+ *   operator  [has]      tab-L   | notch-R    → plugs left into value, accepts param on right
+ *   param     {text1}    tab-L   | flat-R     → plugs left into operator/action, terminal
+ *   action    [remove]   tab-L   | notch-R    → plugs left into <do>, accepts args on right
+ *
+ * Example chain:  $if( ←value→ ←operator→ ←param  <do  ←action→ ←param )
+ *                 [flat|notch] [tab|notch] [tab|notch] [tab|flat] [tab|notch] [tab|flat]
  */
 
 interface Props {
@@ -16,32 +24,43 @@ interface Props {
 }
 const props = defineProps<Props>()
 
-// ── constants ─────────────────────────────────────────────────────────────────
-const H     = 34     // body height
-const R     = 5      // corner radius
-const TW    = 9      // tab half-width (the bump)
-const TH    = 9      // tab protrusion depth
-const TR    = 3      // tab corner radius
-const PX    = 13     // horizontal text padding
-const FSIZE = 11     // font size px
-const CW    = 6.8    // approx char width
+// ── sizing ────────────────────────────────────────────────────────────────────
+const H    = 32      // body height
+const R    = 4       // corner radius
+const TW   = 8       // tab half-width
+const TH   = 8       // tab protrusion depth
+const TR   = 2.5     // tab corner radius
+const PX   = 12      // horizontal text padding
+const CW   = 6.6     // approx char width at 11px
 
-const bw = Math.max(54, Math.ceil(props.label.length * CW) + PX * 2)
+const bw = Math.max(52, Math.ceil(props.label.length * CW) + PX * 2)
 
-// SVG canvas accounts for protruding connectors
-const hasLeftNotch  = props.kind === 'operator' || props.kind === 'action'
-const hasRightTab   = props.kind === 'value' || props.kind === 'operator' || props.kind === 'wrapper'
-const hasTopTab     = props.kind === 'param'
+// Does each side have a tab (out) or notch (in) or flat?
+// L = left side, R = right side
+const leftTab   = props.kind !== 'wrapper'               // all except wrapper have tab-left
+const rightNotch = props.kind !== 'param'                // all except param have notch-right
+// (wrapper: flat-L, notch-R)
+// (value:   tab-L,  notch-R)
+// (operator:tab-L,  notch-R)
+// (param:   tab-L,  flat-R)
+// (action:  tab-L,  notch-R)
 
-const svgW = bw + (hasRightTab ? TH : 0)
-const svgH = H  + (hasTopTab  ? TH : 0)
+// Canvas size: tab on left means we need TH extra on left side
+// notch on right is INWARD so it reduces effective width — but we keep bw as the outer boundary
+// We offset body right by TH when there's a left tab, so the tab protrudes left of x=0
+const bodyOffX = leftTab ? TH : 0
+const svgW = bw + bodyOffX   // total canvas width
+const svgH = H
 
-// Body origin (shifted right when there's a left notch, to leave room for inward cut)
-// We draw everything relative to body top-left corner (bx, by)
-const bx = 0
-const by = hasTopTab ? TH : 0
+// Body rect in SVG space
+const x0 = bodyOffX  // left edge of body
+const y0 = 0         // top edge of body
+const x1 = x0 + bw  // right edge of body
+const y1 = y0 + H   // bottom edge
 
-// ── colour palette ────────────────────────────────────────────────────────────
+const midY = y0 + H / 2
+
+// ── colours ───────────────────────────────────────────────────────────────────
 const COLORS: Record<string, { fill: string; stroke: string; text: string }> = {
   value:    { fill: '#0d2520', stroke: '#4ec9b0', text: '#4ec9b0' },
   operator: { fill: '#1c0f2e', stroke: '#c792ea', text: '#c792ea' },
@@ -51,71 +70,67 @@ const COLORS: Record<string, { fill: string; stroke: string; text: string }> = {
 }
 const col = COLORS[props.kind] ?? COLORS['value']!
 
-// ── path builder ──────────────────────────────────────────────────────────────
-// We trace clockwise from top-left of the body rect.
-// Vertical midpoint of body for connectors:
-const midY = by + H / 2
+// ── path ──────────────────────────────────────────────────────────────────────
+// Trace clockwise: top-left → top-right → bottom-right → bottom-left → close
+//
+// Helper fragments:
+//   tabOut going LEFT  = bump protruding left from the left edge (going up the left side)
+//   notchIn on RIGHT   = indent cut into right edge (going down the right side)
 
 function buildPath(): string {
-  // Right tab protrusion (outward bump on right edge)
-  const rightTab = hasRightTab ? `
-    L${bx+bw},${midY - TW}
-    L${bx+bw+TH-TR},${midY - TW} Q${bx+bw+TH},${midY - TW} ${bx+bw+TH},${midY - TW + TR}
-    L${bx+bw+TH},${midY + TW - TR} Q${bx+bw+TH},${midY + TW} ${bx+bw+TH-TR},${midY + TW}
-    L${bx+bw},${midY + TW}
-  ` : ''
+  // TOP edge: left-to-right, straight
+  const top = `M${x0 + R},${y0} L${x1 - R},${y0} Q${x1},${y0} ${x1},${y0 + R}`
 
-  // Left notch (inward cut on left edge) — only for operator/action
-  // The notch is traced on the way back up the left side
-  const leftNotchDown = hasLeftNotch ? `
-    L${bx},${midY + TW}
-    L${bx-TH+TR},${midY + TW} Q${bx-TH},${midY + TW} ${bx-TH},${midY + TW - TR}
-    L${bx-TH},${midY - TW + TR} Q${bx-TH},${midY - TW} ${bx-TH+TR},${midY - TW}
-    L${bx},${midY - TW}
-  ` : ''
+  // RIGHT edge: top-to-bottom
+  // If rightNotch: cut an inward notch at midY
+  let right: string
+  if (rightNotch) {
+    // Go down to notch top, cut inward, continue down
+    right = `
+      L${x1},${midY - TW}
+      L${x1 - TH + TR},${midY - TW} Q${x1 - TH},${midY - TW} ${x1 - TH},${midY - TW + TR}
+      L${x1 - TH},${midY + TW - TR} Q${x1 - TH},${midY + TW} ${x1 - TH + TR},${midY + TW}
+      L${x1},${midY + TW}
+      L${x1},${y1 - R} Q${x1},${y1} ${x1 - R},${y1}
+    `
+  } else {
+    right = `L${x1},${y1 - R} Q${x1},${y1} ${x1 - R},${y1}`
+  }
 
-  // Top tab (upward bump for params)
-  const midX = bx + bw / 2
-  const topTab = hasTopTab ? `
-    L${midX - TW},${by}
-    L${midX - TW},${by - TH + TR} Q${midX - TW},${by - TH} ${midX - TW + TR},${by - TH}
-    L${midX + TW - TR},${by - TH} Q${midX + TW},${by - TH} ${midX + TW},${by - TH + TR}
-    L${midX + TW},${by}
-  ` : ''
+  // BOTTOM edge: right-to-left, straight
+  const bottom = `L${x0 + R},${y1} Q${x0},${y1} ${x0},${y1 - R}`
 
-  // Top edge: left-to-right
-  const topEdge = hasTopTab
-    ? `M${bx+R},${by} ${topTab} L${bx+bw-R},${by} Q${bx+bw},${by} ${bx+bw},${by+R}`
-    : `M${bx+R},${by} L${bx+bw-R},${by} Q${bx+bw},${by} ${bx+bw},${by+R}`
+  // LEFT edge: bottom-to-top
+  // If leftTab: bump protruding LEFT from x0 at midY (going upward)
+  let left: string
+  if (leftTab) {
+    // Coming up the left side, at midY we protrude outward (leftward = negative x)
+    left = `
+      L${x0},${midY + TW}
+      L${x0 - TH + TR},${midY + TW} Q${x0 - TH},${midY + TW} ${x0 - TH},${midY + TW - TR}
+      L${x0 - TH},${midY - TW + TR} Q${x0 - TH},${midY - TW} ${x0 - TH + TR},${midY - TW}
+      L${x0},${midY - TW}
+      L${x0},${y0 + R} Q${x0},${y0} ${x0 + R},${y0}
+    `
+  } else {
+    left = `L${x0},${y0 + R} Q${x0},${y0} ${x0 + R},${y0}`
+  }
 
-  // Right edge: top-to-bottom (with optional tab)
-  const rightEdge = hasRightTab
-    ? `L${bx+bw},${midY - TW} ${rightTab} L${bx+bw},${by+H-R} Q${bx+bw},${by+H} ${bx+bw-R},${by+H}`
-    : `L${bx+bw},${by+H-R} Q${bx+bw},${by+H} ${bx+bw-R},${by+H}`
-
-  // Bottom edge: right-to-left
-  const bottomEdge = `L${bx+R},${by+H} Q${bx},${by+H} ${bx},${by+H-R}`
-
-  // Left edge: bottom-to-top (with optional notch)
-  const leftEdge = hasLeftNotch
-    ? `${leftNotchDown} L${bx},${by+R} Q${bx},${by} ${bx+R},${by}`
-    : `L${bx},${by+R} Q${bx},${by} ${bx+R},${by}`
-
-  return `${topEdge} ${rightEdge} ${bottomEdge} ${leftEdge} Z`
+  return `${top} ${right} ${bottom} ${left} Z`
 }
 
 const path = buildPath()
 
-// Text center: horizontal center of body, vertical center of body
-const textX = bx + bw / 2
-const textY = by + H / 2
+// Text centered in the body rect
+const textX = x0 + bw / 2
+const textY = y0 + H / 2
 </script>
 
 <template>
   <svg
-    :width="svgW + (hasLeftNotch ? TH : 0)"
+    :width="svgW"
     :height="svgH"
-    :viewBox="`${hasLeftNotch ? -TH : 0} 0 ${svgW + (hasLeftNotch ? TH : 0)} ${svgH}`"
+    :viewBox="`${leftTab ? -TH : 0} 0 ${svgW} ${svgH}`"
     class="puzzle-svg"
     xmlns="http://www.w3.org/2000/svg"
     overflow="visible"
@@ -134,10 +149,10 @@ const textY = by + H / 2
       text-anchor="middle"
       dominant-baseline="central"
       :fill="col.text"
-      :font-size="FSIZE"
+      :font-size="11"
       font-family="'Consolas','Fira Mono',monospace"
       font-weight="600"
-      letter-spacing="0.03em"
+      letter-spacing="0.02em"
       pointer-events="none"
       style="user-select: none"
     >{{ label }}</text>
