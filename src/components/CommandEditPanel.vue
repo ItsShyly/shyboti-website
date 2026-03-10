@@ -2,6 +2,7 @@
 import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
+import PuzzlePiece from './PuzzlePiece.vue'
 
 export interface CustomCommand {
   name: string; response: string; rule: string; alias: string
@@ -812,12 +813,14 @@ function simulateRule() {
   }
 }
 
+type PieceKind = 'value' | 'operator' | 'action' | 'param' | 'wrapper'
+
 const palette = computed(() => [
-  { group: 'Wrappers',   cls: 'tk-wrapper', tokens: WRAPPERS     },
-  { group: 'Operators',  cls: 'tk-op',      tokens: OPERATORS    },
-  { group: 'Actions',    cls: 'tk-action',  tokens: ACTIONS      },
-  { group: 'Values',     cls: 'tk-value',   tokens: VALUES       },
-  { group: 'Parameters', cls: 'tk-param',   tokens: PARAMS.value },
+  { group: 'Wrappers',   kind: 'wrapper'  as PieceKind, tokens: WRAPPERS     },
+  { group: 'Operators',  kind: 'operator' as PieceKind, tokens: OPERATORS    },
+  { group: 'Actions',    kind: 'action'   as PieceKind, tokens: ACTIONS      },
+  { group: 'Values',     kind: 'value'    as PieceKind, tokens: VALUES       },
+  { group: 'Parameters', kind: 'param'    as PieceKind, tokens: PARAMS.value },
 ])
 
 function onClickOutside(e: MouseEvent) {
@@ -890,14 +893,16 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 
                 <div class="palette">
                   <div v-for="g in palette" :key="g.group" class="palette-group">
-                    <div class="palette-group-label" :class="g.cls">{{ g.group }}</div>
+                    <div class="palette-group-label" :class="'pk-' + g.kind">{{ g.group }}</div>
                     <div v-for="tok in g.tokens" :key="tok"
-                      class="palette-token" :class="tokenClass(tok)"
+                      class="palette-piece-wrap"
                       draggable="true"
                       @dragstart="onDragStart($event, tok)"
                       @click="onPaletteClick(tok)"
-                      title="Click or drag"
-                    >{{ tok }}</div>
+                      title="Click or drag to add"
+                    >
+                      <PuzzlePiece :label="tok" :kind="g.kind" />
+                    </div>
                   </div>
                 </div>
 
@@ -1076,11 +1081,22 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .field-select   { appearance: none; cursor: pointer; }
 
 .rule-area { display: flex; flex-direction: row; gap: 10px; align-items: flex-start; }
-.palette { width: 130px; flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; }
-.palette-group { display: flex; flex-direction: column; gap: 2px; }
-.palette-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 3px; opacity: .7; }
-.palette-token { display: inline-block; padding: 3px 7px; font-size: 11px; font-family: 'Consolas','Fira Mono',monospace; cursor: grab; border: 1px solid transparent; transition: opacity .1s; user-select: none; white-space: nowrap; }
-.palette-token:hover { opacity: .75; }
+.palette { width: 150px; flex-shrink: 0; display: flex; flex-direction: column; gap: 12px; }
+.palette-group { display: flex; flex-direction: column; gap: 4px; }
+.palette-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 2px; opacity: .6; }
+.pk-wrapper  { color: #569cd6; }
+.pk-operator { color: #c792ea; }
+.pk-action   { color: #f14949; }
+.pk-value    { color: #4ec9b0; }
+.pk-param    { color: #e5c07b; }
+.palette-piece-wrap {
+  display: block; cursor: grab; user-select: none;
+  transition: filter .12s, transform .1s;
+  overflow: visible;
+  line-height: 0;
+}
+.palette-piece-wrap:hover { filter: brightness(1.3); transform: translateX(2px); }
+.palette-piece-wrap:active { cursor: grabbing; }
 
 .editor-col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; overflow: visible; }
 .editor-wrap { position: relative; width: 100%; }
