@@ -32,18 +32,18 @@ const geo = computed(() => {
 
   const bodyW = Math.max(52, Math.ceil(props.label.length * CW) + PX * 2)
 
-  // Place body so tab (if any) has room on the left.
-  // offset = how far right the body rectangle sits inside the SVG canvas.
-  const offset = leftTab ? TH : 0
-  const x0 = offset
-  const x1 = offset + bodyW
+  // Body always starts at x0=TH so there's room for a left tab whether or not we draw one.
+  // viewBox shifts left by TH when there's a left tab, exposing the protrusion.
+  const x0 = TH
+  const x1 = TH + bodyW
   const y0 = 0
   const y1 = H
   const midY = H / 2
 
-  // Total SVG canvas width
-  const svgW = bodyW + offset
-  const svgH = H
+  const svgW    = bodyW + TH   // canvas width (tab area + body)
+  const svgH    = H
+  const vbX     = leftTab ? -TH : 0   // expose left tab when present
+  const vbW     = svgW + (leftTab ? TH : 0)
 
   // ── path ──────────────────────────────────────────────────────────────────
   const top    = `M${x0+R},${y0} L${x1-R},${y0} Q${x1},${y0} ${x1},${y0+R}`
@@ -68,9 +68,9 @@ const geo = computed(() => {
   return {
     col,
     path:    `${top} ${right} ${bottom} ${left} Z`,
-    svgW,
+    svgW:    vbW,
     svgH,
-    viewBox: `0 0 ${svgW} ${svgH}`,
+    viewBox: `${vbX} 0 ${vbW} ${svgH}`,
     textX:   x0 + bodyW / 2,
     textY:   midY,
   }
