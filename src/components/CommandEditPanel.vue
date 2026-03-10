@@ -841,8 +841,6 @@ function simulateRule() {
   }
 }
 
-type PieceKind = 'value' | 'operator' | 'action' | 'param' | 'wrapper'
-
 const palette = computed(() => [
   { group: 'Wrappers',   kind: 'wrapper'  as PieceKind, tokens: WRAPPERS     },
   { group: 'Operators',  kind: 'operator' as PieceKind, tokens: OPERATORS    },
