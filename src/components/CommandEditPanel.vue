@@ -693,11 +693,12 @@ function insertAcItem() {
     const idx   = plain.indexOf(ph); if (idx === -1) return
     if (ph === PH.action && ACTIONS.includes(item)) {
       const skel = actionSkeleton(item)
-      // consume '[' (idx-1) + action PH (idx) + all consecutive arg PHs after it
+      // [ and ] are eaten by highlight()/getPlainText — plain has just ▪action▪arg▪arg...
+      // Replace from ▪action through all consecutive ▪arg PHs with the new skeleton.
       let sliceEnd = idx + 1
       while (plain.charAt(sliceEnd) === PH.arg) sliceEnd++
-      form.value.rule = plain.slice(0, idx - 1) + skel + plain.slice(sliceEnd)
-      applyHighlight(); nextTick(() => restoreCaret(el, idx - 1 + skel.length))
+      form.value.rule = plain.slice(0, idx) + skel + plain.slice(sliceEnd)
+      applyHighlight(); nextTick(() => restoreCaret(el, idx + skel.length))
       return
     }
     form.value.rule = plain.slice(0, idx) + item + plain.slice(idx + 1)
@@ -770,11 +771,11 @@ function onEditorDrop(e: DragEvent) {
     if (!phFound) return
     if (ph === PH.action && ACTIONS.includes(tok)) {
       const skel = actionSkeleton(tok)
-      // consume '[' (pos-1) + action PH (pos) + all consecutive arg PHs after it
+      // [ and ] are eaten by highlight()/getPlainText - replace from pos through all arg PHs
       let sliceEnd = pos + 1
       while (plain.charAt(sliceEnd) === PH.arg) sliceEnd++
-      form.value.rule = plain.slice(0, pos - 1) + skel + plain.slice(sliceEnd)
-      applyHighlight(); nextTick(() => restoreCaret(el, pos - 1 + skel.length))
+      form.value.rule = plain.slice(0, pos) + skel + plain.slice(sliceEnd)
+      applyHighlight(); nextTick(() => restoreCaret(el, pos + skel.length))
       return
     }
     form.value.rule = plain.slice(0, pos) + tok + plain.slice(pos + 1)
