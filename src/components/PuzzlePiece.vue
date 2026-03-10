@@ -5,7 +5,8 @@ interface Props {
   label: string
   kind: 'value' | 'operator' | 'action' | 'param' | 'wrapper'
   rightFlat?: boolean
-  leftTab?: boolean
+  forceLeftTab?: boolean
+  forceNoLeftTab?: boolean
 }
 const props = defineProps<Props>()
 
@@ -28,7 +29,7 @@ const COLORS: Record<string, { fill: string; stroke: string; text: string }> = {
 
 const geo = computed(() => {
   const col        = COLORS[props.kind] ?? COLORS['value']!
-  const leftTab    = props.leftTab ?? (props.kind !== 'wrapper')
+  const leftTab    = props.forceNoLeftTab ? false : props.forceLeftTab ? true : (props.kind !== 'wrapper')
   const rightNotch = props.rightFlat ? false : true
 
   const bw   = Math.max(52, Math.ceil(props.label.length * CW) + PX * 2)
