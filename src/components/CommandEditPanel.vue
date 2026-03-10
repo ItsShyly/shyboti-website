@@ -693,10 +693,9 @@ function insertAcItem() {
     const idx   = plain.indexOf(ph); if (idx === -1) return
     if (ph === PH.action && ACTIONS.includes(item)) {
       const skel = actionSkeleton(item)
-      const hasArg = plain.charAt(idx + 1) === PH.arg
-      // idx - 1 = the '[' before the action PH
-      // sliceEnd = end of the arg PH (if present), no +1 to avoid eating the '>' after ']>'
-      const sliceEnd = hasArg ? idx + 2 : idx + 1
+      // consume '[' (idx-1) + action PH (idx) + all consecutive arg PHs after it
+      let sliceEnd = idx + 1
+      while (plain.charAt(sliceEnd) === PH.arg) sliceEnd++
       form.value.rule = plain.slice(0, idx - 1) + skel + plain.slice(sliceEnd)
       applyHighlight(); nextTick(() => restoreCaret(el, idx - 1 + skel.length))
       return
@@ -771,9 +770,10 @@ function onEditorDrop(e: DragEvent) {
     if (!phFound) return
     if (ph === PH.action && ACTIONS.includes(tok)) {
       const skel = actionSkeleton(tok)
-      const hasArg = plain.charAt(pos + 1) === PH.arg
-      const sliceEnd = hasArg ? pos + 2 : pos + 1
-      form.value.rule = plain.slice(0, pos - 1) + skel + plain.slice(sliceEnd + 1)
+      // consume '[' (pos-1) + action PH (pos) + all consecutive arg PHs after it
+      let sliceEnd = pos + 1
+      while (plain.charAt(sliceEnd) === PH.arg) sliceEnd++
+      form.value.rule = plain.slice(0, pos - 1) + skel + plain.slice(sliceEnd)
       applyHighlight(); nextTick(() => restoreCaret(el, pos - 1 + skel.length))
       return
     }
