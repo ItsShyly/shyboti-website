@@ -166,17 +166,17 @@ function tokenClass(tok: string): string {
 }
 function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES, ...PARAMS.value] }
 
-// ── Inline SVG puzzle piece (mirrors PuzzlePiece.vue, runs as a string builder) ──
-function puzzleSVG(label: string, kind: PieceKind): string {
+// ── Inline SVG puzzle piece ──────────────────────────────────────────────────
+// All pieces: tab-left (sticks OUT left), configurable right side
+// rightFlat: wrapper open/close pieces — they terminate, nothing slots into them
+// rightNotch (IN): value, operator, action, param — something can slot in from right
+function puzzleSVG(label: string, kind: PieceKind, rightFlat = false): string {
   const H = 28, R = 4, TW = 7, TH = 8, TR = 2.5, PX = 10, CW = 6.2
   const bw = Math.max(46, Math.ceil(label.length * CW) + PX * 2)
 
-  const leftTab    = kind !== 'wrapper'
-  const rightNotch = kind !== 'param'
-
-  const bodyOffX = leftTab ? TH : 0
-  const svgW     = bw + bodyOffX
-  const svgH     = H
+  // All pieces have a left tab (protrudes left)
+  const bodyOffX = TH
+  const svgH = H
   const x0 = bodyOffX, y0 = 0, x1 = x0 + bw, y1 = H
   const midY = H / 2
 
@@ -189,31 +189,34 @@ function puzzleSVG(label: string, kind: PieceKind): string {
   }
   const col = COLS[kind]
 
+  // right side: notch IN unless rightFlat
+  const rightNotch = !rightFlat
   const top    = `M${x0+R},${y0} L${x1-R},${y0} Q${x1},${y0} ${x1},${y0+R}`
   const right  = rightNotch
     ? `L${x1},${midY-TW} L${x1-TH+TR},${midY-TW} Q${x1-TH},${midY-TW} ${x1-TH},${midY-TW+TR} L${x1-TH},${midY+TW-TR} Q${x1-TH},${midY+TW} ${x1-TH+TR},${midY+TW} L${x1},${midY+TW} L${x1},${y1-R} Q${x1},${y1} ${x1-R},${y1}`
     : `L${x1},${y1-R} Q${x1},${y1} ${x1-R},${y1}`
   const bottom = `L${x0+R},${y1} Q${x0},${y1} ${x0},${y1-R}`
-  const left   = leftTab
-    ? `L${x0},${midY+TW} L${x0-TH+TR},${midY+TW} Q${x0-TH},${midY+TW} ${x0-TH},${midY+TW-TR} L${x0-TH},${midY-TW+TR} Q${x0-TH},${midY-TW} ${x0-TH+TR},${midY-TW} L${x0},${midY-TW} L${x0},${y0+R} Q${x0},${y0} ${x0+R},${y0}`
-    : `L${x0},${y0+R} Q${x0},${y0} ${x0+R},${y0}`
+  // left tab always protrudes outward (leftward)
+  const left   = `L${x0},${midY+TW} L${x0-TH+TR},${midY+TW} Q${x0-TH},${midY+TW} ${x0-TH},${midY+TW-TR} L${x0-TH},${midY-TW+TR} Q${x0-TH},${midY-TW} ${x0-TH+TR},${midY-TW} L${x0},${midY-TW} L${x0},${y0+R} Q${x0},${y0} ${x0+R},${y0}`
   const d = `${top} ${right} ${bottom} ${left} Z`
 
-  const vbX = leftTab ? -TH : 0
-  const vbW = svgW + (leftTab ? TH : 0)
+  const vbX = -TH
+  const vbW = bw + TH * 2  // room for left-tab and optional right overflow
   const tx  = x0 + bw / 2
   const ty  = H / 2
 
-  return `<svg width="${vbW}" height="${svgH}" viewBox="${vbX} 0 ${vbW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;overflow:visible">`
+  return `<svg width="${bw + TH}" height="${svgH}" viewBox="${vbX} 0 ${vbW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;overflow:visible">`
     + `<path d="${d}" fill="${col.fill}" stroke="${col.stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`
     + `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" fill="${col.text}" font-size="10" font-family="Consolas,Fira Mono,monospace" font-weight="600" pointer-events="none">${label}</text>`
     + `</svg>`
 }
 
-// Wrap a puzzle SVG as an atomic inline token (contenteditable=false, data-tok for plain-text recovery)
-function puzzleSpan(tok: string, kind: PieceKind): string {
-  const svg = puzzleSVG(tok, kind)
-  return `<span class="pz-tok" data-tok="${tok}" contenteditable="false" style="display:inline-block;vertical-align:middle;margin:0 1px;cursor:default">${svg}</span>`
+// Wrap a puzzle SVG as an atomic inline token
+// data-tok is used by getPlainText to recover the raw token string
+function puzzleSpan(tok: string, kind: PieceKind, rightFlat = false): string {
+  const svg = puzzleSVG(tok, kind, rightFlat)
+  // draggable="true" enables reordering; data-tok-drag marks it as a draggable piece
+  return `<span class="pz-tok" data-tok="${tok}" contenteditable="false" draggable="true" data-tok-drag="1" style="display:inline-block;vertical-align:middle;margin:0 2px;cursor:grab">${svg}</span>`
 }
 
 function ifSkeleton() {
@@ -267,7 +270,7 @@ function highlight(src: string): string {
         else if (cj === ')') { if (depth === 0) break; depth-- }
         inner += cj; j++
       }
-      out += `<span class="if-block">${puzzleSpan('$if(', 'wrapper')}${highlight(inner)}${puzzleSpan(')', 'wrapper')}</span>`
+      out += `<span class="if-block">${puzzleSpan('$if(', 'wrapper', true)}${highlight(inner)}${puzzleSpan('>)', 'wrapper', true)}</span>`
       i = j + 1; continue
     }
 
@@ -279,7 +282,7 @@ function highlight(src: string): string {
         else if (cj === '}') { if (depth === 0) break; depth-- }
         inner += cj; j++
       }
-      out += `<span class="if-block">${puzzleSpan('$else{', 'wrapper')}${highlight(inner)}${puzzleSpan('}', 'wrapper')}</span>`
+      out += `<span class="if-block">${puzzleSpan('$else{', 'wrapper', true)}${highlight(inner)}${puzzleSpan('}', 'wrapper', true)}</span>`
       i = j + 1; continue
     }
 
@@ -288,7 +291,7 @@ function highlight(src: string): string {
       let j = i + 3
       while (j < src.length && src.charAt(j) !== '>') j++
       const inner = src.slice(i + 3, j)
-      out += `<span class="do-block">${puzzleSpan('<do', 'wrapper')}${highlight(inner.trim())}${puzzleSpan('>', 'wrapper')}</span>`
+      out += `<span class="do-block">${puzzleSpan('<do', 'wrapper', true)}${highlight(inner.trim())}${puzzleSpan('>', 'wrapper', true)}</span>`
       i = j + 1; continue
     }
 
@@ -481,6 +484,8 @@ const acPos      = ref({ top: 0, left: 0 })
 const acVisible  = ref(false)
 const acTrigger  = ref('')
 const acActivePh = ref<string | null>(null)
+const acSwapTok  = ref<string | null>(null)  // token being swapped via left-click
+let   draggedTok = ''                        // token being dragged from inside the editor
 
 function insertAtCaret(text: string) {
   const el = editorRef.value; if (!el) return
@@ -529,18 +534,76 @@ function onEditorKeydown(e: KeyboardEvent) {
 
 function onEditorClick(e: MouseEvent) {
   const target = e.target as HTMLElement
+
+  // Left-click on a real puzzle piece (pz-tok) → open swap picker
+  const tokSpan = (target.classList.contains('pz-tok') ? target
+    : target.closest?.('.pz-tok') as HTMLElement | null)
+  if (tokSpan && tokSpan.dataset.tok) {
+    e.preventDefault()
+    const tok   = tokSpan.dataset.tok
+    const kind  = tokenKind(tok)
+    if (!kind) return
+    // Build candidate list for this kind
+    const candidates: Record<PieceKind, string[]> = {
+      wrapper:  WRAPPERS,
+      operator: OPERATORS,
+      action:   ACTIONS,
+      value:    VALUES,
+      param:    PARAMS.value,
+    }
+    acItems.value    = candidates[kind]
+    acIndex.value    = acItems.value.indexOf(tok)
+    acTrigger.value  = tok
+    acActivePh.value = null
+    acSwapTok.value  = tok
+    acVisible.value  = true
+    const rect = tokSpan.getBoundingClientRect()
+    const er   = editorRef.value!.getBoundingClientRect()
+    acPos.value = { top: rect.bottom - er.top + 4, left: rect.left - er.left }
+    return
+  }
+
   const phSpan = target.classList.contains('tk-placeholder') ? target
     : (target.closest?.('.tk-placeholder') as HTMLElement | null)
-  if (!phSpan) { acVisible.value = false; acActivePh.value = null; return }
+  if (!phSpan) { acVisible.value = false; acActivePh.value = null; acSwapTok.value = null; return }
   const ph = phSpan.dataset.ph ?? ''
   if (!ph || !(PH_CANDIDATES[ph]?.length)) return
   e.preventDefault()
   acActivePh.value = ph
+  acSwapTok.value  = null
   acItems.value    = PH_CANDIDATES[ph]
   acIndex.value    = 0; acTrigger.value = ''; acVisible.value = true
   const rect = phSpan.getBoundingClientRect()
   const er   = editorRef.value!.getBoundingClientRect()
   acPos.value = { top: rect.bottom - er.top + 4, left: rect.left - er.left }
+}
+
+// Right-click on a pz-tok → delete it (replace with placeholder if inside action/if context)
+function onEditorContextMenu(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  const tokSpan = (target.classList.contains('pz-tok') ? target
+    : target.closest?.('.pz-tok') as HTMLElement | null) as HTMLElement | null
+  if (!tokSpan || !tokSpan.dataset.tok) return
+  e.preventDefault()
+  const tok   = tokSpan.dataset.tok
+  const kind  = tokenKind(tok)
+  const plain = getPlainText(editorRef.value!)
+  const idx   = plain.indexOf(tok)
+  if (idx === -1) return
+
+  // Determine if this position expects a specific placeholder
+  // We replace with the matching PH sentinel based on kind
+  const kindToPh: Record<PieceKind, string> = {
+    value:    PH.value,
+    operator: PH.op,
+    action:   PH.action,
+    param:    PH.param,
+    wrapper:  '', // wrappers don't get a placeholder
+  }
+  const replacement = kind ? (kindToPh[kind] ?? '') : ''
+  form.value.rule = plain.slice(0, idx) + replacement + plain.slice(idx + tok.length)
+  applyHighlight()
+  nextTick(() => restoreCaret(editorRef.value!, idx + replacement.length))
 }
 
 function checkAutocomplete() {
@@ -567,6 +630,21 @@ function insertAcItem() {
   const item = acItems.value[acIndex.value]; if (!item) return
   acVisible.value = false
   const el = editorRef.value; if (!el) return
+
+  // Swap an existing token for another of the same kind
+  if (acSwapTok.value) {
+    const oldTok = acSwapTok.value; acSwapTok.value = null
+    const plain  = getPlainText(el)
+    const idx    = plain.indexOf(oldTok)
+    if (idx === -1) return
+    let insert = item
+    if (item === '$if')              insert = ifSkeleton()
+    else if (ACTIONS.includes(item)) insert = actionSkeleton(item)
+    form.value.rule = plain.slice(0, idx) + insert + plain.slice(idx + oldTok.length)
+    applyHighlight()
+    nextTick(() => restoreCaret(el, idx + insert.length))
+    return
+  }
 
   if (acActivePh.value) {
     const ph = acActivePh.value; acActivePh.value = null
@@ -598,7 +676,29 @@ function insertAcItem() {
   nextTick(() => restoreCaret(el, before.length + insert.length))
 }
 
-function onDragStart(e: DragEvent, tok: string) { e.dataTransfer?.setData('text/plain', tok) }
+function onDragStart(e: DragEvent, tok: string) {
+  e.dataTransfer?.setData('text/plain', tok)
+}
+
+// Drag start from a piece already inside the editor
+function onEditorDragStart(e: DragEvent) {
+  const target = e.target as HTMLElement
+  const tokSpan = (target.classList.contains('pz-tok') ? target
+    : target.closest?.('.pz-tok') as HTMLElement | null) as HTMLElement | null
+  if (!tokSpan || !tokSpan.dataset.tok) { e.preventDefault(); return }
+  draggedTok = tokSpan.dataset.tok
+  e.dataTransfer?.setData('text/plain', draggedTok)
+  e.dataTransfer?.setData('text/x-editor-drag', '1') // marks as internal move
+  // Remove the piece from its current position after a tick (so it renders as a ghost)
+  nextTick(() => {
+    if (!draggedTok) return
+    const plain = getPlainText(editorRef.value!)
+    const idx   = plain.indexOf(draggedTok)
+    if (idx === -1) return
+    form.value.rule = plain.slice(0, idx) + plain.slice(idx + draggedTok.length)
+    applyHighlight()
+  })
+}
 
 function getPhSpanAt(e: DragEvent): HTMLElement | null {
   for (const el of document.elementsFromPoint(e.clientX, e.clientY))
@@ -944,9 +1044,22 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                       @input="onEditorInput"
                       @keydown="onEditorKeydown"
                       @click="onEditorClick"
+                      @contextmenu="onEditorContextMenu"
+                      @dragstart="onEditorDragStart"
                       @drop="onEditorDrop"
                       @dragover="onEditorDragover"
                     ></div>
+                    <div class="editor-legend">
+                      <span class="legend-item">
+                        <span class="legend-icon">🖱️<span class="legend-btn lmb">L</span></span>
+                        <span class="legend-desc">Select / drag piece</span>
+                      </span>
+                      <span class="legend-sep">·</span>
+                      <span class="legend-item">
+                        <span class="legend-icon">🖱️<span class="legend-btn rmb">R</span></span>
+                        <span class="legend-desc">Remove piece</span>
+                      </span>
+                    </div>
 
                     <div v-if="form.rule && ruleWarnings.length" class="rule-warnings">
                       <div v-for="w in ruleWarnings" :key="w" class="rule-warning-item">⚠ {{ w }}</div>
@@ -1133,6 +1246,15 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .rule-editor:empty::before { content: attr(data-placeholder); color: #2a2a35; pointer-events: none; }
 .rule-warnings     { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
 .rule-warning-item { font-size: 11px; color: #f5a623; background: rgba(245,166,35,.08); border-left: 2px solid #f5a62366; padding: 3px 7px; }
+
+.editor-legend { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+.legend-item   { display: inline-flex; align-items: center; gap: 4px; }
+.legend-icon   { display: inline-flex; align-items: center; font-size: 13px; line-height: 1; }
+.legend-btn    { display: inline-block; font-size: 8px; font-weight: 700; line-height: 1; padding: 1px 3px; border-radius: 2px; margin-left: 1px; vertical-align: middle; }
+.legend-btn.lmb { background: #2a2a35; color: #569cd6; border: 1px solid #569cd644; }
+.legend-btn.rmb { background: #2a1a1a; color: #f14949; border: 1px solid #f1494944; }
+.legend-desc   { font-size: 10px; color: #444; }
+.legend-sep    { color: #333; font-size: 12px; }
 
 .ac-dropdown { position: absolute; z-index: 100; background: #1a1a1e; border: 1px solid #2a2a30; min-width: 160px; max-height: 180px; overflow-y: auto; }
 .ac-item { padding: 5px 10px; font-size: 12px; font-family: 'Consolas','Fira Mono',monospace; cursor: pointer; transition: background .1s; }
