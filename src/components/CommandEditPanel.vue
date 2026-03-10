@@ -252,7 +252,7 @@ function highlight(src: string): string {
     const k = kindMap[ph]
     if (k) {
       const svg = puzzleSVG(label, k)
-      return `<span class="tk-placeholder pz-ph ${cls}" data-ph="${ph}" contenteditable="false" style="display:inline-block;vertical-align:middle;margin:0 1px;opacity:0.55;cursor:pointer">${svg}</span>`
+      return `<span class="tk-placeholder pz-ph ${cls}" data-ph="${ph}" contenteditable="false" style="display:inline-block;vertical-align:middle;margin:0 1px;opacity:0.35;cursor:pointer">${svg}</span>`
     }
     return `<span class="tk-placeholder ${cls}" data-ph="${ph}" contenteditable="false">${label}</span>`
   }
@@ -694,8 +694,10 @@ function insertAcItem() {
     if (ph === PH.action && ACTIONS.includes(item)) {
       const skel = actionSkeleton(item)
       const hasArg = plain.charAt(idx + 1) === PH.arg
+      // idx - 1 = the '[' before the action PH
+      // sliceEnd = end of the arg PH (if present), no +1 to avoid eating the '>' after ']>'
       const sliceEnd = hasArg ? idx + 2 : idx + 1
-      form.value.rule = plain.slice(0, idx - 1) + skel + plain.slice(sliceEnd + 1)
+      form.value.rule = plain.slice(0, idx - 1) + skel + plain.slice(sliceEnd)
       applyHighlight(); nextTick(() => restoreCaret(el, idx - 1 + skel.length))
       return
     }
@@ -1093,7 +1095,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                     <div class="editor-legend">
                       <span class="legend-item">
                         <span class="legend-icon">🖱️<span class="legend-btn lmb">L</span></span>
-                        <span class="legend-desc">Select / drag piece</span>
+                        <span class="legend-desc">Select piece</span>
                       </span>
                       <span class="legend-sep">·</span>
                       <span class="legend-item">
@@ -1385,8 +1387,8 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .action-block { background: rgba(241,73,73,.07);   border: 1px solid rgba(241,73,73,.18);  border-radius: 4px; padding: 2px 4px; display: inline-flex; align-items: center; gap: 1px; }
 
 .pz-tok:hover > svg { filter: brightness(1.3) drop-shadow(0 0 3px currentColor); }
-.pz-ph { opacity: 0.5; transition: opacity .15s; }
-.pz-ph:hover { opacity: 0.85; }
+.pz-ph { opacity: 0.35; transition: opacity .15s; }
+.pz-ph:hover { opacity: 0.7; }
 
 .tk-placeholder {
   display: inline-block; padding: 0 5px; border-radius: 3px;
