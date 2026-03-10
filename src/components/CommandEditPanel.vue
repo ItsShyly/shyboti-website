@@ -172,8 +172,8 @@ function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES,
 // rightNotch (IN): value, operator, action, param — something can slot in from right
 // rightFlat overrides the right-side shape to flat (used for <do and >) wrapper tokens)
 function puzzleSVG(label: string, kind: PieceKind, rightFlat = false, leftTabOverride?: boolean): string {
-  const H = 28, R = 4, TW = 7, TH = 8, TR = 2.5, PX = 10, CW = 6.2
-  const bw = Math.max(46, Math.ceil(label.length * CW) + PX * 2)
+  const H = 32, R = 4, TW = 8, TH = 8, TR = 2.5, PX = 12, CW = 6.6
+  const bw = Math.max(52, Math.ceil(label.length * CW) + PX * 2)
 
   // Grammar: wrapper=flat-L|notch-R, all others=tab-L|notch-R
   // leftTab/rightFlat can be overridden per-call for structural tokens like <do and >)
@@ -212,7 +212,7 @@ function puzzleSVG(label: string, kind: PieceKind, rightFlat = false, leftTabOve
 
   return `<svg width="${vbW}" height="${svgH}" viewBox="${vbX} 0 ${vbW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;overflow:visible">`
     + `<path d="${d}" fill="${col.fill}" stroke="${col.stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`
-    + `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" fill="${col.text}" font-size="10" font-family="Consolas,Fira Mono,monospace" font-weight="600" pointer-events="none">${label}</text>`
+    + `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" fill="${col.text}" font-size="11" font-family="Consolas,Fira Mono,monospace" font-weight="600" letter-spacing="0.02em" pointer-events="none" style="user-select:none">${label}</text>`
     + `</svg>`
 }
 

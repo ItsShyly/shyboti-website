@@ -11,7 +11,7 @@
  *   wrapper   $if(…)     flat-L  | notch-R    → container, things go inside its right
  *   value     {output}   tab-L   | notch-R    → plugs left into wrapper, accepts operator on right
  *   operator  [has]      tab-L   | notch-R    → plugs left into value, accepts param on right
- *   param     {text1}    tab-L   | flat-R     → plugs left into operator/action, terminal
+ *   param     {text1}    tab-L   | notch-R    → plugs left into operator/action, accepts value on right
  *   action    [remove]   tab-L   | notch-R    → plugs left into <do>, accepts args on right
  */
 
