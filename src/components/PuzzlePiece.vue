@@ -34,9 +34,10 @@ const CW   = 6.6
 
 const bw = Math.max(52, Math.ceil(props.label.length * CW) + PX * 2)
 
-// Original grammar:
+// Grammar: wrapper=flat-L|notch-R, all others=tab-L|notch-R
+// rightFlat prop overrides right side to flat for specific tokens
 const leftTab    = props.kind !== 'wrapper'
-const rightNotch = props.rightFlat ? false : (props.kind !== 'param')
+const rightNotch = props.rightFlat ? false : true
 
 const bodyOffX = leftTab ? TH : 0
 const svgW = bw + bodyOffX

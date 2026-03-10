@@ -175,12 +175,11 @@ function puzzleSVG(label: string, kind: PieceKind, rightFlat = false): string {
   const H = 28, R = 4, TW = 7, TH = 8, TR = 2.5, PX = 10, CW = 6.2
   const bw = Math.max(46, Math.ceil(label.length * CW) + PX * 2)
 
-  // Restore original grammar:
-  // wrapper = flat-L | notch-R (unless rightFlat)
-  // value/operator/action = tab-L | notch-R
-  // param = tab-L | flat-R
+  // Grammar:
+  // wrapper = flat-L | notch-R (unless rightFlat override)
+  // value/operator/action/param = tab-L | notch-R
   const leftTab    = kind !== 'wrapper'
-  const rightNotch = rightFlat ? false : kind !== 'param'
+  const rightNotch = rightFlat ? false : true  // all pieces notch-right unless explicitly flat
 
   const bodyOffX = leftTab ? TH : 0
   const svgW = bw + bodyOffX
@@ -294,18 +293,30 @@ function highlight(src: string): string {
     }
 
     if (src.startsWith('<do', i)) {
-      // find closing >
+      // find closing > (not consumed by $if — $if's parser stops at ')' not '>')
       let j = i + 3
       while (j < src.length && src.charAt(j) !== '>') j++
       const inner = src.slice(i + 3, j)
-      out += `<span class="do-block">${puzzleSpan('<do', 'wrapper', true)}${highlight(inner.trim())}${puzzleSpan('>', 'wrapper', true)}</span>`
+      // <do has notch-right (things slot into it); no standalone '>' piece needed here —
+      // the closing '>' is part of the >)  piece rendered by the $if wrapper
+      out += `<span class="do-block">${puzzleSpan('<do', 'wrapper')}${highlight(inner.trim())}</span>`
       i = j + 1; continue
     }
 
+    // Action: either [name{args}] with known name, OR [ followed immediately by a PH.action sentinel
     const actionMatch = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)
-    if (actionMatch) {
-      const name = actionMatch[1] ?? ''
-      let j = i + 1 + name.length
+    const actionPhMatch = src.charAt(i) === '[' && PH_SET.has(src.charAt(i + 1))
+    if (actionMatch || actionPhMatch) {
+      if (actionPhMatch) {
+        // [ followed by PH.action — just render the PH, skip the bare '['
+        i++ // skip '['
+        out += renderPH(src.charAt(i)); i++
+        // skip trailing ']' if present
+        if (src.charAt(i) === ']') i++
+        continue
+      }
+      const name = actionMatch![1] ?? ''
+      let j = i + 1 + name.length  // skip '[' + name letters
       let args: string[] = []
       let foundClose = false
       while (j < src.length) {
@@ -330,7 +341,6 @@ function highlight(src: string): string {
         return k ? puzzleSpan(a, k) : escHtml(a)
       }).join('')
       out += `<span class="action-block" style="display:inline-flex;align-items:center">${actionPiece}${argPieces}</span>`
-      if (!foundClose) { /* partial */ }
       i = j; continue
     }
 
