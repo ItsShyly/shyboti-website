@@ -613,40 +613,75 @@ function onEditorContextMenu(e: MouseEvent) {
     : target.closest?.('.pz-tok') as HTMLElement | null) as HTMLElement | null
   if (!tokSpan || !tokSpan.dataset.tok) return
   e.preventDefault()
-  const tok   = tokSpan.dataset.tok
-  const kind  = tokenKind(tok)
+  const tok = tokSpan.dataset.tok
+
+  // Structural wrapper pieces that cannot be deleted independently
+  if (tok === '<do' || tok === '>)') return
+
   const plain = getPlainText(editorRef.value!)
   const idx   = plain.indexOf(tok)
   if (idx === -1) return
 
-  // Determine if this position expects a specific placeholder
-  // We replace with the matching PH sentinel based on kind
-  const kindToPh: Record<PieceKind, string> = {
-    value:    PH.value,
-    operator: PH.op,
-    action:   PH.action,
-    param:    PH.param,
-    wrapper:  '', // wrappers don't get a placeholder
-  }
   // For wrapper opening tokens, delete the entire $if(...) / $else{...} block
-  let deleteEnd = idx + tok.length
+  let deleteStart = idx
+  let deleteEnd   = idx + tok.length
   if (tok === '$if(') {
-    // find the matching ')' at depth 0
     let depth = 0, k = idx + 4
     while (k < plain.length) {
       if (plain[k] === '(') depth++
       else if (plain[k] === ')') { if (depth === 0) { deleteEnd = k + 1; break }; depth-- }
       k++
     }
-  } else if (tok === '$else{') {
+    form.value.rule = plain.slice(0, deleteStart) + plain.slice(deleteEnd)
+    applyHighlight(); nextTick(() => restoreCaret(editorRef.value!, deleteStart)); return
+  }
+  if (tok === '$else{') {
     let depth = 0, k = idx + 6
     while (k < plain.length) {
       if (plain[k] === '{') depth++
       else if (plain[k] === '}') { if (depth === 0) { deleteEnd = k + 1; break }; depth-- }
       k++
     }
+    form.value.rule = plain.slice(0, deleteStart) + plain.slice(deleteEnd)
+    applyHighlight(); nextTick(() => restoreCaret(editorRef.value!, deleteStart)); return
   }
-  const replacement = (kind && tok !== '$if(' && tok !== '$else{') ? (kindToPh[kind] ?? '') : ''
+
+  // Action piece: find the whole [action{args}] in plain text and replace with fresh skeleton
+  // so orphaned arg placeholders don't linger
+  if (ACTIONS.includes(tok)) {
+    // The action token in plain text is e.g. "[remove]" stored as data-tok
+    // Around it in the rule string is [...args...] — find the enclosing action block
+    const actionStart = plain.lastIndexOf('[', idx)  // opening '[' before the action name
+    let actionEnd = idx + tok.length
+    // skip past any following arg tokens (PH or real) until ']'
+    // Actually in the plain-text repr, the skeleton is stored as PH chars with no brackets
+    // The action block in plain is: PH.action + PH.arg... or [name]{arg}...
+    // Since tok = "[remove]" etc., we need to consume args after it
+    while (actionEnd < plain.length) {
+      const c = plain[actionEnd]!
+      if (PH_ALL.includes(c)) { actionEnd++; continue }  // placeholder arg
+      if (c === '{') { // real arg token like {text1}
+        while (actionEnd < plain.length && plain[actionEnd] !== '}') actionEnd++
+        actionEnd++; continue
+      }
+      break
+    }
+    // Replace the action + its args with just the action placeholder skeleton
+    const replacement = PH.action + PH.arg  // one action slot + one arg slot
+    form.value.rule = plain.slice(0, idx) + replacement + plain.slice(actionEnd)
+    applyHighlight(); nextTick(() => restoreCaret(editorRef.value!, idx + replacement.length)); return
+  }
+
+  // Arg/value/operator/param piece: replace with appropriate placeholder
+  const kind = tokenKind(tok)
+  const kindToPh: Record<PieceKind, string> = {
+    value:    PH.value,
+    operator: PH.op,
+    action:   PH.action,
+    param:    PH.param,
+    wrapper:  '',
+  }
+  const replacement = kind ? (kindToPh[kind] ?? '') : ''
   form.value.rule = plain.slice(0, idx) + replacement + plain.slice(deleteEnd)
   applyHighlight()
   nextTick(() => restoreCaret(editorRef.value!, idx + replacement.length))
