@@ -40,14 +40,15 @@ const geo = computed(() => {
   const y1 = H
   const midY = H / 2
 
-  const svgW    = bodyW + TH   // canvas width (tab area + body)
-  const svgH    = H
-  const vbX     = leftTab ? -TH : 0   // expose left tab when present
-  const vbW     = svgW + (leftTab ? TH : 0)
+  // viewBox: left edge is -TH when leftTab (exposes protruding tab), right edge includes +TH for right tab
+  const vbX  = leftTab ? -TH : 0
+  const vbW  = (leftTab ? TH : 0) + TH + bodyW  // exposed left tab + body offset + body
+  const svgH = H
 
   // ── path ──────────────────────────────────────────────────────────────────
   const top    = `M${x0+R},${y0} L${x1-R},${y0} Q${x1},${y0} ${x1},${y0+R}`
 
+  // Right notch cuts INWARD (x1-TH) — something slots into this piece from the right
   const right = rightTab
     ? `L${x1},${midY-TW}` +
       ` L${x1-TH+TR},${midY-TW} Q${x1-TH},${midY-TW} ${x1-TH},${midY-TW+TR}` +
@@ -57,7 +58,7 @@ const geo = computed(() => {
 
   const bottom = `L${x0+R},${y1} Q${x0},${y1} ${x0},${y1-R}`
 
-  // Left tab protrudes LEFT from x0 — since x0 = TH when leftTab, it goes to x=0 (not negative)
+  // Left tab protrudes OUT to the left (x0-TH = 0 since x0=TH)
   const left = leftTab
     ? `L${x0},${midY+TW}` +
       ` L${x0-TH+TR},${midY+TW} Q${x0-TH},${midY+TW} ${x0-TH},${midY+TW-TR}` +
