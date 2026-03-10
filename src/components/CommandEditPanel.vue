@@ -171,9 +171,10 @@ function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES,
 // rightFlat: wrapper open/close pieces — they terminate, nothing slots into them
 // rightNotch (IN): value, operator, action, param — something can slot in from right
 // rightFlat overrides the right-side shape to flat (used for <do and >) wrapper tokens)
-function puzzleSVG(label: string, kind: PieceKind, rightFlat = false, leftTabOverride?: boolean): string {
+function puzzleSVG(label: string, kind: PieceKind, rightFlat = false, leftTabOverride?: boolean, displayLabel?: string): string {
   const H = 32, R = 4, TW = 8, TH = 8, TR = 2.5, PX = 12, CW = 6.6
-  const bw = Math.max(52, Math.ceil(label.length * CW) + PX * 2)
+  const sizeLabel = (displayLabel !== undefined && displayLabel.length > label.length) ? displayLabel : label
+  const bw = Math.max(52, Math.ceil(sizeLabel.length * CW) + PX * 2)
 
   // Grammar: wrapper=flat-L|notch-R, all others=tab-L|notch-R
   // leftTab/rightFlat can be overridden per-call for structural tokens like <do and >)
@@ -210,14 +211,14 @@ function puzzleSVG(label: string, kind: PieceKind, rightFlat = false, leftTabOve
 
   return `<svg width="${vbW}" height="${H}" viewBox="${vbX} 0 ${vbW} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;overflow:visible">`
     + `<path d="${d}" fill="${col.fill}" stroke="${col.stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`
-    + `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" fill="${col.text}" font-size="11" font-family="Consolas,Fira Mono,monospace" font-weight="600" letter-spacing="0.02em" pointer-events="none" style="user-select:none">${label}</text>`
+    + `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" fill="${col.text}" font-size="11" font-family="Consolas,Fira Mono,monospace" font-weight="600" letter-spacing="0.02em" pointer-events="none" style="user-select:none">${displayLabel !== undefined ? displayLabel : label}</text>`
     + `</svg>`
 }
 
 // Wrap a puzzle SVG as an atomic inline token
 // data-tok is used by getPlainText to recover the raw token string
-function puzzleSpan(tok: string, kind: PieceKind, rightFlat = false, leftTabOverride?: boolean): string {
-  const svg = puzzleSVG(tok, kind, rightFlat, leftTabOverride)
+function puzzleSpan(tok: string, kind: PieceKind, rightFlat = false, leftTabOverride?: boolean, displayLabel?: string): string {
+  const svg = puzzleSVG(tok, kind, rightFlat, leftTabOverride, displayLabel)
   // draggable="true" enables reordering; data-tok-drag marks it as a draggable piece
   return `<span class="pz-tok" data-tok="${tok}" contenteditable="false" draggable="true" data-tok-drag="1" style="display:inline-block;vertical-align:middle;margin:0 2px;cursor:grab">${svg}</span>`
 }
@@ -273,7 +274,11 @@ function highlight(src: string): string {
         else if (cj === ')') { if (depth === 0) break; depth-- }
         inner += cj; j++
       }
-      out += `<span class="if-block">${puzzleSpan('$if(', 'wrapper', true)}${highlight(inner)}${puzzleSpan('>)', 'wrapper', true, true)}</span>`
+      // highlight(inner) processes <do...> and leaves do-block intentionally unclosed.
+      // We inject >)  into that open do-block, then close do-block, then close if-block.
+      const innerHtml = highlight(inner)
+      out += `<span class="if-block">${puzzleSpan('$if(', 'wrapper', true)}${innerHtml}${puzzleSpan('>)', 'wrapper', true, true, '')}</span></span>`
+      // The extra </span> closes the do-block that highlight(inner) left open
       i = j + 1; continue
     }
 
@@ -296,7 +301,9 @@ function highlight(src: string): string {
       const inner = src.slice(i + 3, j)
       // <do has notch-right (things slot into it); no standalone '>' piece needed here —
       // the closing '>' is part of the >)  piece rendered by the $if wrapper
-      out += `<span class="do-block">${puzzleSpan('<do', 'wrapper', false, true)}${highlight(inner.trim())}</span>`
+      // <do shows 'then do'; leave do-block UNCLOSED so $if handler can inject >)  inside it
+      out += `<span class="do-block">${puzzleSpan('<do', 'wrapper', false, true, 'then do')}${highlight(inner.trim())}`
+      // intentionally no </span> here — $if handler closes it after appending >) piece
       i = j + 1; continue
     }
 
