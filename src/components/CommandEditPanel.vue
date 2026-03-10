@@ -180,11 +180,11 @@ function puzzleSVG(label: string, kind: PieceKind, rightFlat = false, leftTabOve
   const leftTab    = leftTabOverride ?? (kind !== 'wrapper')
   const rightNotch = rightFlat ? false : true
 
-  const bodyOffX = leftTab ? TH : 0
-  const svgW = bw + bodyOffX
-  const svgH = H
-  const x0 = bodyOffX, y0 = 0, x1 = x0 + bw, y1 = H
+  // Body at x=0..bw; tab (if any) protrudes LEFT into -TH..0
+  const x0 = 0, y0 = 0, x1 = bw, y1 = H
   const midY = H / 2
+  const vbX  = leftTab ? -TH : 0
+  const vbW  = leftTab ? bw + TH : bw
 
   const COLS: Record<PieceKind, { fill: string; stroke: string; text: string }> = {
     value:    { fill: '#0d2520', stroke: '#4ec9b0', text: '#4ec9b0' },
@@ -205,12 +205,10 @@ function puzzleSVG(label: string, kind: PieceKind, rightFlat = false, leftTabOve
     : `L${x0},${y0+R} Q${x0},${y0} ${x0+R},${y0}`
   const d = `${top} ${right} ${bottom} ${left} Z`
 
-  const vbX = leftTab ? -TH : 0
-  const vbW = svgW + (leftTab ? TH : 0)
-  const tx  = x0 + bw / 2
-  const ty  = H / 2
+  const tx = bw / 2
+  const ty = H / 2
 
-  return `<svg width="${vbW}" height="${svgH}" viewBox="${vbX} 0 ${vbW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;overflow:visible">`
+  return `<svg width="${vbW}" height="${H}" viewBox="${vbX} 0 ${vbW} ${H}" xmlns="http://www.w3.org/2000/svg" style="display:inline-block;vertical-align:middle;overflow:visible">`
     + `<path d="${d}" fill="${col.fill}" stroke="${col.stroke}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`
     + `<text x="${tx}" y="${ty}" text-anchor="middle" dominant-baseline="central" fill="${col.text}" font-size="11" font-family="Consolas,Fira Mono,monospace" font-weight="600" letter-spacing="0.02em" pointer-events="none" style="user-select:none">${label}</text>`
     + `</svg>`
