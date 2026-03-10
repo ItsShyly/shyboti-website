@@ -171,15 +171,14 @@ function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES,
 // rightFlat: wrapper open/close pieces — they terminate, nothing slots into them
 // rightNotch (IN): value, operator, action, param — something can slot in from right
 // rightFlat overrides the right-side shape to flat (used for <do and >) wrapper tokens)
-function puzzleSVG(label: string, kind: PieceKind, rightFlat = false): string {
+function puzzleSVG(label: string, kind: PieceKind, rightFlat = false, leftTabOverride?: boolean): string {
   const H = 28, R = 4, TW = 7, TH = 8, TR = 2.5, PX = 10, CW = 6.2
   const bw = Math.max(46, Math.ceil(label.length * CW) + PX * 2)
 
-  // Grammar:
-  // wrapper = flat-L | notch-R (unless rightFlat override)
-  // value/operator/action/param = tab-L | notch-R
-  const leftTab    = kind !== 'wrapper'
-  const rightNotch = rightFlat ? false : true  // all pieces notch-right unless explicitly flat
+  // Grammar: wrapper=flat-L|notch-R, all others=tab-L|notch-R
+  // leftTab/rightFlat can be overridden per-call for structural tokens like <do and >)
+  const leftTab    = leftTabOverride ?? (kind !== 'wrapper')
+  const rightNotch = rightFlat ? false : true
 
   const bodyOffX = leftTab ? TH : 0
   const svgW = bw + bodyOffX
@@ -219,8 +218,8 @@ function puzzleSVG(label: string, kind: PieceKind, rightFlat = false): string {
 
 // Wrap a puzzle SVG as an atomic inline token
 // data-tok is used by getPlainText to recover the raw token string
-function puzzleSpan(tok: string, kind: PieceKind, rightFlat = false): string {
-  const svg = puzzleSVG(tok, kind, rightFlat)
+function puzzleSpan(tok: string, kind: PieceKind, rightFlat = false, leftTabOverride?: boolean): string {
+  const svg = puzzleSVG(tok, kind, rightFlat, leftTabOverride)
   // draggable="true" enables reordering; data-tok-drag marks it as a draggable piece
   return `<span class="pz-tok" data-tok="${tok}" contenteditable="false" draggable="true" data-tok-drag="1" style="display:inline-block;vertical-align:middle;margin:0 2px;cursor:grab">${svg}</span>`
 }
@@ -276,7 +275,7 @@ function highlight(src: string): string {
         else if (cj === ')') { if (depth === 0) break; depth-- }
         inner += cj; j++
       }
-      out += `<span class="if-block">${puzzleSpan('$if(', 'wrapper', true)}${highlight(inner)}${puzzleSpan('>)', 'wrapper', true)}</span>`
+      out += `<span class="if-block">${puzzleSpan('$if(', 'wrapper', true)}${highlight(inner)}${puzzleSpan('>)', 'wrapper', true, true)}</span>`
       i = j + 1; continue
     }
 
@@ -299,20 +298,27 @@ function highlight(src: string): string {
       const inner = src.slice(i + 3, j)
       // <do has notch-right (things slot into it); no standalone '>' piece needed here —
       // the closing '>' is part of the >)  piece rendered by the $if wrapper
-      out += `<span class="do-block">${puzzleSpan('<do', 'wrapper')}${highlight(inner.trim())}</span>`
+      out += `<span class="do-block">${puzzleSpan('<do', 'wrapper', false, true)}${highlight(inner.trim())}</span>`
       i = j + 1; continue
     }
 
-    // Action: either [name{args}] with known name, OR [ followed immediately by a PH.action sentinel
+    // Action: [name...] with known name, OR [PH...] skeleton with placeholder action
     const actionMatch = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)
-    const actionPhMatch = src.charAt(i) === '[' && PH_SET.has(src.charAt(i + 1))
+    const actionPhMatch = src.charAt(i) === '[' && (PH_SET.has(src.charAt(i + 1)) || src.charAt(i + 1) === ']')
     if (actionMatch || actionPhMatch) {
       if (actionPhMatch) {
-        // [ followed by PH.action — just render the PH, skip the bare '['
+        // Skeleton [▪action▪arg] — collect everything between [ and matching ]
         i++ // skip '['
-        out += renderPH(src.charAt(i)); i++
-        // skip trailing ']' if present
-        if (src.charAt(i) === ']') i++
+        const phArgs: string[] = []
+        while (i < src.length && src.charAt(i) !== ']') {
+          if (PH_SET.has(src.charAt(i))) { phArgs.push(src.charAt(i)); i++ }
+          else i++ // skip unexpected chars
+        }
+        if (src.charAt(i) === ']') i++ // skip ']'
+        // render as action-block: first PH is the action slot, rest are arg slots
+        const actionSlot = phArgs[0] ? renderPH(phArgs[0]) : ''
+        const argSlots   = phArgs.slice(1).map(renderPH).join('')
+        out += `<span class="action-block" style="display:inline-flex;align-items:center">${actionSlot}${argSlots}</span>`
         continue
       }
       const name = actionMatch![1] ?? ''
@@ -617,8 +623,26 @@ function onEditorContextMenu(e: MouseEvent) {
     param:    PH.param,
     wrapper:  '', // wrappers don't get a placeholder
   }
-  const replacement = kind ? (kindToPh[kind] ?? '') : ''
-  form.value.rule = plain.slice(0, idx) + replacement + plain.slice(idx + tok.length)
+  // For wrapper opening tokens, delete the entire $if(...) / $else{...} block
+  let deleteEnd = idx + tok.length
+  if (tok === '$if(') {
+    // find the matching ')' at depth 0
+    let depth = 0, k = idx + 4
+    while (k < plain.length) {
+      if (plain[k] === '(') depth++
+      else if (plain[k] === ')') { if (depth === 0) { deleteEnd = k + 1; break }; depth-- }
+      k++
+    }
+  } else if (tok === '$else{') {
+    let depth = 0, k = idx + 6
+    while (k < plain.length) {
+      if (plain[k] === '{') depth++
+      else if (plain[k] === '}') { if (depth === 0) { deleteEnd = k + 1; break }; depth-- }
+      k++
+    }
+  }
+  const replacement = (kind && tok !== '$if(' && tok !== '$else{') ? (kindToPh[kind] ?? '') : ''
+  form.value.rule = plain.slice(0, idx) + replacement + plain.slice(deleteEnd)
   applyHighlight()
   nextTick(() => restoreCaret(editorRef.value!, idx + replacement.length))
 }

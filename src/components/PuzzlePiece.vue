@@ -18,8 +18,8 @@
 interface Props {
   label: string
   kind: 'value' | 'operator' | 'action' | 'param' | 'wrapper'
-  // Override right-side shape (used for specific wrapper tokens like <do and >))
-  rightFlat?: boolean
+  rightFlat?: boolean   // force flat right (closing bracket pieces)
+  leftTab?: boolean     // force tab left (structural pieces like <do, >) that are kind=wrapper)
 }
 const props = defineProps<Props>()
 
@@ -35,8 +35,8 @@ const CW   = 6.6
 const bw = Math.max(52, Math.ceil(props.label.length * CW) + PX * 2)
 
 // Grammar: wrapper=flat-L|notch-R, all others=tab-L|notch-R
-// rightFlat prop overrides right side to flat for specific tokens
-const leftTab    = props.kind !== 'wrapper'
+// Props can override for structural tokens like <do (tab-L|notch-R) and >) (tab-L|flat-R)
+const leftTab    = props.leftTab ?? (props.kind !== 'wrapper')
 const rightNotch = props.rightFlat ? false : true
 
 const bodyOffX = leftTab ? TH : 0
