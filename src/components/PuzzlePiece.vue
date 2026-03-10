@@ -33,6 +33,7 @@ const TR = 2.5  // tab/notch corner radius
 const PX = 12   // horizontal text padding
 const CW = 6.6  // approx char width for label sizing
 
+// v2 — force rebuild
 const COLORS: Record<string, { fill: string; stroke: string; text: string }> = {
   value:    { fill: '#0d2520', stroke: '#4ec9b0', text: '#4ec9b0' },
   operator: { fill: '#1c0f2e', stroke: '#c792ea', text: '#c792ea' },
