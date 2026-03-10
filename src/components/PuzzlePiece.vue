@@ -36,7 +36,7 @@ const geo = computed(() => {
   const x0   = 0, y0 = 0, x1 = bw, y1 = H
   const midY = H / 2
   const vbX  = leftTab ? -TH : 0
-  const vbW  = leftTab ? bw + TH : bw
+  const vbW  = bw + TH   // always wide enough to show left tab without clipping
 
   const top    = `M${x0+R},${y0} L${x1-R},${y0} Q${x1},${y0} ${x1},${y0+R}`
   // Right: notch cuts INWARD to x1-TH
