@@ -228,11 +228,11 @@ function evalExpr(raw: string, env: MockEnv): string {
   if (counterM) {
     const name = counterM[1]!; const op = counterM[2] ?? ''
     if (!(name in mockCounters)) mockCounters[name] = 0
-    if (!op)        { mockCounters[name]++; return String(mockCounters[name]) }
+    if (!op)        { mockCounters[name] = (mockCounters[name] ?? 0) + 1; return String(mockCounters[name]) }
     if (op === 'get')   return String(mockCounters[name])
     if (op === 'reset') { mockCounters[name] = 0; return '0' }
     const setM = op.match(/^set\((.+)\)$/); if (setM) { mockCounters[name] = parseInt(evalExprStr(setM[1]!, env)) || 0; return String(mockCounters[name]) }
-    const addM = op.match(/^add\((.+)\)$/); if (addM) { mockCounters[name] += parseInt(evalExprStr(addM[1]!, env)) || 0; return String(mockCounters[name]) }
+    const addM = op.match(/^add\((.+)\)$/); if (addM) { mockCounters[name] = (mockCounters[name] ?? 0) + (parseInt(evalExprStr(addM[1]!, env)) || 0); return String(mockCounters[name]) }
     return ''
   }
 
@@ -241,7 +241,7 @@ function evalExpr(raw: string, env: MockEnv): string {
   if (ucounterM) {
     const key = `u_${ucounterM[1]}`; const op = ucounterM[2] ?? ''
     if (!(key in mockCounters)) mockCounters[key] = 0
-    if (!op) { mockCounters[key]++; return String(mockCounters[key]) }
+    if (!op) { mockCounters[key] = (mockCounters[key] ?? 0) + 1; return String(mockCounters[key]) }
     if (op === 'get') return String(mockCounters[key])
     return ''
   }
