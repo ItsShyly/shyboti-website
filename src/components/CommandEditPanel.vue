@@ -676,19 +676,38 @@ const REF_GROUPS = [
 ]
 
 // Render a reference token with user-supplied name segments in a distinct colour.
-// Prefixes where the next word is a user-chosen name: $counter. $ucounter. $var. $uvar. $list.
+// Two cases:
+//   1. Name after a dotted prefix: $counter.name, $var.name, $list.name etc.
+//   2. Argument placeholders inside (): url, user, min, max, seconds, fmt, etc.
 function renderRefToken(token: string): string {
+  // Step 1: highlight the user-chosen name after known dotted prefixes
+  let result = token
   const namePrefixes = ['$counter.', '$ucounter.', '$var.', '$uvar.', '$list.']
   for (const prefix of namePrefixes) {
-    if (token.startsWith(prefix)) {
-      const rest = token.slice(prefix.length)
+    if (result.startsWith(prefix)) {
+      const rest = result.slice(prefix.length)
       const m = rest.match(/^(\w+)(.*)/s)
       if (m) {
-        return prefix + `<span class="ref-token-name">${m[1]}</span>` + (m[2] ?? '')
+        result = prefix + `<span class="ref-token-name">${m[1]}</span>` + (m[2] ?? '')
       }
+      break
     }
   }
-  return token
+  // Step 2: highlight word-args inside () — these are always placeholder names
+  // e.g. $http.get(url), $mod.timeout(user,seconds), $random.int(min,max)
+  // Match the paren section and wrap each comma-separated word in a span.
+  result = result.replace(/\(([^)]+)\)/g, (_, inner: string) => {
+    const colored = inner.split(',').map(part => {
+      const trimmed = part.trim()
+      // Only color pure word tokens (no $ or special chars) — these are param names
+      if (/^[a-zA-Z_]\w*$/.test(trimmed)) {
+        return `<span class="ref-token-name">${trimmed}</span>`
+      }
+      return part
+    }).join(',')
+    return `(${colored})`
+  })
+  return result
 }
 
 // COMPLETIONS_META: flat list with group+desc for dropdown display
