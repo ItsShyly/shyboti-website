@@ -524,8 +524,19 @@ const mockCtx        = ref<MockContext>({ ...DEFAULT_MOCK })
 let   _normalHighlighting = false
 let   _ghostEl: HTMLElement | null = null
 
-// Ghost autocomplete suggestion
-const ghostSuggestion = ref('')
+// Ghost autocomplete — shown inline after cursor
+const ghostSuggestion = ref('')  // the suffix to complete (e.g. 'f(' when you typed '$i')
+const ghostFull       = ref('')  // the full match that would be inserted
+const ghostMatches    = ref<string[]>([])  // all matches for cycling
+const ghostMatchIdx   = ref(0)             // current cycle position
+
+// Autocomplete dropdown for Normal Mode
+const nmAcVisible  = ref(false)
+const nmAcItems    = ref<{ token: string; group: string; desc: string }[]>([])
+const nmAcIndex    = ref(0)
+const nmAcPos      = ref({ top: 0, left: 0 })
+const nmAcPartial  = ref('')  // current partial text, e.g. '$co'
+const nmAcRef      = ref<HTMLDivElement | null>(null)
 
 // All completable tokens for Normal Mode
 const COMPLETIONS = [
@@ -664,6 +675,108 @@ const REF_GROUPS = [
   ]},
 ]
 
+// COMPLETIONS_META: flat list with group+desc for dropdown display
+const COMPLETIONS_META: { token: string; group: string; desc: string }[] = [
+  // Control Flow
+  { token: '$if()',       group: 'Control Flow', desc: 'Conditional block' },
+  { token: '$else',       group: 'Control Flow', desc: 'Else branch' },
+  { token: '$end',        group: 'Control Flow', desc: 'End block' },
+  { token: '$foreach()',  group: 'Control Flow', desc: 'Loop over list' },
+  { token: '$repeat()',   group: 'Control Flow', desc: 'Repeat n times' },
+  { token: '$define',     group: 'Control Flow', desc: 'Define a macro' },
+  { token: '$index',      group: 'Control Flow', desc: 'Current loop index' },
+  // Counters
+  { token: '$counter.',   group: 'Counters', desc: 'Increment +1, return value' },
+  { token: '$ucounter.',  group: 'Counters', desc: 'Per-user counter' },
+  // Variables
+  { token: '$var.',       group: 'Variables', desc: 'Read/write variable' },
+  { token: '$uvar.',      group: 'Variables', desc: 'Per-user variable' },
+  // Lists
+  { token: '$list.',      group: 'Lists', desc: 'Random item from list' },
+  // User
+  { token: '$user',           group: 'User', desc: 'Sending user (login name)' },
+  { token: '$user.name',      group: 'User', desc: 'Login name' },
+  { token: '$user.display',   group: 'User', desc: 'Display name' },
+  { token: '$user.mention',   group: 'User', desc: '@DisplayName' },
+  { token: '$user.followage', group: 'User', desc: 'How long following' },
+  { token: '$user.is(mod)',         group: 'User', desc: 'true/false' },
+  { token: '$user.is(sub)',         group: 'User', desc: 'true/false' },
+  { token: '$user.is(vip)',         group: 'User', desc: 'true/false' },
+  { token: '$user.is(broadcaster)', group: 'User', desc: 'true/false' },
+  { token: '$target.name',    group: 'User', desc: 'First arg as user' },
+  { token: '$target.mention', group: 'User', desc: '@target' },
+  // Message
+  { token: '$message.text',   group: 'Message', desc: 'Full message text' },
+  { token: '$message.id',     group: 'Message', desc: 'Message ID' },
+  { token: '$message.length', group: 'Message', desc: 'Character count' },
+  // Arguments
+  { token: '$args',       group: 'Arguments', desc: 'All arguments' },
+  { token: '$args.count', group: 'Arguments', desc: 'Number of args' },
+  { token: '$1',          group: 'Arguments', desc: 'First arg' },
+  { token: '$2',          group: 'Arguments', desc: 'Second arg' },
+  { token: '$3',          group: 'Arguments', desc: 'Third arg' },
+  { token: '$query',      group: 'Arguments', desc: 'Alias for $args' },
+  // Channel
+  { token: '$channel.name',    group: 'Channel', desc: 'Channel login' },
+  { token: '$channel.title',   group: 'Channel', desc: 'Stream title' },
+  { token: '$channel.game',    group: 'Channel', desc: 'Current game' },
+  { token: '$channel.viewers', group: 'Channel', desc: 'Viewer count' },
+  { token: '$channel.isLive',  group: 'Channel', desc: 'true/false' },
+  { token: '$channel.uptime',  group: 'Channel', desc: 'Stream uptime' },
+  // Command
+  { token: '$command.output', group: 'Command', desc: 'Built-in command output' },
+  { token: '$command.uses',   group: 'Command', desc: 'Times used' },
+  { token: '$command.name',   group: 'Command', desc: 'Command name' },
+  // Random
+  { token: '$random.int(,)',    group: 'Random', desc: 'Random integer' },
+  { token: '$random.pick(,)',   group: 'Random', desc: 'Random from list' },
+  { token: '$random.chance()',  group: 'Random', desc: 'true with pct% chance' },
+  // Text
+  { token: '$text.upper()',    group: 'Text', desc: 'Uppercase' },
+  { token: '$text.lower()',    group: 'Text', desc: 'Lowercase' },
+  { token: '$text.replace(,,)', group: 'Text', desc: 'Replace substring' },
+  { token: '$text.contains(,)', group: 'Text', desc: 'true/false' },
+  { token: '$text.len()',       group: 'Text', desc: 'String length' },
+  { token: '$text.trim()',      group: 'Text', desc: 'Trim whitespace' },
+  { token: '$calc()',           group: 'Text', desc: 'Math expression' },
+  // Time
+  { token: '$time.now',        group: 'Time', desc: 'Current ISO timestamp' },
+  { token: '$time.unix',       group: 'Time', desc: 'Unix timestamp (seconds)' },
+  { token: '$time.ago()',      group: 'Time', desc: 'Human time since ts' },
+  { token: '$time.format(,)',  group: 'Time', desc: 'Format timestamp' },
+  // HTTP
+  { token: '$http.get()',      group: 'HTTP', desc: 'GET request' },
+  { token: '$http.post(,)',    group: 'HTTP', desc: 'POST request' },
+  { token: '$http.json(,)',    group: 'HTTP', desc: 'GET + extract JSON path' },
+  // Twitch
+  { token: '$twitch.uptime',   group: 'Twitch', desc: 'Stream uptime' },
+  { token: '$twitch.game',     group: 'Twitch', desc: 'Current game' },
+  { token: '$twitch.title',    group: 'Twitch', desc: 'Stream title' },
+  { token: '$twitch.followers()', group: 'Twitch', desc: 'Follower count' },
+  // Moderation
+  { token: '$mod.timeout(,)',  group: 'Moderation', desc: 'Timeout user' },
+  { token: '$mod.ban()',       group: 'Moderation', desc: 'Ban user' },
+  { token: '$mod.delete()',    group: 'Moderation', desc: 'Delete message' },
+]
+
+const GROUP_COLORS: Record<string, { bg: string; text: string }> = {
+  'Control Flow': { bg: 'rgba(86,156,214,.15)',  text: '#569cd6' },
+  'Counters':     { bg: 'rgba(229,192,123,.12)', text: '#e5c07b' },
+  'Variables':    { bg: 'rgba(229,192,123,.12)', text: '#e5c07b' },
+  'Lists':        { bg: 'rgba(229,192,123,.12)', text: '#e5c07b' },
+  'User':         { bg: 'rgba(78,201,176,.12)',  text: '#4ec9b0' },
+  'Message':      { bg: 'rgba(78,201,176,.10)',  text: '#4ec9b0' },
+  'Arguments':    { bg: 'rgba(78,201,176,.10)',  text: '#4ec9b0' },
+  'Channel':      { bg: 'rgba(199,146,234,.12)', text: '#c792ea' },
+  'Command':      { bg: 'rgba(199,146,234,.12)', text: '#c792ea' },
+  'Random':       { bg: 'rgba(241,73,73,.10)',   text: '#f14949' },
+  'Text':         { bg: 'rgba(35,209,139,.08)',  text: '#23d18b' },
+  'Time':         { bg: 'rgba(35,209,139,.08)',  text: '#23d18b' },
+  'HTTP':         { bg: 'rgba(245,166,35,.10)',  text: '#f5a623' },
+  'Twitch':       { bg: 'rgba(145,71,255,.12)',  text: '#9147ff' },
+  'Moderation':   { bg: 'rgba(241,73,73,.12)',   text: '#f14949' },
+}
+
 function updatePreview() {
   try {
     resetMockState()
@@ -681,6 +794,7 @@ const BUILTIN_PREFIX = '$command.output'
 
 function onNormalInput() {
   const el = normalEditorRef.value; if (!el) return
+  removeGhostSpan()  // remove ghost before reading text so it doesn't pollute innerText
   let text = el.innerText.replace(/\n$/, '')
   // Guard: built-in commands must always start with the locked prefix
   if (props.isBuiltIn && !text.startsWith(BUILTIN_PREFIX)) {
@@ -706,7 +820,12 @@ function getTextOffset(el: HTMLElement): number {
   const sel = window.getSelection(); if (!sel?.rangeCount) return 0
   const range = sel.getRangeAt(0)
   const pre = range.cloneRange(); pre.selectNodeContents(el); pre.setEnd(range.startContainer, range.startOffset)
-  return pre.toString().length
+  // Subtract any ghost-inline text that got included (ghost spans are before cursor in DOM order sometimes)
+  let ghost = 0
+  el.querySelectorAll('.ghost-inline').forEach(g => {
+    if (pre.intersectsNode(g)) ghost += (g.textContent?.length ?? 0)
+  })
+  return Math.max(0, pre.toString().length - ghost)
 }
 
 function restoreTextOffset(el: HTMLElement, offset: number) {
@@ -728,16 +847,52 @@ function restoreTextOffset(el: HTMLElement, offset: number) {
   if (!placed) { const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(r) }
 }
 
+let _lastGhostPartial = ''
+
+function removeGhostSpan() {
+  const el = normalEditorRef.value; if (!el) return
+  const existing = el.querySelector('.ghost-inline')
+  if (existing) existing.parentNode?.removeChild(existing)
+}
+
+function insertGhostSpan(suffix: string) {
+  removeGhostSpan()
+  if (!suffix) return
+  const sel = window.getSelection(); if (!sel?.rangeCount) return
+  const range = sel.getRangeAt(0).cloneRange()
+  range.collapse(true)
+  const span = document.createElement('span')
+  span.className = 'ghost-inline'
+  span.setAttribute('contenteditable', 'false')
+  span.style.cssText = 'color:#3a3a50;pointer-events:none;user-select:none;font-family:inherit;font-size:inherit;'
+  span.textContent = suffix
+  range.insertNode(span)
+  // Move caret back to before the ghost span
+  const r = document.createRange()
+  r.setStartBefore(span)
+  r.collapse(true)
+  sel.removeAllRanges()
+  sel.addRange(r)
+}
+
 function updateGhost(el: HTMLElement, text: string) {
-  const sel = window.getSelection(); if (!sel?.rangeCount) { ghostSuggestion.value = ''; return }
+  const sel = window.getSelection(); if (!sel?.rangeCount) { ghostSuggestion.value = ''; removeGhostSpan(); ghostMatches.value = []; ghostMatchIdx.value = 0; return }
   const offset = getTextOffset(el)
   const before = text.slice(0, offset)
-  // find the current $-token being typed
   const m = before.match(/(\$[\w.]*)$/)
-  if (!m) { ghostSuggestion.value = ''; return }
+  if (!m) { ghostSuggestion.value = ''; removeGhostSpan(); ghostMatches.value = []; ghostMatchIdx.value = 0; _lastGhostPartial = ''; return }
   const partial = m[1]!
-  const match   = COMPLETIONS.find(c => c.startsWith(partial) && c !== partial)
-  ghostSuggestion.value = match ? match.slice(partial.length) : ''
+  const matches = COMPLETIONS.filter(c => c.startsWith(partial) && c !== partial)
+  if (!matches.length) { ghostSuggestion.value = ''; removeGhostSpan(); ghostMatches.value = []; ghostMatchIdx.value = 0; _lastGhostPartial = ''; return }
+  // Reset cycle index when partial changes
+  if (partial !== _lastGhostPartial) { ghostMatchIdx.value = 0; _lastGhostPartial = partial }
+  ghostMatches.value = matches
+  if (ghostMatchIdx.value >= matches.length) ghostMatchIdx.value = 0
+  const match = matches[ghostMatchIdx.value]!
+  const suffix = match.slice(partial.length)
+  ghostSuggestion.value = suffix
+  ghostFull.value = match
+  nextTick(() => insertGhostSpan(suffix))
 }
 
 function onNormalKeydown(e: KeyboardEvent) {
@@ -750,42 +905,58 @@ function onNormalKeydown(e: KeyboardEvent) {
       e.preventDefault(); return
     }
   }
-  // Tab: accept ghost suggestion
-  if (e.key === 'Tab' && ghostSuggestion.value) {
+  // Tab key handling
+  if (e.key === 'Tab') {
     e.preventDefault()
     const el = normalEditorRef.value; if (!el) return
-    const offset  = getTextOffset(el)
-    const text    = el.innerText.replace(/\n$/, '')
-    const before  = text.slice(0, offset)
-    const after   = text.slice(offset)
-    const m       = before.match(/(\$[\w.]*)$/)
-    const partial = m?.[1] ?? ''
-    const full    = partial + ghostSuggestion.value
-    // For structures, add newlines
-    let insert = full
-    let cursorOffset = before.length - partial.length + full.length
-    if (full === '$if()') {
-      insert = '$if()\n  \n$end'
-      cursorOffset = before.length - partial.length + 4 // inside ()
-    } else if (full === '$foreach()') {
-      insert = '$foreach( in )\n  \n$end'
-      cursorOffset = before.length - partial.length + 9
-    } else if (full === '$repeat()') {
-      insert = '$repeat()\n  \n$end'
-      cursorOffset = before.length - partial.length + 8
+    if (ghostMatches.value.length > 1 && e.shiftKey === false && ghostSuggestion.value) {
+      // Cycle to next match on repeated Tab
+      ghostMatchIdx.value = (ghostMatchIdx.value + 1) % ghostMatches.value.length
+      const partial = el.innerText.replace(/\n$/, '').slice(0, getTextOffset(el)).match(/(\$[\w.]*)$/)?.[1] ?? ''
+      const next = ghostMatches.value[ghostMatchIdx.value]!
+      ghostSuggestion.value = next.slice(partial.length)
+      ghostFull.value = next
+      nextTick(() => insertGhostSpan(next.slice(partial.length)))
+      return
     }
-    const newText = before.slice(0, before.length - partial.length) + insert + after
-    form.value.rule = newText
-    el.innerText = newText
-    applyNormalHighlight(el, newText)
-    nextTick(() => restoreTextOffset(el, cursorOffset))
-    ghostSuggestion.value = ''
+    if (ghostSuggestion.value) {
+      // Accept current ghost suggestion
+      const offset  = getTextOffset(el)
+      const text    = el.innerText.replace(/\n$/, '')
+      const before  = text.slice(0, offset)
+      const after   = text.slice(offset)
+      const m       = before.match(/(\$[\w.]*)$/)
+      const partial = m?.[1] ?? ''
+      const full    = partial + ghostSuggestion.value
+      let insert = full
+      let cursorOffset = before.length - partial.length + full.length
+      if (full === '$if()') {
+        insert = '$if()\n  \n$end'; cursorOffset = before.length - partial.length + 4
+      } else if (full === '$foreach()') {
+        insert = '$foreach( in )\n  \n$end'; cursorOffset = before.length - partial.length + 9
+      } else if (full === '$repeat()') {
+        insert = '$repeat()\n  \n$end'; cursorOffset = before.length - partial.length + 8
+      }
+      const newText = before.slice(0, before.length - partial.length) + insert + after
+      form.value.response = newText
+      el.innerText = newText
+      applyNormalHighlight(el, newText)
+      nextTick(() => restoreTextOffset(el, cursorOffset))
+      ghostSuggestion.value = ''; ghostMatches.value = []; ghostMatchIdx.value = 0; _lastGhostPartial = ''
+    } else {
+      // No suggestion — insert 2 spaces (stay in editor like a code editor)
+      removeGhostSpan()
+      const offset = getTextOffset(el)
+      const text   = el.innerText.replace(/\n$/, '')
+      const newText = text.slice(0, offset) + '  ' + text.slice(offset)
+      form.value.response = newText
+      el.innerText = newText
+      applyNormalHighlight(el, newText)
+      nextTick(() => restoreTextOffset(el, offset + 2))
+    }
     return
   }
-  // Enter: auto-indent inside blocks
-  if (e.key === 'Enter') {
-    // default behaviour is fine for now
-  }
+  // Enter: default behaviour (line break)
 }
 
 const editorRef  = ref<HTMLDivElement | null>(null)
@@ -1365,8 +1536,10 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                 :data-placeholder="isBuiltIn ? '$text.upper($command.output)' : 'Hello $user.mention! $if($args) You said: $args $end'"
                 @input="onNormalInput"
                 @keydown="onNormalKeydown"
+                @blur="removeGhostSpan"
               ></div>
-              <div v-if="ghostSuggestion" class="ghost-suggestion">{{ ghostSuggestion }}</div>
+              <!-- Inline ghost: rendered as a zero-width overlay after cursor via CSS trick -->
+              <div v-if="ghostSuggestion" class="ghost-overlay" aria-hidden="true"></div>
             </div>
 
             <div class="normal-hint">Tab to complete &nbsp;·&nbsp; <code>$</code> to start a variable</div>
@@ -1380,16 +1553,18 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             <!-- Mock values -->
             <details class="mock-ctx-details">
               <summary class="mock-ctx-summary">⚙ Mock values</summary>
-              <div class="mock-ctx-grid">
-                <label>user</label><input v-model="mockCtx.user" class="field-input mock-input" />
-                <label>display</label><input v-model="mockCtx.display" class="field-input mock-input" />
-                <label>args</label><input v-model="mockCtx.args" class="field-input mock-input" @input="mockCtx.argList = mockCtx.args.split(' ')" />
-                <label>message</label><input v-model="mockCtx.messageText" class="field-input mock-input" />
-                <label>output</label><input v-model="mockCtx.commandOutput" class="field-input mock-input" />
-                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isMod" /> mod</label>
-                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isSub" /> sub</label>
-                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isVip" /> vip</label>
-                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isBroadcaster" /> broadcaster</label>
+              <div class="mock-ctx-body">
+                <div class="mock-ctx-grid">
+                  <label>user</label><input v-model="mockCtx.user" class="field-input mock-input" @input="mockCtx.display = mockCtx.user" />
+                  <label>message</label><input v-model="mockCtx.messageText" class="field-input mock-input" @input="() => { const w = mockCtx.messageText.split(' '); mockCtx.args = w.slice(1).join(' '); mockCtx.argList = w.slice(1) }" placeholder="message without command" />
+                </div>
+                <div class="mock-role-row">
+                  <span class="mock-role-hint">Role:</span>
+                  <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isMod" /> mod</label>
+                  <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isSub" /> sub</label>
+                  <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isVip" /> vip</label>
+                  <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isBroadcaster" /> broadcaster</label>
+                </div>
               </div>
             </details>
 
@@ -1638,12 +1813,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 }
 .normal-editor:focus { border-color: #6f2bff55; }
 .normal-editor:empty::before { content: attr(data-placeholder); color: #2a2a35; pointer-events: none; white-space: pre; }
-.ghost-suggestion {
-  position: absolute; bottom: 0; right: 8px;
-  font-size: 10px; color: #444; font-family: 'Consolas','Fira Mono',monospace;
-  padding: 2px 6px; background: #111217; border: 1px solid #222;
-  pointer-events: none;
-}
+.ghost-overlay { display: none; } /* ghost is rendered via ::after on the editor */
 .normal-hint { font-size: 10px; color: #383838; }
 .normal-hint code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; }
 
@@ -1670,9 +1840,12 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
   display: grid; grid-template-columns: 60px 1fr; gap: 4px 8px;
   padding: 8px 10px; align-items: center;
 }
+.mock-ctx-body { display: flex; flex-direction: column; }
 .mock-ctx-grid label { font-size: 10px; color: #555; font-family: 'Consolas','Fira Mono',monospace; }
 .mock-input { font-size: 11px !important; padding: 3px 6px !important; }
-.mock-check-label { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #555; grid-column: span 1; cursor: pointer; }
+.mock-role-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px 8px; }
+.mock-role-hint { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+.mock-check-label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #666; cursor: pointer; }
 .mock-check-label input { accent-color: #6f2bff; }
 
 /* ── Reference panel ── */

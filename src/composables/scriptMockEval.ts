@@ -7,30 +7,32 @@
 
 export interface MockContext {
   user:         string
-  display:      string
   channel:      string
-  args:         string
-  argList:      string[]
   messageText:  string
   isMod:        boolean
   isVip:        boolean
   isSub:        boolean
   isBroadcaster: boolean
   commandOutput: string
+  // derived
+  display:      string
+  args:         string
+  argList:      string[]
 }
 
 export const DEFAULT_MOCK: MockContext = {
   user:         'testuser',
   display:      'TestUser',
   channel:      'testchannel',
-  args:         'hello world',
-  argList:      ['hello', 'world'],
-  messageText:  '+command hello world',
+  messageText:  'hello world',
   isMod:        false,
   isVip:        false,
   isSub:        false,
   isBroadcaster: false,
   commandOutput: '[bot output]',
+  // derived from messageText (args = message without leading +command word)
+  args:         'hello world',
+  argList:      ['hello', 'world'],
 }
 
 // In-memory mock counters/vars/lists for preview session
