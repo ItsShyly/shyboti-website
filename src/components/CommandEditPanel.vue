@@ -79,11 +79,15 @@ async function load() {
   } catch {}
   loading.value = false
   await nextTick()
-  // Normal editor
+  // Normal editor — load response into the script editor
   const nel = normalEditorRef.value
-  if (nel) { nel.innerText = form.value.rule; applyNormalHighlight(nel, form.value.rule) }
+  if (nel) {
+    const src = form.value.response || (props.isBuiltIn ? BUILTIN_PREFIX : '')
+    nel.innerText = src
+    applyNormalHighlight(nel, src)
+  }
   updatePreview()
-  // Puzzle editor
+  // Puzzle editor (legacy, kept as fallback)
   const el = editorRef.value
   if (el) el.innerHTML = highlight(form.value.rule)
   const rel = responseRef.value
@@ -661,31 +665,29 @@ const REF_GROUPS = [
 ]
 
 function updatePreview() {
-  if (editorMode.value !== 'normal') return
   try {
     resetMockState()
-    previewOutput.value = mockEval(form.value.rule, mockCtx.value)
+    previewOutput.value = mockEval(form.value.response, mockCtx.value)
   } catch { previewOutput.value = '[preview error]' }
 }
 
-watch(() => form.value.rule, () => { if (editorMode.value === 'normal') updatePreview() }, { flush: 'post' })
-watch(editorMode, mode => {
-  if (mode === 'normal') {
-    nextTick(() => {
-      const nel = normalEditorRef.value
-      if (nel) { nel.innerText = form.value.rule; applyNormalHighlight(nel, form.value.rule) }
-      updatePreview()
-    })
-  }
-})
+watch(() => form.value.response, () => updatePreview(), { flush: 'post' })
+
 watch(mockCtx, () => updatePreview(), { deep: true })
 
 // ── Normal editor input handler ──────────────────────────────────────────────
 
+const BUILTIN_PREFIX = '$command.output'
+
 function onNormalInput() {
   const el = normalEditorRef.value; if (!el) return
-  const text = el.innerText.replace(/\n$/, '')
-  form.value.rule = text
+  let text = el.innerText.replace(/\n$/, '')
+  // Guard: built-in commands must always start with the locked prefix
+  if (props.isBuiltIn && !text.startsWith(BUILTIN_PREFIX)) {
+    text = BUILTIN_PREFIX + (text.startsWith('$command.outpu') ? text.slice(text.indexOf(BUILTIN_PREFIX.slice(-1)) + 1) : '\n' + text)
+    el.innerText = text
+  }
+  form.value.response = text
   applyNormalHighlight(el, text)
   updateGhost(el, text)
 }
@@ -739,6 +741,15 @@ function updateGhost(el: HTMLElement, text: string) {
 }
 
 function onNormalKeydown(e: KeyboardEvent) {
+  // Guard prefix for built-in commands
+  if (props.isBuiltIn) {
+    const el = normalEditorRef.value; if (!el) return
+    const offset = getTextOffset(el)
+    if ((e.key === 'Backspace' && offset <= BUILTIN_PREFIX.length) ||
+        (e.key === 'Delete'    && offset < BUILTIN_PREFIX.length)) {
+      e.preventDefault(); return
+    }
+  }
   // Tab: accept ghost suggestion
   if (e.key === 'Tab' && ghostSuggestion.value) {
     e.preventDefault()
@@ -1332,228 +1343,70 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
         <div v-if="loading" class="panel-loading">Loading…</div>
         <div v-else class="panel-body">
 
+          <!-- ── Response / Script editor ── -->
           <div class="field-group">
-            <template v-if="!isBuiltIn">
-              <label class="field-label">Response <span class="field-hint">= <code class="hint-code">{output}</code> &nbsp;·&nbsp; also use {user} {channel} {args}</span></label>
+            <label class="field-label">
+              Response
+              <span class="field-hint">full scripting language — <code class="hint-code">$</code> to start a variable</span>
+            </label>
+
+            <!-- locked $command.output prefix for built-in commands -->
+            <div v-if="isBuiltIn" class="builtin-prefix-row">
+              <span class="builtin-prefix-token">$command.output</span>
+              <span class="builtin-prefix-hint">locked — wrap your script around this</span>
+            </div>
+
+            <div class="normal-editor-container">
               <div
-                ref="responseRef"
-                class="field-textarea response-editor"
+                ref="normalEditorRef"
+                class="normal-editor"
                 contenteditable="true"
                 spellcheck="false"
-                data-placeholder="Hello {user}! You said: {args}"
-                @input="onResponseInput"
+                :data-placeholder="isBuiltIn ? '$text.upper($command.output)' : 'Hello $user.mention! $if($args) You said: $args $end'"
+                @input="onNormalInput"
+                @keydown="onNormalKeydown"
               ></div>
-            </template>
-            <template v-else>
-              <label class="field-label">Output <span class="field-hint">Hardcoded — the bot generates this</span></label>
-              <div class="output-placeholder">
-                <span class="op-brace">{</span><span class="op-label">output</span><span class="op-brace">}</span>
+              <div v-if="ghostSuggestion" class="ghost-suggestion">{{ ghostSuggestion }}</div>
+            </div>
+
+            <div class="normal-hint">Tab to complete &nbsp;·&nbsp; <code>$</code> to start a variable</div>
+
+            <!-- Preview -->
+            <div class="preview-section">
+              <div class="preview-label">Preview <span class="preview-note">(mock values)</span></div>
+              <div class="preview-output">{{ previewOutput || '—' }}</div>
+            </div>
+
+            <!-- Mock values -->
+            <details class="mock-ctx-details">
+              <summary class="mock-ctx-summary">⚙ Mock values</summary>
+              <div class="mock-ctx-grid">
+                <label>user</label><input v-model="mockCtx.user" class="field-input mock-input" />
+                <label>display</label><input v-model="mockCtx.display" class="field-input mock-input" />
+                <label>args</label><input v-model="mockCtx.args" class="field-input mock-input" @input="mockCtx.argList = mockCtx.args.split(' ')" />
+                <label>message</label><input v-model="mockCtx.messageText" class="field-input mock-input" />
+                <label>output</label><input v-model="mockCtx.commandOutput" class="field-input mock-input" />
+                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isMod" /> mod</label>
+                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isSub" /> sub</label>
+                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isVip" /> vip</label>
+                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isBroadcaster" /> broadcaster</label>
               </div>
-            </template>
+            </details>
+
+            <!-- Variable reference -->
+            <details class="ref-panel">
+              <summary class="ref-summary">📖 Variable reference</summary>
+              <div class="ref-content">
+                <div class="ref-group" v-for="g in REF_GROUPS" :key="g.label">
+                  <div class="ref-group-label">{{ g.label }}</div>
+                  <div class="ref-row" v-for="r in g.items" :key="r.token">
+                    <code class="ref-token">{{ r.token }}</code>
+                    <span class="ref-desc">{{ r.desc }}</span>
+                  </div>
+                </div>
+              </div>
+            </details>
           </div>
-
-          <!-- ── Rule section (collapsible) ────────────────────────────────────────── -->
-          <div class="rule-section">
-            <button class="rule-toggle" @click="ruleOpen = !ruleOpen">
-              <span class="rule-toggle-arrow">{{ ruleOpen ? '▼' : '►' }}</span>
-              Rule
-              <span class="rule-toggle-hint">
-                {{ ruleOpen ? 'click to collapse' : (form.rule.trim() ? '✔ rule set — click to edit' : 'click to add a rule') }}
-              </span>
-              <span v-if="!ruleValid && !!form.rule" class="rule-toggle-warn">⚠ invalid</span>
-            </button>
-
-            <div v-if="ruleOpen" class="rule-section-body">
-
-              <!-- Mode toggle -->
-              <div class="mode-toggle-row">
-                <button class="mode-btn" :class="{ active: editorMode === 'normal' }" @click="editorMode = 'normal'">⌨ Normal</button>
-                <button class="mode-btn" :class="{ active: editorMode === 'puzzle' }" @click="editorMode = 'puzzle'">🧩 Puzzle</button>
-                <span class="mode-hint">{{ editorMode === 'normal' ? 'Free text — full scripting language' : 'Drag-and-drop puzzle pieces' }}</span>
-              </div>
-
-              <!-- ── Normal Mode editor ── -->
-              <div v-if="editorMode === 'normal'" class="normal-mode-wrap">
-
-                <div class="normal-editor-container">
-                  <div
-                    ref="normalEditorRef"
-                    class="normal-editor"
-                    contenteditable="true"
-                    spellcheck="false"
-                    data-placeholder="$if($user.is(mod))&#10;  $counter.deaths +1 death!&#10;$end"
-                    @input="onNormalInput"
-                    @keydown="onNormalKeydown"
-                  ></div>
-                  <div v-if="ghostSuggestion" class="ghost-suggestion">{{ ghostSuggestion }}</div>
-                </div>
-
-                <div class="normal-hint">Tab to complete &nbsp;·&nbsp; <code>$</code> to start a variable</div>
-
-                <!-- Preview output -->
-                <div class="preview-section">
-                  <div class="preview-label">Preview <span class="preview-note">(mock values)</span></div>
-                  <div class="preview-output">{{ previewOutput || '—' }}</div>
-                </div>
-
-                <!-- Mock context editor -->
-                <details class="mock-ctx-details">
-                  <summary class="mock-ctx-summary">⚙ Mock values</summary>
-                  <div class="mock-ctx-grid">
-                    <label>user</label><input v-model="mockCtx.user" class="field-input mock-input" />
-                    <label>display</label><input v-model="mockCtx.display" class="field-input mock-input" />
-                    <label>args</label><input v-model="mockCtx.args" class="field-input mock-input" @input="mockCtx.argList = mockCtx.args.split(' ')" />
-                    <label>message</label><input v-model="mockCtx.messageText" class="field-input mock-input" />
-                    <label>output</label><input v-model="mockCtx.commandOutput" class="field-input mock-input" />
-                    <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isMod" /> mod</label>
-                    <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isSub" /> sub</label>
-                    <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isVip" /> vip</label>
-                    <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isBroadcaster" /> broadcaster</label>
-                  </div>
-                </details>
-
-                <!-- Variable reference panel -->
-                <details class="ref-panel">
-                  <summary class="ref-summary">📖 Variable reference</summary>
-                  <div class="ref-content">
-                    <div class="ref-group" v-for="g in REF_GROUPS" :key="g.label">
-                      <div class="ref-group-label">{{ g.label }}</div>
-                      <div class="ref-row" v-for="r in g.items" :key="r.token">
-                        <code class="ref-token">{{ r.token }}</code>
-                        <span class="ref-desc">{{ r.desc }}</span>
-                      </div>
-                    </div>
-                  </div>
-                </details>
-
-              </div>
-
-              <!-- target toggle (puzzle mode only) -->
-              <div v-if="editorMode === 'puzzle'" class="rule-target-row">
-                <span class="rule-target-label">Apply rule to:</span>
-                <button class="rule-target-btn" :class="{ active: ruleTarget === 'output' }" @click="ruleTarget = 'output'">{output}</button>
-                <button class="rule-target-btn" :class="{ active: ruleTarget === 'input' }"  @click="ruleTarget = 'input'">{input}</button>
-              </div>
-
-              <div v-if="editorMode === 'puzzle'" class="rule-area">
-
-                <div class="palette">
-                  <div v-for="g in palette" :key="g.group" class="palette-group">
-                    <div class="palette-group-label" :class="'pk-' + g.kind">{{ g.group }}</div>
-                    <div v-for="tok in g.tokens" :key="tok"
-                      class="palette-piece-wrap"
-                      draggable="true"
-                      @dragstart="onDragStart($event, tok)"
-                      @click="onPaletteClick(tok)"
-                      title="Click or drag to add"
-                    >
-                      <PuzzlePiece :label="tok" :kind="g.kind" />
-                    </div>
-                  </div>
-                </div>
-
-                <div class="editor-col">
-                  <div class="editor-wrap">
-                    <div
-                      ref="editorRef"
-                      class="rule-editor"
-                      :class="{ invalid: !ruleValid && !!form.rule }"
-                      contenteditable="true"
-                      spellcheck="false"
-                      data-placeholder="e.g. $if({output}[has]{text1}&lt;do [remove{text1}]&gt;)"
-                      @input="onEditorInput"
-                      @keydown="onEditorKeydown"
-                      @click="onEditorClick"
-                      @contextmenu="onEditorContextMenu"
-                      @dragstart="onEditorDragStart"
-                      @drop="onEditorDrop"
-                      @dragover="onEditorDragover"
-                    ></div>
-                    <div class="editor-legend">
-                      <span class="legend-item">
-                        <span class="legend-icon">🖱️<span class="legend-btn lmb">L</span></span>
-                        <span class="legend-desc">Select piece</span>
-                      </span>
-                      <span class="legend-sep">·</span>
-                      <span class="legend-item">
-                        <span class="legend-icon">🖱️<span class="legend-btn rmb">R</span></span>
-                        <span class="legend-desc">Remove piece</span>
-                      </span>
-                    </div>
-
-                    <div v-if="form.rule && ruleWarnings.length" class="rule-warnings">
-                      <div v-for="w in ruleWarnings" :key="w" class="rule-warning-item">⚠ {{ w }}</div>
-                    </div>
-
-                    <div v-if="acVisible" ref="acRef" class="ac-dropdown"
-                      :style="{ top: acPos.top + 'px', left: acPos.left + 'px' }">
-                      <div v-for="(item, i) in acItems" :key="item"
-                        class="ac-item" :class="[tokenClass(item), { active: i === acIndex }]"
-                        @mousedown.prevent="acIndex = i; insertAcItem()"
-                      >{{ item }}</div>
-                    </div>
-                  </div>
-
-                  <!-- Params: below the editor -->
-                  <div class="params-section">
-                    <div class="params-header">
-                      <span class="params-label">Parameters</span>
-                      <div class="params-add-btns">
-                        <button class="btn-add-param" @click="addParam('text')">+ text</button>
-                        <button class="btn-add-param" @click="addParam('regex')">+ regex</button>
-                      </div>
-                    </div>
-                    <div class="params-list">
-                      <div v-for="p in userParams" :key="p.key" class="param-row">
-                        <span class="param-key tk-param">{{ '{' + p.key + '}' }}</span>
-                        <input v-model="p.value" class="field-input param-input"
-                          :placeholder="p.type === 'regex' ? 'pattern…' : 'text…'" />
-                        <button class="btn-remove-param"
-                          :disabled="form.rule.includes('{' + p.key + '}')"
-                          :title="form.rule.includes('{' + p.key + '}') ? 'Used in rule — cannot remove' : 'Remove'"
-                          @click="removeParam(p.key)">✕</button>
-                      </div>
-                      <div v-if="userParams.length === 0" class="params-empty">
-                        No parameters — click + text or + regex to add
-                      </div>
-                    </div>
-                  </div>
-
-                  <!-- Simulator -->
-                  <div class="sim-section">
-                    <button class="btn-sim-toggle" @click="simExpanded = !simExpanded">
-                      {{ simExpanded ? '▾ hide simulator' : '▸ test rule' }}
-                    </button>
-                    <div v-if="simExpanded" class="sim-body">
-                      <div class="sim-row">
-                        <span class="sim-label">Input</span>
-                        <input v-model="simInput" class="field-input sim-input" placeholder="test input…" />
-                      </div>
-                      <div class="sim-row">
-                        <span class="sim-label">User</span>
-                        <input v-model="simUser" class="field-input sim-input" placeholder="testuser" />
-                      </div>
-                      <div v-if="isBuiltIn" class="sim-row">
-                        <span class="sim-label">Output</span>
-                        <span class="sim-builtin-note">bot-generated — uses <code>{output}</code> placeholder</span>
-                      </div>
-                      <button class="btn-run-sim" :disabled="!form.rule.trim()" @click="simulateRule">Run</button>
-                      <div v-if="simResult" class="sim-result">
-                        <div v-if="simResult.errors.length" class="sim-errors">
-                          <div v-for="e in simResult.errors" :key="e" class="sim-error-item">{{ e }}</div>
-                        </div>
-                        <div v-if="!simResult.errors.length" class="sim-output">
-                          <span class="sim-output-label">Output</span>
-                          <span class="sim-output-val">{{ simResult.output }}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                </div><!-- /editor-col -->
-              </div><!-- /rule-area -->
-            </div><!-- /rule-section-body -->
-          </div><!-- /rule-section -->
 
           <div class="cond-row">
             <div class="field-group sm">
@@ -1753,6 +1606,18 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .sim-output-label { font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0; }
 .sim-output-val { font-size: 13px; font-family: 'Consolas','Fira Mono',monospace; color: #23d18b; background: rgba(35,209,139,.08); border: 1px solid rgba(35,209,139,.25); padding: 4px 10px; word-break: break-all; flex: 1; }
 
+/* ── Built-in prefix lock ── */
+.builtin-prefix-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+.builtin-prefix-token {
+  font-family: 'Consolas','Fira Mono',monospace; font-size: 12px;
+  color: #9d6cff; background: rgba(111,43,255,.12);
+  border: 1px solid rgba(111,43,255,.3); padding: 3px 9px;
+  user-select: none; cursor: not-allowed;
+  position: relative;
+}
+.builtin-prefix-token::after { content: '🔒'; font-size: 9px; margin-left: 5px; opacity: .5; }
+.builtin-prefix-hint { font-size: 10px; color: #383838; }
+
 /* ── Mode toggle ── */
 .mode-toggle-row { display: flex; align-items: center; gap: 6px; }
 .mode-btn { height: 26px; padding: 0 12px; border: 1px solid #2a2a30; background: #111217; color: #555; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; transition: all .15s; }
@@ -1832,8 +1697,9 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .pz-tok:hover > svg { filter: brightness(1.3) drop-shadow(0 0 3px currentColor); }
 
 /* Syntax highlight for normal mode editor */
-.sh-kw      { color: #569cd6; }
-.sh-builtin { color: #9d6cff; }
+.sh-kw       { color: #569cd6; }
+.sh-builtin  { color: #9d6cff; }
+.sh-locked   { color: #9d6cff; border-bottom: 1px solid rgba(111,43,255,.4); cursor: not-allowed; }
 .sh-op      { color: #c792ea; }
 .sh-string  { color: #ce9178; }
 .sh-number  { color: #b5cea8; }
