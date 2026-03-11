@@ -3,6 +3,8 @@ import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import PuzzlePiece from './PuzzlePiece.vue'
+import { highlightScript } from '../composables/scriptHighlight'
+import { mockEval, resetMockState, DEFAULT_MOCK, type MockContext } from '../composables/scriptMockEval'
 
 export interface CustomCommand {
   name: string; response: string; rule: string; alias: string
@@ -77,6 +79,11 @@ async function load() {
   } catch {}
   loading.value = false
   await nextTick()
+  // Normal editor
+  const nel = normalEditorRef.value
+  if (nel) { nel.innerText = form.value.rule; applyNormalHighlight(nel, form.value.rule) }
+  updatePreview()
+  // Puzzle editor
   const el = editorRef.value
   if (el) el.innerHTML = highlight(form.value.rule)
   const rel = responseRef.value
@@ -502,6 +509,272 @@ function applyHighlight() {
 
 function ruleForSave(rule: string) {
   let r = rule; for (const p of PH_ALL) r = r.split(p).join(''); return r
+}
+
+// ── Normal Mode state ──────────────────────────────────────────────────────
+const editorMode     = ref<'normal' | 'puzzle'>('normal')
+const normalEditorRef = ref<HTMLDivElement | null>(null)
+const previewOutput  = ref('')
+const refPanelOpen   = ref(false)
+const mockCtx        = ref<MockContext>({ ...DEFAULT_MOCK })
+let   _normalHighlighting = false
+let   _ghostEl: HTMLElement | null = null
+
+// Ghost autocomplete suggestion
+const ghostSuggestion = ref('')
+
+// All completable tokens for Normal Mode
+const COMPLETIONS = [
+  '$if()', '$else', '$end', '$foreach()', '$repeat()', '$define',
+  '$counter.', '$ucounter.', '$var.', '$uvar.', '$list.',
+  '$user', '$user.name', '$user.display', '$user.mention', '$user.followage', '$user.created',
+  '$user.is(mod)', '$user.is(sub)', '$user.is(vip)', '$user.is(broadcaster)',
+  '$target.name', '$target.mention', '$target.id',
+  '$channel.name', '$channel.title', '$channel.game', '$channel.viewers', '$channel.isLive', '$channel.uptime',
+  '$command.name', '$command.uses', '$command.output',
+  '$message.text', '$message.id', '$message.length',
+  '$args', '$args.count', '$1', '$2', '$3',
+  '$query',
+  '$random.int(,)', '$random.pick(,)', '$random.chance()',
+  '$time.now', '$time.unix', '$time.format(,)', '$time.ago()',
+  '$text.len()', '$text.upper()', '$text.lower()', '$text.title()', '$text.trim()',
+  '$text.contains(,)', '$text.starts(,)', '$text.ends(,)',
+  '$text.replace(,,)', '$text.remove(,)', '$text.split(,)', '$text.join(,)',
+  '$regex.match(,)', '$regex.replace(,,)',
+  '$calc()',
+  '$http.get()', '$http.post(,)', '$http.json(,)',
+  '$twitch.followers()', '$twitch.subscribers()', '$twitch.uptime', '$twitch.game', '$twitch.title',
+  '$emote.has(7tv,)', '$emote.count(7tv)',
+  '$log.last()', '$log.find()',
+  '$mod.delete()', '$mod.timeout(,)', '$mod.ban()', '$mod.unban()', '$mod.purge()',
+  '$chat.slow()', '$chat.emoteonly()', '$chat.followers()',
+  '$cooldown.set()', '$cooldown.user()',
+  '$index', '$last_error',
+]
+
+// ── Variable reference data ─────────────────────────────────────────────
+const REF_GROUPS = [
+  { label: 'Control Flow', items: [
+    { token: '$if(condition)', desc: 'Conditional block' },
+    { token: '$else', desc: 'Else branch' },
+    { token: '$end', desc: 'End block' },
+    { token: '$foreach(item in list)', desc: 'Loop over list' },
+    { token: '$repeat(n)', desc: 'Repeat n times' },
+    { token: '$define name(params)', desc: 'Define a macro' },
+    { token: '$index', desc: 'Current loop index' },
+  ]},
+  { label: 'Counters', items: [
+    { token: '$counter.name', desc: 'Increment +1, return value' },
+    { token: '$counter.name.get', desc: 'Read without changing' },
+    { token: '$counter.name.set(n)', desc: 'Set to value' },
+    { token: '$counter.name.add(n)', desc: 'Add value' },
+    { token: '$counter.name.reset', desc: 'Reset to 0' },
+    { token: '$ucounter.name', desc: 'Per-user counter' },
+  ]},
+  { label: 'Variables', items: [
+    { token: '$var.name', desc: 'Read variable' },
+    { token: '$var.name.set(value)', desc: 'Set variable' },
+    { token: '$var.name.delete', desc: 'Delete variable' },
+    { token: '$uvar.name', desc: 'Per-user variable' },
+  ]},
+  { label: 'Lists', items: [
+    { token: '$list.name', desc: 'Random item from list' },
+    { token: '$list.name.add(value)', desc: 'Add to list' },
+    { token: '$list.name.remove(value)', desc: 'Remove value' },
+    { token: '$list.name.get(index)', desc: 'Get by index' },
+    { token: '$list.name.size', desc: 'Number of items' },
+    { token: '$list.name.random', desc: 'Random item' },
+    { token: '$list.name.clear', desc: 'Clear list' },
+  ]},
+  { label: 'User', items: [
+    { token: '$user.name', desc: 'Login name' },
+    { token: '$user.display', desc: 'Display name' },
+    { token: '$user.mention', desc: '@DisplayName' },
+    { token: '$user.followage', desc: 'How long following' },
+    { token: '$user.is(mod)', desc: 'true/false' },
+    { token: '$user.is(sub)', desc: 'true/false' },
+    { token: '$user.is(vip)', desc: 'true/false' },
+    { token: '$user.is(broadcaster)', desc: 'true/false' },
+    { token: '$target.name', desc: 'First argument as user' },
+    { token: '$target.mention', desc: '@target' },
+  ]},
+  { label: 'Channel', items: [
+    { token: '$channel.name', desc: 'Channel login' },
+    { token: '$channel.title', desc: 'Stream title' },
+    { token: '$channel.game', desc: 'Current game' },
+    { token: '$channel.viewers', desc: 'Viewer count' },
+    { token: '$channel.isLive', desc: 'true/false' },
+    { token: '$channel.uptime', desc: 'Stream uptime' },
+  ]},
+  { label: 'Arguments', items: [
+    { token: '$args', desc: 'All arguments' },
+    { token: '$args.count', desc: 'Number of args' },
+    { token: '$1 $2 $3', desc: 'Individual args' },
+    { token: '$query', desc: 'Alias for $args' },
+  ]},
+  { label: 'Random', items: [
+    { token: '$random.int(min,max)', desc: 'Random integer' },
+    { token: '$random.pick(a,b,c)', desc: 'Random from list' },
+    { token: '$random.chance(pct)', desc: 'true with pct% chance' },
+  ]},
+  { label: 'Text', items: [
+    { token: '$text.upper(text)', desc: 'Uppercase' },
+    { token: '$text.lower(text)', desc: 'Lowercase' },
+    { token: '$text.replace(text,from,to)', desc: 'Replace' },
+    { token: '$text.contains(text,val)', desc: 'true/false' },
+    { token: '$text.len(text)', desc: 'String length' },
+    { token: '$text.trim(text)', desc: 'Trim whitespace' },
+    { token: '$calc(expr)', desc: 'Math expression' },
+  ]},
+  { label: 'Time', items: [
+    { token: '$time.now', desc: 'Current ISO timestamp' },
+    { token: '$time.unix', desc: 'Unix timestamp (seconds)' },
+    { token: '$time.ago(ts)', desc: 'Human time since ts' },
+    { token: '$time.format(ts,fmt)', desc: 'Format timestamp' },
+  ]},
+  { label: 'HTTP', items: [
+    { token: '$http.get(url)', desc: 'GET request, returns text' },
+    { token: '$http.post(url,body)', desc: 'POST request' },
+    { token: '$http.json(url,path)', desc: 'GET + extract JSON path' },
+  ]},
+  { label: 'Twitch', items: [
+    { token: '$twitch.uptime', desc: 'Stream uptime' },
+    { token: '$twitch.game', desc: 'Current game' },
+    { token: '$twitch.title', desc: 'Stream title' },
+    { token: '$twitch.followers(user)', desc: 'Follower count' },
+  ]},
+  { label: 'Emotes', items: [
+    { token: '$emote.has(7tv,code)', desc: 'Check if emote exists' },
+    { token: '$emote.count(7tv)', desc: 'Count emotes' },
+  ]},
+  { label: 'Command', items: [
+    { token: '$command.output', desc: 'Built-in command output' },
+    { token: '$command.uses', desc: 'Times command was used' },
+    { token: '$command.name', desc: 'Command name' },
+  ]},
+  { label: 'Moderation', items: [
+    { token: '$mod.timeout(user,seconds)', desc: 'Timeout user' },
+    { token: '$mod.ban(user)', desc: 'Ban user' },
+    { token: '$mod.delete(msg_id)', desc: 'Delete message' },
+    { token: '$mod.purge(user)', desc: 'Purge user messages' },
+  ]},
+]
+
+function updatePreview() {
+  if (editorMode.value !== 'normal') return
+  try {
+    resetMockState()
+    previewOutput.value = mockEval(form.value.rule, mockCtx.value)
+  } catch { previewOutput.value = '[preview error]' }
+}
+
+watch(() => form.value.rule, () => { if (editorMode.value === 'normal') updatePreview() }, { flush: 'post' })
+watch(editorMode, mode => {
+  if (mode === 'normal') {
+    nextTick(() => {
+      const nel = normalEditorRef.value
+      if (nel) { nel.innerText = form.value.rule; applyNormalHighlight(nel, form.value.rule) }
+      updatePreview()
+    })
+  }
+})
+watch(mockCtx, () => updatePreview(), { deep: true })
+
+// ── Normal editor input handler ──────────────────────────────────────────────
+
+function onNormalInput() {
+  const el = normalEditorRef.value; if (!el) return
+  const text = el.innerText.replace(/\n$/, '')
+  form.value.rule = text
+  applyNormalHighlight(el, text)
+  updateGhost(el, text)
+}
+
+function applyNormalHighlight(el: HTMLElement, text: string) {
+  if (_normalHighlighting) return
+  const sel = window.getSelection()
+  const offset = sel?.rangeCount ? getTextOffset(el) : 0
+  _normalHighlighting = true
+  el.innerHTML = highlightScript(text)
+  _normalHighlighting = false
+  restoreTextOffset(el, offset)
+}
+
+function getTextOffset(el: HTMLElement): number {
+  const sel = window.getSelection(); if (!sel?.rangeCount) return 0
+  const range = sel.getRangeAt(0)
+  const pre = range.cloneRange(); pre.selectNodeContents(el); pre.setEnd(range.startContainer, range.startOffset)
+  return pre.toString().length
+}
+
+function restoreTextOffset(el: HTMLElement, offset: number) {
+  let remaining = offset, placed = false
+  function walk(node: Node) {
+    if (placed) return
+    if (node.nodeType === Node.TEXT_NODE) {
+      const len = node.textContent?.length ?? 0
+      if (remaining <= len) {
+        const r = document.createRange(); r.setStart(node, remaining); r.collapse(true)
+        window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(r)
+        placed = true; return
+      }
+      remaining -= len; return
+    }
+    for (const c of Array.from(node.childNodes)) walk(c)
+  }
+  walk(el)
+  if (!placed) { const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(r) }
+}
+
+function updateGhost(el: HTMLElement, text: string) {
+  const sel = window.getSelection(); if (!sel?.rangeCount) { ghostSuggestion.value = ''; return }
+  const offset = getTextOffset(el)
+  const before = text.slice(0, offset)
+  // find the current $-token being typed
+  const m = before.match(/(\$[\w.]*)$/)
+  if (!m) { ghostSuggestion.value = ''; return }
+  const partial = m[1]!
+  const match   = COMPLETIONS.find(c => c.startsWith(partial) && c !== partial)
+  ghostSuggestion.value = match ? match.slice(partial.length) : ''
+}
+
+function onNormalKeydown(e: KeyboardEvent) {
+  // Tab: accept ghost suggestion
+  if (e.key === 'Tab' && ghostSuggestion.value) {
+    e.preventDefault()
+    const el = normalEditorRef.value; if (!el) return
+    const offset  = getTextOffset(el)
+    const text    = el.innerText.replace(/\n$/, '')
+    const before  = text.slice(0, offset)
+    const after   = text.slice(offset)
+    const m       = before.match(/(\$[\w.]*)$/)
+    const partial = m?.[1] ?? ''
+    const full    = partial + ghostSuggestion.value
+    // For structures, add newlines
+    let insert = full
+    let cursorOffset = before.length - partial.length + full.length
+    if (full === '$if()') {
+      insert = '$if()\n  \n$end'
+      cursorOffset = before.length - partial.length + 4 // inside ()
+    } else if (full === '$foreach()') {
+      insert = '$foreach( in )\n  \n$end'
+      cursorOffset = before.length - partial.length + 9
+    } else if (full === '$repeat()') {
+      insert = '$repeat()\n  \n$end'
+      cursorOffset = before.length - partial.length + 8
+    }
+    const newText = before.slice(0, before.length - partial.length) + insert + after
+    form.value.rule = newText
+    el.innerText = newText
+    applyNormalHighlight(el, newText)
+    nextTick(() => restoreTextOffset(el, cursorOffset))
+    ghostSuggestion.value = ''
+    return
+  }
+  // Enter: auto-indent inside blocks
+  if (e.key === 'Enter') {
+    // default behaviour is fine for now
+  }
 }
 
 const editorRef  = ref<HTMLDivElement | null>(null)
@@ -1092,14 +1365,77 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 
             <div v-if="ruleOpen" class="rule-section-body">
 
-              <!-- target toggle -->
-              <div class="rule-target-row">
+              <!-- Mode toggle -->
+              <div class="mode-toggle-row">
+                <button class="mode-btn" :class="{ active: editorMode === 'normal' }" @click="editorMode = 'normal'">⌨ Normal</button>
+                <button class="mode-btn" :class="{ active: editorMode === 'puzzle' }" @click="editorMode = 'puzzle'">🧩 Puzzle</button>
+                <span class="mode-hint">{{ editorMode === 'normal' ? 'Free text — full scripting language' : 'Drag-and-drop puzzle pieces' }}</span>
+              </div>
+
+              <!-- ── Normal Mode editor ── -->
+              <div v-if="editorMode === 'normal'" class="normal-mode-wrap">
+
+                <div class="normal-editor-container">
+                  <div
+                    ref="normalEditorRef"
+                    class="normal-editor"
+                    contenteditable="true"
+                    spellcheck="false"
+                    data-placeholder="$if($user.is(mod))&#10;  $counter.deaths +1 death!&#10;$end"
+                    @input="onNormalInput"
+                    @keydown="onNormalKeydown"
+                  ></div>
+                  <div v-if="ghostSuggestion" class="ghost-suggestion">{{ ghostSuggestion }}</div>
+                </div>
+
+                <div class="normal-hint">Tab to complete &nbsp;·&nbsp; <code>$</code> to start a variable</div>
+
+                <!-- Preview output -->
+                <div class="preview-section">
+                  <div class="preview-label">Preview <span class="preview-note">(mock values)</span></div>
+                  <div class="preview-output">{{ previewOutput || '—' }}</div>
+                </div>
+
+                <!-- Mock context editor -->
+                <details class="mock-ctx-details">
+                  <summary class="mock-ctx-summary">⚙ Mock values</summary>
+                  <div class="mock-ctx-grid">
+                    <label>user</label><input v-model="mockCtx.user" class="field-input mock-input" />
+                    <label>display</label><input v-model="mockCtx.display" class="field-input mock-input" />
+                    <label>args</label><input v-model="mockCtx.args" class="field-input mock-input" @input="mockCtx.argList = mockCtx.args.split(' ')" />
+                    <label>message</label><input v-model="mockCtx.messageText" class="field-input mock-input" />
+                    <label>output</label><input v-model="mockCtx.commandOutput" class="field-input mock-input" />
+                    <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isMod" /> mod</label>
+                    <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isSub" /> sub</label>
+                    <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isVip" /> vip</label>
+                    <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isBroadcaster" /> broadcaster</label>
+                  </div>
+                </details>
+
+                <!-- Variable reference panel -->
+                <details class="ref-panel">
+                  <summary class="ref-summary">📖 Variable reference</summary>
+                  <div class="ref-content">
+                    <div class="ref-group" v-for="g in REF_GROUPS" :key="g.label">
+                      <div class="ref-group-label">{{ g.label }}</div>
+                      <div class="ref-row" v-for="r in g.items" :key="r.token">
+                        <code class="ref-token">{{ r.token }}</code>
+                        <span class="ref-desc">{{ r.desc }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+
+              </div>
+
+              <!-- target toggle (puzzle mode only) -->
+              <div v-if="editorMode === 'puzzle'" class="rule-target-row">
                 <span class="rule-target-label">Apply rule to:</span>
                 <button class="rule-target-btn" :class="{ active: ruleTarget === 'output' }" @click="ruleTarget = 'output'">{output}</button>
                 <button class="rule-target-btn" :class="{ active: ruleTarget === 'input' }"  @click="ruleTarget = 'input'">{input}</button>
               </div>
 
-              <div class="rule-area">
+              <div v-if="editorMode === 'puzzle'" class="rule-area">
 
                 <div class="palette">
                   <div v-for="g in palette" :key="g.group" class="palette-group">
@@ -1416,6 +1752,72 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .sim-output { display: flex; align-items: baseline; gap: 8px; }
 .sim-output-label { font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0; }
 .sim-output-val { font-size: 13px; font-family: 'Consolas','Fira Mono',monospace; color: #23d18b; background: rgba(35,209,139,.08); border: 1px solid rgba(35,209,139,.25); padding: 4px 10px; word-break: break-all; flex: 1; }
+
+/* ── Mode toggle ── */
+.mode-toggle-row { display: flex; align-items: center; gap: 6px; }
+.mode-btn { height: 26px; padding: 0 12px; border: 1px solid #2a2a30; background: #111217; color: #555; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; transition: all .15s; }
+.mode-btn:hover { color: #888; border-color: #444; }
+.mode-btn.active { border-color: #6f2bff66; color: #9d6cff; background: rgba(111,43,255,.1); }
+.mode-hint { font-size: 10px; color: #383838; margin-left: 4px; }
+
+/* ── Normal Mode editor ── */
+.normal-mode-wrap { display: flex; flex-direction: column; gap: 8px; }
+.normal-editor-container { position: relative; }
+.normal-editor {
+  min-height: 120px; max-height: 320px; overflow-y: auto;
+  background: #0d0d10; border: 1px solid #2a2a30;
+  padding: 12px 14px; font-family: 'Consolas','Fira Mono',monospace;
+  font-size: 13px; line-height: 1.7; color: #c0c0c0;
+  outline: none; white-space: pre-wrap; word-break: break-word;
+  tab-size: 2;
+}
+.normal-editor:focus { border-color: #6f2bff55; }
+.normal-editor:empty::before { content: attr(data-placeholder); color: #2a2a35; pointer-events: none; white-space: pre; }
+.ghost-suggestion {
+  position: absolute; bottom: 0; right: 8px;
+  font-size: 10px; color: #444; font-family: 'Consolas','Fira Mono',monospace;
+  padding: 2px 6px; background: #111217; border: 1px solid #222;
+  pointer-events: none;
+}
+.normal-hint { font-size: 10px; color: #383838; }
+.normal-hint code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; }
+
+/* ── Preview ── */
+.preview-section { display: flex; flex-direction: column; gap: 4px; }
+.preview-label { font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; }
+.preview-note { font-size: 9px; color: #333; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.preview-output {
+  font-family: 'Consolas','Fira Mono',monospace; font-size: 13px;
+  color: #4ec9b0; background: rgba(78,201,176,.06);
+  border: 1px solid rgba(78,201,176,.15);
+  padding: 8px 12px; min-height: 32px; word-break: break-all;
+}
+
+/* ── Mock context ── */
+.mock-ctx-details, .ref-panel { border: 1px solid #1e1e22; }
+.mock-ctx-summary, .ref-summary {
+  padding: 6px 10px; font-size: 10px; font-weight: 600; color: #555;
+  text-transform: uppercase; letter-spacing: .05em;
+  cursor: pointer; user-select: none; list-style: none;
+}
+.mock-ctx-summary:hover, .ref-summary:hover { color: #888; }
+.mock-ctx-grid {
+  display: grid; grid-template-columns: 60px 1fr; gap: 4px 8px;
+  padding: 8px 10px; align-items: center;
+}
+.mock-ctx-grid label { font-size: 10px; color: #555; font-family: 'Consolas','Fira Mono',monospace; }
+.mock-input { font-size: 11px !important; padding: 3px 6px !important; }
+.mock-check-label { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #555; grid-column: span 1; cursor: pointer; }
+.mock-check-label input { accent-color: #6f2bff; }
+
+/* ── Reference panel ── */
+.ref-content { max-height: 320px; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 10px; }
+.ref-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9d6cff; margin-bottom: 3px; }
+.ref-row { display: flex; align-items: baseline; gap: 8px; padding: 1px 0; }
+.ref-token { font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; color: #4ec9b0; background: rgba(78,201,176,.08); padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
+.ref-desc { font-size: 10px; color: #484848; }
+
+/* ── Syntax highlight colours ── */
 </style>
 
 <style>
@@ -1428,6 +1830,16 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .action-block { background: rgba(241,73,73,.07);   border: 1px solid rgba(241,73,73,.18);  border-radius: 4px; padding: 2px 4px; display: inline-flex; align-items: center; gap: 1px; }
 
 .pz-tok:hover > svg { filter: brightness(1.3) drop-shadow(0 0 3px currentColor); }
+
+/* Syntax highlight for normal mode editor */
+.sh-kw      { color: #569cd6; }
+.sh-builtin { color: #9d6cff; }
+.sh-op      { color: #c792ea; }
+.sh-string  { color: #ce9178; }
+.sh-number  { color: #b5cea8; }
+.sh-paren   { color: #888; }
+.sh-comment { color: #3c4a3c; font-style: italic; }
+.sh-error   { color: #f14949; text-decoration: underline wavy #f1494966; }
 .pz-ph { opacity: 0.35; transition: opacity .15s; }
 .pz-ph:hover { opacity: 0.7; }
 
