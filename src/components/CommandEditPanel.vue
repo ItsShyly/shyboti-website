@@ -570,110 +570,126 @@ const COMPLETIONS = [
 // ── Variable reference data ─────────────────────────────────────────────
 const REF_GROUPS = [
   { label: 'Control Flow', items: [
-    { token: '$if(condition)', desc: 'Conditional block' },
-    { token: '$else', desc: 'Else branch' },
-    { token: '$end', desc: 'End block' },
-    { token: '$foreach(item in list)', desc: 'Loop over list' },
-    { token: '$repeat(n)', desc: 'Repeat n times' },
-    { token: '$define name(params)', desc: 'Define a macro' },
-    { token: '$index', desc: 'Current loop index' },
+    { token: '$if(condition)', desc: 'Conditional block', example: '$if($user.is(mod))' },
+    { token: '$else', desc: 'Else branch', example: '' },
+    { token: '$end', desc: 'End block', example: '' },
+    { token: '$foreach(item in list)', desc: 'Loop over list', example: '$foreach(q in $list.quotes)' },
+    { token: '$repeat(n)', desc: 'Repeat n times', example: '$repeat(3)' },
+    { token: '$define name(params)', desc: 'Define a macro', example: '$define greet(user)' },
+    { token: '$index', desc: 'Current loop index (0-based)', example: '' },
   ]},
   { label: 'Counters', items: [
-    { token: '$counter.name', desc: 'Increment +1, return value' },
-    { token: '$counter.name.get', desc: 'Read without changing' },
-    { token: '$counter.name.set(n)', desc: 'Set to value' },
-    { token: '$counter.name.add(n)', desc: 'Add value' },
-    { token: '$counter.name.reset', desc: 'Reset to 0' },
-    { token: '$ucounter.name', desc: 'Per-user counter' },
+    { token: '$counter.name', desc: 'Increment +1, return value', example: '$counter.wins' },
+    { token: '$counter.name.get', desc: 'Read without changing', example: '$counter.wins.get' },
+    { token: '$counter.name.set(n)', desc: 'Set to value', example: '$counter.wins.set(10)' },
+    { token: '$counter.name.add(n)', desc: 'Add value', example: '$counter.wins.add(5)' },
+    { token: '$counter.name.reset', desc: 'Reset to 0', example: '$counter.wins.reset' },
+    { token: '$ucounter.name', desc: 'Per-user counter', example: '$ucounter.hugs' },
   ]},
   { label: 'Variables', items: [
-    { token: '$var.name', desc: 'Read variable' },
-    { token: '$var.name.set(value)', desc: 'Set variable' },
-    { token: '$var.name.delete', desc: 'Delete variable' },
-    { token: '$uvar.name', desc: 'Per-user variable' },
+    { token: '$var.name', desc: 'Read variable', example: '$var.lastSong' },
+    { token: '$var.name.set(value)', desc: 'Set variable', example: '$var.lastSong.set($args)' },
+    { token: '$var.name.delete', desc: 'Delete variable', example: '$var.lastSong.delete' },
+    { token: '$uvar.name', desc: 'Per-user variable', example: '$uvar.points' },
   ]},
   { label: 'Lists', items: [
-    { token: '$list.name', desc: 'Random item from list' },
-    { token: '$list.name.add(value)', desc: 'Add to list' },
-    { token: '$list.name.remove(value)', desc: 'Remove value' },
-    { token: '$list.name.get(index)', desc: 'Get by index' },
-    { token: '$list.name.size', desc: 'Number of items' },
-    { token: '$list.name.random', desc: 'Random item' },
-    { token: '$list.name.clear', desc: 'Clear list' },
+    { token: '$list.name', desc: 'Random item from list', example: '$list.quotes' },
+    { token: '$list.name.add(value)', desc: 'Add to list', example: '$list.quotes.add($args)' },
+    { token: '$list.name.remove(value)', desc: 'Remove value', example: '$list.quotes.remove($args)' },
+    { token: '$list.name.get(index)', desc: 'Get by index', example: '$list.quotes.get(0)' },
+    { token: '$list.name.size', desc: 'Number of items', example: '$list.quotes.size' },
+    { token: '$list.name.random', desc: 'Random item', example: '$list.quotes.random' },
+    { token: '$list.name.clear', desc: 'Clear list', example: '$list.quotes.clear' },
   ]},
   { label: 'User', items: [
-    { token: '$user.name', desc: 'Login name' },
-    { token: '$user.display', desc: 'Display name' },
-    { token: '$user.mention', desc: '@DisplayName' },
-    { token: '$user.followage', desc: 'How long following' },
-    { token: '$user.is(mod)', desc: 'true/false' },
-    { token: '$user.is(sub)', desc: 'true/false' },
-    { token: '$user.is(vip)', desc: 'true/false' },
-    { token: '$user.is(broadcaster)', desc: 'true/false' },
-    { token: '$target.name', desc: 'First argument as user' },
-    { token: '$target.mention', desc: '@target' },
+    { token: '$user.name', desc: 'Login name', example: 'coolstreamer' },
+    { token: '$user.display', desc: 'Display name', example: 'CoolStreamer' },
+    { token: '$user.mention', desc: '@DisplayName', example: '@CoolStreamer' },
+    { token: '$user.followage', desc: 'How long following', example: '2 years, 3 months' },
+    { token: '$user.is(mod)', desc: 'true/false', example: 'false' },
+    { token: '$user.is(sub)', desc: 'true/false', example: 'true' },
+    { token: '$user.is(vip)', desc: 'true/false', example: 'false' },
+    { token: '$user.is(broadcaster)', desc: 'true/false', example: 'false' },
+    { token: '$target.name', desc: 'First argument as user', example: 'coolstreamer (the @mention arg)' },
+    { token: '$target.mention', desc: '@target', example: '@coolstreamer' },
   ]},
   { label: 'Channel', items: [
-    { token: '$channel.name', desc: 'Channel login' },
-    { token: '$channel.title', desc: 'Stream title' },
-    { token: '$channel.game', desc: 'Current game' },
-    { token: '$channel.viewers', desc: 'Viewer count' },
-    { token: '$channel.isLive', desc: 'true/false' },
-    { token: '$channel.uptime', desc: 'Stream uptime' },
+    { token: '$channel.name', desc: 'Channel login', example: 'mystream' },
+    { token: '$channel.title', desc: 'Stream title', example: 'Playing some games!' },
+    { token: '$channel.game', desc: 'Current game', example: 'Just Chatting' },
+    { token: '$channel.viewers', desc: 'Viewer count', example: '42' },
+    { token: '$channel.isLive', desc: 'true/false', example: 'true' },
+    { token: '$channel.uptime', desc: 'Stream uptime', example: '1h 23m' },
   ]},
   { label: 'Arguments', items: [
-    { token: '$args', desc: 'All arguments' },
-    { token: '$args.count', desc: 'Number of args' },
-    { token: '$1 $2 $3', desc: 'Individual args' },
-    { token: '$query', desc: 'Alias for $args' },
+    { token: '$args', desc: 'All arguments', example: 'hello world' },
+    { token: '$args.count', desc: 'Number of args', example: '2' },
+    { token: '$1 $2 $3', desc: 'Individual args', example: '$1 → hello, $2 → world' },
+    { token: '$query', desc: 'Alias for $args', example: 'hello world' },
   ]},
   { label: 'Random', items: [
-    { token: '$random.int(min,max)', desc: 'Random integer' },
-    { token: '$random.pick(a,b,c)', desc: 'Random from list' },
-    { token: '$random.chance(pct)', desc: 'true with pct% chance' },
+    { token: '$random.int(min,max)', desc: 'Random integer', example: '$random.int(1,100) → 42' },
+    { token: '$random.pick(a,b,c)', desc: 'Random from list', example: '$random.pick(yes,no,maybe) → maybe' },
+    { token: '$random.chance(pct)', desc: 'true with pct% chance', example: '$random.chance(30) → true' },
   ]},
   { label: 'Text', items: [
-    { token: '$text.upper(text)', desc: 'Uppercase' },
-    { token: '$text.lower(text)', desc: 'Lowercase' },
-    { token: '$text.replace(text,from,to)', desc: 'Replace' },
-    { token: '$text.contains(text,val)', desc: 'true/false' },
-    { token: '$text.len(text)', desc: 'String length' },
-    { token: '$text.trim(text)', desc: 'Trim whitespace' },
-    { token: '$calc(expr)', desc: 'Math expression' },
+    { token: '$text.upper(text)', desc: 'Uppercase', example: '$text.upper($user.name) → COOLSTREAMER' },
+    { token: '$text.lower(text)', desc: 'Lowercase', example: '$text.lower(Hello) → hello' },
+    { token: '$text.replace(text,from,to)', desc: 'Replace', example: '$text.replace($args,bad,***)' },
+    { token: '$text.contains(text,val)', desc: 'true/false', example: '$text.contains($args,hello) → true' },
+    { token: '$text.len(text)', desc: 'String length', example: '$text.len($args) → 11' },
+    { token: '$text.trim(text)', desc: 'Trim whitespace', example: '$text.trim( hello ) → hello' },
+    { token: '$calc(expr)', desc: 'Math expression', example: '$calc(2 + 3) → 5' },
   ]},
   { label: 'Time', items: [
-    { token: '$time.now', desc: 'Current ISO timestamp' },
-    { token: '$time.unix', desc: 'Unix timestamp (seconds)' },
-    { token: '$time.ago(ts)', desc: 'Human time since ts' },
-    { token: '$time.format(ts,fmt)', desc: 'Format timestamp' },
+    { token: '$time.now', desc: 'Current ISO timestamp', example: '2025-01-01T12:00:00Z' },
+    { token: '$time.unix', desc: 'Unix timestamp (seconds)', example: '1735732800' },
+    { token: '$time.ago(ts)', desc: 'Human time since ts', example: '$time.ago($var.lastSeen) → 3 hours ago' },
+    { token: '$time.format(ts,fmt)', desc: 'Format timestamp', example: '$time.format($time.now,HH:mm) → 12:00' },
   ]},
   { label: 'HTTP', items: [
-    { token: '$http.get(url)', desc: 'GET request, returns text' },
-    { token: '$http.post(url,body)', desc: 'POST request' },
-    { token: '$http.json(url,path)', desc: 'GET + extract JSON path' },
+    { token: '$http.get(url)', desc: 'GET request, returns text', example: '$http.get(https://api.example.com/joke)' },
+    { token: '$http.post(url,body)', desc: 'POST request', example: '$http.post(https://api.example.com/log,$args)' },
+    { token: '$http.json(url,path)', desc: 'GET + extract JSON path', example: '$http.json(https://api.example.com/data,$.name)' },
   ]},
   { label: 'Twitch', items: [
-    { token: '$twitch.uptime', desc: 'Stream uptime' },
-    { token: '$twitch.game', desc: 'Current game' },
-    { token: '$twitch.title', desc: 'Stream title' },
-    { token: '$twitch.followers(user)', desc: 'Follower count' },
+    { token: '$twitch.uptime', desc: 'Stream uptime', example: '1h 23m' },
+    { token: '$twitch.game', desc: 'Current game', example: 'Just Chatting' },
+    { token: '$twitch.title', desc: 'Stream title', example: 'Playing games!' },
+    { token: '$twitch.followers(user)', desc: 'Follower count', example: '$twitch.followers($user.name) → 1234' },
   ]},
   { label: 'Emotes', items: [
-    { token: '$emote.has(7tv,code)', desc: 'Check if emote exists' },
-    { token: '$emote.count(7tv)', desc: 'Count emotes' },
+    { token: '$emote.has(7tv,code)', desc: 'Check if emote exists', example: '$emote.has(7tv,KEKW) → true' },
+    { token: '$emote.count(7tv)', desc: 'Count emotes', example: '42' },
   ]},
   { label: 'Command', items: [
-    { token: '$command.output', desc: 'Built-in command output' },
-    { token: '$command.uses', desc: 'Times command was used' },
-    { token: '$command.name', desc: 'Command name' },
+    { token: '$command.output', desc: 'Built-in command output', example: 'Now playing: Never Gonna Give You Up' },
+    { token: '$command.uses', desc: 'Times command was used', example: '17' },
+    { token: '$command.name', desc: 'Command name', example: '!song' },
   ]},
   { label: 'Moderation', items: [
-    { token: '$mod.timeout(user,seconds)', desc: 'Timeout user' },
-    { token: '$mod.ban(user)', desc: 'Ban user' },
-    { token: '$mod.delete(msg_id)', desc: 'Delete message' },
-    { token: '$mod.purge(user)', desc: 'Purge user messages' },
+    { token: '$mod.timeout(user,seconds)', desc: 'Timeout user', example: '$mod.timeout($target.name,60)' },
+    { token: '$mod.ban(user)', desc: 'Ban user', example: '$mod.ban($target.name)' },
+    { token: '$mod.delete(msg_id)', desc: 'Delete message', example: '$mod.delete($message.id)' },
+    { token: '$mod.purge(user)', desc: 'Purge user messages', example: '$mod.purge($target.name)' },
   ]},
 ]
+
+// Render a reference token with user-supplied name segments in a distinct colour.
+// Prefixes where the next word is a user-chosen name: $counter. $ucounter. $var. $uvar. $list.
+function renderRefToken(token: string): string {
+  const namePrefixes = ['$counter.', '$ucounter.', '$var.', '$uvar.', '$list.']
+  for (const prefix of namePrefixes) {
+    if (token.startsWith(prefix)) {
+      const rest = token.slice(prefix.length)
+      const m = rest.match(/^(\w+)(.*)/s)
+      if (m) {
+        return prefix + `<span class="ref-token-name">${m[1]}</span>` + (m[2] ?? '')
+      }
+    }
+  }
+  return token
+}
 
 // COMPLETIONS_META: flat list with group+desc for dropdown display
 const COMPLETIONS_META: { token: string; group: string; desc: string }[] = [
@@ -895,6 +911,33 @@ function updateGhost(el: HTMLElement, text: string) {
   nextTick(() => insertGhostSpan(suffix))
 }
 
+// Accept the current ghost suggestion — shared by Tab and ArrowRight
+function acceptCurrentGhost() {
+  const el = normalEditorRef.value; if (!el) return
+  const offset  = getTextOffset(el)
+  const text    = form.value.response  // use model (clean), not innerText (which includes ghost span)
+  const before  = text.slice(0, offset)
+  const after   = text.slice(offset)
+  const m       = before.match(/(\$[\w.]*)$/)
+  const partial = m?.[1] ?? ''
+  const full    = partial + ghostSuggestion.value
+  let insert = full
+  let cursorOffset = before.length - partial.length + full.length
+  if (full === '$if()') {
+    insert = '$if()\n  \n$end'; cursorOffset = before.length - partial.length + 4
+  } else if (full === '$foreach()') {
+    insert = '$foreach( in )\n  \n$end'; cursorOffset = before.length - partial.length + 9
+  } else if (full === '$repeat()') {
+    insert = '$repeat()\n  \n$end'; cursorOffset = before.length - partial.length + 8
+  }
+  const newText = before.slice(0, before.length - partial.length) + insert + after
+  form.value.response = newText
+  el.innerText = newText
+  applyNormalHighlight(el, newText)
+  nextTick(() => restoreTextOffset(el, cursorOffset))
+  ghostSuggestion.value = ''; ghostMatches.value = []; ghostMatchIdx.value = 0; _lastGhostPartial = ''
+}
+
 function onNormalKeydown(e: KeyboardEvent) {
   // Guard prefix for built-in commands
   if (props.isBuiltIn) {
@@ -905,6 +948,12 @@ function onNormalKeydown(e: KeyboardEvent) {
       e.preventDefault(); return
     }
   }
+  // ArrowRight: accept ghost suggestion if one is active
+  if (e.key === 'ArrowRight' && ghostSuggestion.value) {
+    e.preventDefault()
+    acceptCurrentGhost()
+    return
+  }
   // Tab key handling
   if (e.key === 'Tab') {
     e.preventDefault()
@@ -912,7 +961,7 @@ function onNormalKeydown(e: KeyboardEvent) {
     if (ghostMatches.value.length > 1 && e.shiftKey === false && ghostSuggestion.value) {
       // Cycle to next match on repeated Tab
       ghostMatchIdx.value = (ghostMatchIdx.value + 1) % ghostMatches.value.length
-      const partial = el.innerText.replace(/\n$/, '').slice(0, getTextOffset(el)).match(/(\$[\w.]*)$/)?.[1] ?? ''
+      const partial = form.value.response.slice(0, getTextOffset(el)).match(/(\$[\w.]*)$/)?.[1] ?? ''
       const next = ghostMatches.value[ghostMatchIdx.value]!
       ghostSuggestion.value = next.slice(partial.length)
       ghostFull.value = next
@@ -920,29 +969,7 @@ function onNormalKeydown(e: KeyboardEvent) {
       return
     }
     if (ghostSuggestion.value) {
-      // Accept current ghost suggestion
-      const offset  = getTextOffset(el)
-      const text    = el.innerText.replace(/\n$/, '')
-      const before  = text.slice(0, offset)
-      const after   = text.slice(offset)
-      const m       = before.match(/(\$[\w.]*)$/)
-      const partial = m?.[1] ?? ''
-      const full    = partial + ghostSuggestion.value
-      let insert = full
-      let cursorOffset = before.length - partial.length + full.length
-      if (full === '$if()') {
-        insert = '$if()\n  \n$end'; cursorOffset = before.length - partial.length + 4
-      } else if (full === '$foreach()') {
-        insert = '$foreach( in )\n  \n$end'; cursorOffset = before.length - partial.length + 9
-      } else if (full === '$repeat()') {
-        insert = '$repeat()\n  \n$end'; cursorOffset = before.length - partial.length + 8
-      }
-      const newText = before.slice(0, before.length - partial.length) + insert + after
-      form.value.response = newText
-      el.innerText = newText
-      applyNormalHighlight(el, newText)
-      nextTick(() => restoreTextOffset(el, cursorOffset))
-      ghostSuggestion.value = ''; ghostMatches.value = []; ghostMatchIdx.value = 0; _lastGhostPartial = ''
+      acceptCurrentGhost()
     } else {
       // No suggestion — insert 2 spaces (stay in editor like a code editor)
       removeGhostSpan()
@@ -1574,9 +1601,10 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
               <div class="ref-content">
                 <div class="ref-group" v-for="g in REF_GROUPS" :key="g.label">
                   <div class="ref-group-label">{{ g.label }}</div>
-                  <div class="ref-row" v-for="r in g.items" :key="r.token">
-                    <code class="ref-token">{{ r.token }}</code>
+                  <div class="ref-row" v-for="r in g.items" :key="r.token" :class="{ 'has-example': !!r.example }">
+                    <code class="ref-token" v-html="renderRefToken(r.token)"></code>
                     <span class="ref-desc">{{ r.desc }}</span>
+                    <span v-if="r.example" class="ref-example">{{ r.example }}</span>
                   </div>
                 </div>
               </div>
@@ -1853,7 +1881,18 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .ref-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9d6cff; margin-bottom: 3px; }
 .ref-row { display: flex; align-items: baseline; gap: 8px; padding: 1px 0; }
 .ref-token { font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; color: #4ec9b0; background: rgba(78,201,176,.08); padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
-.ref-desc { font-size: 10px; color: #484848; }
+:deep(.ref-token-name) { color: #7cb8ea; font-style: italic; }
+.ref-desc { font-size: 10px; color: #484848; flex: 1; }
+.ref-row { position: relative; }
+.ref-example {
+  display: none; position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  font-family: 'Consolas','Fira Mono',monospace; font-size: 10px;
+  color: #23d18b; background: #0d1a13; border: 1px solid rgba(35,209,139,.3);
+  padding: 2px 7px; white-space: nowrap; pointer-events: none; z-index: 10;
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
+}
+.ref-row.has-example:hover .ref-example { display: block; }
+.ref-row.has-example:hover .ref-desc { opacity: 0.4; }
 
 /* ── Syntax highlight colours ── */
 </style>

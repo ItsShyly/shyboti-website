@@ -2,7 +2,6 @@
  * scriptMockEval.ts
  * Client-side mock evaluator for the Normal Mode editor preview.
  * Uses fake/static values for all Twitch-live variables.
- * Mirrors the logic of scriptEngine.ts but runs in the browser with no DB.
  */
 
 export interface MockContext {
@@ -14,7 +13,6 @@ export interface MockContext {
   isSub:        boolean
   isBroadcaster: boolean
   commandOutput: string
-  // derived
   display:      string
   args:         string
   argList:      string[]
@@ -30,12 +28,10 @@ export const DEFAULT_MOCK: MockContext = {
   isSub:        false,
   isBroadcaster: false,
   commandOutput: '[bot output]',
-  // derived from messageText (args = message without leading +command word)
   args:         'hello world',
   argList:      ['hello', 'world'],
 }
 
-// In-memory mock counters/vars/lists for preview session
 const mockCounters: Record<string, number> = {}
 const mockVars:     Record<string, string> = {}
 const mockLists:    Record<string, string[]> = {}
@@ -45,8 +41,6 @@ export function resetMockState() {
   for (const k in mockVars)     delete mockVars[k]
   for (const k in mockLists)    delete mockLists[k]
 }
-
-// ─── Entry point ─────────────────────────────────────────────────────────────
 
 export function mockEval(src: string, ctx: MockContext = DEFAULT_MOCK): string {
   if (!src?.trim()) return ''
@@ -62,7 +56,59 @@ interface MockEnv {
   calls:  number
 }
 
-// ─── Tokeniser (same structure as server) ────────────────────────────────────
+// ─── Condition evaluation ─────────────────────────────────────────────────────
+// After evalSrc resolves all $-vars in a condition, the raw string may still
+// contain comparison operators (>, <, ==, etc.) and boolean operators.
+// evalCondStr evaluates those operators on the resulting values.
+
+function evalCondStr(s: string): string {
+  const t = s.trim()
+
+  // Boolean: "and" / "or" (low precedence, left-to-right, split on first occurrence)
+  const orIdx  = findLogicalOp(t, ' or ')
+  if (orIdx !== -1) {
+    return String(isTruthy(evalCondStr(t.slice(0, orIdx))) ||
+                  isTruthy(evalCondStr(t.slice(orIdx + 4))))
+  }
+  const andIdx = findLogicalOp(t, ' and ')
+  if (andIdx !== -1) {
+    return String(isTruthy(evalCondStr(t.slice(0, andIdx))) &&
+                  isTruthy(evalCondStr(t.slice(andIdx + 5))))
+  }
+  const notM = t.match(/^not\s+(.+)$/i)
+  if (notM) return String(!isTruthy(evalCondStr(notM[1]!)))
+
+  // Comparison operators (==, !=, >=, <=, >, <)
+  const cmpM = t.match(/^(.+?)\s*(==|!=|>=|<=|>|<)\s*(.+)$/)
+  if (cmpM) {
+    const left = cmpM[1]!.trim(), op = cmpM[2]!, right = cmpM[3]!.trim()
+    const lN = parseFloat(left), rN = parseFloat(right)
+    const num = !isNaN(lN) && !isNaN(rN)
+    switch (op) {
+      case '==': return String(num ? lN === rN : left === right)
+      case '!=': return String(num ? lN !== rN : left !== right)
+      case '>':  return String(num ? lN >  rN : left >  right)
+      case '<':  return String(num ? lN <  rN : left <  right)
+      case '>=': return String(num ? lN >= rN : left >= right)
+      case '<=': return String(num ? lN <= rN : left <= right)
+    }
+  }
+  return t
+}
+
+/** Find a logical operator string outside any parens, right-to-left so we respect precedence */
+function findLogicalOp(s: string, op: string): number {
+  let depth = 0
+  for (let i = s.length - op.length; i >= 0; i--) {
+    const c = s[i]!
+    if (c === ')') depth++
+    else if (c === '(') depth--
+    if (depth === 0 && s.slice(i, i + op.length).toLowerCase() === op) return i
+  }
+  return -1
+}
+
+// ─── Source evaluator ─────────────────────────────────────────────────────────
 
 function evalSrc(src: string, env: MockEnv): string {
   if (env.calls++ > 500) return '[overflow]'
@@ -78,7 +124,8 @@ function evalSrc(src: string, env: MockEnv): string {
       const condEnd   = findMatchingParen(src, condStart - 1)
       const cond      = src.slice(condStart, condEnd)
       const { thenSrc, elseSrc, endIdx } = findIfBody(src, condEnd + 1)
-      const condVal = evalExprStr(cond, env)
+      // Evaluate vars in condition first, then evaluate comparison
+      const condVal = evalCondStr(evalSrc(cond.trim(), env))
       out += evalSrc(isTruthy(condVal) ? thenSrc : (elseSrc ?? ''), env)
       i = endIdx; continue
     }
@@ -91,7 +138,7 @@ function evalSrc(src: string, env: MockEnv): string {
       const argStr   = src.slice(argStart, argEnd)
       const fm       = argStr.match(/^(\w+)\s+in\s+(.+)$/)
       const item     = fm?.[1] ?? 'item'
-      const list     = evalExprStr(fm?.[2]?.trim() ?? '', env)
+      const list     = evalSrc((fm?.[2] ?? '').trim(), env)
       const items    = list.split(',').map(s => s.trim()).filter(Boolean)
       const { body, endIdx } = findBlock(src, argEnd + 1)
       const childEnv = { ...env, locals: { ...env.locals } }
@@ -108,7 +155,7 @@ function evalSrc(src: string, env: MockEnv): string {
     if (repM) {
       const argStart = i + repM[0].length
       const argEnd   = findMatchingParen(src, argStart - 1)
-      const count    = parseInt(evalExprStr(src.slice(argStart, argEnd), env)) || 0
+      const count    = parseInt(evalSrc(src.slice(argStart, argEnd), env)) || 0
       const { body, endIdx } = findBlock(src, argEnd + 1)
       const childEnv = { ...env, locals: { ...env.locals } }
       let loopOut = ''
@@ -142,29 +189,22 @@ function evalSrc(src: string, env: MockEnv): string {
   return out
 }
 
-function evalExprStr(raw: string, env: MockEnv): string {
-  return evalSrc(raw.trim(), env)
-}
-
 function evalExpr(raw: string, env: MockEnv): string {
   const expr  = raw.trim()
   if (!expr.startsWith('$')) return expr
   const inner = expr.slice(1)
 
-  // Locals
   if (env.locals[inner] !== undefined) return env.locals[inner]!
 
-  // $index, $last_error
   if (inner === 'index')      return String(env.index)
   if (inner === 'last_error') return env.locals['__last_error__'] ?? ''
 
-  // $args, $query, $1..$9
   if (inner === 'args' || inner === 'query') return env.ctx.args
   if (inner === 'args.count')               return String(env.ctx.argList.length)
-  const argNm  = inner.match(/^args\.(\d+)$/)
-  if (argNm)   return env.ctx.argList[parseInt(argNm[1]!) - 1] ?? ''
-  const dolN   = inner.match(/^(\d)$/)
-  if (dolN)    return env.ctx.argList[parseInt(dolN[1]!) - 1] ?? ''
+  const argNm = inner.match(/^args\.(\d+)$/)
+  if (argNm)  return env.ctx.argList[parseInt(argNm[1]!) - 1] ?? ''
+  const dolN  = inner.match(/^(\d)$/)
+  if (dolN)   return env.ctx.argList[parseInt(dolN[1]!) - 1] ?? ''
 
   // $user.*
   if (inner.startsWith('user')) {
@@ -233,12 +273,12 @@ function evalExpr(raw: string, env: MockEnv): string {
     if (!op)        { mockCounters[name] = (mockCounters[name] ?? 0) + 1; return String(mockCounters[name]) }
     if (op === 'get')   return String(mockCounters[name])
     if (op === 'reset') { mockCounters[name] = 0; return '0' }
-    const setM = op.match(/^set\((.+)\)$/); if (setM) { mockCounters[name] = parseInt(evalExprStr(setM[1]!, env)) || 0; return String(mockCounters[name]) }
-    const addM = op.match(/^add\((.+)\)$/); if (addM) { mockCounters[name] = (mockCounters[name] ?? 0) + (parseInt(evalExprStr(addM[1]!, env)) || 0); return String(mockCounters[name]) }
+    const setM = op.match(/^set\((.+)\)$/); if (setM) { mockCounters[name] = parseInt(evalSrc(setM[1]!, env)) || 0; return String(mockCounters[name]) }
+    const addM = op.match(/^add\((.+)\)$/); if (addM) { mockCounters[name] = (mockCounters[name] ?? 0) + (parseInt(evalSrc(addM[1]!, env)) || 0); return String(mockCounters[name]) }
     return ''
   }
 
-  // $ucounter — same as counter in mock
+  // $ucounter
   const ucounterM = inner.match(/^ucounter\.(\w+)(?:\.(.+))?$/)
   if (ucounterM) {
     const key = `u_${ucounterM[1]}`; const op = ucounterM[2] ?? ''
@@ -252,18 +292,18 @@ function evalExpr(raw: string, env: MockEnv): string {
   const varM = inner.match(/^var\.(\w+)(?:\.(.+))?$/)
   if (varM) {
     const name = varM[1]!; const op = varM[2] ?? ''
-    if (!op)           return mockVars[name] ?? ''
+    if (!op)             return mockVars[name] ?? ''
     if (op === 'delete') { delete mockVars[name]; return '' }
-    const setM = op.match(/^set\((.+)\)$/); if (setM) { mockVars[name] = evalExprStr(setM[1]!, env); return mockVars[name] }
+    const setM = op.match(/^set\((.+)\)$/); if (setM) { mockVars[name] = evalSrc(setM[1]!, env); return mockVars[name]! }
     return ''
   }
 
-  // $uvar — same as var in mock
+  // $uvar
   const uvarM = inner.match(/^uvar\.(\w+)(?:\.(.+))?$/)
   if (uvarM) {
     const name = `u_${uvarM[1]}`; const op = uvarM[2] ?? ''
-    if (!op)           return mockVars[name] ?? ''
-    const setM = op.match(/^set\((.+)\)$/); if (setM) { mockVars[name] = evalExprStr(setM[1]!, env); return mockVars[name] }
+    if (!op)   return mockVars[name] ?? ''
+    const setM = op.match(/^set\((.+)\)$/); if (setM) { mockVars[name] = evalSrc(setM[1]!, env); return mockVars[name]! }
     return ''
   }
 
@@ -275,8 +315,8 @@ function evalExpr(raw: string, env: MockEnv): string {
     const lst = mockLists[name]!
     if (!op || op === 'random') return lst[Math.floor(Math.random() * lst.length)] ?? ''
     if (op === 'size')  return String(lst.length)
-    const addM = op.match(/^add\((.+)\)$/); if (addM) { lst.push(evalExprStr(addM[1]!, env)); return lst[lst.length-1]! }
-    const getM = op.match(/^get\((.+)\)$/); if (getM) { return lst[parseInt(evalExprStr(getM[1]!, env))] ?? '' }
+    const addM = op.match(/^add\((.+)\)$/); if (addM) { lst.push(evalSrc(addM[1]!, env)); return lst[lst.length-1]! }
+    const getM = op.match(/^get\((.+)\)$/); if (getM) { return lst[parseInt(evalSrc(getM[1]!, env))] ?? '' }
     return ''
   }
 
@@ -284,11 +324,11 @@ function evalExpr(raw: string, env: MockEnv): string {
   if (inner.startsWith('random')) {
     const prop = inner.slice(6).replace(/^\./, '')
     const intM = prop.match(/^int\((.+),(.+)\)$/)
-    if (intM) { const min = parseInt(evalExprStr(intM[1]!, env)); const max = parseInt(evalExprStr(intM[2]!, env)); return String(Math.floor(Math.random() * (max - min + 1)) + min) }
+    if (intM) { const min = parseInt(evalSrc(intM[1]!, env)); const max = parseInt(evalSrc(intM[2]!, env)); return String(Math.floor(Math.random() * (max - min + 1)) + min) }
     const pickM = prop.match(/^pick\((.+)\)$/)
     if (pickM) { const items = pickM[1]!.split(',').map(s => s.trim()); return items[Math.floor(Math.random() * items.length)] ?? '' }
     const chanceM = prop.match(/^chance\((.+)\)$/)
-    if (chanceM) { return String(Math.random() * 100 < parseFloat(evalExprStr(chanceM[1]!, env))) }
+    if (chanceM) { return String(Math.random() * 100 < parseFloat(evalSrc(chanceM[1]!, env))) }
     return ''
   }
 
@@ -306,7 +346,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     const fnM  = call.match(/^(\w+)\((.+)?\)$/)
     if (!fnM) return ''
     const fn = fnM[1]!; const rawArgs = splitArgs(fnM[2] ?? '')
-    const a  = (n: number) => evalExprStr(rawArgs[n] ?? '', env)
+    const a  = (n: number) => evalSrc(rawArgs[n] ?? '', env)
     switch (fn) {
       case 'len':      return String(a(0).length)
       case 'upper':    return a(0).toUpperCase()
@@ -329,39 +369,30 @@ function evalExpr(raw: string, env: MockEnv): string {
     const call = inner.slice(6)
     const matchM   = call.match(/^match\((.+)\)$/)
     const replaceM = call.match(/^replace\((.+)\)$/)
-    if (matchM) { try { const [t, p] = splitArgs(matchM[1]!); const m = evalExprStr(t ?? '', env).match(new RegExp(evalExprStr(p ?? '', env))); return m?.[0] ?? '' } catch { return '' } }
-    if (replaceM) { try { const [t, p, r] = splitArgs(replaceM[1]!); return evalExprStr(t ?? '', env).replace(new RegExp(evalExprStr(p ?? '', env), 'g'), evalExprStr(r ?? '', env)) } catch { return '' } }
+    if (matchM)   { try { const [t, p] = splitArgs(matchM[1]!); const m = evalSrc(t ?? '', env).match(new RegExp(evalSrc(p ?? '', env))); return m?.[0] ?? '' } catch { return '' } }
+    if (replaceM) { try { const [t, p, r] = splitArgs(replaceM[1]!); return evalSrc(t ?? '', env).replace(new RegExp(evalSrc(p ?? '', env), 'g'), evalSrc(r ?? '', env)) } catch { return '' } }
     return ''
   }
 
   // $calc
   const calcM = inner.match(/^calc\((.+)\)$/)
   if (calcM) {
-    try { const safe = evalExprStr(calcM[1]!, env).replace(/[^0-9+\-*/().\s%]/g, ''); return String(Function(`"use strict"; return (${safe})`)()) } catch { return '0' }
+    try { const safe = evalSrc(calcM[1]!, env).replace(/[^0-9+\-*/().\s%]/g, ''); return String(Function(`"use strict"; return (${safe})`)()) } catch { return '0' }
   }
 
-  // $http.* — mock
-  if (inner.startsWith('http.')) return '[http response]'
-
-  // $twitch.* — mock
+  if (inner.startsWith('http.'))     return '[http response]'
   if (inner.startsWith('twitch.')) {
     const prop = inner.slice(7)
-    if (prop === 'uptime')   return '1h 23m'
-    if (prop === 'game')     return 'Just Chatting'
-    if (prop === 'title')    return 'Mock stream title'
-    if (prop.startsWith('followers')) return '1234'
+    if (prop === 'uptime')               return '1h 23m'
+    if (prop === 'game')                 return 'Just Chatting'
+    if (prop === 'title')                return 'Mock stream title'
+    if (prop.startsWith('followers'))    return '1234'
     if (prop.startsWith('subscribers')) return '56'
     return ''
   }
-
-  // $emote.* — mock
-  if (inner.startsWith('emote.')) return 'true'
-
-  // $log.* — mock
-  if (inner.startsWith('log.')) return '[log result]'
-
-  // $mod.* / $chat.* / $cooldown.* / $debug.*
-  if (inner.startsWith('mod.') || inner.startsWith('chat.') ||
+  if (inner.startsWith('emote.'))    return 'true'
+  if (inner.startsWith('log.'))      return '[log result]'
+  if (inner.startsWith('mod.')    || inner.startsWith('chat.')  ||
       inner.startsWith('cooldown.') || inner.startsWith('debug.')) return ''
 
   // User macro call
@@ -369,7 +400,7 @@ function evalExpr(raw: string, env: MockEnv): string {
   if (macroCallM && env.macros[macroCallM[1]!]) {
     const macro   = env.macros[macroCallM[1]!]!
     const rawArgs = splitArgs(macroCallM[2] ?? '')
-    const evaled  = rawArgs.map(a => evalExprStr(a, env))
+    const evaled  = rawArgs.map(a => evalSrc(a, env))
     const childEnv: MockEnv = { ...env, locals: { ...env.locals } }
     for (let i = 0; i < macro.params.length; i++) childEnv.locals[macro.params[i]!] = evaled[i] ?? ''
     return evalSrc(macro.body, childEnv)
@@ -378,7 +409,7 @@ function evalExpr(raw: string, env: MockEnv): string {
   return ''
 }
 
-// ─── Parser helpers (same as server) ─────────────────────────────────────────
+// ─── Parser helpers ───────────────────────────────────────────────────────────
 
 function findExprEnd(src: string, start: number): number {
   let i = start + 1, depth = 0
@@ -405,10 +436,19 @@ function findMatchingParen(src: string, openIdx: number): number {
 function findIfBody(src: string, from: number): { thenSrc: string; elseSrc: string | null; endIdx: number } {
   let depth = 0, i = from, thenEnd = -1, elseStart = -1, endIdx = src.length
   while (i < src.length) {
-    if (src.slice(i).match(/^\$if\s*\(/))   { depth++; i += 3; continue }
-    if (src.slice(i).match(/^\$else\b/) && depth === 0) { thenEnd = i; elseStart = i + 5; i += 5; continue }
-    if (src.slice(i).match(/^\$end\b/)  && depth === 0) { if (thenEnd === -1) thenEnd = i; endIdx = i + 4; break }
-    if (src.slice(i).match(/^\$end\b/))     { depth--; i += 4; continue }
+    // Track nested blocks that consume a $end
+    if (src.slice(i).match(/^\$if\s*\(/) ||
+        src.slice(i).match(/^\$foreach\s*\(/) ||
+        src.slice(i).match(/^\$repeat\s*\(/)) {
+      depth++; i += 3; continue
+    }
+    if (src.slice(i).match(/^\$else\b/) && depth === 0) {
+      thenEnd = i; elseStart = i + 5; i += 5; continue
+    }
+    if (src.slice(i).match(/^\$end\b/) && depth === 0) {
+      if (thenEnd === -1) thenEnd = i; endIdx = i + 4; break
+    }
+    if (src.slice(i).match(/^\$end\b/)) { depth--; i += 4; continue }
     i++
   }
   const thenSrc = src.slice(from, thenEnd === -1 ? endIdx - 4 : thenEnd).trim()
@@ -419,7 +459,11 @@ function findIfBody(src: string, from: number): { thenSrc: string; elseSrc: stri
 function findBlock(src: string, from: number): { body: string; endIdx: number } {
   let depth = 0, i = from
   while (i < src.length) {
-    if (src.slice(i).match(/^\$if\s*\(/) || src.slice(i).match(/^\$foreach\s*\(/) || src.slice(i).match(/^\$repeat\s*\(/)) { depth++; i += 3; continue }
+    if (src.slice(i).match(/^\$if\s*\(/) ||
+        src.slice(i).match(/^\$foreach\s*\(/) ||
+        src.slice(i).match(/^\$repeat\s*\(/)) {
+      depth++; i += 3; continue
+    }
     if (src.slice(i, i + 4) === '$end' && depth === 0) return { body: src.slice(from, i).trim(), endIdx: i + 4 }
     if (src.slice(i, i + 4) === '$end') { depth--; i += 4; continue }
     i++
