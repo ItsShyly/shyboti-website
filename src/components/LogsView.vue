@@ -88,9 +88,10 @@ async function fetchEmotes(ch: string) {
 
 // ── Fetch one day from Spanix directly ───────────────────────────────────────
 async function fetchDay(ch: string, y: number, m: number, d: number, signal: AbortSignal): Promise<LogMsg[]> {
-  // When user filter is set, use the API proxy (searches all months)
-  // This path is only used for day-by-day scrollback (no user filter here)
-  const path = `/channel/${ch}/${y}/${m}/${d}`
+  // Zero-pad month and day — Spanix requires e.g. /2026/03/08 not /2026/3/8
+  const mm   = String(m).padStart(2, '0')
+  const dd   = String(d).padStart(2, '0')
+  const path = `/channel/${ch}/${y}/${mm}/${dd}`
   const res = await fetch(`${SPANIX}${path}?json=true&limit=10000`, { signal })
   if (!res.ok) return []
   const data = await res.json() as any
@@ -100,6 +101,16 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
     messages = messages.filter(m => m.text.toLowerCase().includes(t))
   }
   return messages
+}
+
+// ── Locate a message by ID via backend (parallel batch scan) ────────────────────
+async function locateMsgDate(ch: string, msgId: string): Promise<string | null> {
+  try {
+    const res  = await fetch(`${API}/logs/locate?channel=${encodeURIComponent(ch)}&msgId=${encodeURIComponent(msgId)}`)
+    if (!res.ok) return null
+    const data = await res.json() as { found: boolean; date?: string }
+    return data.found && data.date ? data.date : null
+  } catch { return null }
 }
 
 // ── Full search via API proxy (handles user filter across all months) ─────────
@@ -226,20 +237,50 @@ async function search() {
     return
   }
 
-  // Otherwise: live scrollback mode — load today first
+  // Otherwise: live scrollback mode
   const today = new Date()
-  try {
-    msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal)
-  } catch {}
-  loading.value = false
-  cursorDate = prevDay(today)
 
   if (hashId) {
-    // Try to find the message, loading older days as needed
-    const found = await loadUntilMsg(hashId)
-    if (found) await scrollToMsg(hashId, true)
-    else { scrollToBottom(); error.value = 'Could not find linked message in recent history.' }
+    // Ask the backend which day this message lives on (parallel batch scan, much faster)
+    loading.value = true
+    const dateStr = await locateMsgDate(ch, hashId)
+    if (abortCtrl.signal.aborted) { loading.value = false; return }
+
+    if (dateStr) {
+      // Load the target day directly, plus the day before for context above it
+      const [yr, mo, dy] = dateStr.split('-').map(Number) as [number, number, number]
+      const targetDate   = new Date(yr, mo - 1, dy)
+      const prevDate     = prevDay(targetDate)
+
+      const [prevMsgs, dayMsgs] = await Promise.all([
+        fetchDay(ch, prevDate.getFullYear(), prevDate.getMonth() + 1, prevDate.getDate(), abortCtrl.signal).catch(() => [] as LogMsg[]),
+        fetchDay(ch, yr, mo, dy, abortCtrl.signal).catch(() => [] as LogMsg[]),
+      ])
+      // Check if the target day is not today — also load today so the user can scroll down
+      let todayMsgs: LogMsg[] = []
+      const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
+      if (dateStr !== todayStr) {
+        todayMsgs = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal).catch(() => [])
+      }
+      msgs.value = [...prevMsgs, ...dayMsgs, ...todayMsgs]
+      // Cursor: the day before prevDate, so scroll-up still works
+      cursorDate = prevDay(prevDate)
+      loading.value = false
+      await scrollToMsg(hashId, true)
+    } else {
+      // Fallback: load today and walk backward (old behavior)
+      msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal).catch(() => [])
+      loading.value = false
+      cursorDate = prevDay(today)
+      const found = await loadUntilMsg(hashId)
+      if (found) await scrollToMsg(hashId, true)
+      else { scrollToBottom(); error.value = 'Could not find linked message.' }
+    }
   } else {
+    // Normal open: load today
+    msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal).catch(() => [])
+    loading.value = false
+    cursorDate = prevDay(today)
     scrollToBottom()
   }
 
