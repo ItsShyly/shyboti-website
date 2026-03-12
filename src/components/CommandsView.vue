@@ -113,11 +113,7 @@ const CAT_COLOR: Record<string, string> = {
 }
 
 function filtered() {
-  if (props.activeNav === 'Custom') return [] // custom tab handled separately
-  const catNames = CATEGORIES[props.activeNav] ?? []
-  let list = props.activeNav === 'Default'
-    ? commands.value
-    : commands.value.filter(c => catNames.includes(c.name))
+  let list = commands.value
   if (search.value.trim()) list = list.filter(c => c.name.includes(search.value.toLowerCase()))
   return list
 }

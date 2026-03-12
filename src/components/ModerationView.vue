@@ -8,7 +8,7 @@ const { session } = useAuth()
 // ── Types ──────────────────────────────────────────────────────────────────
 interface BlockedTerm   { id: number; term: string; action: string; duration: number }
 interface SpamFilter    { id: number; type: string; threshold: number; action: string; duration: number }
-interface NukeConfig    { id: number; trigger: string; duration: number; label: string }
+interface NukeConfig    { id: number; trigger: string; duration: number; label: string; lookback: number }
 
 // ── Tab ────────────────────────────────────────────────────────────────────
 type Tab = 'blocked' | 'spam' | 'nukes'
@@ -36,9 +36,10 @@ const newSpamDur       = ref(300)
 
 // ── Nukes ──────────────────────────────────────────────────────────────────
 const nukes    = ref<NukeConfig[]>([])
-const newNuke  = ref('')
-const newNukeDur   = ref(600)
-const newNukeLabel = ref('')
+const newNuke        = ref('')
+const newNukeDur     = ref(600)
+const newNukeLabel   = ref('')
+const newNukeLookback = ref(30)  // minutes to look back
 
 // ── Shared ────────────────────────────────────────────────────────────────
 const loading = ref(false)
@@ -132,7 +133,7 @@ async function addNuke() {
     const res = await fetch(`${API}/moderation/${session.value.channel}/nukes`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${session.value.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ trigger: newNuke.value.trim(), duration: newNukeDur.value, label: newNukeLabel.value || newNuke.value.trim() })
+      body: JSON.stringify({ trigger: newNuke.value.trim(), duration: newNukeDur.value, label: newNukeLabel.value || newNuke.value.trim(), lookback: newNukeLookback.value })
     })
     if (!res.ok) throw new Error()
     const data = await res.json()
@@ -154,11 +155,14 @@ async function removeNuke(id: number) {
   } catch { error.value = 'Could not remove.' }
 }
 
+const nukeLookbackOverride = ref<Record<number, number>>({})
+
 async function fireNuke(id: number) {
   const nuke = nukes.value.find(n => n.id === id); if (!nuke || !session.value) return
-  if (!confirm(`Fire nuke "${nuke.label}"? This will timeout everyone who said "${nuke.trigger}" recently.`)) return
+  const lookback = nukeLookbackOverride.value[id] ?? nuke.lookback ?? 30
+  if (!confirm(`Fire nuke "${nuke.label}"? This will timeout everyone who said "${nuke.trigger}" in the last ${lookback} minutes.`)) return
   try {
-    const res = await fetch(`${API}/moderation/${session.value.channel}/nukes/${id}/fire`, {
+    const res = await fetch(`${API}/moderation/${session.value.channel}/nukes/${id}/fire?lookback=${lookback}`, {
       method: 'POST', headers: { Authorization: `Bearer ${session.value.token}` }
     })
     const data = await res.json() as any
@@ -259,9 +263,14 @@ onMounted(load)
         <input v-model="newNuke" class="field-input flex1" placeholder="trigger word/phrase" @keydown.enter="addNuke" />
         <input v-model="newNukeLabel" class="field-input" style="width:120px" placeholder="label (optional)" />
         <div class="threshold-wrap">
-          <span class="threshold-lbl">⏱</span>
+          <span class="threshold-lbl">⏱ timeout</span>
           <input v-model.number="newNukeDur" type="number" min="1" class="field-input dur-input" />
-          <span class="threshold-hint">sec timeout</span>
+          <span class="threshold-hint">sec</span>
+        </div>
+        <div class="threshold-wrap">
+          <span class="threshold-lbl">↩ lookback</span>
+          <input v-model.number="newNukeLookback" type="number" min="1" max="1440" class="field-input dur-input" />
+          <span class="threshold-hint">min</span>
         </div>
         <button class="add-btn" @click="addNuke" :disabled="saving">+ Create</button>
       </div>
@@ -271,6 +280,14 @@ onMounted(load)
           <span class="item-label">{{ n.label }}</span>
           <span class="item-term" style="color:#555">{{ n.trigger }}</span>
           <span class="item-dur">{{ fmtDur(n.duration) }}</span>
+          <div class="threshold-wrap" style="margin-left:auto">
+            <span class="threshold-lbl" style="font-size:10px">↩</span>
+            <input type="number" min="1" max="1440"
+              :value="nukeLookbackOverride[n.id] ?? n.lookback ?? 30"
+              @input="nukeLookbackOverride[n.id] = parseInt(($event.target as HTMLInputElement).value)"
+              class="field-input dur-input" style="width:52px" title="Minutes to look back" />
+            <span class="threshold-hint">min</span>
+          </div>
           <button class="nuke-fire-btn" @click="fireNuke(n.id)">💣 Fire</button>
           <button class="item-del" @click="removeNuke(n.id)">✕</button>
         </div>
