@@ -156,11 +156,17 @@ async function removeNuke(id: number) {
 }
 
 const nukeLookbackOverride = ref<Record<number, number>>({})
+const nukeConfirm = ref<number | null>(null)
 
 async function fireNuke(id: number) {
+  if (nukeConfirm.value !== id) {
+    nukeConfirm.value = id
+    setTimeout(() => { if (nukeConfirm.value === id) nukeConfirm.value = null }, 4000)
+    return
+  }
+  nukeConfirm.value = null
   const nuke = nukes.value.find(n => n.id === id); if (!nuke || !session.value) return
   const lookback = nukeLookbackOverride.value[id] ?? nuke.lookback ?? 30
-  if (!confirm(`Fire nuke "${nuke.label}"? This will timeout everyone who said "${nuke.trigger}" in the last ${lookback} minutes.`)) return
   try {
     const res = await fetch(`${API}/moderation/${session.value.channel}/nukes/${id}/fire?lookback=${lookback}`, {
       method: 'POST', headers: { Authorization: `Bearer ${session.value.token}` }
@@ -288,7 +294,7 @@ onMounted(load)
               class="field-input dur-input" style="width:52px" title="Minutes to look back" />
             <span class="threshold-hint">min</span>
           </div>
-          <button class="nuke-fire-btn" @click="fireNuke(n.id)">💣 Fire</button>
+          <button class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }" @click="fireNuke(n.id)">{{ nukeConfirm === n.id ? '⚠️ Sure?' : '💣 Fire' }}</button>
           <button class="item-del" @click="removeNuke(n.id)">✕</button>
         </div>
       </div>
@@ -359,6 +365,8 @@ onMounted(load)
 .item-dur    { font-size: 11px; color: #555; }
 .item-del    { margin-left: auto; background: transparent; border: 1px solid #f1494933; color: #f14949; font-size: 11px; padding: 2px 7px; cursor: pointer; }
 .item-del:hover { background: rgba(241,73,73,.1); }
-.nuke-fire-btn { height: 28px; padding: 0 12px; background: rgba(241,73,73,.15); border: 1px solid #f1494966; color: #f14949; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; margin-left: auto; transition: background .15s; }
+.nuke-fire-btn { height: 28px; padding: 0 12px; background: rgba(241,73,73,.15); border: 1px solid #f1494966; color: #f14949; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; margin-left: auto; transition: background .15s, border-color .15s; }
 .nuke-fire-btn:hover { background: rgba(241,73,73,.3); }
+.nuke-fire-btn.confirm { background: rgba(241,73,73,.35); border-color: #f14949; animation: pulse-red .6s infinite alternate; }
+@keyframes pulse-red { from { box-shadow: 0 0 0 0 rgba(241,73,73,.4); } to { box-shadow: 0 0 0 4px rgba(241,73,73,0); } }
 </style>
