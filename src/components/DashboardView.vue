@@ -78,7 +78,7 @@ function groupedActivity() {
   for (const e of activity.value) {
     const d = fmtDate(e.timestamp)
     if (d !== cur) { cur = d; groups.push({ date: d, entries: [] }) }
-    groups[groups.length - 1].entries.push(e)
+    groups[groups.length - 1]!.entries.push(e)
   }
   return groups
 }
