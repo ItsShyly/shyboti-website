@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 
@@ -26,8 +26,8 @@ const searched    = ref(false)
 const emoteMap    = ref<EmoteMap>({})
 const bodyRef     = ref<HTMLDivElement | null>(null)
 const highlightId = ref<string | null>(null)
+const copyToast   = ref(false)
 
-// cursor: the next date to load (going backwards)
 let cursorDate: Date | null = null
 let abortCtrl = new AbortController()
 let scrollListenerAttached = false
@@ -40,7 +40,7 @@ function buildUrl(msgId: string | null = null) {
   if (termFilter.value.trim()) p.set('term',    termFilter.value.trim())
   if (dateFilter.value)        p.set('date',    dateFilter.value)
   const qs   = p.toString() ? '?' + p.toString() : ''
-  const hash = msgId ? `#msg-${msgId}` : (window.location.hash.startsWith('#msg-') ? window.location.hash : '')
+  const hash = msgId ? `#msg-${msgId}` : ''
   return window.location.pathname + qs + hash
 }
 
@@ -48,7 +48,7 @@ function pushSearchUrl() {
   history.replaceState(null, '', buildUrl())
 }
 
-function pushHash(msgId: string | null) {
+function pushHash(msgId: string) {
   history.replaceState(null, '', buildUrl(msgId))
 }
 
@@ -61,19 +61,17 @@ function readUrlState() {
 }
 
 function readHashId(): string | null {
-  const h = window.location.hash
-  const m = h.match(/^#msg-(.+)$/)
+  const m = window.location.hash.match(/^#msg-(.+)$/)
   return m ? m[1]! : null
 }
 
-// ── Longest name width for column alignment ──────────────────────────────────
+// ── Longest name width ───────────────────────────────────────────────────────
 const nameColWidth = computed(() => {
   if (!msgs.value.length) return 140
   const max = msgs.value.reduce((acc, m) => {
     const name = m.displayName || m.username
     return name.length > acc ? name.length : acc
   }, 0)
-  // ~7.5px per char in 600 weight 12px, cap 240px min 80px
   return Math.min(240, Math.max(80, max * 7.8))
 })
 
@@ -88,10 +86,11 @@ async function fetchEmotes(ch: string) {
   }
 }
 
-// ── Fetch one day from Spanix ─────────────────────────────────────────────────
+// ── Fetch one day from Spanix directly ───────────────────────────────────────
 async function fetchDay(ch: string, y: number, m: number, d: number, signal: AbortSignal): Promise<LogMsg[]> {
-  const u = userFilter.value.trim().toLowerCase()
-  const path = u ? `/channel/${ch}/user/${u}/${y}/${m}/${d}` : `/channel/${ch}/${y}/${m}/${d}`
+  // When user filter is set, use the API proxy (searches all months)
+  // This path is only used for day-by-day scrollback (no user filter here)
+  const path = `/channel/${ch}/${y}/${m}/${d}`
   const res = await fetch(`${SPANIX}${path}?json=true&limit=10000`, { signal })
   if (!res.ok) return []
   const data = await res.json() as any
@@ -103,41 +102,93 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
   return messages
 }
 
+// ── Full search via API proxy (handles user filter across all months) ─────────
+async function fetchAll(ch: string, signal: AbortSignal): Promise<LogMsg[]> {
+  const p = new URLSearchParams({ channel: ch })
+  if (userFilter.value.trim())  p.set('user', userFilter.value.trim())
+  if (termFilter.value.trim())  p.set('term', termFilter.value.trim())
+  if (dateFilter.value)         p.set('date', dateFilter.value)
+  const res = await fetch(`${API}/logs/search?${p}`, { signal })
+  if (!res.ok) return []
+  const data = await res.json() as any
+  return data.messages ?? []
+}
+
 function prevDay(d: Date): Date {
   const p = new Date(d); p.setDate(p.getDate() - 1); return p
 }
 
+// ── Load older day (scrollback, no user filter) ──────────────────────────────
 async function loadOlderDay() {
   if (!cursorDate || loadingMore.value || noMore.value) return
-  const signal = abortCtrl.signal
   loadingMore.value = true
 
+  // Snapshot cursor and advance before any async work
   const d = cursorDate
   cursorDate = prevDay(d)
 
   const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2)
   if (d < cutoff) { noMore.value = true; loadingMore.value = false; return }
 
+  const signal = abortCtrl.signal
   try {
     const dayMsgs = await fetchDay(
       channel.value.trim().toLowerCase().replace(/^#/, ''),
       d.getFullYear(), d.getMonth() + 1, d.getDate(), signal
     )
-    if (signal.aborted) return
+    if (signal.aborted) { loadingMore.value = false; return }
 
     if (dayMsgs.length === 0) {
+      // Empty day — release lock before recursing so scroll doesn't fire again
       loadingMore.value = false
-      loadOlderDay()
+      // Small delay to let scroll settle before trying next day
+      await new Promise(r => setTimeout(r, 50))
+      await loadOlderDay()
       return
     }
 
-    const prevH = bodyRef.value?.scrollHeight ?? 0
+    // Preserve scroll position across prepend
+    const body   = bodyRef.value
+    const prevST = body?.scrollTop ?? 0
+    const prevSH = body?.scrollHeight ?? 0
     msgs.value = [...dayMsgs, ...msgs.value]
     await nextTick()
-    if (bodyRef.value) bodyRef.value.scrollTop += bodyRef.value.scrollHeight - prevH
+    if (body) {
+      const delta = body.scrollHeight - prevSH
+      body.scrollTop = prevST + delta
+    }
   } catch {}
 
   loadingMore.value = false
+}
+
+// ── Keep loading older days until we find the target msg id ──────────────────
+async function loadUntilMsg(targetId: string) {
+  const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2)
+  while (true) {
+    // Check if it's already in the list
+    if (msgs.value.some(m => m.id === targetId)) return true
+    if (!cursorDate || cursorDate < cutoff || noMore.value) return false
+
+    const d = cursorDate
+    cursorDate = prevDay(d)
+    if (d < cutoff) { noMore.value = true; return false }
+
+    try {
+      const dayMsgs = await fetchDay(
+        channel.value.trim().toLowerCase().replace(/^#/, ''),
+        d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal
+      )
+      if (abortCtrl.signal.aborted) return false
+      if (dayMsgs.length > 0) {
+        const prevSH = bodyRef.value?.scrollHeight ?? 0
+        msgs.value = [...dayMsgs, ...msgs.value]
+        await nextTick()
+        if (bodyRef.value) bodyRef.value.scrollTop += bodyRef.value.scrollHeight - prevSH
+      }
+      if (msgs.value.some(m => m.id === targetId)) return true
+    } catch { return false }
+  }
 }
 
 function onScroll() {
@@ -164,13 +215,18 @@ async function search() {
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   fetchEmotes(ch)
 
-  if (dateFilter.value) {
-    const [y, m, d] = dateFilter.value.split('-').map(Number)
-    try { msgs.value = await fetchDay(ch, y!, m!, d!, abortCtrl.signal) } catch {}
+  const hashId = readHashId()
+
+  // If user filter or term or date: use the full proxy search (returns all results)
+  if (userFilter.value.trim() || termFilter.value.trim() || dateFilter.value) {
+    try { msgs.value = await fetchAll(ch, abortCtrl.signal) } catch {}
     loading.value = false; noMore.value = true
-    scrollToBottom(); return
+    if (hashId) { await nextTick(); await scrollToMsg(hashId, true) }
+    else scrollToBottom()
+    return
   }
 
+  // Otherwise: live scrollback mode — load today first
   const today = new Date()
   try {
     msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal)
@@ -178,14 +234,15 @@ async function search() {
   loading.value = false
   cursorDate = prevDay(today)
 
-  // Check if we should scroll to a hash target
-  const hashId = readHashId()
   if (hashId) {
-    await nextTick()
-    scrollToMsg(hashId, true)
+    // Try to find the message, loading older days as needed
+    const found = await loadUntilMsg(hashId)
+    if (found) await scrollToMsg(hashId, true)
+    else { scrollToBottom(); error.value = 'Could not find linked message in recent history.' }
   } else {
     scrollToBottom()
   }
+
   await nextTick()
   attachScrollListener()
 }
@@ -194,32 +251,30 @@ function scrollToBottom() {
   nextTick(() => { if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight })
 }
 
-function scrollToMsg(id: string, highlight = false) {
-  nextTick(() => {
-    const el = document.getElementById(`log-${id}`)
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      if (highlight) {
-        highlightId.value = id
-        setTimeout(() => { if (highlightId.value === id) highlightId.value = null }, 3000)
-      }
+async function scrollToMsg(id: string, highlight = false): Promise<void> {
+  await nextTick()
+  const el = document.getElementById(`log-${id}`)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    if (highlight) {
+      highlightId.value = id
+      setTimeout(() => { if (highlightId.value === id) highlightId.value = null }, 3000)
     }
-  })
+  }
 }
 
 function shareMsg(m: LogMsg) {
   pushHash(m.id)
   highlightId.value = m.id
   setTimeout(() => { if (highlightId.value === m.id) highlightId.value = null }, 3000)
-  // Copy URL to clipboard
   navigator.clipboard.writeText(window.location.href).catch(() => {})
+  copyToast.value = true
+  setTimeout(() => copyToast.value = false, 2000)
 }
 
 onMounted(async () => {
   readUrlState()
-  // If no channel from URL, fall back to logged-in channel
   if (!channel.value && session.value?.channel) channel.value = session.value.channel
-  // Auto-search if we have a channel (either from URL params or session)
   if (channel.value) await search()
 })
 onUnmounted(() => {
@@ -288,6 +343,11 @@ function esc(s: string) {
 
     <div v-if="error" class="logs-error">{{ error }}</div>
 
+    <!-- Copy toast -->
+    <transition name="toast-fade">
+      <div v-if="copyToast" class="copy-toast">✓ Copied to clipboard</div>
+    </transition>
+
     <div v-if="!searched && !loading" class="logs-empty">Enter a channel and press Search.</div>
     <div v-else-if="loading" class="logs-empty">Searching…</div>
     <div v-else-if="searched && !msgs.length && !loadingMore" class="logs-empty">No messages found.</div>
@@ -302,7 +362,7 @@ function esc(s: string) {
           <div class="top-loader" :class="{ visible: loadingMore }">
             <span class="spinner">⟳</span> Loading older messages…
           </div>
-          <div v-if="noMore && !dateFilter" class="top-loader no-more">↑ No older logs</div>
+          <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">↑ No older logs</div>
 
           <div
             v-for="m in msgs"
@@ -349,6 +409,15 @@ function esc(s: string) {
 .logs-empty  { color: #444; font-size: 13px; padding: 40px; text-align: center; }
 .logs-count  { font-size: 11px; color: #555; padding: 0 2px 4px; flex-shrink: 0; }
 
+/* Copy toast */
+.copy-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: #1e2a1e; border: 1px solid #23d18b55; color: #23d18b;
+  font-size: 12px; padding: 8px 18px; pointer-events: none; z-index: 9999;
+}
+.toast-fade-enter-active, .toast-fade-leave-active { transition: opacity .2s, transform .2s; }
+.toast-fade-enter-from, .toast-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(8px); }
+
 .logs-results { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .logs-table   { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .logs-thead   {
@@ -367,21 +436,14 @@ function esc(s: string) {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .log-row {
-  display: grid;
-  padding: 5px 14px;
-  border-bottom: 1px solid #1a1a1e;
-  font-size: 12px;
-  align-items: center;
-  transition: background .1s;
-  position: relative;
+  display: grid; padding: 5px 14px;
+  border-bottom: 1px solid #1a1a1e; font-size: 12px;
+  align-items: center; transition: background .1s; position: relative;
 }
 .log-row:hover { background: #1a1a1e; }
-.log-row.highlighted {
-  background: rgba(111, 43, 255, 0.12);
-  animation: hl-fade 3s ease forwards;
-}
+.log-row.highlighted { animation: hl-fade 3s ease forwards; }
 @keyframes hl-fade {
-  0%   { background: rgba(111, 43, 255, 0.22); }
+  0%   { background: rgba(111,43,255,.25); }
   100% { background: transparent; }
 }
 
@@ -389,15 +451,10 @@ function esc(s: string) {
 .log-user { font-weight: 600; word-break: break-all; padding-right: 8px; }
 .log-msg  { color: #ccc; word-break: break-word; line-height: 1.6; }
 
-/* Share button — only visible on row hover */
 .log-share {
   display: flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px;
-  color: #444;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity .15s, color .15s;
-  flex-shrink: 0;
+  width: 20px; height: 20px; color: #444; cursor: pointer;
+  opacity: 0; transition: opacity .15s, color .15s; flex-shrink: 0;
 }
 .log-row:hover .log-share { opacity: 1; }
 .log-share:hover { color: #9d6cff; }
