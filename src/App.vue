@@ -60,8 +60,10 @@ onMounted(async () => {
     showToast(`✓ ShyBoti left #${channel}`)
   }
 
-  // Default: if not on a specific page, go to dashboard
-  if (route.path === '/' || route.path === '') router.push('/dashboard')
+  // Default route: logged in → dashboard, logged out → home
+  if (route.path === '/' || route.path === '') {
+    router.push(session.value ? '/dashboard' : '/home')
+  }
 })
 
 function addBot() { window.location.href = `${API}/auth/add` }
