@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 
@@ -18,20 +18,44 @@ const termFilter = ref('')
 const dateFilter = ref('')
 
 const msgs        = ref<LogMsg[]>([])
-const loading     = ref(false)      // initial load
-const loadingMore = ref(false)      // fetching older day on scroll
-const noMore      = ref(false)      // no more days to load
+const loading     = ref(false)
+const loadingMore = ref(false)
+const noMore      = ref(false)
 const error       = ref('')
 const searched    = ref(false)
 const emoteMap    = ref<EmoteMap>({})
 const bodyRef     = ref<HTMLDivElement | null>(null)
+const highlightId = ref<string | null>(null)
 
 // cursor: the next date to load (going backwards)
 let cursorDate: Date | null = null
 let abortCtrl = new AbortController()
 let scrollListenerAttached = false
 
-// ── Emotes ──────────────────────────────────────────────────────────────────
+// ── URL hash sync ────────────────────────────────────────────────────────────
+function pushHash(msgId: string | null) {
+  const base = window.location.pathname + window.location.search
+  history.replaceState(null, '', msgId ? `${base}#msg-${msgId}` : base)
+}
+
+function readHashId(): string | null {
+  const h = window.location.hash
+  const m = h.match(/^#msg-(.+)$/)
+  return m ? m[1]! : null
+}
+
+// ── Longest name width for column alignment ──────────────────────────────────
+const nameColWidth = computed(() => {
+  if (!msgs.value.length) return 140
+  const max = msgs.value.reduce((acc, m) => {
+    const name = m.displayName || m.username
+    return name.length > acc ? name.length : acc
+  }, 0)
+  // ~7.5px per char in 600 weight 12px, cap 240px min 80px
+  return Math.min(240, Math.max(80, max * 7.8))
+})
+
+// ── Emotes ───────────────────────────────────────────────────────────────────
 async function fetchEmotes(ch: string) {
   emoteMap.value = {}
   for (const path of [`/emotes/${ch}`, `/emotes/twitch/${ch}`]) {
@@ -42,7 +66,7 @@ async function fetchEmotes(ch: string) {
   }
 }
 
-// ── Fetch one day from Spanix ────────────────────────────────────────────────
+// ── Fetch one day from Spanix ─────────────────────────────────────────────────
 async function fetchDay(ch: string, y: number, m: number, d: number, signal: AbortSignal): Promise<LogMsg[]> {
   const u = userFilter.value.trim().toLowerCase()
   const path = u ? `/channel/${ch}/user/${u}/${y}/${m}/${d}` : `/channel/${ch}/${y}/${m}/${d}`
@@ -57,12 +81,10 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
   return messages
 }
 
-// ── Advance cursor back one day ──────────────────────────────────────────────
 function prevDay(d: Date): Date {
   const p = new Date(d); p.setDate(p.getDate() - 1); return p
 }
 
-// ── Load one more day (prepend) ──────────────────────────────────────────────
 async function loadOlderDay() {
   if (!cursorDate || loadingMore.value || noMore.value) return
   const signal = abortCtrl.signal
@@ -71,7 +93,6 @@ async function loadOlderDay() {
   const d = cursorDate
   cursorDate = prevDay(d)
 
-  // Stop going back more than ~2 years
   const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2)
   if (d < cutoff) { noMore.value = true; loadingMore.value = false; return }
 
@@ -83,7 +104,6 @@ async function loadOlderDay() {
     if (signal.aborted) return
 
     if (dayMsgs.length === 0) {
-      // Empty day — try to keep going without blocking the UI
       loadingMore.value = false
       loadOlderDay()
       return
@@ -92,14 +112,12 @@ async function loadOlderDay() {
     const prevH = bodyRef.value?.scrollHeight ?? 0
     msgs.value = [...dayMsgs, ...msgs.value]
     await nextTick()
-    // Maintain scroll position after prepend
     if (bodyRef.value) bodyRef.value.scrollTop += bodyRef.value.scrollHeight - prevH
   } catch {}
 
   loadingMore.value = false
 }
 
-// ── Scroll handler — trigger load when near top ──────────────────────────────
 function onScroll() {
   if (!bodyRef.value || loadingMore.value || noMore.value) return
   if (bodyRef.value.scrollTop < 120) loadOlderDay()
@@ -119,7 +137,7 @@ async function search() {
   if (bodyRef.value) { bodyRef.value.removeEventListener('scroll', onScroll); scrollListenerAttached = false }
 
   loading.value = true; error.value = ''; searched.value = true
-  msgs.value = []; noMore.value = false; loadingMore.value = false
+  msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   fetchEmotes(ch)
 
@@ -130,17 +148,21 @@ async function search() {
     scrollToBottom(); return
   }
 
-  // Load today
   const today = new Date()
   try {
     msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal)
   } catch {}
   loading.value = false
-
-  // Cursor starts at yesterday
   cursorDate = prevDay(today)
 
-  scrollToBottom()
+  // Check if we should scroll to a hash target
+  const hashId = readHashId()
+  if (hashId) {
+    await nextTick()
+    scrollToMsg(hashId, true)
+  } else {
+    scrollToBottom()
+  }
   await nextTick()
   attachScrollListener()
 }
@@ -149,7 +171,30 @@ function scrollToBottom() {
   nextTick(() => { if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight })
 }
 
-onMounted(() => { if (session.value?.channel) channel.value = session.value.channel })
+function scrollToMsg(id: string, highlight = false) {
+  nextTick(() => {
+    const el = document.getElementById(`log-${id}`)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (highlight) {
+        highlightId.value = id
+        setTimeout(() => { if (highlightId.value === id) highlightId.value = null }, 3000)
+      }
+    }
+  })
+}
+
+function shareMsg(m: LogMsg) {
+  pushHash(m.id)
+  highlightId.value = m.id
+  setTimeout(() => { if (highlightId.value === m.id) highlightId.value = null }, 3000)
+  // Copy URL to clipboard
+  navigator.clipboard.writeText(window.location.href).catch(() => {})
+}
+
+onMounted(() => {
+  if (session.value?.channel) channel.value = session.value.channel
+})
 onUnmounted(() => {
   abortCtrl.abort()
   if (bodyRef.value) bodyRef.value.removeEventListener('scroll', onScroll)
@@ -223,20 +268,32 @@ function esc(s: string) {
     <div v-else-if="searched" class="logs-results">
       <div class="logs-count">{{ msgs.length.toLocaleString() }} messages loaded</div>
       <div class="logs-table">
-        <div class="logs-thead">
-          <div>Time</div><div>User</div><div>Message</div>
+        <div class="logs-thead" :style="{ gridTemplateColumns: `150px ${nameColWidth}px 1fr 24px` }">
+          <div>Time</div><div>User</div><div>Message</div><div></div>
         </div>
         <div class="logs-tbody" ref="bodyRef">
-          <!-- Top sentinel: shown while loading older days -->
           <div class="top-loader" :class="{ visible: loadingMore }">
             <span class="spinner">⟳</span> Loading older messages…
           </div>
           <div v-if="noMore && !dateFilter" class="top-loader no-more">↑ No older logs</div>
 
-          <div v-for="m in msgs" :key="m.id" class="log-row">
+          <div
+            v-for="m in msgs"
+            :key="m.id"
+            :id="`log-${m.id}`"
+            class="log-row"
+            :class="{ highlighted: highlightId === m.id }"
+            :style="{ gridTemplateColumns: `150px ${nameColWidth}px 1fr 24px` }"
+          >
             <div class="log-time">{{ fmtTs(m.timestamp) }}</div>
             <div class="log-user" :style="{ color: userColor(m) }">{{ m.displayName || m.username }}</div>
             <div class="log-msg" v-html="renderMsg(m.text)"></div>
+            <div class="log-share" @click="shareMsg(m)" title="Copy link to this message">
+              <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M10 2L14 6L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M14 6H6C4.34 6 3 7.34 3 9V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
           </div>
         </div>
       </div>
@@ -267,7 +324,11 @@ function esc(s: string) {
 
 .logs-results { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .logs-table   { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.logs-thead   { display: grid; grid-template-columns: 150px 140px 1fr; padding: 7px 14px; background: #0d0d10; border: 1px solid #1e1e24; font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0; }
+.logs-thead   {
+  display: grid;
+  padding: 7px 14px; background: #0d0d10; border: 1px solid #1e1e24;
+  font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0;
+}
 .logs-tbody   { overflow-y: auto; flex: 1; }
 .logs-tbody::-webkit-scrollbar { width: 3px; }
 .logs-tbody::-webkit-scrollbar-thumb { background: #333; }
@@ -278,10 +339,42 @@ function esc(s: string) {
 .spinner     { display: inline-block; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.log-row  { display: grid; grid-template-columns: 150px 140px 1fr; padding: 5px 14px; border-bottom: 1px solid #1a1a1e; font-size: 12px; align-items: center; transition: background .1s; }
+.log-row {
+  display: grid;
+  padding: 5px 14px;
+  border-bottom: 1px solid #1a1a1e;
+  font-size: 12px;
+  align-items: center;
+  transition: background .1s;
+  position: relative;
+}
 .log-row:hover { background: #1a1a1e; }
+.log-row.highlighted {
+  background: rgba(111, 43, 255, 0.12);
+  animation: hl-fade 3s ease forwards;
+}
+@keyframes hl-fade {
+  0%   { background: rgba(111, 43, 255, 0.22); }
+  100% { background: transparent; }
+}
+
 .log-time { color: #444; font-size: 11px; }
-.log-user { font-weight: 600; word-break: break-all; }
+.log-user { font-weight: 600; word-break: break-all; padding-right: 8px; }
 .log-msg  { color: #ccc; word-break: break-word; line-height: 1.6; }
+
+/* Share button — only visible on row hover */
+.log-share {
+  display: flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px;
+  color: #444;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity .15s, color .15s;
+  flex-shrink: 0;
+}
+.log-row:hover .log-share { opacity: 1; }
+.log-share:hover { color: #9d6cff; }
+.log-share svg { width: 13px; height: 13px; }
+
 :deep(.chat-emote) { height: 28px; vertical-align: middle; display: inline-block; margin: 0 1px; }
 </style>
