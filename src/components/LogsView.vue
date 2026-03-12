@@ -218,6 +218,9 @@ function attachScrollListener() {
 // ── Main search ──────────────────────────────────────────────────────────────
 async function search() {
   if (!channel.value.trim()) { error.value = 'Channel is required.'; return }
+
+  // Read hash BEFORE pushSearchUrl strips it
+  const hashId = readHashId()
   pushSearchUrl()
 
   abortCtrl.abort(); abortCtrl = new AbortController()
@@ -228,8 +231,6 @@ async function search() {
   cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   fetchEmotes(ch)
-
-  const hashId  = readHashId()
   const today   = new Date()
   const isUser  = !!userFilter.value.trim()
 
