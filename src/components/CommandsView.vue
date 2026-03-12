@@ -101,7 +101,8 @@ const CATEGORIES: Record<string, string[]> = {
   Moderation: ['whitelist', 'to', 'user'],
 }
 
-const props = defineProps<{ activeNav: string }>()
+// Internal tab state — replaces old activeNav prop
+const activeTab = ref<'Default' | 'Custom'>('Default')
 
 const BLOCKED = ['join','leave','pm2','refresh','whitelist','git']
 
@@ -277,6 +278,12 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 
 <template>
   <div>
+    <!-- Tab bar -->
+    <div class="cmd-tabs">
+      <button class="cmd-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">Default</button>
+      <button class="cmd-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">Custom</button>
+    </div>
+
     <!-- Search bar inside panel -->
     <div class="cmd-search-wrap">
       <svg class="cmd-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -285,6 +292,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       <input v-model="search" class="cmd-search" placeholder="Search commands…" />
     </div>
 
+    <template v-if="activeTab === 'Default'">
     <div v-if="loading" class="state-msg">Loading commands…</div>
     <div v-else-if="commands.length === 0" class="state-msg">No commands found for #{{ session?.channel }}</div>
 
@@ -347,9 +355,10 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
         </div>
       </div>
     </template>
+    </template><!-- /Default tab -->
 
     <!-- ── Custom commands tab ─────────────────────────────────────── -->
-    <template v-if="activeNav === 'Custom'">
+    <template v-if="activeTab === 'Custom'">
       <div class="custom-header">
         <span class="custom-count">{{ customCommands.length }} custom command{{ customCommands.length !== 1 ? 's' : '' }}</span>
         <div v-if="!creatingNew">
@@ -438,6 +447,11 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 </template>
 
 <style scoped>
+.cmd-tabs { display: flex; gap: 0; border-bottom: 1px solid #222; margin-bottom: 14px; }
+.cmd-tab { padding: 8px 20px; border: none; background: transparent; color: #555; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; }
+.cmd-tab:hover { color: #aaa; }
+.cmd-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
+
 .cmd-search-wrap {
   position: relative; height: 38px; background: #2c2c2e;
   display: flex; align-items: center; margin-bottom: 12px;

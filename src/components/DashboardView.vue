@@ -3,153 +3,160 @@ import { ref, onMounted, watch } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 
-const { session } = useAuth()
+const { session, availableChannels, switchChannel } = useAuth()
 
-interface LogEntry {
-  user: string
-  channel: string
-  message: string
+// ── Types ──────────────────────────────────────────────────────────────────
+interface ActivityEntry {
+  id:        number
+  channel:   string
+  type:      'cmd_added' | 'cmd_changed' | 'cmd_removed' | 'ban' | 'unban' | 'timeout'
+  actor:     string   // who did the action
+  target:    string   // command name or banned user
+  detail:    string   // extra info
   timestamp: number
 }
 
-const logs    = ref<LogEntry[]>([])
-const search  = ref('')
-const loading = ref(false)
-const error   = ref('')
+// ── State ──────────────────────────────────────────────────────────────────
+const activity  = ref<ActivityEntry[]>([])
+const loading   = ref(false)
+const error     = ref('')
 
-async function fetchLogs() {
+// ── Channel picker ─────────────────────────────────────────────────────────
+const viewChannel = ref(session.value?.channel ?? '')
+watch(() => session.value?.channel, ch => { if (ch) { viewChannel.value = ch; fetchActivity() } })
+
+async function fetchActivity() {
   if (!session.value) return
-  loading.value = true
-  error.value   = ''
+  loading.value = true; error.value = ''
   try {
-    const params = new URLSearchParams({ limit: '200' })
-    if (search.value.trim()) params.set('search', search.value.trim())
-    const res = await fetch(`${API}/logs?${params}`, {
+    const res = await fetch(`${API}/activity/${viewChannel.value}?limit=80`, {
       headers: { Authorization: `Bearer ${session.value.token}` }
     })
     if (!res.ok) throw new Error()
-    const data = await res.json() as { logs: LogEntry[] }
-    logs.value = data.logs
-  } catch {
-    error.value = 'Could not load logs.'
-  } finally {
-    loading.value = false
-  }
+    const data = await res.json() as { activity: ActivityEntry[] }
+    activity.value = data.activity
+  } catch { error.value = 'Could not load activity.' }
+  loading.value = false
 }
 
-let debounce: ReturnType<typeof setTimeout>
-watch(search, () => {
-  clearTimeout(debounce)
-  debounce = setTimeout(fetchLogs, 350)
-})
+onMounted(fetchActivity)
 
-onMounted(fetchLogs)
-
-function fmt(ts: number) {
-  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+// ── Helpers ────────────────────────────────────────────────────────────────
+function fmtTime(ts: number) {
+  return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
-
 function fmtDate(ts: number) {
-  return new Date(ts).toLocaleDateString([], { day: '2-digit', month: '2-digit' })
+  const d = new Date(ts)
+  const today = new Date()
+  if (d.toDateString() === today.toDateString()) return 'Today'
+  const yest  = new Date(today); yest.setDate(yest.getDate() - 1)
+  if (d.toDateString() === yest.toDateString()) return 'Yesterday'
+  return d.toLocaleDateString([], { day: '2-digit', month: 'short' })
+}
+
+const TYPE_META: Record<string, { icon: string; color: string; label: string }> = {
+  cmd_added:   { icon: '+',  color: '#23d18b', label: 'Command added'   },
+  cmd_changed: { icon: '✎',  color: '#e5c07b', label: 'Command changed' },
+  cmd_removed: { icon: '−',  color: '#f14949', label: 'Command removed' },
+  ban:         { icon: '⊘',  color: '#f14949', label: 'Banned'          },
+  unban:       { icon: '✓',  color: '#4ec9b0', label: 'Unbanned'        },
+  timeout:     { icon: '⏱', color: '#c792ea', label: 'Timed out'       },
+}
+
+// Group by date for visual separation
+function groupedActivity() {
+  const groups: { date: string; entries: ActivityEntry[] }[] = []
+  let cur = ''
+  for (const e of activity.value) {
+    const d = fmtDate(e.timestamp)
+    if (d !== cur) { cur = d; groups.push({ date: d, entries: [] }) }
+    groups[groups.length - 1].entries.push(e)
+  }
+  return groups
 }
 </script>
 
 <template>
-  <div class="dashboard">
+  <div class="dash">
     <div class="dash-header">
-      <h2 class="dash-title">Dashboard</h2>
-      <p class="dash-sub">Latest activity in <span class="chan">#{{ session?.channel }}</span></p>
-    </div>
-
-    <div class="log-toolbar">
-      <div class="log-search-wrap">
-        <svg class="log-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
-        </svg>
-        <input v-model="search" class="log-search" placeholder="Filter messages…" />
-      </div>
-      <button class="refresh-btn" @click="fetchLogs" :disabled="loading">
-        {{ loading ? '…' : '↺ Refresh' }}
-      </button>
-    </div>
-
-    <div v-if="error" class="log-error">{{ error }}</div>
-    <div v-else-if="loading && logs.length === 0" class="log-empty">Loading…</div>
-    <div v-else-if="logs.length === 0" class="log-empty">No messages found.</div>
-
-    <div v-else class="log-table">
-      <div class="log-thead">
-        <div>Time</div>
-        <div>User</div>
-        <div>Message</div>
-      </div>
-      <div class="log-tbody">
-        <div v-for="(log, i) in logs" :key="i" class="log-row">
-          <div class="log-time">
-            <span class="log-date">{{ fmtDate(log.timestamp) }}</span>
-            <span>{{ fmt(log.timestamp) }}</span>
-          </div>
-          <div class="log-user">{{ log.user }}</div>
-          <div class="log-msg">{{ log.message }}</div>
+      <div>
+        <div class="dash-title">Dashboard</div>
+        <div class="dash-sub">Activity feed for
+          <select v-if="availableChannels.length > 1" class="chan-select" v-model="viewChannel" @change="fetchActivity">
+            <option v-for="ch in availableChannels" :key="ch" :value="ch">#{{ ch }}</option>
+          </select>
+          <span v-else class="chan">#{{ viewChannel }}</span>
         </div>
       </div>
+      <button class="refresh-btn" @click="fetchActivity" :disabled="loading">{{ loading ? '…' : '↺' }}</button>
+    </div>
+
+    <div v-if="error" class="feed-empty err">{{ error }}</div>
+    <div v-else-if="loading && !activity.length" class="feed-empty">Loading…</div>
+    <div v-else-if="!activity.length" class="feed-empty">No activity yet.</div>
+
+    <div v-else class="feed">
+      <template v-for="group in groupedActivity()" :key="group.date">
+        <div class="feed-date-label">{{ group.date }}</div>
+        <div v-for="e in group.entries" :key="e.id" class="feed-row">
+          <div class="feed-icon" :style="{ color: TYPE_META[e.type]?.color, borderColor: TYPE_META[e.type]?.color + '44' }">
+            {{ TYPE_META[e.type]?.icon ?? '•' }}
+          </div>
+          <div class="feed-body">
+            <span class="feed-type" :style="{ color: TYPE_META[e.type]?.color }">{{ TYPE_META[e.type]?.label }}</span>
+            <span class="feed-target">{{ e.target }}</span>
+            <span v-if="e.detail" class="feed-detail">{{ e.detail }}</span>
+          </div>
+          <div class="feed-right">
+            <span class="feed-actor">{{ e.actor }}</span>
+            <span class="feed-time">{{ fmtTime(e.timestamp) }}</span>
+          </div>
+        </div>
+      </template>
     </div>
   </div>
 </template>
 
 <style scoped>
-.dashboard { display: flex; flex-direction: column; gap: 16px; }
+.dash { display: flex; flex-direction: column; gap: 16px; height: 100%; }
 
-.dash-header { margin-bottom: 4px; }
-.dash-title  { font-size: 20px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
-.dash-sub    { font-size: 13px; color: #666; }
+.dash-header { display: flex; align-items: flex-start; justify-content: space-between; }
+.dash-title  { font-size: 18px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
+.dash-sub    { font-size: 12px; color: #555; display: flex; align-items: center; gap: 6px; }
 .chan        { color: #9d6cff; }
+.chan-select { background: #111217; border: 1px solid #2a2a30; color: #9d6cff; font-family: inherit; font-size: 12px; padding: 2px 6px; outline: none; cursor: pointer; }
 
-.log-toolbar { display: flex; gap: 10px; align-items: center; }
-.log-search-wrap {
-  position: relative; flex: 1; height: 36px;
-  background: #2c2c2e; display: flex; align-items: center;
-}
-.log-search-icon {
-  position: absolute; left: 10px; width: 16px; height: 16px;
-  color: #666; pointer-events: none;
-}
-.log-search {
-  width: 100%; height: 100%; background: transparent; border: none; outline: none;
-  color: #fff; font-family: inherit; font-size: 13px; padding: 0 12px 0 34px;
-}
-.log-search::placeholder { color: #555; }
+.refresh-btn { height: 30px; padding: 0 12px; border: 1px solid #2a2a30; background: transparent; color: #666; font-family: inherit; font-size: 13px; cursor: pointer; }
+.refresh-btn:hover:not(:disabled) { color: #fff; border-color: #555; }
+.refresh-btn:disabled { opacity: 0.3; }
 
-.refresh-btn {
-  height: 36px; padding: 0 14px; border: 1px solid #3a3a3a;
-  background: transparent; color: #aaa; font-family: inherit;
-  font-size: 13px; cursor: pointer; white-space: nowrap;
+.feed-empty { color: #444; font-size: 13px; padding: 40px; text-align: center; }
+.feed-empty.err { color: #f14949; }
+
+.feed { display: flex; flex-direction: column; gap: 1px; overflow-y: auto; flex: 1; }
+
+.feed-date-label { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: .08em; padding: 12px 14px 4px; border-top: 1px solid #1e1e22; margin-top: 4px; }
+.feed-date-label:first-child { border-top: none; margin-top: 0; }
+
+.feed-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px; background: #141418;
+  border-bottom: 1px solid #1e1e1e;
+  transition: background .1s;
 }
-.refresh-btn:hover:not(:disabled) { background: #2c2c2e; color: #fff; }
-.refresh-btn:disabled { opacity: 0.4; cursor: default; }
+.feed-row:hover { background: #1c1c20; }
 
-.log-error { color: #f14949; font-size: 13px; padding: 12px; }
-.log-empty { color: #555; font-size: 13px; padding: 40px; text-align: center; }
-
-.log-table { background: #1b1b1d; overflow: hidden; }
-.log-thead {
-  display: grid; grid-template-columns: 110px 140px 1fr;
-  padding: 8px 16px; border-bottom: 1px solid #2a2a2a;
-  font-size: 11px; color: #666; letter-spacing: 0.06em; text-transform: uppercase;
+.feed-icon {
+  width: 28px; height: 28px; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; border: 1px solid; font-weight: 700;
 }
-.log-tbody { max-height: calc(100vh - 320px); overflow-y: auto; }
-.log-tbody::-webkit-scrollbar { width: 3px; }
-.log-tbody::-webkit-scrollbar-thumb { background: #333; }
 
-.log-row {
-  display: grid; grid-template-columns: 110px 140px 1fr;
-  padding: 6px 16px; border-bottom: 1px solid #222;
-  font-size: 12px; transition: background 0.1s;
-}
-.log-row:hover { background: #222; }
+.feed-body { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.feed-type   { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; flex-shrink: 0; }
+.feed-target { font-size: 12px; color: #e0e0e0; font-weight: 600; }
+.feed-detail { font-size: 11px; color: #555; word-break: break-all; }
 
-.log-time  { display: flex; flex-direction: column; gap: 1px; color: #555; }
-.log-date  { font-size: 10px; }
-.log-user  { color: #9d6cff; font-weight: 600; align-self: center; word-break: break-all; }
-.log-msg   { color: #ccc; align-self: center; word-break: break-word; }
+.feed-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.feed-actor { font-size: 11px; color: #666; }
+.feed-time  { font-size: 10px; color: #444; }
 </style>
