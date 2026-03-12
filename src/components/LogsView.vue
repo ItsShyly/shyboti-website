@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 
@@ -66,14 +66,18 @@ function readHashId(): string | null {
 }
 
 // ── Longest name width ───────────────────────────────────────────────────────
-const nameColWidth = computed(() => {
-  if (!msgs.value.length) return 140
-  const max = msgs.value.reduce((acc, m) => {
-    const name = m.displayName || m.username
-    return name.length > acc ? name.length : acc
-  }, 0)
-  return Math.min(240, Math.max(80, max * 7.8))
-})
+// nameColWidth: recalculate only when msgs changes, stored in a plain ref
+// so typing in input fields never triggers re-evaluation of 10k+ entries.
+const nameColWidth = ref(140)
+watch(msgs, (list: LogMsg[]) => {
+  if (!list.length) { nameColWidth.value = 140; return }
+  let max = 0
+  for (const m of list) {
+    const len = (m.displayName || m.username).length
+    if (len > max) max = len
+  }
+  nameColWidth.value = Math.min(240, Math.max(80, max * 7.8))
+}, { flush: 'post' })
 
 // ── Emotes ───────────────────────────────────────────────────────────────────
 async function fetchEmotes(ch: string) {
@@ -116,7 +120,7 @@ async function locateMsgDate(ch: string, msgId: string): Promise<string | null> 
 // ── Full search via API proxy (handles user filter across all months) ─────────
 async function fetchAll(ch: string, signal: AbortSignal): Promise<LogMsg[]> {
   const p = new URLSearchParams({ channel: ch })
-  if (userFilter.value.trim())  p.set('user', userFilter.value.trim())
+  if (userFilter.value.trim())  p.set('user', userFilter.value.trim().toLowerCase())
   if (termFilter.value.trim())  p.set('term', termFilter.value.trim())
   if (dateFilter.value)         p.set('date', dateFilter.value)
   const res = await fetch(`${API}/logs/search?${p}`, { signal })
@@ -293,7 +297,12 @@ function scrollToBottom() {
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
+  // Two ticks + rAF: first tick lets Vue finish patching the DOM,
+  // second tick + rAF ensures the browser has actually laid out the new rows
+  // before we try to find the element and scroll to it.
   await nextTick()
+  await nextTick()
+  await new Promise<void>(r => requestAnimationFrame(() => r()))
   const el = document.getElementById(`log-${id}`)
   if (el) {
     el.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -409,6 +418,7 @@ function esc(s: string) {
             v-for="m in msgs"
             :key="m.id"
             :id="`log-${m.id}`"
+            v-memo="[m.id, highlightId === m.id]"
             class="log-row"
             :class="{ highlighted: highlightId === m.id }"
             :style="{ gridTemplateColumns: `150px ${nameColWidth}px 1fr 24px` }"
