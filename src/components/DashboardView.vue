@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 
@@ -18,9 +18,12 @@ interface ActivityEntry {
 const activity    = ref<ActivityEntry[]>([])
 const loading     = ref(false)
 const error       = ref('')
+const liveStatus  = ref<'connecting' | 'live' | 'off'>('off')
 const ALL_CHANNELS = '__all__'
 const viewChannel  = ref(session.value?.channel ?? '')
 const activeTypes  = ref<Set<string>>(new Set()) // empty = show all
+
+let sseSource: EventSource | null = null
 
 const ALL_TYPES = ['cmd_added','cmd_changed','cmd_removed','ban','unban','timeout'] as const
 
@@ -37,6 +40,7 @@ const filteredActivity = computed(() =>
 )
 
 watch(() => session.value?.channel, ch => { if (ch) { viewChannel.value = ch; fetchActivity() } })
+watch(viewChannel, () => { startSSE() })
 
 async function fetchActivity() {
   if (!session.value) return
@@ -64,7 +68,36 @@ async function fetchActivity() {
   loading.value = false
 }
 
-onMounted(fetchActivity)
+onMounted(() => { fetchActivity(); startSSE() })
+onUnmounted(() => { sseSource?.close(); sseSource = null })
+
+function startSSE() {
+  sseSource?.close()
+  sseSource = null
+  if (!session.value?.token) return
+
+  const ch = viewChannel.value === ALL_CHANNELS ? '' : viewChannel.value
+  const url = `${API}/activity/stream${ch ? `?channel=${ch}` : ''}` +
+    `${ch ? '&' : '?'}token=${session.value.token}`
+
+  liveStatus.value = 'connecting'
+  const es = new EventSource(url)
+  sseSource = es
+
+  es.onopen = () => { liveStatus.value = 'live' }
+  es.onerror = () => {
+    liveStatus.value = 'off'
+    // Reconnect after 5s if still mounted
+    setTimeout(() => { if (sseSource === es) startSSE() }, 5000)
+  }
+  es.onmessage = (e) => {
+    try {
+      const entry = JSON.parse(e.data) as ActivityEntry
+      // Prepend and keep max 200
+      activity.value = [entry, ...activity.value].slice(0, 200)
+    } catch {}
+  }
+}
 
 function fmtTime(ts: number) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -111,7 +144,10 @@ function groupedActivity() {
           </select>
         </div>
       </div>
-      <button class="refresh-btn" @click="fetchActivity" :disabled="loading">{{ loading ? '…' : '↺' }}</button>
+      <div class="dash-header-right">
+        <span class="live-dot" :class="liveStatus" :title="liveStatus === 'live' ? 'Live' : liveStatus === 'connecting' ? 'Connecting…' : 'Offline'"></span>
+        <button class="refresh-btn" @click="fetchActivity" :disabled="loading">{{ loading ? '…' : '↺' }}</button>
+      </div>
     </div>
 
     <!-- Type filter chips -->
@@ -161,6 +197,12 @@ function groupedActivity() {
 .dash-sub    { font-size: 12px; color: #555; display: flex; align-items: center; gap: 6px; }
 .chan-select { background: #111217; border: 1px solid #2a2a30; color: #9d6cff; font-family: inherit; font-size: 12px; padding: 2px 6px; outline: none; cursor: pointer; }
 
+.dash-header-right { display: flex; align-items: center; gap: 10px; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.live-dot.live        { background: #23d18b; box-shadow: 0 0 6px #23d18b88; animation: pulse-live 2s ease-in-out infinite; }
+.live-dot.connecting  { background: #e5c07b; }
+.live-dot.off         { background: #333; }
+@keyframes pulse-live { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
 .refresh-btn { height: 30px; padding: 0 12px; border: 1px solid #2a2a30; background: transparent; color: #666; font-family: inherit; font-size: 13px; cursor: pointer; }
 .refresh-btn:hover:not(:disabled) { color: #fff; border-color: #555; }
 .refresh-btn:disabled { opacity: 0.3; }
