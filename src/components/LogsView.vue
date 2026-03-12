@@ -28,7 +28,8 @@ const bodyRef     = ref<HTMLDivElement | null>(null)
 const highlightId = ref<string | null>(null)
 const copyToast   = ref(false)
 
-let cursorDate: Date | null = null
+let cursorDate:  Date | null = null   // used in channel-only mode (day by day)
+let cursorMonth: { y: number; m: number } | null = null  // used in user mode (month by month)
 let abortCtrl = new AbortController()
 let scrollListenerAttached = false
 
@@ -90,13 +91,11 @@ async function fetchEmotes(ch: string) {
   }
 }
 
-// ── Fetch one day from Spanix directly ───────────────────────────────────────
+// ── Fetch one day (channel mode) ───────────────────────────────────────
 async function fetchDay(ch: string, y: number, m: number, d: number, signal: AbortSignal): Promise<LogMsg[]> {
-  // Zero-pad month and day — Spanix requires e.g. /2026/03/08 not /2026/3/8
-  const mm   = String(m).padStart(2, '0')
-  const dd   = String(d).padStart(2, '0')
-  const path = `/channel/${ch}/${y}/${mm}/${dd}`
-  const res = await fetch(`${SPANIX}${path}?json=true&limit=10000`, { signal })
+  const mm  = String(m).padStart(2, '0')
+  const dd  = String(d).padStart(2, '0')
+  const res = await fetch(`${SPANIX}/channel/${ch}/${y}/${mm}/${dd}?json=true&limit=10000`, { signal })
   if (!res.ok) return []
   const data = await res.json() as any
   let messages: LogMsg[] = data?.messages ?? []
@@ -107,108 +106,107 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
   return messages
 }
 
-// ── Locate a message by ID via backend (parallel batch scan) ────────────────────
-async function locateMsgDate(ch: string, msgId: string): Promise<string | null> {
-  try {
-    const res  = await fetch(`${API}/logs/locate?channel=${encodeURIComponent(ch)}&msgId=${encodeURIComponent(msgId)}`)
-    if (!res.ok) return null
-    const data = await res.json() as { found: boolean; date?: string }
-    return data.found && data.date ? data.date : null
-  } catch { return null }
-}
-
-// ── Full search via API proxy (handles user filter across all months) ─────────
-async function fetchAll(ch: string, signal: AbortSignal): Promise<LogMsg[]> {
-  const p = new URLSearchParams({ channel: ch })
-  if (userFilter.value.trim())  p.set('user', userFilter.value.trim().toLowerCase())
-  if (termFilter.value.trim())  p.set('term', termFilter.value.trim())
-  if (dateFilter.value)         p.set('date', dateFilter.value)
-  const res = await fetch(`${API}/logs/search?${p}`, { signal })
+// ── Fetch one month (user mode) ───────────────────────────────────────
+async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal): Promise<LogMsg[]> {
+  const mm  = String(m).padStart(2, '0')
+  const u   = userFilter.value.trim().toLowerCase()
+  const res = await fetch(`${SPANIX}/channel/${ch}/user/${u}/${y}/${mm}?json=true&limit=100000`, { signal })
   if (!res.ok) return []
   const data = await res.json() as any
-  return data.messages ?? []
+  let messages: LogMsg[] = data?.messages ?? []
+  if (termFilter.value.trim()) {
+    const t = termFilter.value.trim().toLowerCase()
+    messages = messages.filter(m => m.text.toLowerCase().includes(t))
+  }
+  return messages
 }
 
 function prevDay(d: Date): Date {
   const p = new Date(d); p.setDate(p.getDate() - 1); return p
 }
-
-// ── Load older day (scrollback, no user filter) ──────────────────────────────
-async function loadOlderDay() {
-  if (!cursorDate || loadingMore.value || noMore.value) return
-  loadingMore.value = true
-
-  // Snapshot cursor and advance before any async work
-  const d = cursorDate
-  cursorDate = prevDay(d)
-
-  const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2)
-  if (d < cutoff) { noMore.value = true; loadingMore.value = false; return }
-
-  const signal = abortCtrl.signal
-  try {
-    const dayMsgs = await fetchDay(
-      channel.value.trim().toLowerCase().replace(/^#/, ''),
-      d.getFullYear(), d.getMonth() + 1, d.getDate(), signal
-    )
-    if (signal.aborted) { loadingMore.value = false; return }
-
-    if (dayMsgs.length === 0) {
-      // Empty day — release lock before recursing so scroll doesn't fire again
-      loadingMore.value = false
-      // Small delay to let scroll settle before trying next day
-      await new Promise(r => setTimeout(r, 50))
-      await loadOlderDay()
-      return
-    }
-
-    // Preserve scroll position across prepend
-    const body   = bodyRef.value
-    const prevST = body?.scrollTop ?? 0
-    const prevSH = body?.scrollHeight ?? 0
-    msgs.value = [...dayMsgs, ...msgs.value]
-    await nextTick()
-    if (body) {
-      const delta = body.scrollHeight - prevSH
-      body.scrollTop = prevST + delta
-    }
-  } catch {}
-
-  loadingMore.value = false
+function prevMonth(ym: { y: number; m: number }): { y: number; m: number } {
+  return ym.m === 1 ? { y: ym.y - 1, m: 12 } : { y: ym.y, m: ym.m - 1 }
 }
 
-// ── Keep loading older days until we find the target msg id ──────────────────
-async function loadUntilMsg(targetId: string) {
-  const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2)
-  while (true) {
-    // Check if it's already in the list
-    if (msgs.value.some(m => m.id === targetId)) return true
-    if (!cursorDate || cursorDate < cutoff || noMore.value) return false
+// ── Prepend messages while keeping scroll position stable ─────────────────────
+async function prependMsgs(newMsgs: LogMsg[]) {
+  const body   = bodyRef.value
+  const prevST = body?.scrollTop ?? 0
+  const prevSH = body?.scrollHeight ?? 0
+  msgs.value = [...newMsgs, ...msgs.value]
+  await nextTick()
+  if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
+}
 
+// ── Load one older chunk on scroll ────────────────────────────────────────────
+// Channel-only → one day at a time. User set → one month at a time.
+async function loadOlder() {
+  if (loadingMore.value || noMore.value) return
+  const ch     = channel.value.trim().toLowerCase().replace(/^#/, '')
+  const signal = abortCtrl.signal
+  const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2)
+
+  if (userFilter.value.trim()) {
+    if (!cursorMonth) { noMore.value = true; return }
+    loadingMore.value = true
+    const cur = cursorMonth
+    cursorMonth = prevMonth(cur)
+    if (new Date(cur.y, cur.m - 1, 1) < cutoff) { noMore.value = true; loadingMore.value = false; return }
+    try {
+      const newMsgs = await fetchMonth(ch, cur.y, cur.m, signal)
+      if (signal.aborted) { loadingMore.value = false; return }
+      if (newMsgs.length > 0) await prependMsgs(newMsgs)
+      else { loadingMore.value = false; return loadOlder() }  // skip empty month
+    } catch {}
+    loadingMore.value = false
+  } else {
+    if (!cursorDate) { noMore.value = true; return }
+    loadingMore.value = true
     const d = cursorDate
     cursorDate = prevDay(d)
-    if (d < cutoff) { noMore.value = true; return false }
-
+    if (d < cutoff) { noMore.value = true; loadingMore.value = false; return }
     try {
-      const dayMsgs = await fetchDay(
-        channel.value.trim().toLowerCase().replace(/^#/, ''),
-        d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal
-      )
-      if (abortCtrl.signal.aborted) return false
-      if (dayMsgs.length > 0) {
-        const prevSH = bodyRef.value?.scrollHeight ?? 0
-        msgs.value = [...dayMsgs, ...msgs.value]
-        await nextTick()
-        if (bodyRef.value) bodyRef.value.scrollTop += bodyRef.value.scrollHeight - prevSH
-      }
-      if (msgs.value.some(m => m.id === targetId)) return true
-    } catch { return false }
+      const newMsgs = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)
+      if (signal.aborted) { loadingMore.value = false; return }
+      if (newMsgs.length > 0) await prependMsgs(newMsgs)
+      else { loadingMore.value = false; return loadOlder() }  // skip empty day
+    } catch {}
+    loadingMore.value = false
+  }
+}
+
+// ── Walk backwards until targetId is found in msgs ───────────────────────────
+async function loadUntilMsg(targetId: string): Promise<boolean> {
+  const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2)
+  const ch     = channel.value.trim().toLowerCase().replace(/^#/, '')
+  const signal = abortCtrl.signal
+  while (true) {
+    if (msgs.value.some(m => m.id === targetId)) return true
+    if (signal.aborted) return false
+    if (userFilter.value.trim()) {
+      if (!cursorMonth) return false
+      const cur = cursorMonth
+      cursorMonth = prevMonth(cur)
+      if (new Date(cur.y, cur.m - 1, 1) < cutoff) { noMore.value = true; return false }
+      try {
+        const newMsgs = await fetchMonth(ch, cur.y, cur.m, signal)
+        if (newMsgs.length > 0) await prependMsgs(newMsgs)
+      } catch { return false }
+    } else {
+      if (!cursorDate || cursorDate < cutoff) { noMore.value = true; return false }
+      const d = cursorDate
+      cursorDate = prevDay(d)
+      try {
+        const newMsgs = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)
+        if (newMsgs.length > 0) await prependMsgs(newMsgs)
+      } catch { return false }
+    }
   }
 }
 
 function onScroll() {
   if (!bodyRef.value || loadingMore.value || noMore.value) return
-  if (bodyRef.value.scrollTop < 120) loadOlderDay()
+  if (bodyRef.value.scrollTop < 120) loadOlder()
 }
 
 function attachScrollListener() {
@@ -227,65 +225,60 @@ async function search() {
 
   loading.value = true; error.value = ''; searched.value = true
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
+  cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   fetchEmotes(ch)
 
-  const hashId = readHashId()
+  const hashId  = readHashId()
+  const today   = new Date()
+  const isUser  = !!userFilter.value.trim()
 
-  // If user filter or term or date: use the full proxy search (returns all results)
-  if (userFilter.value.trim() || termFilter.value.trim() || dateFilter.value) {
-    try { msgs.value = await fetchAll(ch, abortCtrl.signal) } catch {}
+  if (dateFilter.value) {
+    // Specific date — just load that single day/month, no scroll-back
+    const [y, m, d] = dateFilter.value.split('-').map(Number)
+    try {
+      msgs.value = isUser
+        ? await fetchMonth(ch, y!, m!, abortCtrl.signal).then(ms => ms.filter(msg => msg.timestamp.startsWith(dateFilter.value)))
+        : await fetchDay(ch, y!, m!, d!, abortCtrl.signal)
+    } catch {}
     loading.value = false; noMore.value = true
-    if (hashId) { await nextTick(); await scrollToMsg(hashId, true) }
-    else scrollToBottom()
+    if (hashId) await scrollToMsg(hashId, true); else scrollToBottom()
     return
   }
 
-  // Otherwise: live scrollback mode
-  const today = new Date()
-
-  if (hashId) {
-    // Ask the backend which day this message lives on (parallel batch scan, much faster)
-    loading.value = true
-    const dateStr = await locateMsgDate(ch, hashId)
-    if (abortCtrl.signal.aborted) { loading.value = false; return }
-
-    if (dateStr) {
-      // Load the target day directly, plus the day before for context above it
-      const [yr, mo, dy] = dateStr.split('-').map(Number) as [number, number, number]
-      const targetDate   = new Date(yr, mo - 1, dy)
-      const prevDate     = prevDay(targetDate)
-
-      const [prevMsgs, dayMsgs] = await Promise.all([
-        fetchDay(ch, prevDate.getFullYear(), prevDate.getMonth() + 1, prevDate.getDate(), abortCtrl.signal).catch(() => [] as LogMsg[]),
-        fetchDay(ch, yr, mo, dy, abortCtrl.signal).catch(() => [] as LogMsg[]),
-      ])
-      // Check if the target day is not today — also load today so the user can scroll down
-      let todayMsgs: LogMsg[] = []
-      const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`
-      if (dateStr !== todayStr) {
-        todayMsgs = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal).catch(() => [])
+  if (isUser) {
+    // User mode: load current month first
+    const y = today.getFullYear(), m = today.getMonth() + 1
+    try { msgs.value = await fetchMonth(ch, y, m, abortCtrl.signal) } catch {}
+    cursorMonth = prevMonth({ y, m })
+    loading.value = false
+    if (hashId) {
+      if (!msgs.value.some(msg => msg.id === hashId)) {
+        const found = await loadUntilMsg(hashId)
+        if (found) await scrollToMsg(hashId, true)
+        else { scrollToBottom(); error.value = 'Could not find linked message.' }
+      } else {
+        await scrollToMsg(hashId, true)
       }
-      msgs.value = [...prevMsgs, ...dayMsgs, ...todayMsgs]
-      // Cursor: the day before prevDate, so scroll-up still works
-      cursorDate = prevDay(prevDate)
-      loading.value = false
-      await scrollToMsg(hashId, true)
     } else {
-      // Fallback: load today and walk backward (old behavior)
-      msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal).catch(() => [])
-      loading.value = false
-      cursorDate = prevDay(today)
-      const found = await loadUntilMsg(hashId)
-      if (found) await scrollToMsg(hashId, true)
-      else { scrollToBottom(); error.value = 'Could not find linked message.' }
+      scrollToBottom()
     }
   } else {
-    // Normal open: load today
-    msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal).catch(() => [])
-    loading.value = false
+    // Channel mode: load today first
+    try { msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal) } catch {}
     cursorDate = prevDay(today)
-    scrollToBottom()
+    loading.value = false
+    if (hashId) {
+      if (!msgs.value.some(msg => msg.id === hashId)) {
+        const found = await loadUntilMsg(hashId)
+        if (found) await scrollToMsg(hashId, true)
+        else { scrollToBottom(); error.value = 'Could not find linked message.' }
+      } else {
+        await scrollToMsg(hashId, true)
+      }
+    } else {
+      scrollToBottom()
+    }
   }
 
   await nextTick()
@@ -297,19 +290,21 @@ function scrollToBottom() {
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
-  // Two ticks + rAF: first tick lets Vue finish patching the DOM,
-  // second tick + rAF ensures the browser has actually laid out the new rows
-  // before we try to find the element and scroll to it.
-  await nextTick()
-  await nextTick()
-  await new Promise<void>(r => requestAnimationFrame(() => r()))
-  const el = document.getElementById(`log-${id}`)
-  if (el) {
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    if (highlight) {
-      highlightId.value = id
-      setTimeout(() => { if (highlightId.value === id) highlightId.value = null }, 3000)
-    }
+  // Poll until the element exists in the DOM (msgs may still be rendering)
+  const deadline = Date.now() + 3000
+  let el: HTMLElement | null = null
+  while (Date.now() < deadline) {
+    await nextTick()
+    await new Promise<void>(r => requestAnimationFrame(() => r()))
+    el = document.getElementById(`log-${id}`)
+    if (el) break
+    await new Promise(r => setTimeout(r, 80))
+  }
+  if (!el) return
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  if (highlight) {
+    highlightId.value = id
+    setTimeout(() => { if (highlightId.value === id) highlightId.value = null }, 3000)
   }
 }
 
