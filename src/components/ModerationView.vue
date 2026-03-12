@@ -6,19 +6,20 @@ import { useAuth } from '../auth'
 const { session } = useAuth()
 
 // ── Types ──────────────────────────────────────────────────────────────────
-interface BlockedTerm   { id: number; term: string; action: string; duration: number }
+interface BlockedTerm   { id: number; term: string; action: string; duration: number; is_regex: number }
 interface SpamFilter    { id: number; type: string; threshold: number; action: string; duration: number }
-interface NukeConfig    { id: number; trigger: string; duration: number; label: string; lookback: number }
+interface NukeConfig    { id: number; trigger: string; duration: number; label: string; lookback: number; stay_active: number; match_exact: number; is_regex: number }
 
 // ── Tab ────────────────────────────────────────────────────────────────────
 type Tab = 'blocked' | 'spam' | 'nukes'
 const activeTab = ref<Tab>('blocked')
 
 // ── Blocked Terms ──────────────────────────────────────────────────────────
-const blockedTerms  = ref<BlockedTerm[]>([])
-const newTerm       = ref('')
-const newTermAction = ref<'delete' | 'timeout' | 'ban'>('delete')
-const newTermDur    = ref(300)
+const blockedTerms    = ref<BlockedTerm[]>([])
+const newTerm         = ref('')
+const newTermAction   = ref<'delete' | 'timeout' | 'ban'>('delete')
+const newTermDur      = ref(300)
+const newTermIsRegex  = ref(false)
 
 // ── Spam Filters ───────────────────────────────────────────────────────────
 const spamFilters   = ref<SpamFilter[]>([])
@@ -35,11 +36,14 @@ const newSpamAction    = ref<'delete' | 'timeout' | 'ban'>('delete')
 const newSpamDur       = ref(300)
 
 // ── Nukes ──────────────────────────────────────────────────────────────────
-const nukes    = ref<NukeConfig[]>([])
-const newNuke        = ref('')
-const newNukeDur     = ref(600)
-const newNukeLabel   = ref('')
-const newNukeLookback = ref(30)  // minutes to look back
+const nukes           = ref<NukeConfig[]>([])
+const newNuke         = ref('')
+const newNukeDur      = ref(600)
+const newNukeLabel    = ref('')
+const newNukeLookback = ref(30)
+const newNukeStayActive = ref(false)
+const newNukeMatchExact = ref(false)
+const newNukeIsRegex    = ref(false)
 
 // ── Shared ────────────────────────────────────────────────────────────────
 const loading = ref(false)
@@ -76,12 +80,12 @@ async function addBlockedTerm() {
     const res = await fetch(`${API}/moderation/${session.value.channel}/blocked-terms`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${session.value.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ term: newTerm.value.trim(), action: newTermAction.value, duration: newTermDur.value })
+      body: JSON.stringify({ term: newTerm.value.trim(), action: newTermAction.value, duration: newTermDur.value, is_regex: newTermIsRegex.value ? 1 : 0 })
     })
     if (!res.ok) throw new Error()
     const data = await res.json()
     blockedTerms.value.push(data.item)
-    newTerm.value = ''
+    newTerm.value = ''; newTermIsRegex.value = false
     showSuccess('Term added.')
   } catch { error.value = 'Could not add term.' }
   saving.value = false
@@ -133,12 +137,21 @@ async function addNuke() {
     const res = await fetch(`${API}/moderation/${session.value.channel}/nukes`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${session.value.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ trigger: newNuke.value.trim(), duration: newNukeDur.value, label: newNukeLabel.value || newNuke.value.trim(), lookback: newNukeLookback.value })
+      body: JSON.stringify({
+        trigger:     newNuke.value.trim(),
+        duration:    newNukeDur.value,
+        label:       newNukeLabel.value || newNuke.value.trim(),
+        lookback:    newNukeLookback.value,
+        stay_active: newNukeStayActive.value ? 1 : 0,
+        match_exact: newNukeMatchExact.value ? 1 : 0,
+        is_regex:    newNukeIsRegex.value    ? 1 : 0,
+      })
     })
     if (!res.ok) throw new Error()
     const data = await res.json()
     nukes.value.push(data.item)
     newNuke.value = ''; newNukeLabel.value = ''
+    newNukeStayActive.value = false; newNukeMatchExact.value = false; newNukeIsRegex.value = false
     showSuccess('Nuke created.')
   } catch { error.value = 'Could not create nuke.' }
   saving.value = false
@@ -209,7 +222,13 @@ onMounted(load)
     <!-- ── Blocked Terms ── -->
     <template v-else-if="activeTab === 'blocked'">
       <div class="add-row">
-        <input v-model="newTerm" class="field-input flex1" placeholder="word or phrase to block" @keydown.enter="addBlockedTerm" />
+        <input v-model="newTerm" class="field-input flex1" :placeholder="newTermIsRegex ? 'regex pattern, e.g. bad(word|phrase)' : 'word or phrase to block'" @keydown.enter="addBlockedTerm" />
+        <label class="toggle-label">
+          <input type="checkbox" v-model="newTermIsRegex" class="toggle-cb" />
+          <span class="toggle-track" :class="{ on: newTermIsRegex }"><span class="toggle-thumb"></span></span>
+          <span class="toggle-text">Regex</span>
+          <span class="info-icon" title="When enabled, the term is treated as a regular expression. Use this for complex patterns like bad(word|phrase) or \bexact\b.">ⓘ</span>
+        </label>
         <select v-model="newTermAction" class="field-select">
           <option value="delete">Delete</option>
           <option value="timeout">Timeout</option>
@@ -221,6 +240,7 @@ onMounted(load)
       <div v-if="!blockedTerms.length" class="mod-empty">No blocked terms yet.</div>
       <div v-else class="item-list">
         <div v-for="t in blockedTerms" :key="t.id" class="item-row">
+          <span class="item-badge regex-badge" v-if="t.is_regex">regex</span>
           <span class="item-term">{{ t.term }}</span>
           <span class="item-action" :style="{ color: ACTION_COLORS[t.action] }">{{ t.action }}</span>
           <span v-if="t.action !== 'delete'" class="item-dur">{{ fmtDur(t.duration) }}</span>
@@ -264,25 +284,61 @@ onMounted(load)
     <template v-else-if="activeTab === 'nukes'">
       <div class="nuke-hint">
         A nuke watches for a trigger word in recent chat. Fire it to timeout everyone who said it.
+        <strong>Stay active</strong> nukes also auto-timeout anyone who says it going forward.
       </div>
-      <div class="add-row">
-        <input v-model="newNuke" class="field-input flex1" placeholder="trigger word/phrase" @keydown.enter="addNuke" />
-        <input v-model="newNukeLabel" class="field-input" style="width:120px" placeholder="label (optional)" />
-        <div class="threshold-wrap">
-          <span class="threshold-lbl">⏱ timeout</span>
-          <input v-model.number="newNukeDur" type="number" min="1" class="field-input dur-input" />
-          <span class="threshold-hint">sec</span>
+
+      <!-- Create nuke form -->
+      <div class="add-row nuke-add-row">
+        <div class="nuke-inputs-top">
+          <input v-model="newNuke" class="field-input flex1"
+            :placeholder="newNukeIsRegex ? 'regex pattern, e.g. bad(spam|ad)' : 'trigger word/phrase'"
+            @keydown.enter="addNuke" />
+          <input v-model="newNukeLabel" class="field-input" style="width:120px" placeholder="label (optional)" />
+          <div class="threshold-wrap">
+            <span class="threshold-lbl">⏱ timeout</span>
+            <input v-model.number="newNukeDur" type="number" min="1" class="field-input dur-input" />
+            <span class="threshold-hint">sec</span>
+          </div>
+          <div class="threshold-wrap">
+            <span class="threshold-lbl">↩ lookback</span>
+            <input v-model.number="newNukeLookback" type="number" min="1" max="1440" class="field-input dur-input" />
+            <span class="threshold-hint">min</span>
+          </div>
         </div>
-        <div class="threshold-wrap">
-          <span class="threshold-lbl">↩ lookback</span>
-          <input v-model.number="newNukeLookback" type="number" min="1" max="1440" class="field-input dur-input" />
-          <span class="threshold-hint">min</span>
+        <div class="nuke-toggles-row">
+          <!-- Stay active toggle -->
+          <label class="toggle-label">
+            <input type="checkbox" v-model="newNukeStayActive" class="toggle-cb" />
+            <span class="toggle-track" :class="{ on: newNukeStayActive }"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">Stay active</span>
+            <span class="info-icon" title="When enabled, this nuke stays permanently active: anyone who says the trigger word going forward will automatically be timed out — not just people from the lookback window. Useful for long-running spam events.">ⓘ</span>
+          </label>
+          <!-- Match exact toggle -->
+          <label class="toggle-label" :class="{ dimmed: newNukeIsRegex }">
+            <input type="checkbox" v-model="newNukeMatchExact" class="toggle-cb" :disabled="newNukeIsRegex" />
+            <span class="toggle-track" :class="{ on: newNukeMatchExact && !newNukeIsRegex }"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">Match exact</span>
+            <span class="info-icon" title="When enabled, only messages that are exactly the trigger string (nothing more, nothing less) will match. When off (default), the trigger can appear anywhere in the message.">ⓘ</span>
+          </label>
+          <!-- Regex toggle -->
+          <label class="toggle-label">
+            <input type="checkbox" v-model="newNukeIsRegex" class="toggle-cb" @change="if (newNukeIsRegex) newNukeMatchExact = false" />
+            <span class="toggle-track" :class="{ on: newNukeIsRegex }"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">Regex</span>
+            <span class="info-icon" title="When enabled, the trigger is treated as a regular expression. This overrides 'Match exact'. Example: bad(word|phrase) matches both 'badword' and 'badphrase'.">ⓘ</span>
+          </label>
+          <button class="add-btn" @click="addNuke" :disabled="saving" style="margin-left:auto">+ Create</button>
         </div>
-        <button class="add-btn" @click="addNuke" :disabled="saving">+ Create</button>
       </div>
+
       <div v-if="!nukes.length" class="mod-empty">No nukes configured.</div>
       <div v-else class="item-list">
         <div v-for="n in nukes" :key="n.id" class="item-row">
+          <div class="nuke-row-badges">
+            <span v-if="n.stay_active" class="item-badge stay-badge" title="Stay active — auto-times out new messages">active</span>
+            <span v-if="n.is_regex"    class="item-badge regex-badge" title="Trigger is a regular expression">regex</span>
+            <span v-if="n.match_exact" class="item-badge exact-badge" title="Must match the entire message exactly">exact</span>
+          </div>
           <span class="item-label">{{ n.label }}</span>
           <span class="item-term" style="color:#555">{{ n.trigger }}</span>
           <span class="item-dur">{{ fmtDur(n.duration) }}</span>
@@ -291,10 +347,12 @@ onMounted(load)
             <input type="number" min="1" max="1440"
               :value="nukeLookbackOverride[n.id] ?? n.lookback ?? 30"
               @input="nukeLookbackOverride[n.id] = parseInt(($event.target as HTMLInputElement).value)"
-              class="field-input dur-input" style="width:52px" title="Minutes to look back" />
+              class="field-input dur-input" style="width:52px" title="Minutes to look back when firing" />
             <span class="threshold-hint">min</span>
           </div>
-          <button class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }" @click="fireNuke(n.id)">{{ nukeConfirm === n.id ? '⚠️ Sure?' : '💣 Fire' }}</button>
+          <button class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }" @click="fireNuke(n.id)">
+            {{ nukeConfirm === n.id ? '⚠️ Sure?' : '💣 Fire' }}
+          </button>
           <button class="item-del" @click="removeNuke(n.id)">✕</button>
         </div>
       </div>
@@ -324,11 +382,16 @@ onMounted(load)
 .tab-btn.active { color: #9d6cff; border-bottom-color: #6f2bff; }
 
 .nuke-hint { font-size: 11px; color: #555; padding: 6px 0; }
+.nuke-hint strong { color: #888; font-weight: 600; }
 
 .add-row {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   background: #141418; padding: 12px 14px; border: 1px solid #1e1e24;
 }
+.nuke-add-row { flex-direction: column; align-items: stretch; }
+.nuke-inputs-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.nuke-toggles-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 8px; padding-top: 8px; border-top: 1px solid #1e1e24; }
+
 .field-input {
   background: #0d0d10; border: 1px solid #2a2a30; color: #e0e0e0;
   font-family: inherit; font-size: 12px; padding: 7px 10px; outline: none;
@@ -352,9 +415,36 @@ onMounted(load)
 .add-btn:hover:not(:disabled) { background: #7f3fff; }
 .add-btn:disabled { opacity: .4; cursor: default; }
 
+/* ── Toggle switch ── */
+.toggle-label {
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; user-select: none; flex-shrink: 0;
+}
+.toggle-label.dimmed { opacity: .35; pointer-events: none; }
+.toggle-cb { display: none; }
+.toggle-track {
+  width: 30px; height: 16px; border-radius: 8px; background: #2a2a30;
+  border: 1px solid #333; position: relative; transition: background .2s, border-color .2s;
+  flex-shrink: 0;
+}
+.toggle-track.on { background: rgba(111,43,255,.5); border-color: #6f2bff88; }
+.toggle-thumb {
+  position: absolute; top: 2px; left: 2px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: #555; transition: left .2s, background .2s;
+}
+.toggle-track.on .toggle-thumb { left: 16px; background: #9d6cff; }
+.toggle-text { font-size: 11px; color: #888; font-weight: 600; }
+.info-icon {
+  font-size: 11px; color: #444; cursor: help;
+  transition: color .15s;
+}
+.info-icon:hover { color: #9d6cff; }
+
+/* ── Item list ── */
 .item-list { display: flex; flex-direction: column; gap: 1px; }
 .item-row {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 10px;
   padding: 9px 14px; background: #141418; border-bottom: 1px solid #1a1a1e;
   transition: background .1s;
 }
@@ -365,6 +455,18 @@ onMounted(load)
 .item-dur    { font-size: 11px; color: #555; }
 .item-del    { margin-left: auto; background: transparent; border: 1px solid #f1494933; color: #f14949; font-size: 11px; padding: 2px 7px; cursor: pointer; }
 .item-del:hover { background: rgba(241,73,73,.1); }
+
+/* ── Badges ── */
+.item-badge {
+  font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  padding: 1px 5px; border-radius: 2px; flex-shrink: 0;
+}
+.stay-badge  { color: #23d18b; background: rgba(35,209,139,.12);  border: 1px solid rgba(35,209,139,.3); }
+.regex-badge { color: #c792ea; background: rgba(199,146,234,.12); border: 1px solid rgba(199,146,234,.3); }
+.exact-badge { color: #e5c07b; background: rgba(229,192,123,.12); border: 1px solid rgba(229,192,123,.3); }
+.nuke-row-badges { display: flex; gap: 4px; align-items: center; }
+
+/* ── Nuke fire button ── */
 .nuke-fire-btn { height: 28px; padding: 0 12px; background: rgba(241,73,73,.15); border: 1px solid #f1494966; color: #f14949; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; margin-left: auto; transition: background .15s, border-color .15s; }
 .nuke-fire-btn:hover { background: rgba(241,73,73,.3); }
 .nuke-fire-btn.confirm { background: rgba(241,73,73,.35); border-color: #f14949; animation: pulse-red .6s infinite alternate; }
