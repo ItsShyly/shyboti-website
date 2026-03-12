@@ -12,7 +12,7 @@ interface LogMsg {
 }
 interface EmoteMap { [name: string]: string }
 
-const channel    = ref(session.value?.channel ?? '')
+const channel    = ref('')
 const userFilter = ref('')
 const termFilter = ref('')
 const dateFilter = ref('')
@@ -32,10 +32,32 @@ let cursorDate: Date | null = null
 let abortCtrl = new AbortController()
 let scrollListenerAttached = false
 
-// ── URL hash sync ────────────────────────────────────────────────────────────
+// ── URL state sync ───────────────────────────────────────────────────────────
+function buildUrl(msgId: string | null = null) {
+  const p = new URLSearchParams()
+  if (channel.value.trim())    p.set('channel', channel.value.trim().toLowerCase().replace(/^#/, ''))
+  if (userFilter.value.trim()) p.set('user',    userFilter.value.trim())
+  if (termFilter.value.trim()) p.set('term',    termFilter.value.trim())
+  if (dateFilter.value)        p.set('date',    dateFilter.value)
+  const qs   = p.toString() ? '?' + p.toString() : ''
+  const hash = msgId ? `#msg-${msgId}` : (window.location.hash.startsWith('#msg-') ? window.location.hash : '')
+  return window.location.pathname + qs + hash
+}
+
+function pushSearchUrl() {
+  history.replaceState(null, '', buildUrl())
+}
+
 function pushHash(msgId: string | null) {
-  const base = window.location.pathname + window.location.search
-  history.replaceState(null, '', msgId ? `${base}#msg-${msgId}` : base)
+  history.replaceState(null, '', buildUrl(msgId))
+}
+
+function readUrlState() {
+  const p = new URLSearchParams(window.location.search)
+  if (p.get('channel')) channel.value    = p.get('channel')!
+  if (p.get('user'))    userFilter.value = p.get('user')!
+  if (p.get('term'))    termFilter.value = p.get('term')!
+  if (p.get('date'))    dateFilter.value = p.get('date')!
 }
 
 function readHashId(): string | null {
@@ -132,6 +154,7 @@ function attachScrollListener() {
 // ── Main search ──────────────────────────────────────────────────────────────
 async function search() {
   if (!channel.value.trim()) { error.value = 'Channel is required.'; return }
+  pushSearchUrl()
 
   abortCtrl.abort(); abortCtrl = new AbortController()
   if (bodyRef.value) { bodyRef.value.removeEventListener('scroll', onScroll); scrollListenerAttached = false }
@@ -192,8 +215,12 @@ function shareMsg(m: LogMsg) {
   navigator.clipboard.writeText(window.location.href).catch(() => {})
 }
 
-onMounted(() => {
-  if (session.value?.channel) channel.value = session.value.channel
+onMounted(async () => {
+  readUrlState()
+  // If no channel from URL, fall back to logged-in channel
+  if (!channel.value && session.value?.channel) channel.value = session.value.channel
+  // Auto-search if we have a channel (either from URL params or session)
+  if (channel.value) await search()
 })
 onUnmounted(() => {
   abortCtrl.abort()
