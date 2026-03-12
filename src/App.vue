@@ -22,7 +22,7 @@ function selectChannel(ch: string) {
 }
 
 type NavItem = 'dashboard' | 'commands' | 'logs' | 'moderation' | 'roles'
-const activeRoute = computed(() => route.path.replace('/', '') as NavItem || 'dashboard')
+const activeRoute = computed(() => route.path.replace('/', '') || 'dashboard')
 
 function nav(to: NavItem) {
   const PUBLIC: NavItem[] = ['logs']
@@ -30,13 +30,6 @@ function nav(to: NavItem) {
   router.push('/' + to)
 }
 
-function canAccess(item: NavItem): boolean {
-  if (!session.value) return item === 'logs'
-  if (channelRole.value?.role === 'broadcaster') return true
-  if (!channelRole.value) return true
-  if (item === 'roles') return false
-  return true
-}
 
 const showAddBanner = ref(false)
 const toast = ref('')

@@ -3,7 +3,7 @@ import { ref, onMounted, watch } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 
-const { session, availableChannels, switchChannel } = useAuth()
+const { session, availableChannels } = useAuth()
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface ActivityEntry {

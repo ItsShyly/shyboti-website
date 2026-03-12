@@ -93,14 +93,6 @@ async function confirmCreate() {
   openEdit(name, false)
 }
 
-const CATEGORIES: Record<string, string[]> = {
-  Default:    [],
-  '7TV':      ['7tv'],
-  APIs:       ['song', 'gpt', 'ask'],
-  Logs:       ['git', 'pm2'],
-  Moderation: ['whitelist', 'to', 'user'],
-}
-
 // Internal tab state — replaces old activeNav prop
 const activeTab = ref<'Default' | 'Custom'>('Default')
 
