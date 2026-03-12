@@ -322,7 +322,7 @@ onMounted(load)
           </label>
           <!-- Regex toggle -->
           <label class="toggle-label">
-            <input type="checkbox" v-model="newNukeIsRegex" class="toggle-cb" @change="if (newNukeIsRegex) newNukeMatchExact = false" />
+            <input type="checkbox" v-model="newNukeIsRegex" class="toggle-cb" @change="newNukeIsRegex && (newNukeMatchExact = false)" />
             <span class="toggle-track" :class="{ on: newNukeIsRegex }"><span class="toggle-thumb"></span></span>
             <span class="toggle-text">Regex</span>
             <span class="info-icon" title="When enabled, the trigger is treated as a regular expression. This overrides 'Match exact'. Example: bad(word|phrase) matches both 'badword' and 'badphrase'.">ⓘ</span>
