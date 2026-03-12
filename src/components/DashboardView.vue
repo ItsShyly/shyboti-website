@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 
@@ -20,6 +20,21 @@ const loading     = ref(false)
 const error       = ref('')
 const ALL_CHANNELS = '__all__'
 const viewChannel  = ref(session.value?.channel ?? '')
+const activeTypes  = ref<Set<string>>(new Set()) // empty = show all
+
+const ALL_TYPES = ['cmd_added','cmd_changed','cmd_removed','ban','unban','timeout'] as const
+
+function toggleType(t: string) {
+  const s = new Set(activeTypes.value)
+  if (s.has(t)) s.delete(t); else s.add(t)
+  activeTypes.value = s
+}
+
+const filteredActivity = computed(() =>
+  activeTypes.value.size === 0
+    ? activity.value
+    : activity.value.filter(e => activeTypes.value.has(e.type))
+)
 
 watch(() => session.value?.channel, ch => { if (ch) { viewChannel.value = ch; fetchActivity() } })
 
@@ -75,7 +90,7 @@ const TYPE_META: Record<string, { icon: string; color: string; label: string }> 
 function groupedActivity() {
   const groups: { date: string; entries: ActivityEntry[] }[] = []
   let cur = ''
-  for (const e of activity.value) {
+  for (const e of filteredActivity.value) {
     const d = fmtDate(e.timestamp)
     if (d !== cur) { cur = d; groups.push({ date: d, entries: [] }) }
     groups[groups.length - 1]!.entries.push(e)
@@ -99,9 +114,21 @@ function groupedActivity() {
       <button class="refresh-btn" @click="fetchActivity" :disabled="loading">{{ loading ? '…' : '↺' }}</button>
     </div>
 
+    <!-- Type filter chips -->
+    <div class="type-filters">
+      <button v-for="t in ALL_TYPES" :key="t"
+        class="type-chip"
+        :class="{ active: activeTypes.has(t) }"
+        :style="{ '--chip-color': TYPE_META[t]?.color }"
+        @click="toggleType(t)">
+        <span class="chip-icon">{{ TYPE_META[t]?.icon }}</span> {{ TYPE_META[t]?.label }}
+      </button>
+      <button v-if="activeTypes.size > 0" class="type-chip clear-chip" @click="activeTypes.clear()">✕ Clear</button>
+    </div>
+
     <div v-if="error" class="feed-empty err">{{ error }}</div>
     <div v-else-if="loading && !activity.length" class="feed-empty">Loading…</div>
-    <div v-else-if="!activity.length" class="feed-empty">No activity yet.</div>
+    <div v-else-if="!filteredActivity.length" class="feed-empty">{{ activity.length ? 'No matching activity.' : 'No activity yet.' }}</div>
 
     <div v-else class="feed">
       <template v-for="group in groupedActivity()" :key="group.date">
@@ -139,6 +166,23 @@ function groupedActivity() {
 .refresh-btn:disabled { opacity: 0.3; }
 
 .feed-empty { color: #444; font-size: 13px; padding: 40px; text-align: center; }
+
+.type-filters { display: flex; gap: 6px; flex-wrap: wrap; padding: 2px 0 4px; flex-shrink: 0; }
+.type-chip {
+  display: flex; align-items: center; gap: 5px;
+  height: 26px; padding: 0 10px; border: 1px solid #2a2a30;
+  background: transparent; color: #555; font-family: inherit; font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: color .15s, border-color .15s, background .15s;
+}
+.type-chip:hover { color: #aaa; border-color: #444; }
+.type-chip.active {
+  color: var(--chip-color, #9d6cff);
+  border-color: var(--chip-color, #9d6cff);
+  background: color-mix(in srgb, var(--chip-color, #9d6cff) 10%, transparent);
+}
+.chip-icon { font-size: 12px; }
+.clear-chip { color: #444; border-color: #222; }
+.clear-chip:hover { color: #aaa; border-color: #555; }
 .feed-empty.err { color: #f14949; }
 
 .feed { display: flex; flex-direction: column; gap: 1px; overflow-y: auto; flex: 1; }
