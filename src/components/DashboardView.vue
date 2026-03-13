@@ -36,6 +36,7 @@ interface TwitchUser {
   followedAt:  string | null   // ISO — if they follow the channel
   subbedSince: string | null   // ISO — if they're subbed
   subTier:     string | null   // '1000' | '2000' | '3000'
+  nameHistory: { name: string; lastSeen: string }[]
 }
 const popup         = ref<{ entry: ActivityEntry; x: number; y: number } | null>(null)
 const popupUser     = ref<TwitchUser | null>(null)
@@ -384,6 +385,15 @@ function fmtActor(actor: string) {
               </span>
             </div>
           </div>
+
+          <!-- Name history -->
+          <div v-if="popupUser.nameHistory?.length" class="popup-names">
+            <div class="popup-names-label">Previous names</div>
+            <div v-for="n in popupUser.nameHistory" :key="n.name" class="popup-name-row">
+              <span class="name-val">{{ n.name }}</span>
+              <span v-if="n.lastSeen" class="name-when">{{ fmtDuration(n.lastSeen) }} ago</span>
+            </div>
+          </div>
         </template>
         <div v-else class="popup-loading" style="color:#555">Could not load profile.</div>
       </div>
@@ -545,6 +555,12 @@ function fmtActor(actor: string) {
 .popup-rel.rel-no  { background: #1e1e22; color: #444; }
 .rel-icon  { font-size: 11px; flex-shrink: 0; }
 .rel-label { flex: 1; }
+.popup-names { display: flex; flex-direction: column; gap: 3px; }
+.popup-names-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.popup-name-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; border-bottom: 1px solid #1e1e22; }
+.popup-name-row:last-child { border-bottom: none; }
+.name-val  { font-size: 12px; color: #aaa; }
+.name-when { font-size: 10px; color: #444; }
 .popup-actions {
   display: flex; gap: 1px;
   border-top: 1px solid #1e1e22;
