@@ -83,8 +83,12 @@ export function highlightScript(src: string): string {
       } else if (BUILTIN_PREFIXES.some(b => tok === b || tok.startsWith(b + '.') || tok.startsWith(b + '('))) {
         // Known fixed builtin — purple
         cls = 'sh-builtin'
+      } else if (/^\$[a-zA-Z_]\w*$/.test(tok) || /^\$[a-zA-Z_]\w*\(/.test(tok)) {
+        // Bare $word or $word(...) — could be a $define macro call or $foreach loop var
+        // Color as custom (teal) rather than error (red) since user may have defined it
+        cls = 'sh-custom'
       } else {
-        // Starts with $ but matches nothing known — red error
+        // Starts with $ and has dots/structure but matches no known prefix — red error
         cls = 'sh-error'
       }
       out += `<span class="${cls}">${esc(tok)}</span>`
