@@ -169,15 +169,15 @@ function goToLogs(e: ActivityEntry) {
   router.push({ path: '/logs', query: { channel: ch, user } })
 }
 
-// Open Twitch mod page popup
+// Open user popup
 function openUserPopup(e: ActivityEntry, evt: MouseEvent) {
   if (!['ban','timeout','unban'].includes(e.type)) return
+  evt.stopPropagation()
   popup.value = { entry: e, x: evt.clientX, y: evt.clientY }
 }
 
-function openTwitchModPage(username: string, channel: string) {
-  window.open(`https://www.twitch.tv/moderator/${channel}/user-details/${username}`, '_blank')
-  popup.value = null
+function openUsercardPopout(username: string, channel: string) {
+  window.open(`https://www.twitch.tv/popout/${channel}/viewercard/${username}`, '_blank', 'width=340,height=560')
 }
 
 function closePopup() { popup.value = null }
@@ -293,11 +293,29 @@ function fmtActor(actor: string) {
 
     <!-- User popup -->
     <div v-if="popup" class="user-popup" :style="{ top: popup.y + 'px', left: popup.x + 'px' }" @click.stop>
-      <div class="popup-name">{{ popup.entry.target }}</div>
-      <div class="popup-sub">in #{{ popup.entry.channel }}</div>
-      <button class="popup-btn" @click="openTwitchModPage(popup.entry.target, popup.entry.channel)">
-        Open Twitch Mod Page ↗
-      </button>
+      <div class="popup-header">
+        <div>
+          <div class="popup-name">{{ popup.entry.target }}</div>
+          <div class="popup-sub">in #{{ popup.entry.channel }}</div>
+        </div>
+        <button class="popup-close" @click="closePopup">✕</button>
+      </div>
+      <!-- Embedded Twitch usercard -->
+      <div class="popup-card-wrap">
+        <iframe
+          class="popup-card"
+          :src="`https://www.twitch.tv/popout/${popup.entry.channel}/viewercard/${popup.entry.target}`"
+          scrolling="no" frameborder="0" allowtransparency="true"
+        />
+      </div>
+      <div class="popup-actions">
+        <button class="popup-btn" @click="goToLogs(popup.entry); closePopup()">
+          📋 Go to Logs
+        </button>
+        <button class="popup-btn" @click="openUsercardPopout(popup.entry.target, popup.entry.channel)">
+          ↗ Open in Twitch
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -395,16 +413,38 @@ function fmtActor(actor: string) {
 .user-popup {
   position: fixed; z-index: 100;
   background: #1b1b1f; border: 1px solid #2a2a30;
-  padding: 14px 16px; min-width: 200px;
+  width: 320px;
   box-shadow: 0 8px 32px #00000088;
   transform: translate(-50%, 12px);
+  overflow: hidden;
 }
-.popup-name { font-size: 14px; font-weight: 700; color: #e0e0e0; margin-bottom: 2px; }
-.popup-sub  { font-size: 11px; color: #555; margin-bottom: 12px; }
+.popup-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid #1e1e22;
+}
+.popup-name  { font-size: 14px; font-weight: 700; color: #e0e0e0; margin-bottom: 2px; }
+.popup-sub   { font-size: 11px; color: #555; }
+.popup-close {
+  background: none; border: none; color: #444; font-size: 13px; cursor: pointer; padding: 0 2px; line-height: 1;
+}
+.popup-close:hover { color: #aaa; }
+.popup-card-wrap {
+  width: 100%; height: 360px; overflow: hidden; background: #0e0e11;
+}
+.popup-card {
+  width: 100%; height: 100%; border: none;
+  /* Twitch usercard has its own scroll — clip it cleanly */
+}
+.popup-actions {
+  display: flex; gap: 1px;
+  border-top: 1px solid #1e1e22;
+}
 .popup-btn {
-  width: 100%; height: 30px; border: 1px solid #6f2bff44;
-  background: #6f2bff15; color: #9d6cff; font-family: inherit; font-size: 11px;
-  cursor: pointer; transition: background .15s;
+  flex: 1; height: 34px; border: none; border-right: 1px solid #1e1e22;
+  background: #141418; color: #888; font-family: inherit; font-size: 11px;
+  cursor: pointer; transition: background .15s, color .15s;
 }
-.popup-btn:hover { background: #6f2bff30; }
+.popup-btn:last-child { border-right: none; }
+.popup-btn:hover { background: #1e1e24; color: #9d6cff; }
 </style>
