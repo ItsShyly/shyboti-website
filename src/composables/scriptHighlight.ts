@@ -5,8 +5,13 @@
  */
 
 const KEYWORDS  = ['$if', '$else', '$end', '$foreach', '$repeat', '$define']
-const BUILTINS  = [
-  '$counter', '$ucounter', '$var', '$uvar', '$list',
+
+// Families where the user chooses a name — e.g. $var.wins, $counter.deaths, $list.quotes
+// These get sh-custom coloring (teal/cyan) to distinguish from fixed builtins
+const CUSTOM_FAMILIES = ['$counter.', '$ucounter.', '$var.', '$uvar.', '$list.']
+
+// Known fixed builtin prefixes (no user-defined name segment)
+const BUILTIN_PREFIXES = [
   '$user', '$target', '$channel', '$command', '$message',
   '$args', '$query', '$random', '$time', '$text', '$regex',
   '$calc', '$http', '$twitch', '$emote', '$log',
@@ -14,6 +19,9 @@ const BUILTINS  = [
   '$index', '$last_error',
   '$1','$2','$3','$4','$5','$6','$7','$8','$9',
 ]
+
+// Legacy flat list kept for callers that used BUILTINS
+const BUILTINS = [...CUSTOM_FAMILIES.map(f => f.slice(0, -1)), ...BUILTIN_PREFIXES]
 
 function esc(s: string): string {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -52,14 +60,33 @@ export function highlightScript(src: string): string {
           j++
         }
       }
-      const tok  = src.slice(i, j)
-      const base = '$' + tok.slice(1).split(/[.(]/)[0]!
-      // sh-error only for truly malformed tokens (e.g. $123numeric, $!bad)
-      // User-defined names like $x, $greet, $name are valid — use sh-builtin colour
-      let cls = 'sh-builtin'
-      if (KEYWORDS.some(k  => tok.startsWith(k)))   cls = 'sh-kw'
-      else if (BUILTINS.some(b => tok.startsWith(b) || tok === b)) cls = 'sh-builtin'
-      else if (!/^\$[a-zA-Z_]/.test(tok)) cls = 'sh-error'  // starts with digit/symbol after $
+      const tok = src.slice(i, j)
+
+      let cls: string
+      if (KEYWORDS.some(k => tok.startsWith(k))) {
+        // Control flow keyword — blue
+        cls = 'sh-kw'
+      } else if (CUSTOM_FAMILIES.some(f => tok.startsWith(f))) {
+        // User-named family ($var.wins, $counter.deaths) — render with two-tone span:
+        // family prefix in builtin colour, user name in custom colour
+        const family = CUSTOM_FAMILIES.find(f => tok.startsWith(f))!
+        const rest   = tok.slice(family.length)  // e.g. "wins" or "wins.get"
+        // Split rest at first dot to separate user name from sub-property
+        const dotIdx   = rest.indexOf('.')
+        const userName = dotIdx === -1 ? rest : rest.slice(0, dotIdx)
+        const subProp  = dotIdx === -1 ? '' : rest.slice(dotIdx)
+        const familyHtml  = `<span class="sh-builtin">${esc(family)}</span>`
+        const userHtml    = `<span class="sh-custom">${esc(userName)}</span>`
+        const subHtml     = subProp ? `<span class="sh-builtin">${esc(subProp)}</span>` : ''
+        out += familyHtml + userHtml + subHtml
+        i = j; continue
+      } else if (BUILTIN_PREFIXES.some(b => tok === b || tok.startsWith(b + '.') || tok.startsWith(b + '('))) {
+        // Known fixed builtin — purple
+        cls = 'sh-builtin'
+      } else {
+        // Starts with $ but matches nothing known — red error
+        cls = 'sh-error'
+      }
       out += `<span class="${cls}">${esc(tok)}</span>`
       i = j; continue
     }

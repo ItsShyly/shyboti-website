@@ -1936,6 +1936,8 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .sh-number  { color: #b5cea8; }
 .sh-paren   { color: #888; }
 .sh-comment { color: #3c4a3c; font-style: italic; }
+.sh-custom  { color: #4fc1e9; } /* user-defined name in $var.name, $counter.name etc. */
+.sh-unknown { color: #d1c023; } 
 .sh-error   { color: #f14949; text-decoration: underline wavy #f1494966; }
 .pz-ph { opacity: 0.35; transition: opacity .15s; }
 .pz-ph:hover { opacity: 0.7; }
