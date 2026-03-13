@@ -71,14 +71,27 @@ async function fetchActivity() {
 onMounted(() => { fetchActivity(); startSSE() })
 onUnmounted(() => { sseSource?.close(); sseSource = null })
 
-function startSSE() {
+async function startSSE() {
   sseSource?.close()
   sseSource = null
   if (!session.value?.token) return
 
   liveStatus.value = 'connecting'
+
+  // Step 1: get a short-lived ticket (EventSource can't send Authorization headers)
+  let ticket: string
+  try {
+    const r = await fetch(`${API}/activity/sse-ticket`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    if (!r.ok) { liveStatus.value = 'off'; return }
+    ticket = (await r.json() as { ticket: string }).ticket
+  } catch { liveStatus.value = 'off'; return }
+
+  // Step 2: open the SSE stream with the ticket
   const ch = viewChannel.value === ALL_CHANNELS ? '' : viewChannel.value
-  const streamUrl = `${API}/activity/stream?token=${session.value.token}${ch ? `&channel=${ch}` : ''}`
+  const streamUrl = `${API}/activity/stream?ticket=${ticket}${ch ? `&channel=${ch}` : ''}`
 
   const es = new EventSource(streamUrl)
   sseSource = es
@@ -86,6 +99,7 @@ function startSSE() {
   es.onopen = () => { liveStatus.value = 'live' }
   es.onerror = () => {
     liveStatus.value = 'off'
+    es.close()
     setTimeout(() => { if (sseSource === es) startSSE() }, 5000)
   }
   es.onmessage = (e) => {
