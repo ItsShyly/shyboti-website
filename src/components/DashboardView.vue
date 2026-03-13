@@ -31,7 +31,11 @@ const collapsedDays = ref<Set<string>>(new Set())
 // User popup
 interface TwitchUser {
   login: string; displayName: string; avatar: string
-  description: string; followers: number; createdAt: string
+  createdAt: string
+  ownFollowers: number | null
+  followedAt:  string | null   // ISO — if they follow the channel
+  subbedSince: string | null   // ISO — if they're subbed
+  subTier:     string | null   // '1000' | '2000' | '3000'
 }
 const popup         = ref<{ entry: ActivityEntry; x: number; y: number } | null>(null)
 const popupUser     = ref<TwitchUser | null>(null)
@@ -182,7 +186,7 @@ function openUserPopup(e: ActivityEntry, evt: MouseEvent) {
   popup.value = { entry: e, x: evt.clientX, y: evt.clientY }
   popupUser.value = null
   popupLoading.value = true
-  fetch(`${API}/twitch/user/${encodeURIComponent(e.target.toLowerCase())}`)
+  fetch(`${API}/twitch/user/${encodeURIComponent(e.target.toLowerCase())}?channel=${encodeURIComponent(e.channel)}`)
     .then(r => r.ok ? r.json() as Promise<TwitchUser> : Promise.reject())
     .then(u => { popupUser.value = u })
     .catch(() => {})
@@ -202,7 +206,24 @@ function fmtFollowers(n: number): string {
 }
 
 function fmtJoined(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { month: 'short', year: 'numeric' })
+  return new Date(iso).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+// How long ago an ISO date was, e.g. "2y 3m" or "4 months"
+function fmtDuration(iso: string): string {
+  const ms      = Date.now() - new Date(iso).getTime()
+  const days    = Math.floor(ms / 86_400_000)
+  const months  = Math.floor(days / 30.44)
+  const years   = Math.floor(months / 12)
+  const remMo   = months % 12
+  if (years > 0 && remMo > 0) return `${years}y ${remMo}mo`
+  if (years > 0)              return `${years}y`
+  if (months > 0)             return `${months}mo`
+  return `${days}d`
+}
+
+function subTierLabel(tier: string): string {
+  return tier === '3000' ? 'Tier 3' : tier === '2000' ? 'Tier 2' : 'Tier 1'
 }
 
 // Format detail nicely
@@ -332,15 +353,35 @@ function fmtActor(actor: string) {
       <div class="popup-body">
         <div v-if="popupLoading" class="popup-loading">Loading…</div>
         <template v-else-if="popupUser">
-          <div v-if="popupUser.description" class="popup-desc">{{ popupUser.description }}</div>
           <div class="popup-stats">
-            <div class="popup-stat">
-              <span class="stat-val">{{ fmtFollowers(popupUser.followers) }}</span>
-              <span class="stat-lbl">followers</span>
-            </div>
+            <!-- Account age -->
             <div class="popup-stat">
               <span class="stat-val">{{ fmtJoined(popupUser.createdAt) }}</span>
-              <span class="stat-lbl">joined</span>
+              <span class="stat-lbl">account created</span>
+            </div>
+            <!-- Own channel followers -->
+            <div v-if="popupUser.ownFollowers !== null" class="popup-stat">
+              <span class="stat-val">{{ fmtFollowers(popupUser.ownFollowers) }}</span>
+              <span class="stat-lbl">followers</span>
+            </div>
+          </div>
+          <!-- Follow / Sub relationship rows -->
+          <div class="popup-relations">
+            <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">
+              <span class="rel-icon">{{ popupUser.followedAt ? '♥' : '♥' }}</span>
+              <span class="rel-label">
+                <template v-if="popupUser.followedAt">Following for {{ fmtDuration(popupUser.followedAt) }}</template>
+                <template v-else>Not following</template>
+              </span>
+            </div>
+            <div class="popup-rel" :class="popupUser.subbedSince ? 'rel-yes' : 'rel-no'">
+              <span class="rel-icon">{{ popupUser.subbedSince ? '★' : '★' }}</span>
+              <span class="rel-label">
+                <template v-if="popupUser.subbedSince">
+                  {{ subTierLabel(popupUser.subTier ?? '1000') }} · {{ fmtDuration(popupUser.subbedSince) }}
+                </template>
+                <template v-else>Not subscribed</template>
+              </span>
             </div>
           </div>
         </template>
@@ -493,8 +534,17 @@ function fmtActor(actor: string) {
 }
 .popup-stats { display: flex; gap: 20px; }
 .popup-stat  { display: flex; flex-direction: column; gap: 2px; }
-.stat-val    { font-size: 14px; font-weight: 700; color: #e0e0e0; }
+.stat-val    { font-size: 13px; font-weight: 700; color: #e0e0e0; }
 .stat-lbl    { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .05em; }
+.popup-relations { display: flex; flex-direction: column; gap: 4px; }
+.popup-rel {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 8px; font-size: 12px;
+}
+.popup-rel.rel-yes { background: #1a2a1a; color: #23d18b; }
+.popup-rel.rel-no  { background: #1e1e22; color: #444; }
+.rel-icon  { font-size: 11px; flex-shrink: 0; }
+.rel-label { flex: 1; }
 .popup-actions {
   display: flex; gap: 1px;
   border-top: 1px solid #1e1e22;
