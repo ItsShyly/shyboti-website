@@ -400,7 +400,7 @@ function fmtActor(actor: string) {
 
       <div class="popup-actions">
         <button class="popup-btn" @click="goToLogs(popup.entry); closePopup()">
-          📋 Logs
+          Logs
         </button>
         <button class="popup-btn" @click="openUsercardPopout(popup.entry.target, popup.entry.channel)">
           ↗ Twitch
