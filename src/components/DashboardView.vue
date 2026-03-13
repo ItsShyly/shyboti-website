@@ -71,29 +71,39 @@ async function fetchActivity() {
 onMounted(() => { fetchActivity(); startSSE() })
 onUnmounted(() => { sseSource?.close(); sseSource = null })
 
-function startSSE() {
+async function startSSE() {
   sseSource?.close()
   sseSource = null
   if (!session.value?.token) return
 
-  const ch = viewChannel.value === ALL_CHANNELS ? '' : viewChannel.value
-  const url = `${API}/activity/stream${ch ? `?channel=${ch}` : ''}` +
-    `${ch ? '&' : '?'}token=${session.value.token}`
-
   liveStatus.value = 'connecting'
-  const es = new EventSource(url)
+  const ch = viewChannel.value === ALL_CHANNELS ? null : viewChannel.value
+
+  // Exchange session token for a short-lived ticket — token never goes in the URL
+  let ticket: string
+  try {
+    const r = await fetch(`${API}/activity/sse-ticket`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.value.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel: ch }),
+    })
+    if (!r.ok) { liveStatus.value = 'off'; return }
+    const data = await r.json() as { ticket: string }
+    ticket = data.ticket
+  } catch { liveStatus.value = 'off'; return }
+
+  const streamUrl = `${API}/activity/stream?ticket=${ticket}${ch ? `&channel=${ch}` : ''}`
+  const es = new EventSource(streamUrl)
   sseSource = es
 
   es.onopen = () => { liveStatus.value = 'live' }
   es.onerror = () => {
     liveStatus.value = 'off'
-    // Reconnect after 5s if still mounted
     setTimeout(() => { if (sseSource === es) startSSE() }, 5000)
   }
   es.onmessage = (e) => {
     try {
       const entry = JSON.parse(e.data) as ActivityEntry
-      // Prepend and keep max 200
       activity.value = [entry, ...activity.value].slice(0, 200)
     } catch {}
   }
