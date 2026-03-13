@@ -40,7 +40,7 @@ const filteredActivity = computed(() =>
 )
 
 watch(() => session.value?.channel, ch => { if (ch) { viewChannel.value = ch; fetchActivity() } })
-watch(viewChannel, () => { startSSE() })
+watch(viewChannel, (newCh, oldCh) => { if (newCh !== oldCh) startSSE() })
 
 async function fetchActivity() {
   if (!session.value) return
@@ -68,7 +68,7 @@ async function fetchActivity() {
   loading.value = false
 }
 
-onMounted(() => { fetchActivity(); startSSE() })
+onMounted(() => { fetchActivity().then(() => startSSE()) })
 onUnmounted(() => { sseSource?.close(); sseSource = null })
 
 async function startSSE() {
