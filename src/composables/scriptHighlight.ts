@@ -54,9 +54,12 @@ export function highlightScript(src: string): string {
       }
       const tok  = src.slice(i, j)
       const base = '$' + tok.slice(1).split(/[.(]/)[0]!
-      let cls = 'sh-error'
+      // sh-error only for truly malformed tokens (e.g. $123numeric, $!bad)
+      // User-defined names like $x, $greet, $name are valid — use sh-builtin colour
+      let cls = 'sh-builtin'
       if (KEYWORDS.some(k  => tok.startsWith(k)))   cls = 'sh-kw'
       else if (BUILTINS.some(b => tok.startsWith(b) || tok === b)) cls = 'sh-builtin'
+      else if (!/^\$[a-zA-Z_]/.test(tok)) cls = 'sh-error'  // starts with digit/symbol after $
       out += `<span class="${cls}">${esc(tok)}</span>`
       i = j; continue
     }
