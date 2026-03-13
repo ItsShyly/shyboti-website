@@ -71,28 +71,15 @@ async function fetchActivity() {
 onMounted(() => { fetchActivity(); startSSE() })
 onUnmounted(() => { sseSource?.close(); sseSource = null })
 
-async function startSSE() {
+function startSSE() {
   sseSource?.close()
   sseSource = null
   if (!session.value?.token) return
 
   liveStatus.value = 'connecting'
-  const ch = viewChannel.value === ALL_CHANNELS ? null : viewChannel.value
+  const ch = viewChannel.value === ALL_CHANNELS ? '' : viewChannel.value
+  const streamUrl = `${API}/activity/stream?token=${session.value.token}${ch ? `&channel=${ch}` : ''}`
 
-  // Exchange session token for a short-lived ticket — token never goes in the URL
-  let ticket: string
-  try {
-    const r = await fetch(`${API}/activity/sse-ticket`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${session.value.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel: ch }),
-    })
-    if (!r.ok) { liveStatus.value = 'off'; return }
-    const data = await r.json() as { ticket: string }
-    ticket = data.ticket
-  } catch { liveStatus.value = 'off'; return }
-
-  const streamUrl = `${API}/activity/stream?ticket=${ticket}${ch ? `&channel=${ch}` : ''}`
   const es = new EventSource(streamUrl)
   sseSource = es
 
