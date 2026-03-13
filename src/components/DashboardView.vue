@@ -29,7 +29,13 @@ const activeTypes  = ref<Set<string>>(new Set())
 const collapsedDays = ref<Set<string>>(new Set())
 
 // User popup
-const popup     = ref<{ entry: ActivityEntry; x: number; y: number } | null>(null)
+interface TwitchUser {
+  login: string; displayName: string; avatar: string
+  description: string; followers: number; createdAt: string
+}
+const popup         = ref<{ entry: ActivityEntry; x: number; y: number } | null>(null)
+const popupUser     = ref<TwitchUser | null>(null)
+const popupLoading  = ref(false)
 
 let sseSource: EventSource | null = null
 
@@ -169,18 +175,35 @@ function goToLogs(e: ActivityEntry) {
   router.push({ path: '/logs', query: { channel: ch, user } })
 }
 
-// Open user popup
+// Open user popup + fetch Twitch profile
 function openUserPopup(e: ActivityEntry, evt: MouseEvent) {
   if (!['ban','timeout','unban'].includes(e.type)) return
   evt.stopPropagation()
   popup.value = { entry: e, x: evt.clientX, y: evt.clientY }
+  popupUser.value = null
+  popupLoading.value = true
+  fetch(`${API}/twitch/user/${encodeURIComponent(e.target.toLowerCase())}`)
+    .then(r => r.ok ? r.json() as Promise<TwitchUser> : Promise.reject())
+    .then(u => { popupUser.value = u })
+    .catch(() => {})
+    .finally(() => { popupLoading.value = false })
 }
 
 function openUsercardPopout(username: string, channel: string) {
   window.open(`https://www.twitch.tv/popout/${channel}/viewercard/${username}`, '_blank', 'width=340,height=560')
 }
 
-function closePopup() { popup.value = null }
+function closePopup() { popup.value = null; popupUser.value = null }
+
+function fmtFollowers(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M'
+  if (n >= 1_000)     return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'K'
+  return String(n)
+}
+
+function fmtJoined(iso: string): string {
+  return new Date(iso).toLocaleDateString([], { month: 'short', year: 'numeric' })
+}
 
 // Format detail nicely
 function fmtDetail(e: ActivityEntry): string {
@@ -294,26 +317,42 @@ function fmtActor(actor: string) {
     <!-- User popup -->
     <div v-if="popup" class="user-popup" :style="{ top: popup.y + 'px', left: popup.x + 'px' }" @click.stop>
       <div class="popup-header">
-        <div>
-          <div class="popup-name">{{ popup.entry.target }}</div>
+        <div class="popup-avatar-wrap">
+          <img v-if="popupUser?.avatar" :src="popupUser.avatar" class="popup-avatar" />
+          <div v-else class="popup-avatar-placeholder">{{ popup.entry.target[0]?.toUpperCase() }}</div>
+        </div>
+        <div class="popup-title-block">
+          <div class="popup-name">{{ popupUser?.displayName ?? popup.entry.target }}</div>
           <div class="popup-sub">in #{{ popup.entry.channel }}</div>
         </div>
         <button class="popup-close" @click="closePopup">✕</button>
       </div>
-      <!-- Embedded Twitch usercard -->
-      <div class="popup-card-wrap">
-        <iframe
-          class="popup-card"
-          :src="`https://www.twitch.tv/popout/${popup.entry.channel}/viewercard/${popup.entry.target}`"
-          scrolling="no" frameborder="0" allowtransparency="true"
-        />
+
+      <!-- Profile body -->
+      <div class="popup-body">
+        <div v-if="popupLoading" class="popup-loading">Loading…</div>
+        <template v-else-if="popupUser">
+          <div v-if="popupUser.description" class="popup-desc">{{ popupUser.description }}</div>
+          <div class="popup-stats">
+            <div class="popup-stat">
+              <span class="stat-val">{{ fmtFollowers(popupUser.followers) }}</span>
+              <span class="stat-lbl">followers</span>
+            </div>
+            <div class="popup-stat">
+              <span class="stat-val">{{ fmtJoined(popupUser.createdAt) }}</span>
+              <span class="stat-lbl">joined</span>
+            </div>
+          </div>
+        </template>
+        <div v-else class="popup-loading" style="color:#555">Could not load profile.</div>
       </div>
+
       <div class="popup-actions">
         <button class="popup-btn" @click="goToLogs(popup.entry); closePopup()">
-          📋 Go to Logs
+          📋 Logs
         </button>
         <button class="popup-btn" @click="openUsercardPopout(popup.entry.target, popup.entry.channel)">
-          ↗ Open in Twitch
+          ↗ Twitch
         </button>
       </div>
     </div>
@@ -413,35 +452,55 @@ function fmtActor(actor: string) {
 .user-popup {
   position: fixed; z-index: 100;
   background: #1b1b1f; border: 1px solid #2a2a30;
-  width: 320px;
+  width: 300px;
   box-shadow: 0 8px 32px #00000088;
   transform: translate(-50%, 12px);
   overflow: hidden;
 }
 .popup-header {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  padding: 12px 14px 10px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 12px 10px;
   border-bottom: 1px solid #1e1e22;
 }
-.popup-name  { font-size: 14px; font-weight: 700; color: #e0e0e0; margin-bottom: 2px; }
+.popup-avatar-wrap { flex-shrink: 0; }
+.popup-avatar {
+  width: 40px; height: 40px; border-radius: 50%; display: block;
+  border: 2px solid #2a2a30;
+}
+.popup-avatar-placeholder {
+  width: 40px; height: 40px; border-radius: 50%;
+  background: #2a1a55; border: 2px solid #6f2bff44;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; font-weight: 700; color: #9d6cff;
+}
+.popup-title-block { flex: 1; min-width: 0; }
+.popup-name  { font-size: 13px; font-weight: 700; color: #e0e0e0; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .popup-sub   { font-size: 11px; color: #555; }
 .popup-close {
-  background: none; border: none; color: #444; font-size: 13px; cursor: pointer; padding: 0 2px; line-height: 1;
+  background: none; border: none; color: #444; font-size: 13px; cursor: pointer; padding: 0 2px; line-height: 1; flex-shrink: 0;
 }
 .popup-close:hover { color: #aaa; }
-.popup-card-wrap {
-  width: 100%; height: 360px; overflow: hidden; background: #0e0e11;
+.popup-body {
+  padding: 12px 14px; min-height: 72px; display: flex; flex-direction: column; gap: 10px;
 }
-.popup-card {
-  width: 100%; height: 100%; border: none;
-  /* Twitch usercard has its own scroll — clip it cleanly */
+.popup-loading {
+  font-size: 12px; color: #555; text-align: center; padding: 16px 0;
 }
+.popup-desc {
+  font-size: 11px; color: #888; line-height: 1.5;
+  max-height: 52px; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+}
+.popup-stats { display: flex; gap: 20px; }
+.popup-stat  { display: flex; flex-direction: column; gap: 2px; }
+.stat-val    { font-size: 14px; font-weight: 700; color: #e0e0e0; }
+.stat-lbl    { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .05em; }
 .popup-actions {
   display: flex; gap: 1px;
   border-top: 1px solid #1e1e22;
 }
 .popup-btn {
-  flex: 1; height: 34px; border: none; border-right: 1px solid #1e1e22;
+  flex: 1; height: 32px; border: none; border-right: 1px solid #1e1e22;
   background: #141418; color: #888; font-family: inherit; font-size: 11px;
   cursor: pointer; transition: background .15s, color .15s;
 }
