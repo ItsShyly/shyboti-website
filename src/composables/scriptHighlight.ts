@@ -23,14 +23,6 @@ export function highlightScript(src: string): string {
   let out = '', i = 0
 
   while (i < src.length) {
-    // Comment: # to end of line
-    if (src[i] === '#') {
-      const end = src.indexOf('\n', i)
-      const line = end === -1 ? src.slice(i) : src.slice(i, end)
-      out += `<span class="sh-comment">${esc(line)}</span>`
-      i += line.length; continue
-    }
-
     // Quoted string
     if (src[i] === '"' || src[i] === "'") {
       const q = src[i]!; let j = i + 1
