@@ -11,6 +11,8 @@ interface ActivityEntry {
   id:        number
   channel:   string
   type:      'cmd_added' | 'cmd_changed' | 'cmd_removed' | 'ban' | 'unban' | 'timeout'
+           | 'timer_added' | 'timer_changed' | 'timer_removed' | 'timer_enabled' | 'timer_disabled'
+           | 'trigger_added' | 'trigger_changed' | 'trigger_removed' | 'trigger_enabled' | 'trigger_disabled'
   actor:     string
   target:    string
   detail:    string
@@ -44,7 +46,11 @@ const popupLoading  = ref(false)
 
 let sseSource: EventSource | null = null
 
-const ALL_TYPES = ['cmd_added','cmd_changed','cmd_removed','ban','unban','timeout'] as const
+const ALL_TYPES = [
+  'cmd_added','cmd_changed','cmd_removed','ban','unban','timeout',
+  'timer_added','timer_changed','timer_removed','timer_enabled','timer_disabled',
+  'trigger_added','trigger_changed','trigger_removed','trigger_enabled','trigger_disabled',
+] as const
 
 function toggleType(t: string) {
   const s = new Set(activeTypes.value)
@@ -157,12 +163,22 @@ function groupedActivity() {
 
 // ── TYPE META ─────────────────────────────────────────────────────────────────
 const TYPE_META: Record<string, { icon: string; color: string; label: string }> = {
-  cmd_added:   { icon: '+',  color: '#23d18b', label: 'Command added'   },
-  cmd_changed: { icon: '✎',  color: '#e5c07b', label: 'Command changed' },
-  cmd_removed: { icon: '−',  color: '#f14949', label: 'Command removed' },
-  ban:         { icon: '⊘',  color: '#f14949', label: 'Banned'          },
-  unban:       { icon: '✓',  color: '#4ec9b0', label: 'Unbanned'        },
-  timeout:     { icon: '⏱', color: '#c792ea', label: 'Timed out'       },
+  cmd_added:        { icon: '+',  color: '#23d18b', label: 'Command added'    },
+  cmd_changed:      { icon: '✎',  color: '#e5c07b', label: 'Command changed'  },
+  cmd_removed:      { icon: '−',  color: '#f14949', label: 'Command removed'  },
+  ban:              { icon: '⊘',  color: '#f14949', label: 'Banned'           },
+  unban:            { icon: '✓',  color: '#4ec9b0', label: 'Unbanned'         },
+  timeout:          { icon: '⏱', color: '#c792ea', label: 'Timed out'        },
+  timer_added:      { icon: '+',  color: '#23d18b', label: 'Timer added'      },
+  timer_changed:    { icon: '✎',  color: '#e5c07b', label: 'Timer changed'    },
+  timer_removed:    { icon: '−',  color: '#f14949', label: 'Timer removed'    },
+  timer_enabled:    { icon: '▶',  color: '#23d18b', label: 'Timer enabled'    },
+  timer_disabled:   { icon: '⏸', color: '#555555', label: 'Timer disabled'   },
+  trigger_added:    { icon: '+',  color: '#4ec9b0', label: 'Trigger added'    },
+  trigger_changed:  { icon: '✎',  color: '#e5c07b', label: 'Trigger changed'  },
+  trigger_removed:  { icon: '−',  color: '#f14949', label: 'Trigger removed'  },
+  trigger_enabled:  { icon: '▶',  color: '#4ec9b0', label: 'Trigger enabled'  },
+  trigger_disabled: { icon: '⏸', color: '#555555', label: 'Trigger disabled'  },
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
@@ -178,6 +194,12 @@ function goToLogs(e: ActivityEntry) {
   const ch = e.channel
   const user = e.target
   router.push({ path: '/logs', query: { channel: ch, user } })
+}
+
+// Navigate to automations for timer/trigger events
+function goToAutomations(e: ActivityEntry) {
+  const tab = e.type.startsWith('timer') ? 'timers' : 'triggers'
+  router.push({ path: '/automations', query: { tab } })
 }
 
 // Open user popup + fetch Twitch profile
@@ -328,6 +350,11 @@ function fmtActor(actor: string) {
                   v-if="['cmd_added','cmd_changed','cmd_removed'].includes(e.type)"
                   class="act-btn" title="Edit command"
                   @click.stop="goToCommand(e)">edit</button>
+                <!-- Go to automations for timer/trigger events -->
+                <button
+                  v-if="e.type.startsWith('timer') || e.type.startsWith('trigger')"
+                  class="act-btn" title="View in Automations"
+                  @click.stop="goToAutomations(e)">↻ auto</button>
               </div>
               <span class="feed-time">{{ fmtTime(e.timestamp) }}</span>
             </div>

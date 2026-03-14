@@ -295,7 +295,7 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
             <span class="sync-dot"></span>synced from #{{ syncConf.sync_from }}
             <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
           </button>
-          <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">↻ Sync…</button>
+          <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">↻ Sync… <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span></button>
         </div>
       </div>
       <button class="btn-new" @click="canEdit && openNew()" :disabled="!canEdit" :class="{ 'btn-new-disabled': !canEdit }">+ New timer</button>

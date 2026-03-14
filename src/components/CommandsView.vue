@@ -470,7 +470,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
           <span class="sync-indicator-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
         </button>
         <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">
-          ↻ Sync from channel…
+          ↻ Sync from channel… <span class="sync-indicator-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
         </button>
       </div>
         <div v-if="!creatingNew">
