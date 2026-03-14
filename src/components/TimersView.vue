@@ -6,6 +6,49 @@ import { highlightScript } from '../composables/scriptHighlight'
 
 const { session } = useAuth()
 
+const REF_GROUPS = [
+  { label: 'Channel', items: [
+    { token: '$channel.name',    desc: 'Channel login name' },
+    { token: '$channel.title',   desc: 'Stream title' },
+    { token: '$channel.game',    desc: 'Current game/category' },
+    { token: '$channel.viewers', desc: 'Viewer count' },
+    { token: '$channel.isLive',  desc: 'true/false' },
+    { token: '$channel.uptime',  desc: 'Stream uptime e.g. 1h 23m' },
+  ]},
+  { label: 'Counters', items: [
+    { token: '$counter.name',         desc: 'Increment +1, return value' },
+    { token: '$counter.name.get',      desc: 'Read without changing' },
+    { token: '$counter.name.set(n)',   desc: 'Set to value' },
+    { token: '$counter.name.add(n)',   desc: 'Add value' },
+    { token: '$counter.name.reset',    desc: 'Reset to 0' },
+  ]},
+  { label: 'Variables', items: [
+    { token: '$var.name',           desc: 'Read variable' },
+    { token: '$var.name.set(value)', desc: 'Set variable' },
+  ]},
+  { label: 'Lists', items: [
+    { token: '$list.name',        desc: 'Random item from list' },
+    { token: '$list.name.size',   desc: 'Number of items' },
+    { token: '$list.name.random', desc: 'Random item' },
+  ]},
+  { label: 'Random', items: [
+    { token: '$random.int(min,max)',  desc: 'Random integer' },
+    { token: '$random.pick(a,b,c)',  desc: 'Pick randomly from list' },
+    { token: '$random.chance(pct)',  desc: 'true with pct% probability' },
+  ]},
+  { label: 'Time', items: [
+    { token: '$time.now',          desc: 'Current ISO timestamp' },
+    { token: '$time.unix',         desc: 'Unix timestamp (seconds)' },
+    { token: '$time.format(ts,fmt)',desc: 'Format a timestamp' },
+  ]},
+  { label: 'Text / Calc', items: [
+    { token: '$text.upper(text)',  desc: 'Uppercase' },
+    { token: '$text.lower(text)',  desc: 'Lowercase' },
+    { token: '$calc(expr)',        desc: 'Math expression e.g. $calc(2+2)' },
+    { token: '$http.get(url)',     desc: 'GET request, returns text' },
+  ]},
+]
+
 interface Timer {
   id: number; name: string; response: string
   interval_sec: number; min_messages: number
@@ -213,6 +256,18 @@ async function toggleActive(t: Timer) {
                 data-placeholder="Hello chat! $channel.viewers viewers right now."
                 @input="onEditorInput"
               ></div>
+              <details class="ref-panel">
+                <summary class="ref-summary">📖 Variable reference</summary>
+                <div class="ref-content">
+                  <div v-for="g in REF_GROUPS" :key="g.label" class="ref-group">
+                    <div class="ref-group-label">{{ g.label }}</div>
+                    <div v-for="r in g.items" :key="r.token" class="ref-row">
+                      <code class="ref-token">{{ r.token }}</code>
+                      <span class="ref-desc">{{ r.desc }}</span>
+                    </div>
+                  </div>
+                </div>
+              </details>
             </div>
 
             <div class="row-2">
@@ -348,6 +403,15 @@ async function toggleActive(t: Timer) {
 .btn-cancel:hover { border-color: #555; color: #e0e0e0; }
 .btn-delete { height: 34px; padding: 0 14px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 12px; cursor: pointer; }
 .btn-delete:hover { background: #f1494911; }
+
+.ref-panel { border: 1px solid #1e1e22; margin-top: 4px; }
+.ref-summary { padding: 5px 10px; font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; user-select: none; list-style: none; }
+.ref-summary:hover { color: #888; }
+.ref-content { max-height: 240px; overflow-y: auto; padding: 6px 10px; display: flex; flex-direction: column; gap: 8px; }
+.ref-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9d6cff; margin-bottom: 2px; }
+.ref-row { display: flex; align-items: baseline; gap: 8px; padding: 1px 0; }
+.ref-token { font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; color: #4ec9b0; background: rgba(78,201,176,.08); padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
+.ref-desc { font-size: 10px; color: #484848; }
 </style>
 
 <style>

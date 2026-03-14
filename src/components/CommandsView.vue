@@ -444,10 +444,18 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
     <!-- ── Custom commands tab ─────────────────────────────────────── -->
     <template v-if="activeTab === 'Custom'">
     <div class="custom-header">
-    <span class="custom-count">{{ customCommands.length }} custom command{{ customCommands.length !== 1 ? 's' : '' }}</span>
-        <button class="sync-config-btn" @click="syncOpen = !syncOpen" :class="{ active: syncConf?.is_active }">
-          {{ syncConf?.is_active ? `↻ synced from #${syncConf.sync_from}` : '↻ Sync from channel…' }}
+      <div class="custom-header-left">
+        <span class="custom-count">{{ customCommands.length }} custom command{{ customCommands.length !== 1 ? 's' : '' }}</span>
+        <!-- Sync indicator — always visible when active, click to expand -->
+        <button v-if="syncConf?.is_active" class="sync-indicator" @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from} · click to manage`">
+          <span class="sync-indicator-dot"></span>
+          <span>synced from #{{ syncConf.sync_from }}</span>
+          <span class="sync-indicator-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
         </button>
+        <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">
+          ↻ Sync from channel…
+        </button>
+      </div>
         <div v-if="!creatingNew">
           <button class="create-btn" @click="startCreate">+ New command</button>
         </div>
@@ -468,27 +476,18 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
         </div>
       </div>
 
-      <!-- Sync panel -->
+      <!-- Sync panel — compact dropdown -->
       <div v-if="syncOpen" class="sync-panel">
-        <div class="sync-panel-title">Sync commands from another channel</div>
-        <div class="sync-panel-sub">Fetches all custom commands from the source channel and copies them here. You need access to both channels.</div>
-
-        <!-- Active sync status -->
-        <div v-if="syncConf?.is_active" class="sync-status-row">
-          <span class="sync-status-dot"></span>
-          <span class="sync-status-text">Syncing from <strong>#{{ syncConf.sync_from }}</strong></span>
-          <span v-if="syncConf.last_synced" class="sync-last-inline">· last synced {{ new Date(syncConf.last_synced).toLocaleString() }}</span>
-          <button class="sync-stop-btn" @click="stopSync">Stop sync</button>
-        </div>
-
         <div class="sync-row">
           <select v-model="syncFrom" class="field-select-sm">
-            <option value="">{{ syncConf?.is_active ? 'Change source…' : 'Select source channel…' }}</option>
+            <option value="">{{ syncConf?.is_active ? 'Change source…' : 'Select channel…' }}</option>
             <option v-for="ch in availableChannels.filter(c => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
           </select>
-          <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">{{ syncSaving ? 'Saving…' : syncConf?.is_active ? 'Update source' : 'Enable sync' }}</button>
-          <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">{{ syncRunning ? 'Syncing…' : '↻ Pull now' }}</button>
+          <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">{{ syncSaving ? '…' : syncConf?.is_active ? 'Update' : 'Enable' }}</button>
+          <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">{{ syncRunning ? '…' : '↻ Pull now' }}</button>
+          <button v-if="syncConf?.is_active" class="sync-stop-btn" @click="stopSync">Stop</button>
         </div>
+        <div v-if="syncConf?.last_synced" class="sync-last">Last pull: {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
         <div v-if="syncMsg" class="sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{ syncMsg }}</div>
       </div>
 
@@ -728,22 +727,20 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .share-btn:hover { background: rgba(78,201,176,.1); }
 
 /* Sync config */
-.sync-config-btn { height: 26px; padding: 0 10px; border: 1px solid #2a2a30; background: transparent; color: #555; font-family: inherit; font-size: 11px; cursor: pointer; transition: all .15s; }
-.sync-config-btn:hover { color: #9d6cff; border-color: #6f2bff44; }
-.sync-config-btn.active { color: #23d18b; border-color: #23d18b44; background: rgba(35,209,139,.08); }
-.sync-panel { background: #141418; border: 1px solid #1e1e24; padding: 12px 14px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
-.sync-panel-title { font-size: 12px; font-weight: 700; color: #e0e0e0; }
-.sync-panel-sub   { font-size: 11px; color: #555; }
-.sync-row  { display: flex; gap: 8px; align-items: center; }
-.sync-msg      { font-size: 11px; color: #23d18b; }
-.sync-msg.err  { color: #f14949; }
-.sync-status-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #1e1e24; margin-bottom: 4px; }
-.sync-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #23d18b; box-shadow: 0 0 5px #23d18b88; animation: pulse-live 2s ease-in-out infinite; flex-shrink: 0; }
+.custom-header-left { display: flex; align-items: center; gap: 10px; }
+.sync-indicator { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border: 1px solid #23d18b44; background: rgba(35,209,139,.06); color: #23d18b; font-family: inherit; font-size: 10px; cursor: pointer; transition: background .15s; }
+.sync-indicator:hover { background: rgba(35,209,139,.12); }
+.sync-indicator-dot { width: 6px; height: 6px; border-radius: 50%; background: #23d18b; box-shadow: 0 0 4px #23d18b88; animation: pulse-live 2s ease-in-out infinite; flex-shrink: 0; }
+.sync-indicator-chevron { font-size: 8px; opacity: .6; }
 @keyframes pulse-live { 0%,100%{opacity:1} 50%{opacity:.4} }
-.sync-status-text { font-size: 11px; color: #e0e0e0; }
-.sync-status-text strong { color: #9d6cff; }
-.sync-last-inline { font-size: 10px; color: #444; }
-.sync-stop-btn { margin-left: auto; height: 24px; padding: 0 10px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 10px; cursor: pointer; }
+.sync-config-btn { height: 22px; padding: 0 8px; border: 1px solid #2a2a30; background: transparent; color: #555; font-family: inherit; font-size: 10px; cursor: pointer; transition: all .15s; }
+.sync-config-btn:hover { color: #9d6cff; border-color: #6f2bff44; }
+.sync-panel { background: #141418; border: 1px solid #1e1e24; border-top: none; padding: 8px 10px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 5px; }
+.sync-row  { display: flex; gap: 6px; align-items: center; }
+.sync-msg  { font-size: 10px; color: #23d18b; }
+.sync-msg.err { color: #f14949; }
+.sync-last { font-size: 10px; color: #444; }
+.sync-stop-btn { height: 28px; padding: 0 8px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 11px; cursor: pointer; }
 .sync-stop-btn:hover { background: rgba(241,73,73,.1); }
 .field-select-sm { background: #0d0d10; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 6px 8px; outline: none; cursor: pointer; }
 .sync-save-btn { height: 32px; padding: 0 12px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }

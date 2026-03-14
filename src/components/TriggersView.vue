@@ -6,6 +6,42 @@ import { highlightScript } from '../composables/scriptHighlight'
 
 const { session } = useAuth()
 
+const REF_GROUPS = [
+  { label: 'User', items: [
+    { token: '$user.name',    desc: 'Sender login name' },
+    { token: '$user.display', desc: 'Sender display name' },
+    { token: '$user.mention', desc: '@DisplayName' },
+    { token: '$user.is(mod)', desc: 'true/false' },
+    { token: '$user.is(sub)', desc: 'true/false' },
+  ]},
+  { label: 'Message', items: [
+    { token: '$message.text',   desc: 'Full message text' },
+    { token: '$args',           desc: 'Text after trigger pattern' },
+    { token: '$1', desc: 'First word of args' },
+    { token: '$2', desc: 'Second word of args' },
+  ]},
+  { label: 'Channel', items: [
+    { token: '$channel.name',    desc: 'Channel login' },
+    { token: '$channel.game',    desc: 'Current game' },
+    { token: '$channel.title',   desc: 'Stream title' },
+    { token: '$channel.viewers', desc: 'Viewer count' },
+    { token: '$channel.isLive',  desc: 'true/false' },
+  ]},
+  { label: 'Variables / Counters', items: [
+    { token: '$var.name',           desc: 'Read variable' },
+    { token: '$var.name.set(value)', desc: 'Set variable' },
+    { token: '$counter.name',       desc: 'Increment +1' },
+    { token: '$counter.name.get',    desc: 'Read counter' },
+  ]},
+  { label: 'Random / Text', items: [
+    { token: '$random.int(min,max)', desc: 'Random integer' },
+    { token: '$random.pick(a,b,c)', desc: 'Pick from list' },
+    { token: '$text.upper(text)',    desc: 'Uppercase' },
+    { token: '$calc(expr)',          desc: 'Math expression' },
+    { token: '$http.get(url)',       desc: 'GET request' },
+  ]},
+]
+
 interface Trigger {
   id: number; name: string
   event_type: string; match_pattern: string; match_type: string
@@ -274,6 +310,18 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
                 data-placeholder="$user.mention just triggered this! PogChamp"
                 @input="onEditorInput"
               ></div>
+              <details class="ref-panel">
+                <summary class="ref-summary">📖 Variable reference</summary>
+                <div class="ref-content">
+                  <div v-for="g in REF_GROUPS" :key="g.label" class="ref-group">
+                    <div class="ref-group-label">{{ g.label }}</div>
+                    <div v-for="r in g.items" :key="r.token" class="ref-row">
+                      <code class="ref-token">{{ r.token }}</code>
+                      <span class="ref-desc">{{ r.desc }}</span>
+                    </div>
+                  </div>
+                </div>
+              </details>
             </div>
 
             <div class="row-3">
@@ -400,6 +448,14 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
 .btn-cancel:hover { border-color: #555; color: #e0e0e0; }
 .btn-delete { height: 34px; padding: 0 14px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 12px; cursor: pointer; }
 .btn-delete:hover { background: #f1494911; }
+.ref-panel { border: 1px solid #1e1e22; margin-top: 4px; }
+.ref-summary { padding: 5px 10px; font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; user-select: none; list-style: none; }
+.ref-summary:hover { color: #888; }
+.ref-content { max-height: 240px; overflow-y: auto; padding: 6px 10px; display: flex; flex-direction: column; gap: 8px; }
+.ref-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9d6cff; margin-bottom: 2px; }
+.ref-row { display: flex; align-items: baseline; gap: 8px; padding: 1px 0; }
+.ref-token { font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; color: #4ec9b0; background: rgba(78,201,176,.08); padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
+.ref-desc { font-size: 10px; color: #484848; }
 </style>
 
 <style>
