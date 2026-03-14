@@ -16,16 +16,11 @@ export interface RolePermissions {
   commands_toggle: boolean
   commands_edit: boolean
   commands_delete: boolean
-  // Timers
-  timers_view: boolean
-  timers_toggle: boolean
-  timers_edit: boolean
-  timers_delete: boolean
-  // Triggers
-  triggers_view: boolean
-  triggers_toggle: boolean
-  triggers_edit: boolean
-  triggers_delete: boolean
+  // Automations (Timers + Triggers)
+  automations_view: boolean
+  automations_toggle: boolean
+  automations_edit: boolean
+  automations_delete: boolean
   // Logs
   logs_view: boolean
   // Moderation

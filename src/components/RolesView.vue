@@ -17,17 +17,11 @@ const PERM_GROUPS: { label: string; perms: { key: keyof Omit<RolePermissions,'mo
     { key: 'commands_edit',   label: 'Edit',   desc: 'Edit responses, cooldowns, and settings. Create new commands.' },
     { key: 'commands_delete', label: 'Delete', desc: 'Permanently delete custom commands.' },
   ]},
-  { label: 'Timers', perms: [
-    { key: 'timers_view',   label: 'View',   desc: 'See the timers list.' },
-    { key: 'timers_toggle', label: 'Toggle', desc: 'Enable or disable timers.' },
-    { key: 'timers_edit',   label: 'Edit',   desc: 'Edit timer content and settings. Create new timers.' },
-    { key: 'timers_delete', label: 'Delete', desc: 'Permanently delete timers.' },
-  ]},
-  { label: 'Triggers', perms: [
-    { key: 'triggers_view',   label: 'View',   desc: 'See the triggers list.' },
-    { key: 'triggers_toggle', label: 'Toggle', desc: 'Enable or disable triggers.' },
-    { key: 'triggers_edit',   label: 'Edit',   desc: 'Edit trigger patterns and responses. Create new triggers.' },
-    { key: 'triggers_delete', label: 'Delete', desc: 'Permanently delete triggers.' },
+  { label: 'Automations', perms: [
+    { key: 'automations_view',   label: 'View',   desc: 'See timers and triggers.' },
+    { key: 'automations_toggle', label: 'Toggle', desc: 'Enable or disable timers and triggers.' },
+    { key: 'automations_edit',   label: 'Edit',   desc: 'Edit and create timers and triggers.' },
+    { key: 'automations_delete', label: 'Delete', desc: 'Permanently delete timers and triggers.' },
   ]},
   { label: 'Logs', perms: [
     { key: 'logs_view', label: 'View Logs', desc: 'Access the chat logs viewer.' },
@@ -40,12 +34,11 @@ const PERM_GROUPS: { label: string; perms: { key: keyof Omit<RolePermissions,'mo
 
 const DEFAULT_PERMS: Omit<RolePermissions, 'modsEnabled'> = {
   dashboard:        true,
-  commands_view:    true,  commands_toggle: true,  commands_edit: false, commands_delete: false,
-  timers_view:      true,  timers_toggle:   true,  timers_edit:   false, timers_delete:   false,
-  triggers_view:    true,  triggers_toggle: true,  triggers_edit: false, triggers_delete: false,
-  logs_view:        true,
-  moderation_view:   true,
-  moderation_manage: false,
+  commands_view:      true, commands_toggle:     true, commands_edit:      false, commands_delete:     false,
+  automations_view:   true, automations_toggle:  true, automations_edit:   false, automations_delete:  false,
+  logs_view:          true,
+  moderation_view:    true,
+  moderation_manage:  false,
 }
 
 // ── Global mod defaults ──────────────────────────────────────────────────────

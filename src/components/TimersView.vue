@@ -6,9 +6,9 @@ import { highlightScript } from '../composables/scriptHighlight'
 
 const { session, availableChannels, channelRole } = useAuth()
 
-const canToggle = computed(() => channelRole.value?.permissions.timers_toggle ?? false)
-const canEdit   = computed(() => channelRole.value?.permissions.timers_edit   ?? false)
-const canDelete = computed(() => channelRole.value?.permissions.timers_delete ?? false)
+const canToggle = computed(() => channelRole.value?.permissions.automations_toggle ?? false)
+const canEdit   = computed(() => channelRole.value?.permissions.automations_edit   ?? false)
+const canDelete = computed(() => channelRole.value?.permissions.automations_delete ?? false)
 
 const REF_GROUPS = [
   { label: 'Channel', items: [
