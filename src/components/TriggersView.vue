@@ -590,7 +590,8 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
 .panel-sub   { font-size: 11px; color: #555; margin-top: 3px; }
 .panel-close { width: 28px; height: 28px; border: none; background: transparent; color: #555; font-size: 14px; cursor: pointer; }
 .panel-close:hover { color: #e0e0e0; }
-.panel-body  { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; }
+.panel-body  { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: none; }
+.panel-body::-webkit-scrollbar { display: none; }
 
 .field-group  { display: flex; flex-direction: column; gap: 5px; }
 .field-label  { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; }

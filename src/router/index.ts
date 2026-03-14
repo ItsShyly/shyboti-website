@@ -13,6 +13,7 @@ const router = createRouter({
     { path: '/timers',      redirect: '/automations?tab=timers' },
     { path: '/triggers',    redirect: '/automations?tab=triggers' },
     { path: '/roles',       component: () => import('../components/RolesView.vue') },
+    { path: '/settings',    component: () => import('../components/SettingsView.vue') },
     { path: '/:path(.*)',   redirect: '/dashboard' },
   ],
 })

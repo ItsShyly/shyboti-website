@@ -169,9 +169,7 @@ onMounted(() => { load(); loadMods() })
         <h2 class="roles-title">Roles</h2>
         <p class="roles-sub">Control what mods can access in <span class="chan">#{{ session?.channel }}</span>.</p>
       </div>
-      <button class="save-btn" :class="{ saved }" :disabled="saving" @click="save">
-        {{ saved ? '✓ Saved' : saving ? 'Saving…' : 'Save changes' }}
-      </button>
+      <span v-if="saved" class="autosave-indicator">✓ Saved</span>
     </div>
 
     <!-- Master enable/disable -->
@@ -184,7 +182,7 @@ onMounted(() => { load(); loadMods() })
           </div>
           <p class="section-sub">Allow mods to access the dashboard at all. When off, mods see nothing.</p>
         </div>
-        <div class="toggle" :class="{ on: modsEnabled }" @click="modsEnabled = !modsEnabled">
+        <div class="toggle" :class="{ on: modsEnabled }" @click="modsEnabled = !modsEnabled; save()">
           <div class="toggle-knob"></div>
         </div>
       </div>
@@ -202,7 +200,7 @@ onMounted(() => { load(); loadMods() })
               <div
                 class="toggle sm"
                 :class="{ on: modsEnabled && (globalPerms as any)[perm.key] }"
-                @click="modsEnabled && ((globalPerms as any)[perm.key] = !(globalPerms as any)[perm.key])"
+                @click="modsEnabled && ((globalPerms as any)[perm.key] = !(globalPerms as any)[perm.key]); modsEnabled && save()"
               ><div class="toggle-knob"></div></div>
             </div>
           </div>
@@ -301,14 +299,7 @@ onMounted(() => { load(); loadMods() })
 .roles-sub   { font-size: 12px; color: #666; }
 .chan        { color: #9d6cff; }
 
-.save-btn {
-  height: 34px; padding: 0 18px; border: none; flex-shrink: 0;
-  background: #6f2bff; color: #fff;
-  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s;
-}
-.save-btn:hover { background: #7f3fff; }
-.save-btn.saved { background: #1a3d2a; color: #23d18b; cursor: default; }
-.save-btn:disabled { opacity: .5; cursor: not-allowed; }
+.autosave-indicator { font-size: 11px; color: #23d18b; padding: 4px 10px; background: rgba(35,209,139,.08); border: 1px solid rgba(35,209,139,.3); }
 
 /* Section */
 .section { background: #1a1a1e; border: 1px solid #2a2a30; padding: 18px 20px; }

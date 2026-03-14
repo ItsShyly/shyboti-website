@@ -21,7 +21,7 @@ function selectChannel(ch: string) {
   showChannelMenu.value = false
 }
 
-type NavItem = 'dashboard' | 'commands' | 'logs' | 'moderation' | 'roles' | 'automations'
+type NavItem = 'dashboard' | 'commands' | 'logs' | 'moderation' | 'roles' | 'automations' | 'settings'
 const activeRoute = computed(() => route.path.replace('/', '') || 'dashboard')
 
 function nav(to: NavItem) {
@@ -127,13 +127,18 @@ function addBot() { window.location.href = `${API}/auth/add` }
           @click="nav('automations')">
           Automations <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
-          Logs
-        </button>
         <button v-if="!session || channelRole?.role === 'broadcaster'"
           class="sidebar-btn" :class="{ active: activeRoute === 'roles', locked: !session }"
           @click="nav('roles')">
           Roles <span v-if="!session" class="lock-icon">🔒</span>
+        </button>
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
+          Logs
+        </button>
+        <button v-if="!session || channelRole?.role === 'broadcaster'"
+          class="sidebar-btn" :class="{ active: activeRoute === 'settings', locked: !session }"
+          @click="nav('settings')">
+          Settings <span v-if="!session" class="lock-icon">🔒</span>
         </button>
         <div v-if="session && !availableChannels.includes(session.login)" class="sidebar-bottom">
           <button class="bot-btn add" @click="addBot">+ Add to your channel</button>
@@ -185,9 +190,9 @@ body { background: #02030a; color: #fff; font-family: 'JetBrains Mono', monospac
 .banner-dismiss { background: transparent; border: none; color: #666; font-size: 14px; cursor: pointer; padding: 0 6px; }
 .banner-dismiss:hover { color: #aaa; }
 
-.body { display: flex; flex: 1; padding: 24px 32px; gap: 24px; min-height: 0; }
+.body { display: flex; flex: 1; min-height: 0; }
 
-.sidebar { width: 200px; flex-shrink: 0; background: #1b1b1d; display: flex; flex-direction: column; padding: 8px 0; }
+.sidebar { width: 200px; flex-shrink: 0; background: #0e0e12; display: flex; flex-direction: column; padding: 8px 0; border-right: 1px solid #1e1e24; }
 .sidebar-btn { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 10px 20px; border: none; background: transparent; color: #777; text-align: left; font-family: inherit; font-size: 13px; cursor: pointer; transition: color 0.1s, background 0.1s; letter-spacing: 0.01em; }
 .sidebar-btn:hover { color: #fff; background: #222; }
 .sidebar-btn.active { color: #9d6cff; font-weight: 700; background: rgba(111,43,255,.08); border-left: 2px solid #6f2bff; }
@@ -199,5 +204,6 @@ body { background: #02030a; color: #fff; font-family: 'JetBrains Mono', monospac
 .bot-btn.add { background: #6f2bff; color: #fff; }
 .bot-btn.add:hover { background: #7f3fff; }
 
-.main-panel { flex: 1; background: #1b1b1d; padding: 24px; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; }
+.main-panel { flex: 1; background: #1b1b1d; padding: 24px; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; scrollbar-width: none; }
+.main-panel::-webkit-scrollbar { display: none; }
 </style>

@@ -1693,7 +1693,8 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .panel-close { width: 28px; height: 28px; border: none; background: transparent; color: #555; font-size: 14px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .panel-close:hover { color: #e0e0e0; }
 .panel-loading { padding: 40px; text-align: center; color: #555; font-size: 13px; }
-.panel-body { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+.panel-body { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; scrollbar-width: none; }
+.panel-body::-webkit-scrollbar { display: none; }
 
 .field-group { display: flex; flex-direction: column; gap: 5px; }
 .field-group.sm { flex: 1; min-width: 0; }
@@ -1896,7 +1897,8 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .mock-check-label input { accent-color: #6f2bff; }
 
 /* ── Reference panel ── */
-.ref-content { max-height: 320px; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 10px; }
+.ref-content { max-height: 320px; overflow-y: auto; padding: 8px 10px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: none; }
+.ref-content::-webkit-scrollbar { display: none; }
 .ref-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9d6cff; margin-bottom: 3px; }
 .ref-row { display: flex; align-items: baseline; gap: 8px; padding: 1px 0; }
 .ref-token { font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; color: #4ec9b0; background: rgba(78,201,176,.08); padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
