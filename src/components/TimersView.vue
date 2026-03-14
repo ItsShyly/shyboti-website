@@ -46,7 +46,7 @@ async function load() {
     if (!res.ok) throw new Error()
     const data = await res.json() as { timers: Timer[] }
     timers.value = data.timers
-  } catch { error.value = 'Could not load timers.' }
+  } catch (e: any) { error.value = 'Could not load timers: ' + (e?.message ?? e) }
   loading.value = false
 }
 
@@ -114,12 +114,12 @@ async function saveTimer() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
       body: JSON.stringify(editTimer.value),
     })
-    if (!res.ok) throw new Error()
+    if (!res.ok) throw new Error(await res.text())
     showSuccess('Timer saved!')
     editOpen.value = false
     load()
-  } catch { error.value = 'Could not save timer.' }
-  saving.value = null
+  } catch (e: any) { error.value = 'Could not save timer: ' + (e?.message ?? e) }
+  finally { saving.value = null }
 }
 
 async function deleteTimer(name: string) {

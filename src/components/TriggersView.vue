@@ -69,7 +69,7 @@ async function load() {
     if (!res.ok) throw new Error()
     const data = await res.json() as { triggers: Trigger[] }
     triggers.value = data.triggers
-  } catch { error.value = 'Could not load triggers.' }
+  } catch (e: any) { error.value = 'Could not load triggers: ' + (e?.message ?? e) }
   loading.value = false
 }
 
@@ -129,12 +129,12 @@ async function saveTrigger() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
       body: JSON.stringify(editTrigger.value),
     })
-    if (!res.ok) throw new Error()
+    if (!res.ok) throw new Error(await res.text())
     showSuccess('Trigger saved!')
     editOpen.value = false
     load()
-  } catch { error.value = 'Could not save trigger.' }
-  saving.value = null
+  } catch (e: any) { error.value = 'Could not save trigger: ' + (e?.message ?? e) }
+  finally { saving.value = null }
 }
 
 async function deleteTrigger(name: string) {
