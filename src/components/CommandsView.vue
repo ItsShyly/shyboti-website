@@ -324,6 +324,21 @@ async function saveSync() {
   syncSaving.value = false
 }
 
+async function stopSync() {
+  if (!session.value || !syncConf.value) return
+  syncSaving.value = true
+  try {
+    await fetch(`${API}/command-sync/${session.value.channel}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ sync_from: syncConf.value.sync_from, is_active: false }),
+    })
+    syncConf.value = { ...syncConf.value, is_active: 0 }
+    syncMsg.value = 'Sync stopped.'
+  } catch { syncMsg.value = 'Failed to stop sync.' }
+  syncSaving.value = false
+}
+
 async function runSync() {
   if (!session.value) return
   syncRunning.value = true; syncMsg.value = ''
@@ -456,17 +471,25 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       <!-- Sync panel -->
       <div v-if="syncOpen" class="sync-panel">
         <div class="sync-panel-title">Sync commands from another channel</div>
-        <div class="sync-panel-sub">Fetches all custom commands from the source channel and copies them here. You need access to the source channel.</div>
+        <div class="sync-panel-sub">Fetches all custom commands from the source channel and copies them here. You need access to both channels.</div>
+
+        <!-- Active sync status -->
+        <div v-if="syncConf?.is_active" class="sync-status-row">
+          <span class="sync-status-dot"></span>
+          <span class="sync-status-text">Syncing from <strong>#{{ syncConf.sync_from }}</strong></span>
+          <span v-if="syncConf.last_synced" class="sync-last-inline">· last synced {{ new Date(syncConf.last_synced).toLocaleString() }}</span>
+          <button class="sync-stop-btn" @click="stopSync">Stop sync</button>
+        </div>
+
         <div class="sync-row">
           <select v-model="syncFrom" class="field-select-sm">
-            <option value="">Select source channel…</option>
+            <option value="">{{ syncConf?.is_active ? 'Change source…' : 'Select source channel…' }}</option>
             <option v-for="ch in availableChannels.filter(c => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
           </select>
-          <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">{{ syncSaving ? 'Saving…' : 'Save config' }}</button>
-          <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">{{ syncRunning ? 'Syncing…' : '↻ Sync now' }}</button>
+          <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">{{ syncSaving ? 'Saving…' : syncConf?.is_active ? 'Update source' : 'Enable sync' }}</button>
+          <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">{{ syncRunning ? 'Syncing…' : '↻ Pull now' }}</button>
         </div>
-        <div v-if="syncMsg" class="sync-msg">{{ syncMsg }}</div>
-        <div v-if="syncConf?.last_synced" class="sync-last">Last synced: {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
+        <div v-if="syncMsg" class="sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{ syncMsg }}</div>
       </div>
 
       <div v-if="customLoading" class="state-msg">Loading…</div>
@@ -712,8 +735,16 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .sync-panel-title { font-size: 12px; font-weight: 700; color: #e0e0e0; }
 .sync-panel-sub   { font-size: 11px; color: #555; }
 .sync-row  { display: flex; gap: 8px; align-items: center; }
-.sync-msg  { font-size: 11px; color: #23d18b; }
-.sync-last { font-size: 10px; color: #444; }
+.sync-msg      { font-size: 11px; color: #23d18b; }
+.sync-msg.err  { color: #f14949; }
+.sync-status-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid #1e1e24; margin-bottom: 4px; }
+.sync-status-dot { width: 7px; height: 7px; border-radius: 50%; background: #23d18b; box-shadow: 0 0 5px #23d18b88; animation: pulse-live 2s ease-in-out infinite; flex-shrink: 0; }
+@keyframes pulse-live { 0%,100%{opacity:1} 50%{opacity:.4} }
+.sync-status-text { font-size: 11px; color: #e0e0e0; }
+.sync-status-text strong { color: #9d6cff; }
+.sync-last-inline { font-size: 10px; color: #444; }
+.sync-stop-btn { margin-left: auto; height: 24px; padding: 0 10px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 10px; cursor: pointer; }
+.sync-stop-btn:hover { background: rgba(241,73,73,.1); }
 .field-select-sm { background: #0d0d10; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 6px 8px; outline: none; cursor: pointer; }
 .sync-save-btn { height: 32px; padding: 0 12px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
 .sync-save-btn:hover:not(:disabled) { background: #7f3fff; }

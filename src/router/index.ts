@@ -9,6 +9,8 @@ const router = createRouter({
     { path: '/commands',    component: () => import('../components/CommandsView.vue') },
     { path: '/logs',        component: () => import('../components/LogsView.vue') },
     { path: '/moderation',  component: () => import('../components/ModerationView.vue') },
+    { path: '/timers',      component: () => import('../components/TimersView.vue') },
+    { path: '/triggers',    component: () => import('../components/TriggersView.vue') },
     { path: '/roles',       component: () => import('../components/RolesView.vue') },
     { path: '/:path(.*)',   redirect: '/dashboard' },
   ],

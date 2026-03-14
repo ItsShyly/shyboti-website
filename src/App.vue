@@ -21,7 +21,7 @@ function selectChannel(ch: string) {
   showChannelMenu.value = false
 }
 
-type NavItem = 'dashboard' | 'commands' | 'logs' | 'moderation' | 'roles'
+type NavItem = 'dashboard' | 'commands' | 'logs' | 'moderation' | 'roles' | 'timers' | 'triggers'
 const activeRoute = computed(() => route.path.replace('/', '') || 'dashboard')
 
 function nav(to: NavItem) {
@@ -122,6 +122,14 @@ function addBot() { window.location.href = `${API}/auth/add` }
         <button class="sidebar-btn" :class="{ active: activeRoute === 'moderation', locked: !session }"
           @click="nav('moderation')">
           Moderation <span v-if="!session" class="lock-icon">🔒</span>
+        </button>
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'timers', locked: !session }"
+          @click="nav('timers')">
+          Timers <span v-if="!session" class="lock-icon">🔒</span>
+        </button>
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'triggers', locked: !session }"
+          @click="nav('triggers')">
+          Triggers <span v-if="!session" class="lock-icon">🔒</span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
           Logs
