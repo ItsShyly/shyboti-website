@@ -190,9 +190,9 @@ async function toggleActive(t: Trigger) {
   if (!session.value) return
   const next = t.is_active ? 0 : 1
   await fetch(`${API}/triggers/${session.value.channel}/${t.name}`, {
-    method: 'PUT',
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
-    body: JSON.stringify({ ...t, is_active: next }),
+    body: JSON.stringify({ is_active: next }),
   })
   t.is_active = next
 }
