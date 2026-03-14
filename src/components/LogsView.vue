@@ -284,6 +284,20 @@ async function search() {
 
   await nextTick()
   attachScrollListener()
+  // If content doesn't fill the container, auto-load older days until it does
+  await autoFillIfShort()
+}
+
+async function autoFillIfShort() {
+  if (noMore.value) return
+  await nextTick()
+  const body = bodyRef.value; if (!body) return
+  // Keep loading older chunks while there's room to scroll
+  let safety = 0
+  while (body.scrollHeight <= body.clientHeight + 20 && !noMore.value && safety++ < 10) {
+    await loadOlder()
+    await nextTick()
+  }
 }
 
 function scrollToBottom() {

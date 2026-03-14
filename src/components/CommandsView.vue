@@ -379,18 +379,15 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 
 <template>
   <div class="cmd-root">
-    <!-- Tab bar + search — sticky together -->
-    <div class="cmd-sticky-top">
-      <div class="cmd-tabs">
-        <button class="cmd-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">Default</button>
-        <button class="cmd-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">Custom</button>
-      </div>
-      <div class="cmd-search-wrap">
-        <svg class="cmd-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
-        </svg>
-        <input v-model="search" class="cmd-search" placeholder="Search commands…" />
-      </div>
+    <div class="cmd-tabs">
+      <button class="cmd-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">Default</button>
+      <button class="cmd-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">Custom</button>
+    </div>
+    <div class="cmd-search-wrap">
+      <svg class="cmd-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
+      </svg>
+      <input v-model="search" class="cmd-search" placeholder="Search commands…" />
     </div>
 
     <template v-if="activeTab === 'Default'">
@@ -512,7 +509,6 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       <div v-if="!customLoading && filteredCustom().length > 0" class="table-header custom-table-header">
         <div></div>
         <div class="sort-col" @click="setSort('name')">Name <span class="sort-arrow">{{ sortField==='name' ? (sortDir==='asc'?'↑':'↓') : '↕' }}</span></div>
-        <div class="sort-col" @click="setSort('isActive')">On/Off <span class="sort-arrow">{{ sortField==='isActive' ? (sortDir==='asc'?'↑':'↓') : '↕' }}</span></div>
         <div>Access</div>
         <div class="sort-col" @click="setSort('cooldown')">Global CD <span class="sort-arrow">{{ sortField==='cooldown' ? (sortDir==='asc'?'↑':'↓') : '↕' }}</span></div>
         <div>User CD</div>
@@ -538,9 +534,6 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
             {{ prefix }}{{ cmd.name }}
             <span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
           </div>
-
-          <!-- on/off square duplicate column for alignment with header -->
-          <div></div>
 
           <div>
             <button class="access-btn" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly, disabled: !canToggle }" @click="cycleRestriction(cmd)">{{ restrictionLabel(cmd) }}</button>
@@ -609,17 +602,15 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 </template>
 
 <style scoped>
-.cmd-root { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.cmd-sticky-top { position: sticky; top: 0; z-index: 10; background: var(--panel-bg, #1a1a1e); }
-.cmd-tabs { display: flex; gap: 0; border-bottom: 1px solid #222; }
+.cmd-root { display: flex; flex-direction: column; }
+.cmd-tabs { display: flex; gap: 0; border-bottom: 1px solid #222; margin-bottom: 0; }
 .cmd-tab { padding: 8px 20px; border: none; background: transparent; color: #555; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; }
 .cmd-tab:hover { color: #aaa; }
 .cmd-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
 
 .cmd-search-wrap {
   position: relative; height: 38px; background: #2c2c2e;
-  display: flex; align-items: center; margin-bottom: 0;
-  border-bottom: 1px solid #222;
+  display: flex; align-items: center; margin-bottom: 12px;
 }
 .cmd-search-icon { position: absolute; left: 10px; width: 16px; height: 16px; color: #666; pointer-events: none; }
 .cmd-search {
@@ -632,6 +623,14 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 
 .table-header,
 .table-row { display: grid; grid-template-columns: 70px 1fr 110px 90px 90px 110px; align-items: center; }
+
+/* Custom commands use wider last column for 3 action buttons */
+.custom-table-header,
+.custom-row { grid-template-columns: 70px 1fr 110px 90px 90px 160px; }
+
+.sort-col { cursor: pointer; user-select: none; }
+.sort-col:hover { color: #aaa; }
+.sort-arrow { font-size: 9px; color: #555; margin-left: 3px; }
 
 .table-header {
   padding: 0 16px 10px;

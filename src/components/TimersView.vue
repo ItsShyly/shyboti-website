@@ -224,7 +224,10 @@ async function toggleActive(t: Timer) {
           </div>
           <div class="timer-response">{{ t.response.slice(0, 80) }}{{ t.response.length > 80 ? '…' : '' }}</div>
         </div>
-        <button class="btn-del" @click.stop="deleteTimer(t.name)" :disabled="saving === t.name">✕</button>
+        <div class="row-actions">
+          <button class="btn-action edit" @click.stop="openEdit(t)">Edit</button>
+          <button class="btn-action del" @click.stop="deleteTimer(t.name)" :disabled="saving === t.name">✕</button>
+        </div>
       </div>
     </div>
 
@@ -357,9 +360,13 @@ async function toggleActive(t: Timer) {
 .meta-pill.game     { color: #23d18b; border-color: #23d18b44; background: #23d18b11; }
 .meta-pill.cond     { color: #c792ea; border-color: #c792ea44; background: #c792ea11; }
 
-.btn-del { width: 26px; height: 26px; border: 1px solid #f1494933; background: transparent; color: #f14949; font-size: 11px; cursor: pointer; flex-shrink: 0; opacity: 0; transition: opacity .15s; }
-.timer-row:hover .btn-del { opacity: 1; }
-.btn-del:hover { background: #f1494922; }
+.row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.btn-action { height: 30px; padding: 0 10px; border: 1px solid; background: transparent; font-family: inherit; font-size: 11px; cursor: pointer; transition: background .15s; white-space: nowrap; }
+.btn-action.edit { border-color: #6f2bff66; color: #9d6cff; }
+.btn-action.edit:hover { background: #6f2bff22; }
+.btn-action.del { border-color: #f1494944; color: #f14949; }
+.btn-action.del:hover { background: #f1494911; }
+.btn-action:disabled { opacity: .4; cursor: not-allowed; }
 
 /* Panel */
 .panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: flex-start; justify-content: flex-end; z-index: 1000; }
