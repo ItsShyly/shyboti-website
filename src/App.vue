@@ -30,7 +30,6 @@ function nav(to: NavItem) {
   router.push('/' + to)
 }
 
-
 const showAddBanner = ref(false)
 const toast = ref('')
 function showToast(msg: string) {
@@ -60,7 +59,6 @@ onMounted(async () => {
     showToast(`✓ ShyBoti left #${channel}`)
   }
 
-  // Default route: logged in → dashboard, logged out → home
   if (route.path === '/' || route.path === '') {
     router.push(session.value ? '/dashboard' : '/home')
   }
@@ -135,6 +133,7 @@ function addBot() { window.location.href = `${API}/auth/add` }
         <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
           Logs
         </button>
+        <div class="sidebar-spacer"></div>
         <button v-if="!session || channelRole?.role === 'broadcaster'"
           class="sidebar-btn" :class="{ active: activeRoute === 'settings', locked: !session }"
           @click="nav('settings')">
@@ -155,8 +154,8 @@ function addBot() { window.location.href = `${API}/auth/add` }
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; }
-body { background: #02030a; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+html, body { height: 100%; overflow: hidden; }
+body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
 .page { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
 .topbar { height: 52px; flex-shrink: 0; background: #0e0e12; border-bottom: 1px solid #1e1e24; display: flex; align-items: center; padding: 0 32px; gap: 16px; }
@@ -190,20 +189,22 @@ body { background: #02030a; color: #fff; font-family: 'JetBrains Mono', monospac
 .banner-dismiss { background: transparent; border: none; color: #666; font-size: 14px; cursor: pointer; padding: 0 6px; }
 .banner-dismiss:hover { color: #aaa; }
 
-.body { display: flex; flex: 1; min-height: 0; }
+.body { display: flex; flex: 1; min-height: 0; overflow: hidden; }
 
-.sidebar { width: 200px; flex-shrink: 0; background: #0e0e12; display: flex; flex-direction: column; padding: 8px 0; border-right: 1px solid #1e1e24; }
+.sidebar { width: 200px; flex-shrink: 0; background: #0e0e12; display: flex; flex-direction: column; padding: 8px 0; border-right: 1px solid #1e1e24; overflow-y: auto; scrollbar-width: none; }
+.sidebar::-webkit-scrollbar { display: none; }
+.sidebar-spacer { flex: 1; }
 .sidebar-btn { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 10px 20px; border: none; background: transparent; color: #777; text-align: left; font-family: inherit; font-size: 13px; cursor: pointer; transition: color 0.1s, background 0.1s; letter-spacing: 0.01em; }
-.sidebar-btn:hover { color: #fff; background: #222; }
+.sidebar-btn:hover { color: #fff; background: #16161a; }
 .sidebar-btn.active { color: #9d6cff; font-weight: 700; background: rgba(111,43,255,.08); border-left: 2px solid #6f2bff; }
 .sidebar-btn.locked { opacity: 0.45; }
 .sidebar-btn.locked:hover { opacity: 0.75; }
 .lock-icon { font-size: 10px; opacity: 0.6; }
-.sidebar-bottom { margin-top: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #222; }
+.sidebar-bottom { padding: 12px 16px; border-top: 1px solid #1e1e24; }
 .bot-btn { width: 100%; height: 32px; border: none; font-family: inherit; font-size: 12px; cursor: pointer; }
 .bot-btn.add { background: #6f2bff; color: #fff; }
 .bot-btn.add:hover { background: #7f3fff; }
 
-.main-panel { flex: 1; background: #1b1b1d; padding: 24px; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; scrollbar-width: none; }
+.main-panel { flex: 1; background: #141418; padding: 24px; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; scrollbar-width: none; }
 .main-panel::-webkit-scrollbar { display: none; }
 </style>
