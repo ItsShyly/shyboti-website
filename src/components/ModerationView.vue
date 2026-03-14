@@ -8,7 +8,7 @@ const { session } = useAuth()
 // ── Types ──────────────────────────────────────────────────────────────────
 interface BlockedTerm   { id: number; term: string; action: string; duration: number; is_regex: number }
 interface SpamFilter    { id: number; type: string; threshold: number; action: string; duration: number }
-interface NukeConfig    { id: number; trigger: string; duration: number; label: string; lookback: number; stay_active: number; match_exact: number; is_regex: number }
+interface NukeConfig    { id: number; trigger: string; duration: number; label: string; lookback: number; stay_active: number; match_exact: number; is_regex: number; expires_at: number | null }
 
 // ── Tab ────────────────────────────────────────────────────────────────────
 type Tab = 'blocked' | 'spam' | 'nukes'
@@ -44,6 +44,8 @@ const newNukeLookback = ref(30)
 const newNukeStayActive = ref(false)
 const newNukeMatchExact = ref(false)
 const newNukeIsRegex    = ref(false)
+const newNukeExpiry     = ref(false)  // whether to set an expiry
+const newNukeExpiryMins = ref(60)     // minutes until auto-deactivate
 
 // ── Shared ────────────────────────────────────────────────────────────────
 const loading = ref(false)
@@ -145,6 +147,8 @@ async function addNuke() {
         stay_active: newNukeStayActive.value ? 1 : 0,
         match_exact: newNukeMatchExact.value ? 1 : 0,
         is_regex:    newNukeIsRegex.value    ? 1 : 0,
+        expires_at:  (newNukeStayActive.value && newNukeExpiry.value)
+          ? Date.now() + newNukeExpiryMins.value * 60_000 : null,
       })
     })
     if (!res.ok) throw new Error()
@@ -155,6 +159,29 @@ async function addNuke() {
     showSuccess('Nuke created.')
   } catch { error.value = 'Could not create nuke.' }
   saving.value = false
+}
+
+async function setNukeExpiry(nuke: NukeConfig, mins: number | null) {
+  if (!session.value) return
+  const expires_at = mins ? Date.now() + mins * 60_000 : null
+  try {
+    await fetch(`${API}/moderation/${session.value.channel}/nukes/${nuke.id}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${session.value.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ expires_at })
+    })
+    nuke.expires_at = expires_at
+    showSuccess(mins ? `Nuke expires in ${mins}m.` : 'Expiry cleared.')
+  } catch { error.value = 'Could not set expiry.' }
+}
+
+function nukeExpiresIn(n: NukeConfig): string | null {
+  if (!n.expires_at) return null
+  const rem = n.expires_at - Date.now()
+  if (rem <= 0) return 'expired'
+  const m = Math.floor(rem / 60_000)
+  const h = Math.floor(m / 60)
+  return h > 0 ? `${h}h ${m % 60}m` : `${m}m`
 }
 
 async function removeNuke(id: number) {
@@ -289,44 +316,52 @@ onMounted(load)
 
       <!-- Create nuke form -->
       <div class="add-row nuke-add-row">
-        <div class="nuke-inputs-top">
-          <input v-model="newNuke" class="field-input flex1"
-            :placeholder="newNukeIsRegex ? 'regex pattern, e.g. bad(spam|ad)' : 'trigger word/phrase'"
-            @keydown.enter="addNuke" />
-          <input v-model="newNukeLabel" class="field-input" style="width:120px" placeholder="label (optional)" />
-          <div class="threshold-wrap">
-            <span class="threshold-lbl">⏱ timeout</span>
-            <input v-model.number="newNukeDur" type="number" min="1" class="field-input dur-input" />
-            <span class="threshold-hint">sec</span>
-          </div>
-          <div class="threshold-wrap">
-            <span class="threshold-lbl">↩ lookback</span>
-            <input v-model.number="newNukeLookback" type="number" min="1" max="1440" class="field-input dur-input" />
+      <div class="nuke-inputs-top">
+      <input v-model="newNuke" class="field-input flex1"
+      :placeholder="newNukeIsRegex ? 'regex pattern, e.g. bad(spam|ad)' : 'trigger word/phrase'"
+      @keydown.enter="addNuke" />
+      <input v-model="newNukeLabel" class="field-input" style="width:120px" placeholder="label (optional)" />
+      <div class="threshold-wrap">
+      <span class="threshold-lbl">⏱ timeout</span>
+      <input v-model.number="newNukeDur" type="number" min="1" class="field-input dur-input" />
+      <span class="threshold-hint">sec</span>
+      </div>
+      <div class="threshold-wrap">
+      <span class="threshold-lbl">↩ lookback</span>
+      <input v-model.number="newNukeLookback" type="number" min="1" max="1440" class="field-input dur-input" />
+      <span class="threshold-hint">min</span>
+      </div>
+      </div>
+      <div class="nuke-toggles-row">
+      <label class="toggle-label">
+        <input type="checkbox" v-model="newNukeStayActive" class="toggle-cb" />
+      <span class="toggle-track" :class="{ on: newNukeStayActive }"><span class="toggle-thumb"></span></span>
+      <span class="toggle-text">Stay active</span>
+      <span class="info-icon" title="Auto-timeout anyone who says trigger going forward.">ⓘ</span>
+      </label>
+      <label class="toggle-label" :class="{ dimmed: newNukeIsRegex }">
+        <input type="checkbox" v-model="newNukeMatchExact" class="toggle-cb" :disabled="newNukeIsRegex" />
+        <span class="toggle-track" :class="{ on: newNukeMatchExact && !newNukeIsRegex }"><span class="toggle-thumb"></span></span>
+      <span class="toggle-text">Match exact</span>
+      <span class="info-icon" title="Only match the full message, not partial.">ⓘ</span>
+      </label>
+      <label class="toggle-label">
+        <input type="checkbox" v-model="newNukeIsRegex" class="toggle-cb" @change="newNukeIsRegex && (newNukeMatchExact = false)" />
+        <span class="toggle-track" :class="{ on: newNukeIsRegex }"><span class="toggle-thumb"></span></span>
+        <span class="toggle-text">Regex</span>
+      <span class="info-icon" title="Treat trigger as a regular expression.">ⓘ</span>
+      </label>
+      <!-- Expiry toggle -->
+      <label class="toggle-label" :class="{ dimmed: !newNukeStayActive }">
+        <input type="checkbox" v-model="newNukeExpiry" class="toggle-cb" :disabled="!newNukeStayActive" />
+        <span class="toggle-track" :class="{ on: newNukeExpiry && newNukeStayActive }"><span class="toggle-thumb"></span></span>
+          <span class="toggle-text">Auto-expire</span>
+            <span class="info-icon" title="Only applies to Stay active nukes. Automatically deactivates the nuke after the specified time.">ⓘ</span>
+          </label>
+          <div v-if="newNukeExpiry && newNukeStayActive" class="threshold-wrap">
+            <input v-model.number="newNukeExpiryMins" type="number" min="1" class="field-input dur-input" />
             <span class="threshold-hint">min</span>
           </div>
-        </div>
-        <div class="nuke-toggles-row">
-          <!-- Stay active toggle -->
-          <label class="toggle-label">
-            <input type="checkbox" v-model="newNukeStayActive" class="toggle-cb" />
-            <span class="toggle-track" :class="{ on: newNukeStayActive }"><span class="toggle-thumb"></span></span>
-            <span class="toggle-text">Stay active</span>
-            <span class="info-icon" title="When enabled, this nuke stays permanently active: anyone who says the trigger word going forward will automatically be timed out — not just people from the lookback window. Useful for long-running spam events.">ⓘ</span>
-          </label>
-          <!-- Match exact toggle -->
-          <label class="toggle-label" :class="{ dimmed: newNukeIsRegex }">
-            <input type="checkbox" v-model="newNukeMatchExact" class="toggle-cb" :disabled="newNukeIsRegex" />
-            <span class="toggle-track" :class="{ on: newNukeMatchExact && !newNukeIsRegex }"><span class="toggle-thumb"></span></span>
-            <span class="toggle-text">Match exact</span>
-            <span class="info-icon" title="When enabled, only messages that are exactly the trigger string (nothing more, nothing less) will match. When off (default), the trigger can appear anywhere in the message.">ⓘ</span>
-          </label>
-          <!-- Regex toggle -->
-          <label class="toggle-label">
-            <input type="checkbox" v-model="newNukeIsRegex" class="toggle-cb" @change="newNukeIsRegex && (newNukeMatchExact = false)" />
-            <span class="toggle-track" :class="{ on: newNukeIsRegex }"><span class="toggle-thumb"></span></span>
-            <span class="toggle-text">Regex</span>
-            <span class="info-icon" title="When enabled, the trigger is treated as a regular expression. This overrides 'Match exact'. Example: bad(word|phrase) matches both 'badword' and 'badphrase'.">ⓘ</span>
-          </label>
           <button class="add-btn" @click="addNuke" :disabled="saving" style="margin-left:auto">+ Create</button>
         </div>
       </div>
@@ -349,6 +384,22 @@ onMounted(load)
               @input="nukeLookbackOverride[n.id] = parseInt(($event.target as HTMLInputElement).value)"
               class="field-input dur-input" style="width:52px" title="Minutes to look back when firing" />
             <span class="threshold-hint">min</span>
+          </div>
+          <!-- Expiry indicator + controls -->
+          <div v-if="n.stay_active" class="expiry-wrap">
+            <span v-if="n.expires_at" class="expiry-badge" :class="{ expired: nukeExpiresIn(n) === 'expired' }">
+              {{ nukeExpiresIn(n) === 'expired' ? 'expired' : `expires ${nukeExpiresIn(n)}` }}
+              <button class="expiry-clear" @click="setNukeExpiry(n, null)" title="Clear expiry">✕</button>
+            </span>
+            <select v-else class="expiry-select" @change="setNukeExpiry(n, parseInt(($event.target as HTMLSelectElement).value))" title="Set auto-expiry">
+              <option value="0">set expiry…</option>
+              <option value="15">15 min</option>
+              <option value="30">30 min</option>
+              <option value="60">1 hour</option>
+              <option value="120">2 hours</option>
+              <option value="240">4 hours</option>
+              <option value="480">8 hours</option>
+            </select>
           </div>
           <button class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }" @click="fireNuke(n.id)">
             {{ nukeConfirm === n.id ? '⚠️ Sure?' : '💣 Fire' }}
@@ -471,4 +522,11 @@ onMounted(load)
 .nuke-fire-btn:hover { background: rgba(241,73,73,.3); }
 .nuke-fire-btn.confirm { background: rgba(241,73,73,.35); border-color: #f14949; animation: pulse-red .6s infinite alternate; }
 @keyframes pulse-red { from { box-shadow: 0 0 0 0 rgba(241,73,73,.4); } to { box-shadow: 0 0 0 4px rgba(241,73,73,0); } }
+
+.expiry-wrap { display: flex; align-items: center; }
+.expiry-badge { font-size: 10px; color: #23d18b; background: rgba(35,209,139,.1); border: 1px solid rgba(35,209,139,.3); padding: 2px 7px; display: flex; align-items: center; gap: 5px; }
+.expiry-badge.expired { color: #f14949; background: rgba(241,73,73,.1); border-color: rgba(241,73,73,.3); }
+.expiry-clear { background: none; border: none; color: inherit; cursor: pointer; font-size: 10px; padding: 0; opacity: .6; }
+.expiry-clear:hover { opacity: 1; }
+.expiry-select { background: #0d0d10; border: 1px solid #2a2a30; color: #555; font-family: inherit; font-size: 10px; padding: 3px 6px; cursor: pointer; outline: none; }
 </style>

@@ -260,8 +260,89 @@ function onCooldownInput(cmd: Command, field: 'cooldown' | 'userCooldown', raw: 
   cdTimers.value[key] = setTimeout(() => updateCommand(cmd), 600)
 }
 
-onMounted(() => { fetchCommands(); fetchCustomCommands() })
-watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands() })
+// ── Share ────────────────────────────────────────────────────────────────
+const shareOpen    = ref(false)
+const shareCmd     = ref('')
+const shareTarget  = ref('')
+const shareSaving  = ref(false)
+const shareSuccess = ref('')
+const shareError   = ref('')
+
+function openShare(name: string) {
+  shareCmd.value = name; shareTarget.value = ''; shareSuccess.value = ''; shareError.value = ''
+  shareOpen.value = true
+}
+
+async function doShare() {
+  if (!session.value || !shareTarget.value) return
+  shareSaving.value = true; shareError.value = ''
+  try {
+    const res = await fetch(`${API}/custom-commands/${session.value.channel}/${shareCmd.value}/share`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ target_channel: shareTarget.value }),
+    })
+    if (!res.ok) throw new Error((await res.json()).error ?? 'Failed')
+    shareSuccess.value = `Copied to #${shareTarget.value}!`
+    setTimeout(() => { shareOpen.value = false }, 1500)
+  } catch (e: any) { shareError.value = e.message ?? 'Share failed' }
+  shareSaving.value = false
+}
+
+// ── Sync ─────────────────────────────────────────────────────────────────
+const syncConf     = ref<{ sync_from: string; is_active: number; last_synced: number } | null>(null)
+const syncOpen     = ref(false)
+const syncFrom     = ref('')
+const syncSaving   = ref(false)
+const syncRunning  = ref(false)
+const syncMsg      = ref('')
+
+async function fetchSync() {
+  if (!session.value) return
+  try {
+    const res = await fetch(`${API}/command-sync/${session.value.channel}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    const data = await res.json() as { sync: any }
+    syncConf.value = data.sync
+    syncFrom.value = data.sync?.sync_from ?? ''
+  } catch {}
+}
+
+async function saveSync() {
+  if (!session.value || !syncFrom.value) return
+  syncSaving.value = true
+  try {
+    await fetch(`${API}/command-sync/${session.value.channel}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ sync_from: syncFrom.value, is_active: true }),
+    })
+    await fetchSync()
+    syncMsg.value = 'Sync config saved.'
+  } catch { syncMsg.value = 'Failed to save.' }
+  syncSaving.value = false
+}
+
+async function runSync() {
+  if (!session.value) return
+  syncRunning.value = true; syncMsg.value = ''
+  try {
+    const res  = await fetch(`${API}/command-sync/${session.value.channel}/run`, {
+      method: 'POST', headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    const data = await res.json() as { count?: number; error?: string }
+    if (!res.ok) throw new Error(data.error)
+    syncMsg.value = `Synced ${data.count} commands from #${syncConf.value?.sync_from}.`
+    await fetchCustomCommands()
+  } catch (e: any) { syncMsg.value = e.message ?? 'Sync failed' }
+  syncRunning.value = false
+}
+
+const { availableChannels } = useAuth()
+
+onMounted(() => { fetchCommands(); fetchCustomCommands(); fetchSync() })
+watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands(); fetchSync() })
 </script>
 
 <template>
@@ -347,8 +428,11 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 
     <!-- ── Custom commands tab ─────────────────────────────────────── -->
     <template v-if="activeTab === 'Custom'">
-      <div class="custom-header">
-        <span class="custom-count">{{ customCommands.length }} custom command{{ customCommands.length !== 1 ? 's' : '' }}</span>
+    <div class="custom-header">
+    <span class="custom-count">{{ customCommands.length }} custom command{{ customCommands.length !== 1 ? 's' : '' }}</span>
+        <button class="sync-config-btn" @click="syncOpen = !syncOpen" :class="{ active: syncConf?.is_active }">
+          {{ syncConf?.is_active ? `↻ synced from #${syncConf.sync_from}` : '↻ Sync from channel…' }}
+        </button>
         <div v-if="!creatingNew">
           <button class="create-btn" @click="startCreate">+ New command</button>
         </div>
@@ -367,6 +451,22 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
           <button class="cancel-btn" @click="cancelCreate">✕</button>
           <span v-if="newCmdError" class="new-cmd-error">{{ newCmdError }}</span>
         </div>
+      </div>
+
+      <!-- Sync panel -->
+      <div v-if="syncOpen" class="sync-panel">
+        <div class="sync-panel-title">Sync commands from another channel</div>
+        <div class="sync-panel-sub">Fetches all custom commands from the source channel and copies them here. You need access to the source channel.</div>
+        <div class="sync-row">
+          <select v-model="syncFrom" class="field-select-sm">
+            <option value="">Select source channel…</option>
+            <option v-for="ch in availableChannels.filter(c => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
+          </select>
+          <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">{{ syncSaving ? 'Saving…' : 'Save config' }}</button>
+          <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">{{ syncRunning ? 'Syncing…' : '↻ Sync now' }}</button>
+        </div>
+        <div v-if="syncMsg" class="sync-msg">{{ syncMsg }}</div>
+        <div v-if="syncConf?.last_synced" class="sync-last">Last synced: {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
       </div>
 
       <div v-if="customLoading" class="state-msg">Loading…</div>
@@ -413,6 +513,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 
           <div class="custom-actions">
             <button class="edit-btn" @click="openEdit(cmd.name, false)">Edit</button>
+            <button class="share-btn" @click="openShare(cmd.name)" title="Copy to another channel">↪</button>
             <button
               class="del-btn"
               :class="{ confirm: deleteConfirmName === cmd.name, deleting: deletingName === cmd.name }"
@@ -432,6 +533,26 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
     @close="editOpen = false"
     @saved="onEditSaved"
   />
+
+  <!-- Share modal -->
+  <Teleport to="body">
+    <div v-if="shareOpen" class="modal-overlay" @click.self="shareOpen = false">
+      <div class="modal">
+        <div class="modal-title">Share <span class="modal-cmd">+{{ shareCmd }}</span></div>
+        <div class="modal-sub">Copy this command to another channel you have access to.</div>
+        <select v-model="shareTarget" class="field-select-sm" style="width:100%;margin-top:12px">
+          <option value="">Select target channel…</option>
+          <option v-for="ch in availableChannels.filter(c => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
+        </select>
+        <div v-if="shareError"   class="modal-msg err">{{ shareError }}</div>
+        <div v-if="shareSuccess" class="modal-msg ok">{{ shareSuccess }}</div>
+        <div class="modal-footer">
+          <button class="btn-cancel" @click="shareOpen = false">Cancel</button>
+          <button class="btn-save" @click="doShare" :disabled="shareSaving || !shareTarget">{{ shareSaving ? 'Copying…' : 'Copy command' }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -578,4 +699,42 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .new-cmd-error {
   font-size: 11px; color: #f14949;
 }
+
+/* Share button */
+.share-btn { height: 34px; padding: 0 10px; border: 1px solid #4ec9b044; background: transparent; color: #4ec9b0; font-family: inherit; font-size: 13px; cursor: pointer; transition: background .15s; }
+.share-btn:hover { background: rgba(78,201,176,.1); }
+
+/* Sync config */
+.sync-config-btn { height: 26px; padding: 0 10px; border: 1px solid #2a2a30; background: transparent; color: #555; font-family: inherit; font-size: 11px; cursor: pointer; transition: all .15s; }
+.sync-config-btn:hover { color: #9d6cff; border-color: #6f2bff44; }
+.sync-config-btn.active { color: #23d18b; border-color: #23d18b44; background: rgba(35,209,139,.08); }
+.sync-panel { background: #141418; border: 1px solid #1e1e24; padding: 12px 14px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+.sync-panel-title { font-size: 12px; font-weight: 700; color: #e0e0e0; }
+.sync-panel-sub   { font-size: 11px; color: #555; }
+.sync-row  { display: flex; gap: 8px; align-items: center; }
+.sync-msg  { font-size: 11px; color: #23d18b; }
+.sync-last { font-size: 10px; color: #444; }
+.field-select-sm { background: #0d0d10; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 6px 8px; outline: none; cursor: pointer; }
+.sync-save-btn { height: 32px; padding: 0 12px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.sync-save-btn:hover:not(:disabled) { background: #7f3fff; }
+.sync-save-btn:disabled { opacity: .4; cursor: not-allowed; }
+.sync-run-btn  { height: 32px; padding: 0 12px; border: 1px solid #23d18b44; background: rgba(35,209,139,.08); color: #23d18b; font-family: inherit; font-size: 11px; cursor: pointer; }
+.sync-run-btn:hover:not(:disabled) { background: rgba(35,209,139,.2); }
+.sync-run-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+/* Share modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; z-index: 1001; }
+.modal { background: #1a1a1e; border: 1px solid #2a2a30; padding: 24px; width: 360px; max-width: 90vw; }
+.modal-title { font-size: 15px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
+.modal-cmd   { color: #9d6cff; }
+.modal-sub   { font-size: 11px; color: #555; }
+.modal-msg   { font-size: 11px; margin-top: 8px; padding: 6px 10px; }
+.modal-msg.ok  { color: #23d18b; background: rgba(35,209,139,.08); border-left: 2px solid #23d18b; }
+.modal-msg.err { color: #f14949; background: rgba(241,73,73,.08); border-left: 2px solid #f14949; }
+.modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.btn-save   { height: 32px; padding: 0 16px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.btn-save:hover:not(:disabled) { background: #7f3fff; }
+.btn-save:disabled { opacity: .4; cursor: not-allowed; }
+.btn-cancel { height: 32px; padding: 0 12px; border: 1px solid #333; background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer; }
+.btn-cancel:hover { border-color: #555; color: #e0e0e0; }
 </style>
