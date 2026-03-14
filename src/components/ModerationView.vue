@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 
-const { session } = useAuth()
+const { session, channelRole } = useAuth()
+
+const canView   = computed(() => channelRole.value?.permissions.moderation_view   ?? false)
+const canManage = computed(() => channelRole.value?.permissions.moderation_manage ?? false)
 
 // ── Types ──────────────────────────────────────────────────────────────────
 interface BlockedTerm   { id: number; term: string; action: string; duration: number; is_regex: number }
@@ -248,7 +251,7 @@ onMounted(load)
 
     <!-- ── Blocked Terms ── -->
     <template v-else-if="activeTab === 'blocked'">
-      <div class="add-row">
+      <div v-if="canManage" class="add-row">
         <input v-model="newTerm" class="field-input flex1" :placeholder="newTermIsRegex ? 'regex pattern, e.g. bad(word|phrase)' : 'word or phrase to block'" @keydown.enter="addBlockedTerm" />
         <label class="toggle-label">
           <input type="checkbox" v-model="newTermIsRegex" class="toggle-cb" />
@@ -271,14 +274,14 @@ onMounted(load)
           <span class="item-term">{{ t.term }}</span>
           <span class="item-action" :style="{ color: ACTION_COLORS[t.action] }">{{ t.action }}</span>
           <span v-if="t.action !== 'delete'" class="item-dur">{{ fmtDur(t.duration) }}</span>
-          <button class="item-del" @click="removeBlockedTerm(t.id)">✕</button>
+          <button v-if="canManage" class="item-del" @click="removeBlockedTerm(t.id)">✕</button>
         </div>
       </div>
     </template>
 
     <!-- ── Spam Filters ── -->
     <template v-else-if="activeTab === 'spam'">
-      <div class="add-row">
+      <div v-if="canManage" class="add-row">
         <select v-model="newSpamType" class="field-select flex1">
           <option v-for="s in SPAM_TYPES" :key="s.value" :value="s.value">{{ s.label }}</option>
         </select>
@@ -302,7 +305,7 @@ onMounted(load)
           <span class="item-dur" style="color:#888">≥ {{ f.threshold }}</span>
           <span class="item-action" :style="{ color: ACTION_COLORS[f.action] }">{{ f.action }}</span>
           <span v-if="f.action !== 'delete'" class="item-dur">{{ fmtDur(f.duration) }}</span>
-          <button class="item-del" @click="removeSpamFilter(f.id)">✕</button>
+          <button v-if="canManage" class="item-del" @click="removeSpamFilter(f.id)">✕</button>
         </div>
       </div>
     </template>
@@ -315,7 +318,7 @@ onMounted(load)
       </div>
 
       <!-- Create nuke form -->
-      <div class="add-row nuke-add-row">
+      <div v-if="canManage" class="add-row nuke-add-row">
       <div class="nuke-inputs-top">
       <input v-model="newNuke" class="field-input flex1"
       :placeholder="newNukeIsRegex ? 'regex pattern, e.g. bad(spam|ad)' : 'trigger word/phrase'"
@@ -362,7 +365,7 @@ onMounted(load)
             <input v-model.number="newNukeExpiryMins" type="number" min="1" class="field-input dur-input" />
             <span class="threshold-hint">min</span>
           </div>
-          <button class="add-btn" @click="addNuke" :disabled="saving" style="margin-left:auto">+ Create</button>
+          <button v-if="canManage" class="add-btn" @click="addNuke" :disabled="saving" style="margin-left:auto">+ Create</button>
         </div>
       </div>
 
@@ -389,9 +392,9 @@ onMounted(load)
           <div v-if="n.stay_active" class="expiry-wrap">
             <span v-if="n.expires_at" class="expiry-badge" :class="{ expired: nukeExpiresIn(n) === 'expired' }">
               {{ nukeExpiresIn(n) === 'expired' ? 'expired' : `expires ${nukeExpiresIn(n)}` }}
-              <button class="expiry-clear" @click="setNukeExpiry(n, null)" title="Clear expiry">✕</button>
+              <button v-if="canManage" class="expiry-clear" @click="setNukeExpiry(n, null)" title="Clear expiry">✕</button>
             </span>
-            <select v-else class="expiry-select" @change="setNukeExpiry(n, parseInt(($event.target as HTMLSelectElement).value))" title="Set auto-expiry">
+            <select v-else-if="canManage" class="expiry-select" @change="setNukeExpiry(n, parseInt(($event.target as HTMLSelectElement).value))" title="Set auto-expiry">
               <option value="0">set expiry…</option>
               <option value="15">15 min</option>
               <option value="30">30 min</option>
@@ -401,10 +404,10 @@ onMounted(load)
               <option value="480">8 hours</option>
             </select>
           </div>
-          <button class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }" @click="fireNuke(n.id)">
+          <button v-if="canManage" class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }" @click="fireNuke(n.id)">
             {{ nukeConfirm === n.id ? '⚠️ Sure?' : '💣 Fire' }}
           </button>
-          <button class="item-del" @click="removeNuke(n.id)">✕</button>
+          <button v-if="canManage" class="item-del" @click="removeNuke(n.id)">✕</button>
         </div>
       </div>
     </template>

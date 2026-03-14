@@ -32,6 +32,10 @@ const PERM_GROUPS: { label: string; perms: { key: keyof Omit<RolePermissions,'mo
   { label: 'Logs', perms: [
     { key: 'logs_view', label: 'View Logs', desc: 'Access the chat logs viewer.' },
   ]},
+  { label: 'Moderation', perms: [
+    { key: 'moderation_view',   label: 'View',   desc: 'See blocked terms, spam filters, and nukes.' },
+    { key: 'moderation_manage', label: 'Manage', desc: 'Add, delete, and fire nukes. Full moderation control.' },
+  ]},
 ]
 
 const DEFAULT_PERMS: Omit<RolePermissions, 'modsEnabled'> = {
@@ -40,6 +44,8 @@ const DEFAULT_PERMS: Omit<RolePermissions, 'modsEnabled'> = {
   timers_view:      true,  timers_toggle:   true,  timers_edit:   false, timers_delete:   false,
   triggers_view:    true,  triggers_toggle: true,  triggers_edit: false, triggers_delete: false,
   logs_view:        true,
+  moderation_view:   true,
+  moderation_manage: false,
 }
 
 // ── Global mod defaults ──────────────────────────────────────────────────────

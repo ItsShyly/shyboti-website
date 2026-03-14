@@ -28,6 +28,9 @@ export interface RolePermissions {
   triggers_delete: boolean
   // Logs
   logs_view: boolean
+  // Moderation
+  moderation_view: boolean
+  moderation_manage: boolean
 }
 
 export interface ChannelRole {
