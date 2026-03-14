@@ -4,7 +4,7 @@ import { API } from '../api'
 import { useAuth } from '../auth'
 import { highlightScript } from '../composables/scriptHighlight'
 
-const { session } = useAuth()
+const { session, availableChannels } = useAuth()
 
 const REF_GROUPS = [
   { label: 'Channel', items: [
@@ -92,9 +92,6 @@ async function load() {
   } catch (e: any) { error.value = 'Could not load timers: ' + (e?.message ?? e) }
   loading.value = false
 }
-
-onMounted(load)
-watch(() => session.value?.channel, load)
 
 function openNew() {
   isNew.value = true
@@ -188,16 +185,130 @@ async function toggleActive(t: Timer) {
   })
   t.is_active = next
 }
+
+// ── Share ───────────────────────────────────────────────────────────
+const shareOpen    = ref(false)
+const shareTimer   = ref('')
+const shareTarget  = ref('')
+const shareSaving  = ref(false)
+const shareSuccess = ref('')
+const shareError   = ref('')
+
+function openShare(name: string) {
+  shareTimer.value = name; shareTarget.value = ''; shareSuccess.value = ''; shareError.value = ''
+  shareOpen.value = true
+}
+async function doShare() {
+  if (!session.value || !shareTarget.value) return
+  shareSaving.value = true; shareError.value = ''
+  try {
+    const res = await fetch(`${API}/timers/${session.value.channel}/${shareTimer.value}/share`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ target_channel: shareTarget.value }),
+    })
+    if (!res.ok) throw new Error((await res.json() as any).error ?? 'Failed')
+    shareSuccess.value = `Copied to #${shareTarget.value}!`
+    setTimeout(() => { shareOpen.value = false }, 1500)
+  } catch (e: any) { shareError.value = e.message ?? 'Share failed' }
+  shareSaving.value = false
+}
+
+// ── Sync ───────────────────────────────────────────────────────────
+const syncConf    = ref<{ sync_from: string; is_active: number; last_synced: number } | null>(null)
+const syncOpen    = ref(false)
+const syncFrom    = ref('')
+const syncSaving  = ref(false)
+const syncRunning = ref(false)
+const syncMsg     = ref('')
+
+async function fetchSync() {
+  if (!session.value) return
+  try {
+    const res = await fetch(`${API}/timer-sync/${session.value.channel}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    const data = await res.json() as { sync: any }
+    syncConf.value = data.sync
+    syncFrom.value = data.sync?.sync_from ?? ''
+  } catch {}
+}
+async function saveSync() {
+  if (!session.value || !syncFrom.value) return
+  syncSaving.value = true
+  try {
+    await fetch(`${API}/timer-sync/${session.value.channel}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ sync_from: syncFrom.value, is_active: true }),
+    })
+    await fetchSync()
+    syncMsg.value = 'Sync saved.'
+  } catch { syncMsg.value = 'Failed to save.' }
+  syncSaving.value = false
+}
+async function stopSync() {
+  if (!session.value || !syncConf.value) return
+  syncSaving.value = true
+  try {
+    await fetch(`${API}/timer-sync/${session.value.channel}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ sync_from: syncConf.value.sync_from, is_active: false }),
+    })
+    syncConf.value = { ...syncConf.value, is_active: 0 }; syncMsg.value = 'Sync stopped.'
+  } catch { syncMsg.value = 'Failed.' }
+  syncSaving.value = false
+}
+async function runSync() {
+  if (!session.value) return
+  syncRunning.value = true; syncMsg.value = ''
+  try {
+    const res = await fetch(`${API}/timer-sync/${session.value.channel}/run`, {
+      method: 'POST', headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    const data = await res.json() as { count?: number; error?: string }
+    if (!res.ok) throw new Error(data.error)
+    syncMsg.value = `Synced ${data.count} timers from #${syncConf.value?.sync_from}.`
+    await load()
+  } catch (e: any) { syncMsg.value = e.message ?? 'Sync failed' }
+  syncRunning.value = false
+}
+
+onMounted(() => { load(); fetchSync() })
+watch(() => session.value?.channel, () => { load(); fetchSync() })
 </script>
 
 <template>
   <div class="view">
     <div class="view-header">
-      <div>
-        <div class="view-title">Timers</div>
-        <div class="view-sub">Automated messages on an interval for #{{ session?.channel }}</div>
+      <div class="view-header-left">
+        <div>
+          <div class="view-title">Timers</div>
+          <div class="view-sub">Automated messages on an interval for #{{ session?.channel }}</div>
+        </div>
+        <button v-if="syncConf?.is_active" class="sync-indicator" @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from}`">
+          <span class="sync-dot"></span>synced from #{{ syncConf.sync_from }}
+          <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
+        </button>
+        <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">↻ Sync…</button>
       </div>
       <button class="btn-new" @click="openNew">+ New timer</button>
+    </div>
+
+    <!-- Sync panel -->
+    <div v-if="syncOpen" class="sync-panel">
+      <div class="sync-row">
+        <select v-model="syncFrom" class="field-select-sm">
+          <option value="">{{ syncConf?.is_active ? 'Change source…' : 'Select channel…' }}</option>
+          <option v-for="ch in availableChannels.filter(c => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
+        </select>
+        <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">{{ syncSaving ? '…' : syncConf?.is_active ? 'Update' : 'Enable' }}</button>
+        <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">{{ syncRunning ? '…' : '↻ Pull now' }}</button>
+        <button v-if="syncConf?.is_active" class="sync-stop-btn" @click="stopSync">Stop</button>
+      </div>
+      <div v-if="syncConf?.last_synced" class="sync-last">Last pull: {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
+      <div v-if="syncMsg" class="sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{ syncMsg }}</div>
     </div>
 
     <div v-if="success" class="toast success">{{ success }}</div>
@@ -226,6 +337,7 @@ async function toggleActive(t: Timer) {
         </div>
         <div class="row-actions">
           <button class="btn-action edit" @click.stop="openEdit(t)">Edit</button>
+          <button class="btn-action share" @click.stop="openShare(t.name)" title="Copy to another channel">↪</button>
           <button class="btn-action del" @click.stop="deleteTimer(t.name)" :disabled="saving === t.name">✕</button>
         </div>
       </div>
@@ -321,14 +433,75 @@ async function toggleActive(t: Timer) {
         </div>
       </div>
     </Teleport>
+
+  <!-- Share modal -->
+  <Teleport to="body">
+    <div v-if="shareOpen" class="modal-overlay" @click.self="shareOpen = false">
+      <div class="modal">
+        <div class="modal-title">Share timer <span class="modal-name">{{ shareTimer }}</span></div>
+        <div class="modal-sub">Copy this timer to another channel you have access to.</div>
+        <select v-model="shareTarget" class="field-select-sm" style="width:100%;margin-top:12px">
+          <option value="">Select target channel…</option>
+          <option v-for="ch in availableChannels.filter(c => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
+        </select>
+        <div v-if="shareError"   class="modal-msg err">{{ shareError }}</div>
+        <div v-if="shareSuccess" class="modal-msg ok">{{ shareSuccess }}</div>
+        <div class="modal-footer">
+          <button class="btn-cancel" @click="shareOpen = false">Cancel</button>
+          <button class="btn-save" @click="doShare" :disabled="shareSaving || !shareTarget">{{ shareSaving ? 'Copying…' : 'Copy timer' }}</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
   </div>
 </template>
 
 <style scoped>
 .view { display: flex; flex-direction: column; gap: 16px; height: 100%; }
 .view-header { display: flex; align-items: flex-start; justify-content: space-between; }
+.view-header-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .view-title  { font-size: 18px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
 .view-sub    { font-size: 12px; color: #555; }
+
+.sync-indicator { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border: 1px solid #23d18b44; background: rgba(35,209,139,.06); color: #23d18b; font-family: inherit; font-size: 10px; cursor: pointer; }
+.sync-indicator:hover { background: rgba(35,209,139,.12); }
+.sync-dot { width: 6px; height: 6px; border-radius: 50%; background: #23d18b; animation: pulse-dot 2s ease-in-out infinite; flex-shrink: 0; }
+.sync-chevron { font-size: 8px; opacity: .6; }
+@keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.4} }
+.sync-config-btn { height: 22px; padding: 0 8px; border: 1px solid #2a2a30; background: transparent; color: #555; font-family: inherit; font-size: 10px; cursor: pointer; }
+.sync-config-btn:hover { color: #9d6cff; border-color: #6f2bff44; }
+.sync-panel { background: #141418; border: 1px solid #1e1e24; padding: 8px 10px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 5px; }
+.sync-row { display: flex; gap: 6px; align-items: center; }
+.sync-msg { font-size: 10px; color: #23d18b; }
+.sync-msg.err { color: #f14949; }
+.sync-last { font-size: 10px; color: #444; }
+.field-select-sm { background: #0d0d10; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 6px 8px; outline: none; cursor: pointer; }
+.sync-save-btn { height: 32px; padding: 0 12px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.sync-save-btn:hover:not(:disabled) { background: #7f3fff; }
+.sync-save-btn:disabled { opacity: .4; cursor: not-allowed; }
+.sync-run-btn { height: 32px; padding: 0 12px; border: 1px solid #23d18b44; background: rgba(35,209,139,.08); color: #23d18b; font-family: inherit; font-size: 11px; cursor: pointer; }
+.sync-run-btn:hover:not(:disabled) { background: rgba(35,209,139,.2); }
+.sync-run-btn:disabled { opacity: .4; cursor: not-allowed; }
+.sync-stop-btn { height: 28px; padding: 0 8px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 11px; cursor: pointer; }
+.sync-stop-btn:hover { background: rgba(241,73,73,.1); }
+
+.btn-action.share { border-color: #4ec9b044; color: #4ec9b0; }
+.btn-action.share:hover { background: rgba(78,201,176,.1); }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: center; justify-content: center; z-index: 1001; }
+.modal { background: #1a1a1e; border: 1px solid #2a2a30; padding: 24px; width: 360px; max-width: 90vw; }
+.modal-title { font-size: 15px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
+.modal-name  { color: #9d6cff; }
+.modal-sub   { font-size: 11px; color: #555; }
+.modal-msg   { font-size: 11px; margin-top: 8px; padding: 6px 10px; }
+.modal-msg.ok  { color: #23d18b; background: rgba(35,209,139,.08); border-left: 2px solid #23d18b; }
+.modal-msg.err { color: #f14949; background: rgba(241,73,73,.08); border-left: 2px solid #f14949; }
+.modal-footer { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.btn-save   { height: 32px; padding: 0 16px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.btn-save:hover:not(:disabled) { background: #7f3fff; }
+.btn-save:disabled { opacity: .4; cursor: not-allowed; }
+.btn-cancel { height: 32px; padding: 0 12px; border: 1px solid #333; background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer; }
+.btn-cancel:hover { border-color: #555; color: #e0e0e0; }
 
 .btn-new { height: 32px; padding: 0 14px; border: 1px solid #6f2bff66; background: #6f2bff15; color: #9d6cff; font-family: inherit; font-size: 12px; cursor: pointer; transition: background .15s; }
 .btn-new:hover { background: #6f2bff30; }
