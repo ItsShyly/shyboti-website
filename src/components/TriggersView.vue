@@ -251,7 +251,8 @@ async function saveSync() {
       body: JSON.stringify({ sync_from: syncFrom.value, is_active: true }),
     })
     await fetchSync()
-    syncMsg.value = 'Sync saved.'
+    // Auto-pull immediately on enable/update
+    await runSync()
   } catch { syncMsg.value = 'Failed to save.' }
   syncSaving.value = false
 }
@@ -301,12 +302,12 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
         <div>
           <div class="view-title">Triggers</div>
           <div class="view-sub">Automatic actions on events for #{{ session?.channel }}</div>
+          <button v-if="syncConf?.is_active" class="sync-indicator" @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from}`">
+            <span class="sync-dot"></span>synced from #{{ syncConf.sync_from }}
+            <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
+          </button>
+          <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">↻ Sync…</button>
         </div>
-        <button v-if="syncConf?.is_active" class="sync-indicator" @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from}`">
-          <span class="sync-dot"></span>synced from #{{ syncConf.sync_from }}
-          <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
-        </button>
-        <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">↻ Sync…</button>
       </div>
       <button class="btn-new" @click="openNew">+ New trigger</button>
     </div>
@@ -318,7 +319,6 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
           <option v-for="ch in availableChannels.filter(c => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
         </select>
         <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">{{ syncSaving ? '…' : syncConf?.is_active ? 'Update' : 'Enable' }}</button>
-        <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">{{ syncRunning ? '…' : '↻ Pull now' }}</button>
         <button v-if="syncConf?.is_active" class="sync-stop-btn" @click="stopSync">Stop</button>
       </div>
       <div v-if="syncConf?.last_synced" class="sync-last">Last pull: {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
@@ -503,13 +503,13 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
 .view-header { display: flex; align-items: flex-start; justify-content: space-between; }
 .view-header-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .view-title  { font-size: 18px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
-.view-sub    { font-size: 12px; color: #555; }
+.view-sub    { font-size: 12px; color: #555; margin-bottom: 4px; }
 .sync-indicator { display: flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border: 1px solid #23d18b44; background: rgba(35,209,139,.06); color: #23d18b; font-family: inherit; font-size: 10px; cursor: pointer; }
 .sync-indicator:hover { background: rgba(35,209,139,.12); }
 .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: #23d18b; animation: pulse-dot 2s ease-in-out infinite; flex-shrink: 0; }
 .sync-chevron { font-size: 8px; opacity: .6; }
 @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:.4} }
-.sync-config-btn { height: 22px; padding: 0 8px; border: 1px solid #2a2a30; background: transparent; color: #555; font-family: inherit; font-size: 10px; cursor: pointer; }
+.sync-config-btn { display: inline-flex; height: 22px; padding: 0 8px; border: 1px solid #2a2a30; background: transparent; color: #555; font-family: inherit; font-size: 10px; cursor: pointer; }
 .sync-config-btn:hover { color: #9d6cff; border-color: #6f2bff44; }
 .sync-panel { background: #141418; border: 1px solid #1e1e24; padding: 8px 10px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 5px; }
 .sync-row { display: flex; gap: 6px; align-items: center; }
