@@ -8,10 +8,26 @@ interface Session {
 }
 
 export interface RolePermissions {
-  canToggleCommands: boolean
-  canEditCooldowns: boolean
-  canManage7TV: boolean
   modsEnabled: boolean
+  // Dashboard
+  dashboard: boolean
+  // Commands
+  commands_view: boolean
+  commands_toggle: boolean
+  commands_edit: boolean
+  commands_delete: boolean
+  // Timers
+  timers_view: boolean
+  timers_toggle: boolean
+  timers_edit: boolean
+  timers_delete: boolean
+  // Triggers
+  triggers_view: boolean
+  triggers_toggle: boolean
+  triggers_edit: boolean
+  triggers_delete: boolean
+  // Logs
+  logs_view: boolean
 }
 
 export interface ChannelRole {

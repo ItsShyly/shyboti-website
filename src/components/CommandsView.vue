@@ -6,8 +6,10 @@ import CommandEditPanel from './CommandEditPanel.vue'
 
 const { session, channelRole } = useAuth()
 
-const canToggle   = computed(() => channelRole.value?.permissions.canToggleCommands ?? false)
-const canCooldown = computed(() => channelRole.value?.permissions.canEditCooldowns ?? false)
+const canView    = computed(() => channelRole.value?.permissions.commands_view    ?? false)
+const canToggle  = computed(() => channelRole.value?.permissions.commands_toggle  ?? false)
+const canEdit    = computed(() => channelRole.value?.permissions.commands_edit    ?? false)
+const canDelete  = computed(() => channelRole.value?.permissions.commands_delete  ?? false)
 
 interface Command {
   name: string
@@ -196,14 +198,15 @@ async function updateCommand(cmd: Command) {
 }
 
 function toggle(cmd: Command | CustomCommand, field: 'isActive' | 'modOnly' | 'broadcasterOnly') {
-  if (!canToggle.value) return
+  if (field === 'isActive' && !canToggle.value) return
+  if (field !== 'isActive' && !canEdit.value) return
   ;(cmd as any)[field] = !(cmd as any)[field]
   if (customCommands.value.includes(cmd as CustomCommand)) updateCustomActive(cmd as CustomCommand)
   else updateCommand(cmd as Command)
 }
 
 function cycleRestriction(cmd: Command | CustomCommand) {
-  if (!canToggle.value) return
+  if (!canEdit.value) return
   const c = cmd as any
   if (!c.modOnly && !c.broadcasterOnly) { c.modOnly = true;  c.broadcasterOnly = false }
   else if (c.modOnly)                   { c.modOnly = false; c.broadcasterOnly = true  }
@@ -249,7 +252,7 @@ async function doDeleteCustom(name: string) {
 const customCdTimers = ref<Record<string, ReturnType<typeof setTimeout>>>({})
 
 function onCustomCooldownInput(cmd: CustomCommand, field: 'cooldown' | 'userCooldown', raw: string) {
-  if (!canCooldown.value) return
+  if (!canEdit.value) return
   const val = parseInt(raw)
   if (isNaN(val) || val < 0) return
   cmd[field] = val
@@ -268,7 +271,7 @@ async function updateCustomActive(cmd: CustomCommand) {
 }
 
 function onCooldownInput(cmd: Command, field: 'cooldown' | 'userCooldown', raw: string) {
-  if (!canCooldown.value) return
+  if (!canEdit.value) return
   const val = parseInt(raw)
   if (isNaN(val) || val < 0) return
   cmd[field] = val
@@ -418,10 +421,10 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
           </div>
 
           <div>
-            <div class="cd-input-wrap" :class="{ disabled: !canCooldown }">
+            <div class="cd-input-wrap" :class="{ disabled: !canEdit }">
               <input
                 type="number" min="0" class="cd-input"
-                :disabled="!canCooldown"
+                :disabled="!canEdit"
                 :value="cmd.cooldown"
                 @change="onCooldownInput(cmd, 'cooldown', ($event.target as HTMLInputElement).value)"
               />
@@ -430,10 +433,10 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
           </div>
 
           <div>
-            <div class="cd-input-wrap user" :class="{ disabled: !canCooldown }">
+            <div class="cd-input-wrap user" :class="{ disabled: !canEdit }">
               <input
                 type="number" min="0" class="cd-input"
-                :disabled="!canCooldown"
+                :disabled="!canEdit"
                 :value="cmd.userCooldown"
                 @change="onCooldownInput(cmd, 'userCooldown', ($event.target as HTMLInputElement).value)"
               />
@@ -444,10 +447,10 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
           <div>
             <button
               class="edit-btn"
-              :class="{ blocked: BLOCKED.includes(cmd.name) }"
-              @click="!BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)"
+              :class="{ blocked: BLOCKED.includes(cmd.name) || !canEdit }"
+              @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)"
             >
-              {{ BLOCKED.includes(cmd.name) ? 'Blocked' : 'Edit' }}
+              {{ BLOCKED.includes(cmd.name) ? 'Blocked' : !canEdit ? 'No access' : 'Edit' }}
             </button>
           </div>
         </div>
@@ -471,7 +474,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
         </button>
       </div>
         <div v-if="!creatingNew">
-          <button class="create-btn" @click="startCreate">+ New command</button>
+          <button class="create-btn" :disabled="!canEdit" :class="{ 'create-btn-disabled': !canEdit }" @click="canEdit && startCreate()">+ New command</button>
         </div>
         <div v-else class="new-cmd-row">
           <span class="new-cmd-prefix">+</span>
@@ -540,27 +543,27 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
           </div>
 
           <div>
-            <div class="cd-input-wrap" :class="{ disabled: !canCooldown }">
+            <div class="cd-input-wrap" :class="{ disabled: !canEdit }">
               <input type="number" min="0" class="cd-input"
-                :disabled="!canCooldown" :value="cmd.cooldown"
+                :disabled="!canEdit" :value="cmd.cooldown"
                 @change="onCustomCooldownInput(cmd, 'cooldown', ($event.target as HTMLInputElement).value)" />
               <span class="cd-unit">s</span>
             </div>
           </div>
 
           <div>
-            <div class="cd-input-wrap user" :class="{ disabled: !canCooldown }">
+            <div class="cd-input-wrap user" :class="{ disabled: !canEdit }">
               <input type="number" min="0" class="cd-input"
-                :disabled="!canCooldown" :value="cmd.userCooldown"
+                :disabled="!canEdit" :value="cmd.userCooldown"
                 @change="onCustomCooldownInput(cmd, 'userCooldown', ($event.target as HTMLInputElement).value)" />
               <span class="cd-unit">s</span>
             </div>
           </div>
 
           <div class="custom-actions">
-            <button class="edit-btn" @click="openEdit(cmd.name, false)">Edit</button>
+            <button class="edit-btn" :class="{ blocked: !canEdit }" @click="canEdit && openEdit(cmd.name, false)">{{ canEdit ? 'Edit' : 'View' }}</button>
             <button class="share-btn" @click="openShare(cmd.name)" title="Copy to another channel">↪</button>
-            <button
+            <button v-if="canDelete"
               class="del-btn"
               :class="{ confirm: deleteConfirmName === cmd.name, deleting: deletingName === cmd.name }"
               @click="deleteCustom(cmd.name)"
@@ -717,6 +720,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
   transition: background 0.15s;
 }
 .create-btn:hover { background: #6f2bff22; }
+.create-btn-disabled { opacity: .35; cursor: not-allowed; pointer-events: none; }
 .create-btn.mt { margin-top: 16px; }
 
 .custom-empty {

@@ -1,10 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { highlightScript } from '../composables/scriptHighlight'
 
-const { session, availableChannels } = useAuth()
+const { session, availableChannels, channelRole } = useAuth()
+
+const canToggle = computed(() => channelRole.value?.permissions.timers_toggle ?? false)
+const canEdit   = computed(() => channelRole.value?.permissions.timers_edit   ?? false)
+const canDelete = computed(() => channelRole.value?.permissions.timers_delete ?? false)
 
 const REF_GROUPS = [
   { label: 'Channel', items: [
@@ -294,7 +298,7 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
           <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">↻ Sync…</button>
         </div>
       </div>
-      <button class="btn-new" @click="openNew">+ New timer</button>
+      <button class="btn-new" @click="canEdit && openNew()" :disabled="!canEdit" :class="{ 'btn-new-disabled': !canEdit }">+ New timer</button>
     </div>
 
     <!-- Sync panel -->
@@ -320,7 +324,7 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
     <div v-else class="timer-list">
       <div v-for="t in timers" :key="t.id" class="timer-row" :class="{ inactive: !t.is_active }">
         <div class="timer-toggle-wrap">
-          <button class="toggle-btn" :class="{ on: t.is_active }" @click="toggleActive(t)" :title="t.is_active ? 'Disable' : 'Enable'">
+          <button class="toggle-btn" :class="{ on: t.is_active, 'toggle-disabled': !canToggle }" @click="canToggle && toggleActive(t)" :title="t.is_active ? 'Disable' : 'Enable'">
             <span class="toggle-knob"></span>
           </button>
         </div>
@@ -336,9 +340,9 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
           <div class="timer-response">{{ t.response.slice(0, 80) }}{{ t.response.length > 80 ? '…' : '' }}</div>
         </div>
         <div class="row-actions">
-          <button class="btn-action edit" @click.stop="openEdit(t)">Edit</button>
+          <button class="btn-action edit" @click.stop="canEdit && openEdit(t)" :class="{ 'btn-action-disabled': !canEdit }">{{ canEdit ? 'Edit' : 'View' }}</button>
           <button class="btn-action share" @click.stop="openShare(t.name)" title="Copy to another channel">↪</button>
-          <button class="btn-action del" @click.stop="deleteTimer(t.name)" :disabled="saving === t.name">✕</button>
+          <button v-if="canDelete" class="btn-action del" @click.stop="deleteTimer(t.name)" :disabled="saving === t.name">✕</button>
         </div>
       </div>
     </div>
@@ -420,7 +424,7 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
             </div>
 
             <div class="panel-footer">
-              <button v-if="!isNew" class="btn-delete" @click="deleteTimer(editTimer.name); editOpen = false">Delete</button>
+              <button v-if="!isNew && canDelete" class="btn-delete" @click="deleteTimer(editTimer.name); editOpen = false">Delete</button>
               <div v-else></div>
               <div class="footer-right">
                 <button class="btn-cancel" @click="editOpen = false">Cancel</button>
@@ -505,6 +509,9 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
 
 .btn-new { height: 32px; padding: 0 14px; border: 1px solid #6f2bff66; background: #6f2bff15; color: #9d6cff; font-family: inherit; font-size: 12px; cursor: pointer; transition: background .15s; }
 .btn-new:hover { background: #6f2bff30; }
+.btn-new-disabled { opacity: .35; cursor: not-allowed; }
+.toggle-disabled { opacity: .35; cursor: not-allowed; }
+.btn-action-disabled { opacity: .35; cursor: not-allowed; }
 
 .toast { padding: 8px 14px; font-size: 12px; margin-bottom: 4px; }
 .toast.success { background: rgba(35,209,139,.1); border: 1px solid rgba(35,209,139,.3); color: #23d18b; }
