@@ -96,6 +96,14 @@ async function confirmCreate() {
 // Internal tab state — replaces old activeNav prop
 const activeTab = ref<'Default' | 'Custom'>('Default')
 
+// Sort state for custom commands
+const sortField = ref<'name' | 'cooldown' | 'isActive'>('name')
+const sortDir   = ref<'asc' | 'desc'>('asc')
+function setSort(field: typeof sortField.value) {
+  if (sortField.value === field) sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc'
+  else { sortField.value = field; sortDir.value = 'asc' }
+}
+
 const BLOCKED = ['join','leave','pm2','refresh','whitelist','git']
 
 function inferCategory(name: string): string {
@@ -121,6 +129,15 @@ function filtered() {
 function filteredCustom() {
   let list = customCommands.value
   if (search.value.trim()) list = list.filter(c => c.name.includes(search.value.toLowerCase()))
+  // Sort
+  list = [...list].sort((a, b) => {
+    let av: any = a[sortField.value], bv: any = b[sortField.value]
+    if (typeof av === 'boolean') av = av ? 1 : 0
+    if (typeof bv === 'boolean') bv = bv ? 1 : 0
+    if (av < bv) return sortDir.value === 'asc' ? -1 : 1
+    if (av > bv) return sortDir.value === 'asc' ? 1 : -1
+    return 0
+  })
   return list
 }
 
@@ -361,19 +378,19 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 </script>
 
 <template>
-  <div>
-    <!-- Tab bar -->
-    <div class="cmd-tabs">
-      <button class="cmd-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">Default</button>
-      <button class="cmd-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">Custom</button>
-    </div>
-
-    <!-- Search bar inside panel -->
-    <div class="cmd-search-wrap">
-      <svg class="cmd-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
-      </svg>
-      <input v-model="search" class="cmd-search" placeholder="Search commands…" />
+  <div class="cmd-root">
+    <!-- Tab bar + search — sticky together -->
+    <div class="cmd-sticky-top">
+      <div class="cmd-tabs">
+        <button class="cmd-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">Default</button>
+        <button class="cmd-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">Custom</button>
+      </div>
+      <div class="cmd-search-wrap">
+        <svg class="cmd-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
+        </svg>
+        <input v-model="search" class="cmd-search" placeholder="Search commands…" />
+      </div>
     </div>
 
     <template v-if="activeTab === 'Default'">
@@ -491,6 +508,17 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
         <div v-if="syncMsg" class="sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{ syncMsg }}</div>
       </div>
 
+      <!-- Custom tab header row with sort -->
+      <div v-if="!customLoading && filteredCustom().length > 0" class="table-header custom-table-header">
+        <div></div>
+        <div class="sort-col" @click="setSort('name')">Name <span class="sort-arrow">{{ sortField==='name' ? (sortDir==='asc'?'↑':'↓') : '↕' }}</span></div>
+        <div class="sort-col" @click="setSort('isActive')">On/Off <span class="sort-arrow">{{ sortField==='isActive' ? (sortDir==='asc'?'↑':'↓') : '↕' }}</span></div>
+        <div>Access</div>
+        <div class="sort-col" @click="setSort('cooldown')">Global CD <span class="sort-arrow">{{ sortField==='cooldown' ? (sortDir==='asc'?'↑':'↓') : '↕' }}</span></div>
+        <div>User CD</div>
+        <div>Actions</div>
+      </div>
+
       <div v-if="customLoading" class="state-msg">Loading…</div>
 
       <div v-else-if="filteredCustom().length === 0" class="custom-empty">
@@ -501,7 +529,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       </div>
 
       <div v-else class="rows">
-        <div v-for="cmd in filteredCustom()" :key="cmd.name" class="table-row">
+        <div v-for="cmd in filteredCustom()" :key="cmd.name" class="table-row custom-row">
           <div><div class="square" :class="cmd.isActive ? 'on' : 'off'"
             @click="cmd.isActive = !cmd.isActive; updateCustomActive(cmd)"></div></div>
 
@@ -510,6 +538,9 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
             {{ prefix }}{{ cmd.name }}
             <span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
           </div>
+
+          <!-- on/off square duplicate column for alignment with header -->
+          <div></div>
 
           <div>
             <button class="access-btn" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly, disabled: !canToggle }" @click="cycleRestriction(cmd)">{{ restrictionLabel(cmd) }}</button>
@@ -578,14 +609,17 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 </template>
 
 <style scoped>
-.cmd-tabs { display: flex; gap: 0; border-bottom: 1px solid #222; margin-bottom: 14px; }
+.cmd-root { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.cmd-sticky-top { position: sticky; top: 0; z-index: 10; background: var(--panel-bg, #1a1a1e); }
+.cmd-tabs { display: flex; gap: 0; border-bottom: 1px solid #222; }
 .cmd-tab { padding: 8px 20px; border: none; background: transparent; color: #555; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; }
 .cmd-tab:hover { color: #aaa; }
 .cmd-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
 
 .cmd-search-wrap {
   position: relative; height: 38px; background: #2c2c2e;
-  display: flex; align-items: center; margin-bottom: 12px;
+  display: flex; align-items: center; margin-bottom: 0;
+  border-bottom: 1px solid #222;
 }
 .cmd-search-icon { position: absolute; left: 10px; width: 16px; height: 16px; color: #666; pointer-events: none; }
 .cmd-search {
