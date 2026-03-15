@@ -25,7 +25,8 @@ const searched    = ref(false)
 const emoteMap    = ref<EmoteMap>({})
 const bodyRef     = ref<HTMLDivElement | null>(null)
 const highlightId = ref<string | null>(null)
-const copyToast   = ref(false)
+const copyToast     = ref(false)
+const searchExpanded = ref(true)  // mobile: collapse search after first search
 
 let cursorDate:  Date | null = null
 let cursorMonth: { y: number; m: number } | null = null
@@ -214,26 +215,14 @@ function onScroll() {
   if (bodyRef.value.scrollTop < 120) loadOlder()
 }
 
-function onWindowScroll() {
-  if (loadingMore.value || noMore.value) return
-  if (window.scrollY < 200) loadOlder()
-}
-
 function attachScrollListener() {
-  if (isMobile()) {
-    if (windowScrollAttached) return
-    window.addEventListener('scroll', onWindowScroll, { passive: true })
-    windowScrollAttached = true
-  } else {
-    if (scrollListenerAttached || !bodyRef.value) return
-    bodyRef.value.addEventListener('scroll', onScroll, { passive: true })
-    scrollListenerAttached = true
-  }
+  if (scrollListenerAttached || !bodyRef.value) return
+  bodyRef.value.addEventListener('scroll', onScroll, { passive: true })
+  scrollListenerAttached = true
 }
 
 function detachScrollListeners() {
   if (bodyRef.value) bodyRef.value.removeEventListener('scroll', onScroll)
-  window.removeEventListener('scroll', onWindowScroll)
   scrollListenerAttached = false
   windowScrollAttached   = false
 }
@@ -249,6 +238,7 @@ async function search() {
   abortCtrl.abort(); abortCtrl = new AbortController()
   detachScrollListeners()
 
+  if (isMobile()) searchExpanded.value = false
   loading.value = true; error.value = ''; searched.value = true
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
   cursorDate = null; cursorMonth = null
@@ -314,22 +304,16 @@ async function search() {
 async function autoFillIfShort() {
   if (noMore.value) return
   await nextTick()
+  const body = bodyRef.value; if (!body) return
   let safety = 0
-  while (!noMore.value && safety++ < 10) {
-    const hasRoom = isMobile()
-      ? document.body.scrollHeight <= window.innerHeight + 20
-      : (bodyRef.value ? bodyRef.value.scrollHeight <= bodyRef.value.clientHeight + 20 : false)
-    if (!hasRoom) break
+  while (body.scrollHeight <= body.clientHeight + 20 && !noMore.value && safety++ < 10) {
     await loadOlder()
     await nextTick()
   }
 }
 
 function scrollToBottom() {
-  nextTick(() => {
-    if (isMobile()) { window.scrollTo(0, document.body.scrollHeight) }
-    else if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight
-  })
+  nextTick(() => { if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight })
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
@@ -407,7 +391,18 @@ function esc(s: string) {
       <div class="logs-sub">Search chat history via Spanix</div>
     </div>
 
-    <div class="search-bar">
+    <!-- Mobile: collapsed summary bar -->
+    <div class="search-summary show-mobile" @click="searchExpanded = !searchExpanded">
+      <span class="summary-text">
+        <span class="summary-ch">#{{ channel || '?' }}</span>
+        <span v-if="userFilter" class="summary-tag">@{{ userFilter }}</span>
+        <span v-if="termFilter" class="summary-tag">"{{ termFilter }}"</span>
+        <span v-if="dateFilter" class="summary-tag">{{ dateFilter }}</span>
+      </span>
+      <span class="summary-chevron">{{ searchExpanded ? '▲' : '▼' }}</span>
+    </div>
+
+    <div class="search-bar" :class="{ 'search-bar-collapsed': !searchExpanded }">
       <div class="field-wrap">
         <label class="field-lbl">Channel</label>
         <input v-model="channel" class="field-input" placeholder="channelname" @keydown.enter="search" />
@@ -551,37 +546,61 @@ function esc(s: string) {
 
 :deep(.chat-emote) { height: 28px; vertical-align: middle; display: inline-block; margin: 0 1px; }
 
-@media (max-width: 680px) {
-  /* Remove height constraints — let page scroll */
-  .logs-view    { height: auto; }
-  .logs-results { flex: none; min-height: auto; }
-  .logs-table   { flex: none; min-height: auto; }
-  .logs-tbody   { overflow-y: visible !important; height: auto !important; flex: none !important; }
+/* ── Mobile summary bar (hidden on desktop) ── */
+.search-summary { display: none; }
 
-  /* Search bar: stack fields */
-  .search-bar { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; }
+@media (max-width: 680px) {
+  /* Fixed-height layout — page does NOT scroll, only .logs-tbody scrolls */
+  .logs-view {
+    height: calc(100vh - 52px); /* full viewport minus topbar */
+    overflow: hidden;
+    gap: 0;
+  }
+  .logs-header { padding: 10px 14px 6px; flex-shrink: 0; }
+  .logs-title  { font-size: 15px; margin-bottom: 2px; }
+
+  /* Summary bar: always visible, tap to expand/collapse search */
+  .search-summary {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 14px; background: #141418; border-bottom: 1px solid #1e1e24;
+    cursor: pointer; flex-shrink: 0; user-select: none;
+  }
+  .summary-text  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 11px; }
+  .summary-ch    { color: #9d6cff; font-weight: 700; }
+  .summary-tag   { color: #888; background: #1e1e24; padding: 1px 6px; }
+  .summary-chevron { font-size: 9px; color: #555; flex-shrink: 0; }
+
+  /* Search bar: expand/collapse */
+  .search-bar {
+    flex-direction: column; align-items: stretch; gap: 8px;
+    padding: 10px 14px; flex-shrink: 0;
+    overflow: hidden; transition: max-height .2s ease, padding .2s ease;
+    max-height: 400px;
+  }
+  .search-bar-collapsed { max-height: 0 !important; padding: 0 14px !important; }
   .field-input { width: 100% !important; }
   .date-input  { width: 100% !important; }
   .search-btn  { width: 100%; }
 
-  /* Hide table header */
-  .logs-thead { display: none !important; }
+  /* Results take all remaining space, tbody scrolls */
+  .logs-results { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .logs-table   { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .logs-thead   { display: none !important; }
+  .logs-tbody   { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
-  /* Card-style rows: 2 lines instead of 4 columns */
+  /* Rows: inline name: message (Chatterino style) */
   .log-row {
     display: flex !important;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: baseline;
-    gap: 0;
-    padding: 7px 12px;
-    grid-template-columns: unset !important; /* override inline style */
+    gap: 5px;
+    padding: 4px 12px;
+    grid-template-columns: unset !important;
   }
-  /* Line 1: username (left) + timestamp (right) */
-  .log-user { order: 1; flex: 1; font-size: 12px; padding-right: 8px; }
-  .log-time { order: 2; flex: 0 0 auto; font-size: 10px; color: #444; margin-left: auto; }
-  /* Line 2: message full width */
-  .log-msg  { order: 3; flex: 0 0 100%; font-size: 12px; padding-top: 2px; }
-  /* Share icon: always visible on mobile (no hover) */
-  .log-share { order: 4; opacity: 1 !important; flex: 0 0 auto; margin-left: auto; }
+  .log-user  { flex-shrink: 0; font-size: 12px; padding-right: 0; white-space: nowrap; }
+  .log-user::after { content: ':'; color: #555; }
+  .log-time  { display: none; }  /* hide timestamp to save space */
+  .log-msg   { flex: 1; font-size: 12px; min-width: 0; word-break: break-word; }
+  .log-share { flex-shrink: 0; opacity: 0.5 !important; }
 }
 </style>
