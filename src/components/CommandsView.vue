@@ -741,9 +741,9 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 
 .custom-actions { display: flex; align-items: center; gap: 6px; }
 .cmd-alias { font-size: 11px; color: #6f2bff; font-weight: 400; margin-left: 6px; }
-.cmd-desc { font-size: 11px; color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmd-desc { font-size: 11px; color: #8d8d8d; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cmd-name-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.cmd-desc-inline { font-size: 10px; color: #3a3a3a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmd-desc-inline { font-size: 10px; color: #8d8d8d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .del-btn { height: 34px; padding: 0 10px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 11px; cursor: pointer; transition: background .15s, border-color .15s, color .15s; white-space: nowrap; }
 .del-btn:hover { background: #f1494911; }
 .del-btn.confirm { border-color: #f14949aa; color: #ff6b6b; background: #f1494922; }
