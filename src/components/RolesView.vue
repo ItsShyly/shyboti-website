@@ -159,7 +159,53 @@ async function toggleModPerm(mod: ModEntry, key: keyof Omit<RolePermissions,'mod
   await saveModOverride(mod)
 }
 
-onMounted(() => { load(); loadMods() })
+// ── Channel settings (prefix, opt-out) ──────────────────────────────────────
+const prefix       = ref('+')
+const prefixSaving = ref(false)
+const prefixSaved  = ref(false)
+const optedOut     = ref(false)
+const optSaving    = ref(false)
+
+async function loadSettings() {
+  if (!session.value) return
+  try {
+    const [sRes, oRes] = await Promise.all([
+      fetch(`${API}/settings/${session.value.channel}`, { headers: { Authorization: `Bearer ${session.value.token}` } }),
+      fetch(`${API}/log-optout`, { headers: { Authorization: `Bearer ${session.value.token}` } }),
+    ])
+    if (sRes.ok) { const d = await sRes.json(); prefix.value = d.settings?.prefix ?? '+' }
+    if (oRes.ok) { const d = await oRes.json(); optedOut.value = d.opted_out ?? false }
+  } catch {}
+}
+
+async function savePrefix() {
+  if (!session.value || session.value.login !== session.value.channel) return
+  prefixSaving.value = true
+  try {
+    await fetch(`${API}/settings/${session.value.channel}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ prefix: prefix.value }),
+    })
+    prefixSaved.value = true; setTimeout(() => prefixSaved.value = false, 2000)
+  } catch {}
+  prefixSaving.value = false
+}
+
+async function toggleOptOut() {
+  if (!session.value) return
+  optSaving.value = true
+  try {
+    await fetch(`${API}/log-optout`, {
+      method: optedOut.value ? 'DELETE' : 'POST',
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    })
+    optedOut.value = !optedOut.value
+  } catch {}
+  optSaving.value = false
+}
+
+onMounted(() => { load(); loadMods(); loadSettings() })
 </script>
 
 <template>
@@ -205,6 +251,46 @@ onMounted(() => { load(); loadMods() })
             </div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Channel settings (broadcaster only) -->
+    <div v-if="session?.login === session?.channel" class="section">
+      <div class="section-title">
+        <span class="badge bc">BC</span>
+        Channel Settings
+      </div>
+      <p class="section-sub">Settings that affect the entire bot for this channel.</p>
+
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="perm-label">Command prefix</div>
+          <div class="perm-desc">The character(s) that trigger bot commands in chat (currently <code class="inline-code">{{ prefix }}</code>cmd)</div>
+        </div>
+        <div class="prefix-input-wrap">
+          <input v-model="prefix" class="prefix-input" maxlength="3" placeholder="+" @keydown.enter="savePrefix" />
+          <button class="save-btn" @click="savePrefix" :disabled="prefixSaving || !prefix">
+            {{ prefixSaved ? '✓' : prefixSaving ? '…' : 'Save' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log opt-out (all users) -->
+    <div class="section">
+      <div class="section-title">
+        <span class="badge logs">LOGS</span>
+        Chat Logs Opt-Out
+      </div>
+      <p class="section-sub">When opted out, your username and messages will be replaced with “OptedOutUser” in all log views for all channels this bot monitors.</p>
+      <div class="settings-row">
+        <div class="settings-info">
+          <div class="perm-label">Opt out of logs</div>
+          <div class="perm-desc">{{ optedOut ? 'You are currently opted out. Your messages appear anonymized.' : 'You are currently visible in logs.' }}</div>
+        </div>
+        <button class="opt-btn" :class="{ out: optedOut }" @click="toggleOptOut" :disabled="optSaving">
+          {{ optSaving ? '…' : optedOut ? '✓ Opted out — click to opt back in' : 'Opt out of logs' }}
+        </button>
       </div>
     </div>
 
@@ -435,4 +521,22 @@ onMounted(() => { load(); loadMods() })
 .toggle-wrap { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .default-val { font-size: 9px; color: #333; white-space: nowrap; }
 .default-val.active { color: #555; }
+
+/* Settings rows */
+.badge.bc   { background: #f1494922; color: #f14949; border: 1px solid #f1494944; }
+.badge.logs { background: #4ec9b015; color: #4ec9b0; border: 1px solid #4ec9b044; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px; background: #141418; }
+.settings-info { flex: 1; }
+.inline-code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; font-size: 12px; background: rgba(111,43,255,.1); padding: 1px 5px; }
+.prefix-input-wrap { display: flex; gap: 6px; }
+.prefix-input { width: 52px; background: #0d0d10; border: 1px solid #2a2a30; color: #e0e0e0; font-family: 'Consolas','Fira Mono',monospace; font-size: 16px; font-weight: 700; padding: 6px 10px; outline: none; text-align: center; }
+.prefix-input:focus { border-color: #6f2bff55; }
+.save-btn { height: 34px; padding: 0 16px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.save-btn:hover:not(:disabled) { background: #7f3fff; }
+.save-btn:disabled { opacity: .4; cursor: not-allowed; }
+.opt-btn { height: 34px; padding: 0 16px; border: 1px solid #2a2a30; background: transparent; color: #888; font-family: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; transition: all .15s; }
+.opt-btn:hover:not(:disabled) { border-color: #f14949; color: #f14949; }
+.opt-btn.out { border-color: #23d18b44; color: #23d18b; background: rgba(35,209,139,.06); }
+.opt-btn.out:hover:not(:disabled) { background: rgba(35,209,139,.15); }
+.opt-btn:disabled { opacity: .4; cursor: not-allowed; }
 </style>

@@ -156,7 +156,7 @@ async function deleteVar(name: string) {
       <div class="section-row">
         <div>
           <div class="section-title">Chat Logs</div>
-          <p class="section-sub">Allow the bot to store and display chat logs in the Logs view.</p>
+          <p class="section-sub">Allow the bot to store and display your chat logs in the Logs view.</p>
         </div>
         <div class="toggle" :class="{ on: logsEnabled }" @click="logsEnabled = !logsEnabled; toggleLogs()">
           <div class="toggle-knob"></div>
