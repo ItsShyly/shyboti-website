@@ -27,10 +27,13 @@ const bodyRef     = ref<HTMLDivElement | null>(null)
 const highlightId = ref<string | null>(null)
 const copyToast   = ref(false)
 
-let cursorDate:  Date | null = null   // used in channel-only mode (day by day)
-let cursorMonth: { y: number; m: number } | null = null  // used in user mode (month by month)
+let cursorDate:  Date | null = null
+let cursorMonth: { y: number; m: number } | null = null
 let abortCtrl = new AbortController()
 let scrollListenerAttached = false
+let windowScrollAttached  = false
+
+const isMobile = () => window.matchMedia('(max-width: 680px)').matches
 
 // ── URL state sync ───────────────────────────────────────────────────────────
 function buildUrl(msgId: string | null = null) {
@@ -211,10 +214,28 @@ function onScroll() {
   if (bodyRef.value.scrollTop < 120) loadOlder()
 }
 
+function onWindowScroll() {
+  if (loadingMore.value || noMore.value) return
+  if (window.scrollY < 200) loadOlder()
+}
+
 function attachScrollListener() {
-  if (scrollListenerAttached || !bodyRef.value) return
-  bodyRef.value.addEventListener('scroll', onScroll, { passive: true })
-  scrollListenerAttached = true
+  if (isMobile()) {
+    if (windowScrollAttached) return
+    window.addEventListener('scroll', onWindowScroll, { passive: true })
+    windowScrollAttached = true
+  } else {
+    if (scrollListenerAttached || !bodyRef.value) return
+    bodyRef.value.addEventListener('scroll', onScroll, { passive: true })
+    scrollListenerAttached = true
+  }
+}
+
+function detachScrollListeners() {
+  if (bodyRef.value) bodyRef.value.removeEventListener('scroll', onScroll)
+  window.removeEventListener('scroll', onWindowScroll)
+  scrollListenerAttached = false
+  windowScrollAttached   = false
 }
 
 // ── Main search ──────────────────────────────────────────────────────────────
@@ -226,7 +247,7 @@ async function search() {
   pushSearchUrl()
 
   abortCtrl.abort(); abortCtrl = new AbortController()
-  if (bodyRef.value) { bodyRef.value.removeEventListener('scroll', onScroll); scrollListenerAttached = false }
+  detachScrollListeners()
 
   loading.value = true; error.value = ''; searched.value = true
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
@@ -293,17 +314,22 @@ async function search() {
 async function autoFillIfShort() {
   if (noMore.value) return
   await nextTick()
-  const body = bodyRef.value; if (!body) return
-  // Keep loading older chunks while there's room to scroll
   let safety = 0
-  while (body.scrollHeight <= body.clientHeight + 20 && !noMore.value && safety++ < 10) {
+  while (!noMore.value && safety++ < 10) {
+    const hasRoom = isMobile()
+      ? document.body.scrollHeight <= window.innerHeight + 20
+      : (bodyRef.value ? bodyRef.value.scrollHeight <= bodyRef.value.clientHeight + 20 : false)
+    if (!hasRoom) break
     await loadOlder()
     await nextTick()
   }
 }
 
 function scrollToBottom() {
-  nextTick(() => { if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight })
+  nextTick(() => {
+    if (isMobile()) { window.scrollTo(0, document.body.scrollHeight) }
+    else if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight
+  })
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
@@ -341,7 +367,7 @@ onMounted(async () => {
 })
 onUnmounted(() => {
   abortCtrl.abort()
-  if (bodyRef.value) bodyRef.value.removeEventListener('scroll', onScroll)
+  detachScrollListeners()
 })
 
 // ── Rendering ────────────────────────────────────────────────────────────────
@@ -524,4 +550,38 @@ function esc(s: string) {
 .log-share svg { width: 13px; height: 13px; }
 
 :deep(.chat-emote) { height: 28px; vertical-align: middle; display: inline-block; margin: 0 1px; }
+
+@media (max-width: 680px) {
+  /* Remove height constraints — let page scroll */
+  .logs-view    { height: auto; }
+  .logs-results { flex: none; min-height: auto; }
+  .logs-table   { flex: none; min-height: auto; }
+  .logs-tbody   { overflow-y: visible !important; height: auto !important; flex: none !important; }
+
+  /* Search bar: stack fields */
+  .search-bar { flex-direction: column; align-items: stretch; gap: 8px; padding: 12px; }
+  .field-input { width: 100% !important; }
+  .date-input  { width: 100% !important; }
+  .search-btn  { width: 100%; }
+
+  /* Hide table header */
+  .logs-thead { display: none !important; }
+
+  /* Card-style rows: 2 lines instead of 4 columns */
+  .log-row {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0;
+    padding: 7px 12px;
+    grid-template-columns: unset !important; /* override inline style */
+  }
+  /* Line 1: username (left) + timestamp (right) */
+  .log-user { order: 1; flex: 1; font-size: 12px; padding-right: 8px; }
+  .log-time { order: 2; flex: 0 0 auto; font-size: 10px; color: #444; margin-left: auto; }
+  /* Line 2: message full width */
+  .log-msg  { order: 3; flex: 0 0 100%; font-size: 12px; padding-top: 2px; }
+  /* Share icon: always visible on mobile (no hover) */
+  .log-share { order: 4; opacity: 1 !important; flex: 0 0 auto; margin-left: auto; }
+}
 </style>
