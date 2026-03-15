@@ -252,6 +252,13 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 .hide-mobile  { }
 .show-mobile  { display: none; }
 
+/* Logs page: prevent outer scroll on mobile */
+@media (max-width: 680px) {
+  body.logs-open,
+  body.logs-open .page,
+  body.logs-open .main-panel { overflow: hidden !important; height: 100%; }
+}
+
 /* ── Mobile (≤ 680px) ── */
 @media (max-width: 680px) {
   html, body { overflow: auto; }

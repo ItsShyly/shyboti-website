@@ -345,11 +345,13 @@ function shareMsg(m: LogMsg) {
 }
 
 onMounted(async () => {
+  if (isMobile()) document.body.classList.add('logs-open')
   readUrlState()
   if (!channel.value && session.value?.channel) channel.value = session.value.channel
   if (channel.value) await search()
 })
 onUnmounted(() => {
+  document.body.classList.remove('logs-open')
   abortCtrl.abort()
   detachScrollListeners()
 })
