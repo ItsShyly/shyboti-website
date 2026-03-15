@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 
@@ -361,6 +361,34 @@ function fmtTs(ts: string) {
     + ' ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
+function fmtTimeOnly(ts: string) {
+  const d = new Date(ts)
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function fmtDayLabel(ts: string) {
+  const d = new Date(ts)
+  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+type DisplayItem =
+  | { kind: 'day';  label: string }
+  | { kind: 'msg';  msg: LogMsg }
+
+const displayItems = computed<DisplayItem[]>(() => {
+  const items: DisplayItem[] = []
+  let lastDay = ''
+  for (const m of msgs.value) {
+    const day = fmtDayLabel(m.timestamp)
+    if (day !== lastDay) {
+      items.push({ kind: 'day', label: day })
+      lastDay = day
+    }
+    items.push({ kind: 'msg', msg: m })
+  }
+  return items
+})
+
 function userColor(m: LogMsg): string {
   const tc = m.tags?.['color']
   if (tc && tc !== '') return tc
@@ -447,25 +475,31 @@ function esc(s: string) {
           </div>
           <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">↑ No older logs</div>
 
-          <div
-            v-for="m in msgs"
-            :key="m.id"
-            :id="`log-${m.id}`"
-            v-memo="[m.id, highlightId === m.id]"
-            class="log-row"
-            :class="{ highlighted: highlightId === m.id }"
-            :style="{ gridTemplateColumns: `150px ${nameColWidth}px 1fr 24px` }"
-          >
-            <div class="log-time">{{ fmtTs(m.timestamp) }}</div>
-            <div class="log-user" :style="{ color: userColor(m) }">{{ m.displayName || m.username }}</div>
-            <div class="log-msg" v-html="renderMsg(m.text)"></div>
-            <div class="log-share" @click="shareMsg(m)" title="Copy link to this message">
-              <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M10 2L14 6L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M14 6H6C4.34 6 3 7.34 3 9V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+          <template v-for="item in displayItems" :key="item.kind === 'day' ? 'day-' + item.label : item.msg.id">
+            <!-- Day separator -->
+            <div v-if="item.kind === 'day'" class="log-day-sep">{{ item.label }}</div>
+
+            <!-- Message row -->
+            <div
+              v-else
+              :id="`log-${item.msg.id}`"
+              v-memo="[item.msg.id, highlightId === item.msg.id]"
+              class="log-row"
+              :class="{ highlighted: highlightId === item.msg.id }"
+              :style="{ gridTemplateColumns: `150px ${nameColWidth}px 1fr 24px` }"
+            >
+              <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
+              <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
+              <div class="log-user" :style="{ color: userColor(item.msg) }">{{ item.msg.displayName || item.msg.username }}</div>
+              <div class="log-msg" v-html="renderMsg(item.msg.text)"></div>
+              <div class="log-share" @click="shareMsg(item.msg)" title="Copy link to this message">
+                <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M10 2L14 6L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M14 6H6C4.34 6 3 7.34 3 9V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
             </div>
-          </div>
+          </template>
         </div>
       </div>
     </div>
@@ -531,7 +565,9 @@ function esc(s: string) {
   100% { background: transparent; }
 }
 
-.log-time { color: #444; font-size: 11px; }
+.log-time       { color: #444; font-size: 11px; }
+.log-time-short { display: none; } /* shown only on mobile */
+.log-day-sep    { display: none; } /* shown only on mobile */
 .log-user { font-weight: 600; word-break: break-all; padding-right: 8px; }
 .log-msg  { color: #ccc; word-break: break-word; line-height: 1.6; }
 
@@ -588,18 +624,30 @@ function esc(s: string) {
   .logs-thead   { display: none !important; }
   .logs-tbody   { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
-  /* Rows: inline name: message (Chatterino style) */
+  /* Day separator */
+  .log-day-sep {
+    display: block;
+    padding: 6px 12px 3px;
+    font-size: 10px; font-weight: 700;
+    color: #555; letter-spacing: .05em;
+    border-top: 1px solid #1e1e24;
+    background: #0d0d10;
+    position: sticky; top: 0; z-index: 1;
+  }
+
+  /* Rows: HH:MM Username: message (Chatterino style) */
   .log-row {
     display: flex !important;
     flex-wrap: nowrap;
     align-items: baseline;
     gap: 5px;
-    padding: 4px 12px;
+    padding: 3px 12px;
     grid-template-columns: unset !important;
   }
+  .log-time       { display: none; }                      /* hide full timestamp */
+  .log-time-short { display: block; flex-shrink: 0; color: #555; font-size: 11px; white-space: nowrap; }
   .log-user  { flex-shrink: 0; font-size: 12px; padding-right: 0; white-space: nowrap; }
   .log-user::after { content: ':'; color: #555; }
-  .log-time  { display: none; }  /* hide timestamp to save space */
   .log-msg   { flex: 1; font-size: 12px; min-width: 0; word-break: break-word; }
   .log-share { flex-shrink: 0; opacity: 0.5 !important; }
 }
