@@ -97,8 +97,44 @@ async function confirmCreate() {
   openEdit(name, false)
 }
 
-// Internal tab state — replaces old activeNav prop
-const activeTab = ref<'Default' | 'Custom'>('Default')
+// Internal tab state
+const activeTab = ref<'Default' | 'Custom' | 'Extras'>('Default')
+
+// ── Extras / Feature flags ───────────────────────────────────────────────────
+const mentionEnabled = ref(false)
+const extrasLoading  = ref(false)
+const extrasSaving   = ref(false)
+const extrasSaved    = ref(false)
+
+async function fetchExtras() {
+  if (!session.value) return
+  extrasLoading.value = true
+  try {
+    const res  = await fetch(`${API}/settings/${session.value.channel}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    if (!res.ok) return
+    const data = await res.json() as { mention_enabled: boolean }
+    mentionEnabled.value = data.mention_enabled
+  } catch {} finally { extrasLoading.value = false }
+}
+
+async function saveExtras() {
+  if (!session.value) return
+  extrasSaving.value = true
+  try {
+    await fetch(`${API}/settings/${session.value.channel}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ mention_enabled: mentionEnabled.value }),
+    })
+    extrasSaved.value = true
+    setTimeout(() => extrasSaved.value = false, 2000)
+  } catch {}
+  extrasSaving.value = false
+}
+
+const isBroadcaster = computed(() => channelRole.value?.role === 'broadcaster')
 
 // Sort state for custom commands
 const sortField = ref<'name' | 'cooldown' | 'isActive'>('name')
@@ -378,8 +414,8 @@ async function runSync() {
 
 const { availableChannels } = useAuth()
 
-onMounted(() => { fetchCommands(); fetchCustomCommands(); fetchSync() })
-watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands(); fetchSync() })
+onMounted(() => { fetchCommands(); fetchCustomCommands(); fetchSync(); fetchExtras() })
+watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands(); fetchSync(); fetchExtras() })
 </script>
 
 <template>
@@ -387,6 +423,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
     <div class="cmd-tabs">
       <button class="cmd-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">Default</button>
       <button class="cmd-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">Custom</button>
+      <button class="cmd-tab" :class="{ active: activeTab === 'Extras' }" @click="activeTab = 'Extras'">Extras</button>
     </div>
     <div class="cmd-search-wrap">
       <svg class="cmd-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -580,7 +617,43 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
           </div>
         </div>
       </div>
-    </template>
+    </template><!-- /Custom tab -->
+
+    <!-- ── Extras tab ──────────────────────────────────────────────────────── -->
+    <template v-if="activeTab === 'Extras'">
+      <div v-if="extrasLoading" class="state-msg">Loading…</div>
+      <template v-else>
+        <div class="extras-section">
+          <div class="extras-section-title">Bot Behaviour</div>
+
+          <!-- Mention trigger -->
+          <div class="extras-row">
+            <div class="extras-info">
+              <div class="extras-label">@shyboti / shyboti mention</div>
+              <div class="extras-desc">
+                When enabled, users can trigger the bot by starting a message with
+                <code class="extras-code">@shyboti</code> or <code class="extras-code">shyboti</code>.
+                Off by default.
+              </div>
+            </div>
+            <div
+              class="extras-toggle"
+              :class="{ on: mentionEnabled, disabled: !isBroadcaster }"
+              @click="isBroadcaster && (mentionEnabled = !mentionEnabled)"
+            >
+              <div class="extras-toggle-knob"></div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="isBroadcaster" class="extras-footer">
+          <button class="extras-save-btn" :class="{ saved: extrasSaved }" :disabled="extrasSaving" @click="saveExtras">
+            {{ extrasSaved ? '✓ Saved' : extrasSaving ? 'Saving…' : 'Save changes' }}
+          </button>
+        </div>
+        <div v-else class="extras-readonly-note">Only the broadcaster can change these settings.</div>
+      </template>
+    </template><!-- /Extras tab -->
   </div>
 <CommandEditPanel
     :cmdName="editingCmd"
@@ -813,4 +886,35 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .btn-save:disabled { opacity: .4; cursor: not-allowed; }
 .btn-cancel { height: 32px; padding: 0 12px; border: 1px solid #333; background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer; }
 .btn-cancel:hover { border-color: #555; color: #e0e0e0; }
+
+/* ── Extras tab ── */
+.extras-section       { background: #222226; border: 1px solid #2a2a30; padding: 20px; margin-top: 12px; }
+.extras-section-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #9d6cff; margin-bottom: 12px; }
+.extras-row   { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 0; border-top: 1px solid #2a2a30; }
+.extras-row:first-of-type { border-top: none; }
+.extras-info  { flex: 1; }
+.extras-label { font-size: 13px; font-weight: 600; color: #d0d0d0; margin-bottom: 4px; }
+.extras-desc  { font-size: 11px; color: #555; line-height: 1.5; }
+.extras-code  { font-family: 'Consolas','Fira Mono',monospace; font-size: 10px; color: #9d6cff; background: #9d6cff15; padding: 1px 5px; }
+.extras-toggle {
+  width: 42px; height: 22px; background: #111217; cursor: pointer;
+  position: relative; transition: background .2s; flex-shrink: 0;
+}
+.extras-toggle.on  { background: #6f2bff; }
+.extras-toggle.disabled { opacity: .35; cursor: not-allowed; }
+.extras-toggle-knob {
+  position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+  background: #555; transition: transform .2s, background .2s;
+}
+.extras-toggle.on .extras-toggle-knob { transform: translateX(20px); background: #fff; }
+.extras-footer { margin-top: 16px; display: flex; justify-content: flex-end; }
+.extras-save-btn {
+  height: 34px; padding: 0 20px; border: none; background: #6f2bff;
+  color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: background .15s;
+}
+.extras-save-btn:hover:not(:disabled) { background: #7f3fff; }
+.extras-save-btn:disabled { opacity: .5; cursor: not-allowed; }
+.extras-save-btn.saved { background: #1a3d2a; color: #23d18b; cursor: default; }
+.extras-readonly-note { font-size: 11px; color: #555; margin-top: 16px; text-align: center; }
 </style>
