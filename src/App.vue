@@ -267,13 +267,13 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 
   .body { overflow: visible; flex-direction: column; }
 
-  /* Sidebar: slide-in drawer from left */
+  /* Sidebar: slide-in drawer from right */
   .sidebar {
-    position: fixed; top: 52px; left: 0; bottom: 0;
+    position: fixed; top: 52px; right: 0; bottom: 0;
     width: 240px; z-index: 100;
-    transform: translateX(-100%);
-    border-right: 1px solid #2a2a30;
-    box-shadow: 4px 0 24px #00000066;
+    transform: translateX(100%);
+    border-left: 1px solid #2a2a30;
+    box-shadow: -4px 0 24px #00000066;
   }
   .sidebar.sidebar-open { transform: translateX(0); }
 
