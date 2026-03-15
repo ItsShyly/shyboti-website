@@ -5,265 +5,195 @@ import { useAuth } from '../auth'
 
 const { session } = useAuth()
 
-// ── Prefix ────────────────────────────────────────────────────────────────
-const prefix      = ref('+')
-const prefixSaved = ref(false)
+const isBroadcaster = ref(false)
+
+// ── Prefix (broadcaster only) ─────────────────────────────────────────────────
+const prefix       = ref('+')
 const prefixSaving = ref(false)
+const prefixSaved  = ref(false)
+const prefixError  = ref('')
 
-// ── Log opt-out ───────────────────────────────────────────────────────────
-const logsEnabled   = ref(true)
-const logsSaving    = ref(false)
+// ── Log opt-out (all users) ───────────────────────────────────────────────────
+const optedOut   = ref(false)
+const optSaving  = ref(false)
+const optMsg     = ref('')
 
-// ── Bot management ────────────────────────────────────────────────────────
-const removeConfirm = ref(false)
-let removeTimer: ReturnType<typeof setTimeout> | null = null
-
-// ── Counters ──────────────────────────────────────────────────────────────
-interface Counter { name: string; value: number }
-const counters     = ref<Counter[]>([])
-const countersLoading = ref(false)
-const counterResetting = ref<string | null>(null)
-
-// ── Variables ─────────────────────────────────────────────────────────────
-interface Var { name: string; value: string }
-const vars         = ref<Var[]>([])
-const varsLoading  = ref(false)
-const varDeleting  = ref<string | null>(null)
-
-// ── Load ──────────────────────────────────────────────────────────────────
 async function load() {
   if (!session.value) return
-  const h = { Authorization: `Bearer ${session.value.token}` }
-  const ch = session.value.channel
+  isBroadcaster.value = session.value.login === session.value.channel
 
-  // Load prefix & log settings from channel settings endpoint
+  const headers = { Authorization: `Bearer ${session.value.token}` }
   try {
-    const res = await fetch(`${API}/settings/${ch}`, { headers: h })
-    if (res.ok) {
-      const d = await res.json() as any
-      prefix.value     = d.prefix      ?? '+'
-      logsEnabled.value = d.logsEnabled ?? true
-    }
+    const [sRes, oRes] = await Promise.all([
+      fetch(`${API}/settings/${session.value.channel}`, { headers }),
+      fetch(`${API}/log-optout`, { headers }),
+    ])
+    if (sRes.ok) { const d = await sRes.json(); prefix.value = d.settings?.prefix ?? '+' }
+    if (oRes.ok) { const d = await oRes.json(); optedOut.value = d.opted_out ?? false }
   } catch {}
-
-  // Load counters
-  countersLoading.value = true
-  try {
-    const res = await fetch(`${API}/settings/${ch}/counters`, { headers: h })
-    if (res.ok) counters.value = (await res.json()).counters ?? []
-  } catch {} finally { countersLoading.value = false }
-
-  // Load variables
-  varsLoading.value = true
-  try {
-    const res = await fetch(`${API}/settings/${ch}/vars`, { headers: h })
-    if (res.ok) vars.value = (await res.json()).vars ?? []
-  } catch {} finally { varsLoading.value = false }
 }
 
-onMounted(load)
-watch(() => session.value?.channel, load)
-
-// ── Save prefix ───────────────────────────────────────────────────────────
 async function savePrefix() {
-  if (!session.value) return
+  if (!session.value || !isBroadcaster.value) return
+  if (!prefix.value.trim()) { prefixError.value = 'Prefix cannot be empty'; return }
+  prefixError.value = ''
   prefixSaving.value = true
   try {
-    await fetch(`${API}/settings/${session.value.channel}`, {
+    const res = await fetch(`${API}/settings/${session.value.channel}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
       body: JSON.stringify({ prefix: prefix.value }),
     })
-    prefixSaved.value = true; setTimeout(() => prefixSaved.value = false, 2000)
-  } catch {}
+    if (!res.ok) throw new Error()
+    prefixSaved.value = true
+    setTimeout(() => prefixSaved.value = false, 2000)
+  } catch { prefixError.value = 'Could not save prefix.' }
   prefixSaving.value = false
 }
 
-// ── Save log opt-out ──────────────────────────────────────────────────────
-async function toggleLogs() {
+async function toggleOptOut() {
   if (!session.value) return
-  logsSaving.value = true
+  optSaving.value = true
+  optMsg.value = ''
   try {
-    await fetch(`${API}/settings/${session.value.channel}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
-      body: JSON.stringify({ logsEnabled: logsEnabled.value }),
+    await fetch(`${API}/log-optout`, {
+      method: optedOut.value ? 'DELETE' : 'POST',
+      headers: { Authorization: `Bearer ${session.value.token}` },
     })
-  } catch {}
-  logsSaving.value = false
+    optedOut.value = !optedOut.value
+    optMsg.value = optedOut.value ? 'You are now opted out.' : 'You have opted back in.'
+    setTimeout(() => optMsg.value = '', 3000)
+  } catch { optMsg.value = 'Something went wrong.' }
+  optSaving.value = false
 }
 
-// ── Remove bot ────────────────────────────────────────────────────────────
-function startRemove() {
-  if (removeConfirm.value) {
-    window.location.href = `${API}/auth/remove`
-    return
-  }
-  removeConfirm.value = true
-  if (removeTimer) clearTimeout(removeTimer)
-  removeTimer = setTimeout(() => { removeConfirm.value = false }, 5000)
-}
-
-// ── Reset counter ─────────────────────────────────────────────────────────
-async function resetCounter(name: string) {
-  if (!session.value) return
-  counterResetting.value = name
-  try {
-    await fetch(`${API}/settings/${session.value.channel}/counters/${encodeURIComponent(name)}/reset`, {
-      method: 'POST', headers: { Authorization: `Bearer ${session.value.token}` }
-    })
-    const c = counters.value.find(c => c.name === name)
-    if (c) c.value = 0
-  } catch {}
-  counterResetting.value = null
-}
-
-// ── Delete variable ───────────────────────────────────────────────────────
-async function deleteVar(name: string) {
-  if (!session.value) return
-  varDeleting.value = name
-  try {
-    await fetch(`${API}/settings/${session.value.channel}/vars/${encodeURIComponent(name)}`, {
-      method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
-    })
-    vars.value = vars.value.filter(v => v.name !== name)
-  } catch {}
-  varDeleting.value = null
-}
+onMounted(load)
+watch(() => session.value?.channel, load)
 </script>
 
 <template>
   <div class="settings">
-    <div class="page-header">
-      <h2 class="page-title">Settings</h2>
-      <p class="page-sub">Channel settings for <span class="chan">#{{ session?.channel }}</span></p>
+    <div class="settings-header">
+      <h2 class="settings-title">Settings</h2>
+      <p class="settings-sub">Channel and account settings for <span class="chan">#{{ session?.channel }}</span>.</p>
     </div>
 
-    <!-- ── Bot Prefix ── -->
-    <div class="section">
-      <div class="section-title">Command Prefix</div>
-      <p class="section-sub">The character before all bot commands (e.g. + for +song).</p>
-      <div class="input-row">
-        <input v-model="prefix" class="field-input prefix-input" maxlength="3" placeholder="+" />
-        <button class="btn-save" :class="{ saved: prefixSaved }" :disabled="prefixSaving || !prefix" @click="savePrefix">
-          {{ prefixSaved ? '✓ Saved' : prefixSaving ? '…' : 'Save' }}
+    <!-- Command prefix — broadcaster only -->
+    <div class="section" v-if="isBroadcaster">
+      <div class="section-head">
+        <div>
+          <div class="section-title">Command Prefix</div>
+          <div class="section-sub">The character(s) used to trigger bot commands in chat. Currently <code class="code">{{ prefix }}</code>command.</div>
+        </div>
+        <span class="badge bc">Broadcaster only</span>
+      </div>
+      <div class="prefix-row">
+        <input
+          v-model="prefix"
+          class="prefix-input"
+          maxlength="3"
+          placeholder="+"
+          @keydown.enter="savePrefix"
+          spellcheck="false"
+        />
+        <div class="prefix-preview">
+          <span class="prefix-example"><span class="pre">{{ prefix || '+' }}</span>ping</span>
+          <span class="prefix-hint">how commands look in chat</span>
+        </div>
+        <button class="save-btn" @click="savePrefix" :disabled="prefixSaving || !prefix">
+          {{ prefixSaved ? '✓ Saved' : prefixSaving ? 'Saving…' : 'Save prefix' }}
         </button>
       </div>
+      <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
+      <div class="section-note">⚠ Changing the prefix will affect all commands immediately. Make sure to tell your chat!</div>
     </div>
 
-    <!-- ── Logs ── -->
+    <!-- Log opt-out — all users -->
     <div class="section">
-      <div class="section-row">
+      <div class="section-head">
         <div>
-          <div class="section-title">Chat Logs</div>
-          <p class="section-sub">Allow the bot to store and display your chat logs in the Logs view.</p>
+          <div class="section-title">Chat Logs Opt-Out</div>
+          <div class="section-sub">
+            Control whether your username and messages appear in the bot's log viewer.
+            When opted out, your name is replaced with <code class="code">OptedOutUser</code> and your messages with <code class="code">&lt;message hidden&gt;</code>.
+          </div>
         </div>
-        <div class="toggle" :class="{ on: logsEnabled }" @click="logsEnabled = !logsEnabled; toggleLogs()">
-          <div class="toggle-knob"></div>
-        </div>
+        <span class="badge" :class="optedOut ? 'out' : 'in'">{{ optedOut ? 'Opted out' : 'Visible' }}</span>
       </div>
-    </div>
 
-    <!-- ── Counters ── -->
-    <div class="section">
-      <div class="section-title">Script Counters</div>
-      <p class="section-sub">All counters created via $counter.name in commands. You can reset them to 0.</p>
-      <div v-if="countersLoading" class="empty">Loading…</div>
-      <div v-else-if="!counters.length" class="empty">No counters yet. Use $counter.name in a command response.</div>
-      <div v-else class="item-list">
-        <div v-for="c in counters" :key="c.name" class="item-row">
-          <code class="item-name">{{ c.name }}</code>
-          <span class="item-value">{{ c.value }}</span>
-          <button class="btn-reset" :disabled="counterResetting === c.name" @click="resetCounter(c.name)">
-            {{ counterResetting === c.name ? '…' : '↺ Reset' }}
-          </button>
+      <div class="opt-row">
+        <div class="opt-status">
+          <div class="opt-dot" :class="{ out: optedOut }"></div>
+          <span v-if="optedOut" class="opt-label out">Your messages are anonymized in all log views.</span>
+          <span v-else class="opt-label">Your username and messages are visible in log views.</span>
         </div>
-      </div>
-    </div>
-
-    <!-- ── Variables ── -->
-    <div class="section">
-      <div class="section-title">Script Variables</div>
-      <p class="section-sub">All persistent variables set via $var.name.set(). You can delete them.</p>
-      <div v-if="varsLoading" class="empty">Loading…</div>
-      <div v-else-if="!vars.length" class="empty">No variables yet. Use $var.name.set(value) in a command response.</div>
-      <div v-else class="item-list">
-        <div v-for="v in vars" :key="v.name" class="item-row">
-          <code class="item-name">{{ v.name }}</code>
-          <span class="item-value var-value">{{ v.value.slice(0, 60) }}{{ v.value.length > 60 ? '…' : '' }}</span>
-          <button class="btn-del" :disabled="varDeleting === v.name" @click="deleteVar(v.name)">
-            {{ varDeleting === v.name ? '…' : '✕' }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Remove bot ── -->
-    <div class="section danger-section">
-      <div class="section-title danger-title">Danger Zone</div>
-      <div class="section-row">
-        <div>
-          <div class="danger-label">Remove ShyBoti from channel</div>
-          <p class="section-sub">This will make the bot leave your channel and delete stored tokens. All settings are preserved.</p>
-        </div>
-        <button class="btn-danger" :class="{ confirm: removeConfirm }" @click="startRemove">
-          {{ removeConfirm ? '⚠ Confirm remove' : 'Remove bot' }}
+        <button class="opt-btn" :class="{ out: optedOut }" @click="toggleOptOut" :disabled="optSaving">
+          {{ optSaving ? '…' : optedOut ? 'Opt back in' : 'Opt out of logs' }}
         </button>
       </div>
+      <div v-if="optMsg" class="opt-msg">{{ optMsg }}</div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.settings { display: flex; flex-direction: column; gap: 16px; }
-.page-header { padding-bottom: 16px; border-bottom: 1px solid #222; }
-.page-title { font-size: 18px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
-.page-sub   { font-size: 12px; color: #666; }
-.chan       { color: #9d6cff; }
+.settings { display: flex; flex-direction: column; gap: 20px; }
 
-.section { background: #1a1a1e; border: 1px solid #2a2a30; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
-.section-title { font-size: 13px; font-weight: 700; color: #e0e0e0; }
-.section-sub   { font-size: 11px; color: #555; }
-.section-row   { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.settings-header { padding-bottom: 16px; border-bottom: 1px solid #222; }
+.settings-title  { font-size: 18px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
+.settings-sub    { font-size: 12px; color: #666; }
+.chan            { color: #9d6cff; }
 
-.input-row { display: flex; gap: 8px; align-items: center; }
-.field-input { background: #111217; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 13px; padding: 7px 10px; outline: none; transition: border-color .15s; }
-.field-input:focus { border-color: #6f2bff55; }
-.prefix-input { width: 80px; font-family: 'Consolas','Fira Mono',monospace; font-size: 16px; text-align: center; }
+.section { background: #1a1a1e; border: 1px solid #2a2a30; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 
-.btn-save { height: 34px; padding: 0 16px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s; }
-.btn-save:hover:not(:disabled) { background: #7f3fff; }
-.btn-save:disabled { opacity: .4; cursor: not-allowed; }
-.btn-save.saved { background: #1a3d2a; color: #23d18b; }
+.section-head  { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.section-title { font-size: 14px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
+.section-sub   { font-size: 12px; color: #666; max-width: 520px; line-height: 1.5; }
+.code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; font-size: 12px; background: rgba(111,43,255,.1); padding: 1px 5px; }
 
-/* Toggle */
-.toggle { width: 42px; height: 22px; background: #111217; cursor: pointer; position: relative; transition: background .2s; flex-shrink: 0; }
-.toggle.on { background: #6f2bff; }
-.toggle-knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; background: #555; transition: transform .2s, background .2s; }
-.toggle.on .toggle-knob { transform: translateX(20px); background: #fff; }
+.badge { font-size: 9px; font-weight: 700; padding: 3px 8px; letter-spacing: .05em; white-space: nowrap; flex-shrink: 0; }
+.badge.bc  { background: #f1494922; color: #f14949; border: 1px solid #f1494944; }
+.badge.in  { background: #23d18b15; color: #23d18b; border: 1px solid #23d18b44; }
+.badge.out { background: #55555515; color: #888;    border: 1px solid #55555544; }
 
-.empty { font-size: 12px; color: #444; padding: 8px 0; }
+/* Prefix section */
+.prefix-row { display: flex; align-items: center; gap: 14px; }
+.prefix-input {
+  width: 60px; background: #0d0d10; border: 1px solid #2a2a30;
+  color: #e0e0e0; font-family: 'Consolas','Fira Mono',monospace;
+  font-size: 20px; font-weight: 700; padding: 8px 12px;
+  outline: none; text-align: center;
+}
+.prefix-input:focus { border-color: #6f2bff88; }
+.prefix-preview { display: flex; flex-direction: column; gap: 2px; }
+.prefix-example { font-family: 'Consolas','Fira Mono',monospace; font-size: 14px; color: #aaa; }
+.prefix-example .pre { color: #9d6cff; font-weight: 700; }
+.prefix-hint { font-size: 10px; color: #444; }
+.save-btn {
+  height: 36px; padding: 0 18px; border: none; background: #6f2bff;
+  color: #fff; font-family: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background .15s; margin-left: auto;
+}
+.save-btn:hover:not(:disabled) { background: #7f3fff; }
+.save-btn:disabled { opacity: .4; cursor: not-allowed; }
+.field-error { font-size: 11px; color: #f14949; }
+.section-note { font-size: 11px; color: #555; background: rgba(229,192,123,.06); border-left: 2px solid #e5c07b44; padding: 6px 10px; }
 
-.item-list { display: flex; flex-direction: column; gap: 2px; }
-.item-row  { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #141418; border: 1px solid #1e1e22; }
-.item-name  { font-family: 'Consolas','Fira Mono',monospace; font-size: 12px; color: #9d6cff; min-width: 100px; flex-shrink: 0; }
-.item-value { font-size: 12px; color: #888; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.var-value  { font-family: 'Consolas','Fira Mono',monospace; color: #e5c07b; }
-
-.btn-reset { height: 26px; padding: 0 10px; border: 1px solid #23d18b44; background: transparent; color: #23d18b; font-family: inherit; font-size: 11px; cursor: pointer; flex-shrink: 0; }
-.btn-reset:hover:not(:disabled) { background: rgba(35,209,139,.1); }
-.btn-reset:disabled { opacity: .4; cursor: not-allowed; }
-
-.btn-del { height: 26px; padding: 0 10px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 11px; cursor: pointer; flex-shrink: 0; }
-.btn-del:hover:not(:disabled) { background: rgba(241,73,73,.1); }
-.btn-del:disabled { opacity: .4; cursor: not-allowed; }
-
-.danger-section { border-color: #f1494933; }
-.danger-title   { color: #f14949; }
-.danger-label   { font-size: 13px; font-weight: 600; color: #e0e0e0; margin-bottom: 4px; }
-
-.btn-danger { height: 34px; padding: 0 16px; border: 1px solid #f1494966; background: transparent; color: #f14949; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0; transition: background .15s; }
-.btn-danger:hover { background: rgba(241,73,73,.1); }
-.btn-danger.confirm { border-color: #f14949; background: rgba(241,73,73,.2); animation: pulse-red .6s infinite alternate; }
-@keyframes pulse-red { from { box-shadow: none; } to { box-shadow: 0 0 8px rgba(241,73,73,.4); } }
+/* Opt-out section */
+.opt-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.opt-status { display: flex; align-items: center; gap: 10px; }
+.opt-dot { width: 8px; height: 8px; border-radius: 50%; background: #23d18b; flex-shrink: 0; transition: background .3s; }
+.opt-dot.out { background: #555; }
+.opt-label { font-size: 12px; color: #888; }
+.opt-label.out { color: #555; }
+.opt-btn {
+  height: 34px; padding: 0 16px; border: 1px solid #2a2a30;
+  background: transparent; color: #888; font-family: inherit; font-size: 11px;
+  cursor: pointer; white-space: nowrap; transition: all .15s; flex-shrink: 0;
+}
+.opt-btn:hover:not(:disabled) { border-color: #f14949; color: #f14949; }
+.opt-btn.out { border-color: #23d18b44; color: #23d18b; background: rgba(35,209,139,.06); }
+.opt-btn.out:hover:not(:disabled) { background: rgba(35,209,139,.15); }
+.opt-btn:disabled { opacity: .4; cursor: not-allowed; }
+.opt-msg { font-size: 11px; color: #23d18b; }
 </style>
