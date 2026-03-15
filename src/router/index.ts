@@ -14,6 +14,7 @@ const router = createRouter({
     { path: '/triggers',    redirect: '/automations?tab=triggers' },
     { path: '/roles',       component: () => import('../components/RolesView.vue') },
     { path: '/settings',    component: () => import('../components/SettingsView.vue') },
+    { path: '/privacy',     component: () => import('../components/PrivacyView.vue') },
     { path: '/:path(.*)',   redirect: '/' },
   ],
 })

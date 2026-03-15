@@ -165,6 +165,11 @@ function addBot() { window.location.href = `${API}/auth/add` }
 
       <main class="main-panel">
         <router-view />
+        <footer class="site-footer">
+          © 2026 shyboti.de
+          <span class="footer-sep">|</span>
+          <router-link to="/privacy" class="footer-link">Privacy</router-link>
+        </footer>
       </main>
     </div>
   </div>
@@ -247,6 +252,11 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 /* ── Main panel ── */
 .main-panel { flex: 1; background: #141418; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; min-width: 0; scrollbar-width: none; }
 .main-panel::-webkit-scrollbar { display: none; }
+
+.site-footer { margin-top: auto; padding: 20px 0 4px; font-size: 11px; color: #333; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.footer-sep  { color: #2a2a30; }
+.footer-link { color: #555; text-decoration: none; transition: color .15s; }
+.footer-link:hover { color: #9d6cff; }
 
 /* ── Responsive helpers ── */
 .hide-mobile  { }
