@@ -11,6 +11,7 @@ export interface CustomCommand {
   enabled_when: string; required_game: string
   regex1: string; regex2: string; text1: string; text2: string
   isActive: boolean | number; cooldown: number; userCooldown: number
+  description: string
 }
 interface Props { cmdName: string; channel: string; open: boolean; isBuiltIn?: boolean }
 
@@ -28,6 +29,7 @@ const ruleTarget    = ref<'output' | 'input'>('output')
 const form = ref<CustomCommand>({
   name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
   regex1: '', regex2: '', text1: '', text2: '', isActive: true, cooldown: 0, userCooldown: 0,
+  description: '',
 })
 
 const OPERATORS = ['[has]','[hasnot]','[=]','[starts]','[ends]']
@@ -63,18 +65,30 @@ async function load() {
   if (!session.value || !props.cmdName) return
   loading.value = true
   try {
-    const res = await fetch(`${API}/custom-commands/${props.channel}`, {
-      headers: { Authorization: `Bearer ${session.value.token}` }
-    })
-    if (res.ok) {
-      const data = await res.json() as { commands: CustomCommand[] }
-      const ex = data.commands.find(c => c.name === props.cmdName)
-      form.value = ex
-        ? { ...ex, isActive: !!ex.isActive }
-        : { name: props.cmdName, response: '', rule: '', alias: '', enabled_when: 'always',
-            required_game: '', regex1: '', regex2: '', text1: '', text2: '',
-            isActive: true, cooldown: 0, userCooldown: 0 }
-      userParams.value = userParams.value.map(p => ({ ...p, value: ex ? ((ex as any)[p.key] ?? '') : '' }))
+    if (props.isBuiltIn) {
+      // For built-ins: load description from /commands/:channel
+      const res = await fetch(`${API}/commands/${props.channel}`, {
+        headers: { Authorization: `Bearer ${session.value.token}` }
+      })
+      if (res.ok) {
+        const data = await res.json() as { commands: Array<{ name: string; description: string }> }
+        const cmd = data.commands.find(c => c.name === props.cmdName)
+        form.value = { ...form.value, name: props.cmdName, description: cmd?.description ?? '' }
+      }
+    } else {
+      const res = await fetch(`${API}/custom-commands/${props.channel}`, {
+        headers: { Authorization: `Bearer ${session.value.token}` }
+      })
+      if (res.ok) {
+        const data = await res.json() as { commands: CustomCommand[] }
+        const ex = data.commands.find(c => c.name === props.cmdName)
+        form.value = ex
+          ? { ...ex, isActive: !!ex.isActive, description: ex.description ?? '' }
+          : { name: props.cmdName, response: '', rule: '', alias: '', enabled_when: 'always',
+              required_game: '', regex1: '', regex2: '', text1: '', text2: '',
+              isActive: true, cooldown: 0, userCooldown: 0, description: '' }
+        userParams.value = userParams.value.map(p => ({ ...p, value: ex ? ((ex as any)[p.key] ?? '') : '' }))
+      }
     }
   } catch {}
   loading.value = false
@@ -1630,6 +1644,23 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             </details>
           </div>
 
+          <!-- Description field -->
+          <div class="field-group">
+            <label class="field-label">
+              Description
+              <span v-if="isBuiltIn" class="field-hint">read-only — set in the command file</span>
+              <span v-else class="field-hint">short description shown in the commands list</span>
+            </label>
+            <div v-if="isBuiltIn" class="desc-readonly">{{ form.description || '—' }}</div>
+            <input
+              v-else
+              v-model="form.description"
+              class="field-input"
+              placeholder="What does this command do?"
+              maxlength="120"
+            />
+          </div>
+
           <div class="cond-row">
             <div class="field-group sm">
               <label class="field-label">Active when</label>
@@ -1792,6 +1823,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .btn-delete:hover:not(:disabled) { background: #f1494911; }
 .btn-delete:disabled { opacity: .4; cursor: not-allowed; }
 .btn-delete.confirm { border-color: #f14949aa; background: #f1494922; font-weight: 700; }
+.desc-readonly { font-size: 12px; color: #555; background: #0d0d10; border: 1px solid #1e1e22; padding: 7px 10px; font-style: italic; }
 
 /* ── Rule section collapsible ── */
 .rule-section { border: 1px solid #222; background: #141418; }

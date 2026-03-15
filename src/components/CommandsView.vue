@@ -18,6 +18,7 @@ interface Command {
   userCooldown: number
   modOnly: boolean
   broadcasterOnly: boolean
+  description: string
 }
 
 interface CustomCommand {
@@ -33,6 +34,7 @@ interface CustomCommand {
   userCooldown: number
   modOnly: boolean
   broadcasterOnly: boolean
+  description: string
 }
 
 const commands       = ref<Command[]>([])
@@ -401,6 +403,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       <div class="table-header">
         <div>On/Off</div>
         <div>Name</div>
+        <div>Description</div>
         <div>Access</div>
         <div>Global CD</div>
         <div>User CD</div>
@@ -415,6 +418,8 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
             <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
             {{ prefix }}{{ cmd.name }}
           </div>
+
+          <div class="cmd-desc">{{ cmd.description || '—' }}</div>
 
           <div>
             <button class="access-btn" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly, disabled: !canToggle }" @click="cycleRestriction(cmd)">{{ restrictionLabel(cmd) }}</button>
@@ -532,10 +537,13 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
           <div><div class="square" :class="cmd.isActive ? 'on' : 'off'"
             @click="cmd.isActive = !cmd.isActive; updateCustomActive(cmd)"></div></div>
 
-          <div class="cmd-name">
-            <span class="cmd-cat-dot" style="background:#9d6cff"></span>
-            {{ prefix }}{{ cmd.name }}
-            <span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
+          <div class="cmd-name-col">
+            <div class="cmd-name">
+              <span class="cmd-cat-dot" style="background:#9d6cff"></span>
+              {{ prefix }}{{ cmd.name }}
+              <span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
+            </div>
+            <div v-if="cmd.description" class="cmd-desc-inline">{{ cmd.description }}</div>
           </div>
 
           <div>
@@ -625,7 +633,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .state-msg { color: #555; padding: 40px; text-align: center; font-size: 14px; }
 
 .table-header,
-.table-row { display: grid; grid-template-columns: 70px 1fr 110px 90px 90px 110px; align-items: center; }
+.table-row { display: grid; grid-template-columns: 70px 140px 1fr 110px 90px 90px 110px; align-items: center; }
 
 /* Custom commands use wider last column for 3 action buttons */
 .custom-table-header,
@@ -733,6 +741,9 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 
 .custom-actions { display: flex; align-items: center; gap: 6px; }
 .cmd-alias { font-size: 11px; color: #6f2bff; font-weight: 400; margin-left: 6px; }
+.cmd-desc { font-size: 11px; color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmd-name-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cmd-desc-inline { font-size: 10px; color: #3a3a3a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .del-btn { height: 34px; padding: 0 10px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 11px; cursor: pointer; transition: background .15s, border-color .15s, color .15s; white-space: nowrap; }
 .del-btn:hover { background: #f1494911; }
 .del-btn.confirm { border-color: #f14949aa; color: #ff6b6b; background: #f1494922; }
