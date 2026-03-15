@@ -466,8 +466,8 @@ function esc(s: string) {
     <div v-else-if="searched" class="logs-results">
       <div class="logs-count">{{ msgs.length.toLocaleString() }} messages loaded</div>
       <div class="logs-table">
-        <div class="logs-thead" :style="{ gridTemplateColumns: `150px ${nameColWidth}px 1fr 24px` }">
-          <div>Time</div><div>User</div><div>Message</div><div></div>
+        <div class="logs-thead">
+          <div>Time</div><div>User</div><div>Message</div>
         </div>
         <div class="logs-tbody" ref="bodyRef">
           <div class="top-loader" :class="{ visible: loadingMore }">
@@ -486,7 +486,7 @@ function esc(s: string) {
               v-memo="[item.msg.id, highlightId === item.msg.id]"
               class="log-row"
               :class="{ highlighted: highlightId === item.msg.id }"
-              :style="{ gridTemplateColumns: `150px ${nameColWidth}px 1fr 24px` }"
+
             >
               <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
               <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
@@ -539,7 +539,7 @@ function esc(s: string) {
 .logs-results { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .logs-table   { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .logs-thead   {
-  display: grid;
+  display: flex; gap: 12px;
   padding: 7px 14px; background: #0d0d10; border: 1px solid #1e1e24;
   font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0;
 }
@@ -554,9 +554,10 @@ function esc(s: string) {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .log-row {
-  display: grid; padding: 5px 14px;
+  display: flex; align-items: baseline; gap: 0;
+  padding: 3px 14px;
   border-bottom: 1px solid #1a1a1e; font-size: 12px;
-  align-items: center; transition: background .1s; position: relative;
+  transition: background .1s; position: relative;
 }
 .log-row:hover { background: #1a1a1e; }
 .log-row.highlighted { animation: hl-fade 3s ease forwards; }
@@ -565,17 +566,17 @@ function esc(s: string) {
   100% { background: transparent; }
 }
 
-.log-time       { color: #444; font-size: 11px; }
+.log-time       { color: #444; font-size: 11px; flex-shrink: 0; margin-right: 10px; }
 .log-time-short { display: none; } /* shown only on mobile */
 .log-day-sep    { display: none; } /* shown only on mobile */
-.log-user { font-weight: 600; word-break: break-all; padding-right: 0; }
-.log-user::after { content: ':'; color: #555; margin-right: 4px; }
-.log-msg  { color: #ccc; word-break: break-word; line-height: 1.6; }
+.log-user { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
+.log-user::after { content: ':'; color: #555; margin-right: 5px; }
+.log-msg  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
 
 .log-share {
   display: flex; align-items: center; justify-content: center;
   width: 20px; height: 20px; color: #444; cursor: pointer;
-  opacity: 0; transition: opacity .15s, color .15s; flex-shrink: 0;
+  opacity: 0; transition: opacity .15s, color .15s; flex-shrink: 0; margin-left: 6px;
 }
 .log-row:hover .log-share { opacity: 1; }
 .log-share:hover { color: #9d6cff; }
