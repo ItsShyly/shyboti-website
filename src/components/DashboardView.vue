@@ -46,15 +46,34 @@ const popupLoading  = ref(false)
 
 let sseSource: EventSource | null = null
 
-const ALL_TYPES = [
-  'cmd_added','cmd_changed','cmd_removed','ban','unban','timeout',
-  'timer_added','timer_changed','timer_removed','timer_enabled','timer_disabled',
-  'trigger_added','trigger_changed','trigger_removed','trigger_enabled','trigger_disabled',
+const TYPE_GROUPS = [
+  {
+    label: 'Commands',
+    types: ['cmd_added','cmd_changed','cmd_removed'],
+  },
+  {
+    label: 'Moderation',
+    types: ['ban','unban','timeout'],
+  },
+  {
+    label: 'Automations',
+    types: ['timer_added','timer_changed','timer_removed','timer_enabled','timer_disabled',
+            'trigger_added','trigger_changed','trigger_removed','trigger_enabled','trigger_disabled'],
+  },
 ] as const
+
+const ALL_TYPES = TYPE_GROUPS.flatMap(g => g.types)
 
 function toggleType(t: string) {
   const s = new Set(activeTypes.value)
   if (s.has(t)) s.delete(t); else s.add(t)
+  activeTypes.value = s
+}
+
+function toggleGroup(types: readonly string[]) {
+  const s = new Set(activeTypes.value)
+  const allOn = types.every(t => s.has(t))
+  types.forEach(t => allOn ? s.delete(t) : s.add(t))
   activeTypes.value = s
 }
 
@@ -286,15 +305,15 @@ function fmtActor(actor: string) {
       </div>
     </div>
 
-    <!-- Type filter chips -->
+    <!-- Type filter chips grouped -->
     <div class="type-filters">
-      <button v-for="t in ALL_TYPES" :key="t" class="type-chip"
-        :class="{ active: activeTypes.has(t) }"
-        :style="{ '--chip-color': TYPE_META[t]?.color }"
-        @click="toggleType(t)">
-        <span class="chip-icon">{{ TYPE_META[t]?.icon }}</span> {{ TYPE_META[t]?.label }}
-      </button>
-      <button v-if="activeTypes.size > 0" class="type-chip clear-chip" @click="activeTypes.clear()">✕ Clear</button>
+      <button
+        v-for="group in TYPE_GROUPS" :key="group.label"
+        class="group-chip"
+        :class="{ active: group.types.every(t => activeTypes.has(t)) }"
+        @click="toggleGroup(group.types)"
+      >{{ group.label }}</button>
+      <button v-if="activeTypes.size > 0" class="clear-chip" @click="activeTypes = new Set()">✕ Clear</button>
     </div>
 
     <div v-if="error" class="feed-empty err">{{ error }}</div>
@@ -458,21 +477,19 @@ function fmtActor(actor: string) {
 .feed-empty { color: #444; font-size: 13px; padding: 40px; text-align: center; }
 .feed-empty.err { color: #f14949; }
 
-.type-filters { display: flex; gap: 6px; flex-wrap: wrap; padding: 2px 0 4px; flex-shrink: 0; }
-.type-chip {
-  display: flex; align-items: center; gap: 5px;
-  height: 26px; padding: 0 10px; border: 1px solid #2a2a30;
-  background: transparent; color: #555; font-family: inherit; font-size: 11px; font-weight: 600;
+.type-filters { display: flex; gap: 6px; align-items: center; padding: 2px 0 4px; flex-shrink: 0; }
+.group-chip {
+  height: 26px; padding: 0 14px; border: 1px solid #2a2a30;
+  background: transparent; color: #666; font-family: inherit; font-size: 11px; font-weight: 600;
   cursor: pointer; transition: color .15s, border-color .15s, background .15s;
 }
-.type-chip:hover { color: #aaa; border-color: #444; }
-.type-chip.active {
-  color: var(--chip-color, #9d6cff);
-  border-color: var(--chip-color, #9d6cff);
-  background: color-mix(in srgb, var(--chip-color, #9d6cff) 10%, transparent);
+.group-chip:hover { color: #ccc; border-color: #555; }
+.group-chip.active { color: #9d6cff; border-color: #6f2bff88; background: #6f2bff15; }
+.clear-chip {
+  height: 22px; padding: 0 9px; border: 1px solid #222;
+  background: transparent; color: #444; font-family: inherit; font-size: 10px;
+  cursor: pointer; margin-left: 2px; transition: color .15s;
 }
-.chip-icon { font-size: 12px; }
-.clear-chip { color: #444; border-color: #222; }
 .clear-chip:hover { color: #aaa; border-color: #555; }
 
 .feed { display: flex; flex-direction: column; gap: 1px; overflow-y: auto; flex: 1; }
