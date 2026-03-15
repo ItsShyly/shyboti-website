@@ -108,7 +108,7 @@
 
       <section>
         <h2>11. Contact</h2>
-        <p>Questions about this privacy policy? Reach out via Twitch: <strong>itsshyly</strong> or on discord: <strong>shyly</strong></p>
+        <p>Questions about this privacy policy? Reach out via Twitch: <strong>itsshyly</strong> or on discord: <strong>.shyly</strong></p>
       </section>
 
     </div>
