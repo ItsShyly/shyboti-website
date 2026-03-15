@@ -909,4 +909,40 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .extras-save-btn:disabled { opacity: .5; cursor: not-allowed; }
 .extras-save-btn.saved { background: #1a3d2a; color: #23d18b; cursor: default; }
 .extras-readonly-note { font-size: 11px; color: #555; margin-top: 16px; text-align: center; }
+
+/* ── Responsive ── */
+@media (max-width: 680px) {
+  /* Commands table: toggle | name+desc | edit button. Hide cooldown columns. */
+  .table-header { display: none; }
+  .table-row {
+    display: flex; flex-wrap: wrap; align-items: center;
+    height: auto; padding: 10px 12px; gap: 8px;
+  }
+  .table-row > *:nth-child(1) { flex-shrink: 0; }
+  .table-row > *:nth-child(2) { flex: 1; min-width: 0; }
+  .table-row > *:nth-child(3) { order: 10; width: 100%; } /* access on second line */
+  .table-row > *:nth-child(4),
+  .table-row > *:nth-child(5) { display: none; }           /* hide CDs */
+  .table-row > *:nth-child(6) { flex-shrink: 0; }          /* edit button */
+  .table-row > *:nth-child(7) { flex-shrink: 0; }          /* desc col (7col layout) */
+
+  /* Custom row same treatment */
+  .custom-row {
+    display: flex; flex-wrap: wrap; align-items: center;
+    height: auto; padding: 10px 12px; gap: 8px;
+  }
+  .custom-row > *:nth-child(4),
+  .custom-row > *:nth-child(5) { display: none; }
+  .custom-row > *:nth-child(3) { order: 10; width: 100%; }
+
+  /* Custom header: stack instead of columns on mobile */
+  .custom-header { flex-wrap: wrap; gap: 8px; }
+  .custom-header-left { flex-wrap: wrap; gap: 6px; }
+
+  /* Sync row: wrap */
+  .sync-row { flex-wrap: wrap; }
+
+  /* New cmd input: shrink */
+  .new-cmd-input { width: 120px; }
+}
 </style>

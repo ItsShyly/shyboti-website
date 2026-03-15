@@ -436,4 +436,11 @@ onMounted(() => { load(); loadMods() })
 .default-val { font-size: 9px; color: #333; white-space: nowrap; }
 .default-val.active { color: #555; }
 
+@media (max-width: 680px) {
+  .roles-header { flex-direction: column; align-items: stretch; }
+  .save-btn { width: 100%; }
+  .perm-grid { grid-template-columns: 1fr; }
+  .mod-perm-grid { grid-template-columns: 1fr; }
+  .master-row { flex-direction: column; }
+}
 </style>

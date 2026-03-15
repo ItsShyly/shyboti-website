@@ -532,4 +532,15 @@ onMounted(load)
 .expiry-clear { background: none; border: none; color: inherit; cursor: pointer; font-size: 10px; padding: 0; opacity: .6; }
 .expiry-clear:hover { opacity: 1; }
 .expiry-select { background: #0d0d10; border: 1px solid #2a2a30; color: #555; font-family: inherit; font-size: 10px; padding: 3px 6px; cursor: pointer; outline: none; }
+
+@media (max-width: 680px) {
+  .add-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .nuke-inputs-top { flex-direction: column; }
+  .nuke-toggles-row { flex-wrap: wrap; gap: 10px; }
+  .item-row { flex-wrap: wrap; gap: 6px; }
+  .item-term { width: 100%; }
+  .nuke-fire-btn { margin-left: 0; }
+  .tabs { overflow-x: auto; }
+  .threshold-wrap { flex-wrap: wrap; }
+}
 </style>

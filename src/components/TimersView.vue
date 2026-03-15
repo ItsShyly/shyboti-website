@@ -513,6 +513,17 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
 .toggle-disabled { opacity: .35; cursor: not-allowed; }
 .btn-action-disabled { opacity: .35; cursor: not-allowed; }
 
+@media (max-width: 680px) {
+  .view-header { flex-wrap: wrap; gap: 10px; }
+  .panel { width: 100vw !important; }
+  .panel-body { padding: 14px 16px; }
+  .row-2, .row-3 { flex-direction: column; gap: 8px; }
+  .timer-row { padding: 10px 10px; gap: 8px; }
+  .row-actions { gap: 4px; }
+  .btn-action { padding: 0 8px; font-size: 10px; }
+  .sync-row { flex-wrap: wrap; }
+}
+
 .toast { padding: 8px 14px; font-size: 12px; margin-bottom: 4px; }
 .toast.success { background: rgba(35,209,139,.1); border: 1px solid rgba(35,209,139,.3); color: #23d18b; }
 .toast.error   { background: rgba(241,73,73,.1);  border: 1px solid rgba(241,73,73,.3);  color: #f14949; }

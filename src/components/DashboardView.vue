@@ -616,4 +616,12 @@ function fmtActor(actor: string) {
 }
 .popup-btn:last-child { border-right: none; }
 .popup-btn:hover { background: #1e1e24; color: #9d6cff; }
+
+@media (max-width: 680px) {
+  .dash-header { flex-wrap: wrap; gap: 8px; }
+  .type-filters { flex-wrap: wrap; }
+  .feed-body { font-size: 11px; }
+  .feed-right { align-items: flex-end; }
+  .user-popup { width: calc(100vw - 20px); transform: translate(-50%, 10px); left: 50% !important; }
+}
 </style>
