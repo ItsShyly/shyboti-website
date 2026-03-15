@@ -63,7 +63,7 @@ onMounted(async () => {
   }
 
   if (route.path === '/' || route.path === '') {
-    router.push(session.value ? '/dashboard' : '/home')
+    router.push(session.value ? '/dashboard' : '/')
   }
 })
 
@@ -74,7 +74,7 @@ function addBot() { window.location.href = `${API}/auth/add` }
   <div class="page">
 
     <div class="topbar">
-      <div class="topbar-brand" @click="router.push('/dashboard')" style="cursor:pointer">
+      <div class="topbar-brand" @click="session ? router.push('/dashboard') : router.push('/')" style="cursor:pointer">
         <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/1x.gif" alt="shy" class="brand-emote" />
         <span class="brand-name">ShyBoti</span>
       </div>
@@ -94,7 +94,7 @@ function addBot() { window.location.href = `${API}/auth/add` }
           <span v-else class="logged-in-as hide-mobile">#{{ session.channel }}</span>
           <span class="logged-in-as hide-mobile" style="color:#555">·</span>
           <span class="logged-in-as hide-mobile">{{ session.login }}</span>
-          <button class="auth-btn logout-btn hide-mobile" @click="logout">Log out</button>
+          <button class="auth-btn logout-btn hide-mobile" @click="logout(); router.push('/')">Log out</button>
         </template>
         <button v-else class="auth-btn login-btn" :class="{ shake: loginShaking }" @click="login">
           <span class="hide-mobile">Login with Twitch</span>
@@ -124,7 +124,7 @@ function addBot() { window.location.href = `${API}/auth/add` }
         <div class="sidebar-mobile-header show-mobile">
           <template v-if="session">
             <span class="sidebar-user">#{{ session.channel }}</span>
-            <button class="sidebar-logout" @click="logout">Log out</button>
+            <button class="sidebar-logout" @click="logout(); router.push('/'); sidebarOpen = false">Log out</button>
           </template>
         </div>
 

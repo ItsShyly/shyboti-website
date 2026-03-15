@@ -568,7 +568,8 @@ function esc(s: string) {
 .log-time       { color: #444; font-size: 11px; }
 .log-time-short { display: none; } /* shown only on mobile */
 .log-day-sep    { display: none; } /* shown only on mobile */
-.log-user { font-weight: 600; word-break: break-all; padding-right: 8px; }
+.log-user { font-weight: 600; word-break: break-all; padding-right: 0; }
+.log-user::after { content: ':'; color: #555; margin-right: 4px; }
 .log-msg  { color: #ccc; word-break: break-word; line-height: 1.6; }
 
 .log-share {
@@ -647,7 +648,6 @@ function esc(s: string) {
   .log-time       { display: none; }                      /* hide full timestamp */
   .log-time-short { display: block; flex-shrink: 0; color: #555; font-size: 11px; white-space: nowrap; }
   .log-user  { flex-shrink: 0; font-size: 12px; padding-right: 0; white-space: nowrap; }
-  .log-user::after { content: ':'; color: #555; }
   .log-msg   { flex: 1; font-size: 12px; min-width: 0; word-break: break-word; }
   .log-share { flex-shrink: 0; opacity: 0.5 !important; }
 }
