@@ -4,7 +4,6 @@ import { API } from '../api'
 import { useAuth } from '../auth'
 
 const { session } = useAuth()
-const SPANIX = 'https://logs.spanix.team'
 
 interface LogMsg {
   id: string; text: string; username: string; displayName: string
@@ -95,7 +94,9 @@ async function fetchEmotes(ch: string) {
 async function fetchDay(ch: string, y: number, m: number, d: number, signal: AbortSignal): Promise<LogMsg[]> {
   const mm  = String(m).padStart(2, '0')
   const dd  = String(d).padStart(2, '0')
-  const res = await fetch(`${SPANIX}/channel/${ch}/${y}/${mm}/${dd}?json=true&limit=10000`, { signal })
+  const params = new URLSearchParams({ channel: ch, year: String(y), month: mm, day: dd, limit: '10000' })
+  if (termFilter.value.trim()) params.set('q', termFilter.value.trim())
+  const res = await fetch(`${API}/logs/day?${params}`, { signal })
   if (!res.ok) return []
   const data = await res.json() as any
   let messages: LogMsg[] = data?.messages ?? []
@@ -110,7 +111,8 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
 async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal): Promise<LogMsg[]> {
   const mm  = String(m).padStart(2, '0')
   const u   = userFilter.value.trim().toLowerCase()
-  const res = await fetch(`${SPANIX}/channel/${ch}/user/${u}/${y}/${mm}?json=true&limit=100000`, { signal })
+  const params = new URLSearchParams({ channel: ch, user: u, year: String(y), month: mm, limit: '100000' })
+  const res = await fetch(`${API}/logs/usermonth?${params}`, { signal })
   if (!res.ok) return []
   const data = await res.json() as any
   let messages: LogMsg[] = data?.messages ?? []
