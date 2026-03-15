@@ -1630,7 +1630,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 
             <!-- Variable reference -->
             <details class="ref-panel">
-              <summary class="ref-summary">📖 Variable reference</summary>
+              <summary class="ref-summary">Variable reference</summary>
               <div class="ref-content">
                 <div class="ref-group" v-for="g in REF_GROUPS" :key="g.label">
                   <div class="ref-group-label">{{ g.label }}</div>

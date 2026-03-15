@@ -310,7 +310,7 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
             <span class="sync-dot"></span>synced from #{{ syncConf.sync_from }}
             <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
           </button>
-          <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">↻ Sync… <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span></button>
+          <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">↻ Sync from channel...<span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span></button>
         </div>
       </div>
       <button class="btn-new" @click="canEdit && openNew()" :disabled="!canEdit" :class="{ 'btn-new-disabled': !canEdit }">+ New trigger</button>
@@ -429,7 +429,7 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
                 @input="onEditorInput"
               ></div>
               <details class="ref-panel">
-                <summary class="ref-summary">📖 Variable reference</summary>
+                <summary class="ref-summary">Variable reference</summary>
                 <div class="ref-content">
                   <div v-for="g in REF_GROUPS" :key="g.label" class="ref-group">
                     <div class="ref-group-label">{{ g.label }}</div>

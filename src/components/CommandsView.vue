@@ -506,14 +506,11 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       <div class="custom-header-left">
         <span class="custom-count">{{ customCommands.length }} custom command{{ customCommands.length !== 1 ? 's' : '' }}</span>
         <!-- Sync indicator — always visible when active, click to expand -->
-        <button v-if="syncConf?.is_active" class="sync-indicator" @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from} · click to manage`">
-          <span class="sync-indicator-dot"></span>
-          <span>synced from #{{ syncConf.sync_from }}</span>
-          <span class="sync-indicator-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
-        </button>
-        <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">
-          ↻ Sync from channel… <span class="sync-indicator-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
-        </button>
+          <button v-if="syncConf?.is_active" class="sync-indicator" @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from}`">
+            <span class="sync-dot"></span>synced from #{{ syncConf.sync_from }}
+            <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
+          </button>
+          <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">↻ Sync from channel... <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span></button>
       </div>
         <div v-if="!creatingNew">
           <button class="create-btn" :disabled="!canEdit" :class="{ 'create-btn-disabled': !canEdit }" @click="canEdit && startCreate()">+ New command</button>
@@ -639,19 +636,14 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
             <div
               class="extras-toggle"
               :class="{ on: mentionEnabled, disabled: !isBroadcaster }"
-              @click="isBroadcaster && (mentionEnabled = !mentionEnabled)"
+              @click="isBroadcaster && (mentionEnabled = !mentionEnabled, saveExtras())"
             >
               <div class="extras-toggle-knob"></div>
             </div>
           </div>
         </div>
 
-        <div v-if="isBroadcaster" class="extras-footer">
-          <button class="extras-save-btn" :class="{ saved: extrasSaved }" :disabled="extrasSaving" @click="saveExtras">
-            {{ extrasSaved ? '✓ Saved' : extrasSaving ? 'Saving…' : 'Save changes' }}
-          </button>
-        </div>
-        <div v-else class="extras-readonly-note">Only the broadcaster can change these settings.</div>
+        <div v-if="!isBroadcaster" class="extras-readonly-note">Only the broadcaster can change these settings.</div>
       </template>
     </template><!-- /Extras tab -->
   </div>
