@@ -50,7 +50,7 @@ const { locale } = useI18n()
             <li>Log-Opt-out direkt im Dashboard</li>
             <li>Twitch-OAuth widerrufen via <a href="https://www.twitch.tv/settings/connections" target="_blank" rel="noopener">Twitch-Verbindungseinstellungen</a></li>
           </ul>
-          <p>Kontakt: Twitch DM an <strong>itsshyly</strong>.</p>
+          <p>Kontakt: <strong>contact@shyboti.de</strong>.</p>
         </section>
         <section><h2>7. Cookies &amp; Local Storage</h2><p>Nur <code>localStorage</code> für das Sitzungstoken. Keine Tracking-Cookies oder Analysetools.</p></section>
         <section><h2>8. Sicherheit</h2><p>OAuth-Tokens serverseitig gespeichert, nur für autorisierte API-Anfragen. HTTPS für alle Verbindungen.</p></section>
@@ -64,7 +64,7 @@ const { locale } = useI18n()
           <p>ShyBoti steht in <strong>keiner Verbindung</strong> zu den genannten Diensten.</p>
         </section>
         <section><h2>10. Änderungen</h2><p>Wir können diese Datenschutzerklärung aktualisieren. Das Datum oben zeigt die letzte Änderung.</p></section>
-        <section><h2>11. Kontakt</h2><p>Fragen? Twitch DM an <strong>itsshyly</strong>.</p></section>
+        <section><h2>11. Kontakt</h2><p>Fragen? Kontaktiere mich: <strong>contact@shyboti.de</strong>.</p></section>
       </template>
 
       <!--  ENGLISH  -->
@@ -109,7 +109,7 @@ const { locale } = useI18n()
             <li>Opt out of log display in the dashboard Settings</li>
             <li>Revoke Twitch OAuth via <a href="https://www.twitch.tv/settings/connections" target="_blank" rel="noopener">Twitch connections settings</a></li>
           </ul>
-          <p>Contact: Twitch DM to <strong>itsshyly</strong>.</p>
+          <p>Contact: <strong>contact@shyboti.de</strong>.</p>
         </section>
         <section><h2>7. Cookies &amp; Local Storage</h2><p>We use <code>localStorage</code> only for your session token. No tracking cookies or third-party analytics.</p></section>
         <section><h2>8. Security</h2><p>OAuth tokens stored server-side, used only for authorised API requests. HTTPS for all connections.</p></section>
@@ -123,7 +123,7 @@ const { locale } = useI18n()
           <p>ShyBoti is <strong>not affiliated</strong> with any of the above services.</p>
         </section>
         <section><h2>10. Changes</h2><p>We may update this policy. The date at the top reflects the last change.</p></section>
-        <section><h2>11. Contact</h2><p>Questions? Twitch DM to <strong>itsshyly</strong>.</p></section>
+        <section><h2>11. Contact</h2><p>Questions? Contact <strong>contact@shyboti.de</strong>.</p></section>
       </template>
 
     </div>
