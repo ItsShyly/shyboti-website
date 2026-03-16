@@ -2,9 +2,11 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
+import { useI18n } from '../i18n'
 import CommandEditPanel from './CommandEditPanel.vue'
 
 const { session, channelRole } = useAuth()
+const { t } = useI18n()
 
 const canView    = computed(() => channelRole.value?.permissions.commands_view    ?? false)
 const canToggle  = computed(() => channelRole.value?.permissions.commands_toggle  ?? false)
@@ -254,9 +256,18 @@ function cycleRestriction(cmd: Command | CustomCommand) {
 }
 
 function restrictionLabel(cmd: { modOnly: boolean; broadcasterOnly: boolean }): string {
-  if (cmd.broadcasterOnly) return 'BC only'
-  if (cmd.modOnly)         return 'Mod only'
-  return 'Everyone'
+  if (cmd.broadcasterOnly) return t('cmd.access.bc')
+  if (cmd.modOnly)         return t('cmd.access.mod')
+  return t('cmd.access.everyone')
+}
+
+// Use i18n description if available, fall back to backend string, then '—'
+function cmdDesc(cmd: Command): string {
+  const key = `cmddesc.${cmd.name}`
+  const translated = t(key)
+  // t() returns the key itself if not found
+  if (translated !== key) return translated
+  return cmd.description || '—'
 }
 
 const deletingName = ref<string | null>(null)
@@ -421,30 +432,30 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 <template>
   <div class="cmd-root">
     <div class="cmd-tabs">
-      <button class="cmd-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">Default</button>
-      <button class="cmd-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">Custom</button>
-      <button class="cmd-tab" :class="{ active: activeTab === 'Extras' }" @click="activeTab = 'Extras'">Extras</button>
+      <button class="cmd-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">{{ t('cmd.title_default') }}</button>
+      <button class="cmd-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">{{ t('cmd.title_custom') }}</button>
+      <button class="cmd-tab" :class="{ active: activeTab === 'Extras' }" @click="activeTab = 'Extras'">{{ t('cmd.title_extras') }}</button>
     </div>
     <div class="cmd-search-wrap">
       <svg class="cmd-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
         <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
       </svg>
-      <input v-model="search" class="cmd-search" placeholder="Search commands…" />
+      <input v-model="search" class="cmd-search" :placeholder="t('cmd.search')" />
     </div>
 
     <template v-if="activeTab === 'Default'">
-    <div v-if="loading" class="state-msg">Loading commands…</div>
-    <div v-else-if="commands.length === 0" class="state-msg">No commands found for #{{ session?.channel }}</div>
+    <div v-if="loading" class="state-msg">{{ t('cmd.loading') }}</div>
+    <div v-else-if="commands.length === 0" class="state-msg">{{ t('cmd.none') }} #{{ session?.channel }}</div>
 
     <template v-else>
       <div class="table-header">
-        <div>On/Off</div>
-        <div>Name</div>
-        <div>Description</div>
-        <div>Access</div>
-        <div>Global CD</div>
-        <div>User CD</div>
-        <div>Features</div>
+        <div>{{ t('cmd.header.onoff') }}</div>
+        <div>{{ t('cmd.header.name') }}</div>
+        <div>{{ t('cmd.header.desc') }}</div>
+        <div>{{ t('cmd.header.access') }}</div>
+        <div>{{ t('cmd.header.gcd') }}</div>
+        <div>{{ t('cmd.header.ucd') }}</div>
+        <div>{{ t('cmd.header.feat') }}</div>
       </div>
 
       <div class="rows">
@@ -456,7 +467,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
             {{ prefix }}{{ cmd.name }}
           </div>
 
-          <div class="cmd-desc">{{ cmd.description || '—' }}</div>
+          <div class="cmd-desc">{{ cmdDesc(cmd) }}</div>
 
           <div>
             <button class="access-btn" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly, disabled: !canToggle }" @click="cycleRestriction(cmd)">{{ restrictionLabel(cmd) }}</button>
@@ -492,7 +503,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
               :class="{ blocked: BLOCKED.includes(cmd.name) || !canEdit }"
               @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)"
             >
-              {{ BLOCKED.includes(cmd.name) ? 'Blocked' : !canEdit ? 'No access' : 'Edit' }}
+              {{ BLOCKED.includes(cmd.name) ? t('cmd.blocked') : !canEdit ? t('cmd.no_access') : t('cmd.edit') }}
             </button>
           </div>
         </div>
@@ -504,16 +515,16 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
     <template v-if="activeTab === 'Custom'">
     <div class="custom-header">
       <div class="custom-header-left">
-        <span class="custom-count">{{ customCommands.length }} custom command{{ customCommands.length !== 1 ? 's' : '' }}</span>
+        <span class="custom-count">{{ customCommands.length }} {{ customCommands.length !== 1 ? t('cmd.count_plural') : t('cmd.count') }}</span>
         <!-- Sync indicator — always visible when active, click to expand -->
           <button v-if="syncConf?.is_active" class="sync-indicator" @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from}`">
-            <span class="sync-dot"></span>synced from #{{ syncConf.sync_from }}
+            <span class="sync-dot"></span>{{ t('cmd.sync.active') }} #{{ syncConf.sync_from }}
             <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
           </button>
-          <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">↻ Sync from channel... <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span></button>
+          <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">{{ t('cmd.sync.config') }} <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span></button>
       </div>
         <div v-if="!creatingNew">
-          <button class="create-btn" :disabled="!canEdit" :class="{ 'create-btn-disabled': !canEdit }" @click="canEdit && startCreate()">+ New command</button>
+          <button class="create-btn" :disabled="!canEdit" :class="{ 'create-btn-disabled': !canEdit }" @click="canEdit && startCreate()">{{ t('cmd.new') }}</button>
         </div>
         <div v-else class="new-cmd-row">
           <span class="new-cmd-prefix">+</span>
@@ -526,7 +537,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
             @keydown.enter="confirmCreate"
             @keydown.escape="cancelCreate"
           />
-          <button class="create-btn" @click="confirmCreate">Create</button>
+          <button class="create-btn" @click="confirmCreate">{{ t('cmd.create') }}</button>
           <button class="cancel-btn" @click="cancelCreate">✕</button>
           <span v-if="newCmdError" class="new-cmd-error">{{ newCmdError }}</span>
         </div>
@@ -536,34 +547,34 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       <div v-if="syncOpen" class="sync-panel">
         <div class="sync-row">
           <select v-model="syncFrom" class="field-select-sm">
-            <option value="">{{ syncConf?.is_active ? 'Change source…' : 'Select channel…' }}</option>
+            <option value="">{{ syncConf?.is_active ? t('cmd.sync.change') : t('cmd.sync.select') }}</option>
             <option v-for="ch in availableChannels.filter(c => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
           </select>
-          <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">{{ syncSaving ? '…' : syncConf?.is_active ? 'Update' : 'Enable' }}</button>
-          <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">{{ syncRunning ? '…' : '↻ Pull now' }}</button>
-          <button v-if="syncConf?.is_active" class="sync-stop-btn" @click="stopSync">Stop</button>
+          <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">{{ syncSaving ? '…' : syncConf?.is_active ? t('cmd.sync.update') : t('cmd.sync.enable') }}</button>
+          <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">{{ syncRunning ? '…' : t('cmd.sync.pull') }}</button>
+          <button v-if="syncConf?.is_active" class="sync-stop-btn" @click="stopSync">{{ t('cmd.sync.stop') }}</button>
         </div>
-        <div v-if="syncConf?.last_synced" class="sync-last">Last pull: {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
+        <div v-if="syncConf?.last_synced" class="sync-last">{{ t('cmd.sync.last') }} {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
         <div v-if="syncMsg" class="sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{ syncMsg }}</div>
       </div>
 
       <!-- Custom tab header row with sort -->
       <div v-if="!customLoading && filteredCustom().length > 0" class="table-header custom-table-header">
         <div></div>
-        <div class="sort-col" @click="setSort('name')">Name <span class="sort-arrow">{{ sortField==='name' ? (sortDir==='asc'?'↑':'↓') : '↕' }}</span></div>
-        <div>Access</div>
-        <div class="sort-col" @click="setSort('cooldown')">Global CD <span class="sort-arrow">{{ sortField==='cooldown' ? (sortDir==='asc'?'↑':'↓') : '↕' }}</span></div>
-        <div>User CD</div>
-        <div>Actions</div>
+        <div class="sort-col" @click="setSort('name')">{{ t('cmd.sort.name') }} <span class="sort-arrow">{{ sortField==='name' ? (sortDir==='asc'?'↑':'↓') : '↕' }}</span></div>
+        <div>{{ t('cmd.sort.access') }}</div>
+        <div class="sort-col" @click="setSort('cooldown')">{{ t('cmd.sort.gcd') }} <span class="sort-arrow">{{ sortField==='cooldown' ? (sortDir==='asc'?'↑':'↓') : '↕' }}</span></div>
+        <div>{{ t('cmd.header.ucd') }}</div>
+        <div>{{ t('cmd.sort.actions') }}</div>
       </div>
 
-      <div v-if="customLoading" class="state-msg">Loading…</div>
+      <div v-if="customLoading" class="state-msg">{{ t('cmd.loading') }}</div>
 
       <div v-else-if="filteredCustom().length === 0" class="custom-empty">
         <div class="empty-icon">✦</div>
-        <div class="empty-title">No custom commands yet</div>
-        <div class="empty-sub">Create your first command with the builder above.</div>
-        <button class="create-btn mt" @click="startCreate">+ New command</button>
+        <div class="empty-title">{{ t('cmd.empty.title') }}</div>
+        <div class="empty-sub">{{ t('cmd.empty.sub') }}</div>
+        <button class="create-btn mt" @click="startCreate">{{ t('cmd.new') }}</button>
       </div>
 
       <div v-else class="rows">
@@ -603,14 +614,14 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
           </div>
 
           <div class="custom-actions">
-            <button class="edit-btn" :class="{ blocked: !canEdit }" @click="canEdit && openEdit(cmd.name, false)">{{ canEdit ? 'Edit' : 'View' }}</button>
+            <button class="edit-btn" :class="{ blocked: !canEdit }" @click="canEdit && openEdit(cmd.name, false)">{{ canEdit ? t('cmd.edit') : t('cmd.view') }}</button>
             <button class="share-btn" @click="openShare(cmd.name)" title="Copy to another channel">↪</button>
             <button v-if="canDelete"
               class="del-btn"
               :class="{ confirm: deleteConfirmName === cmd.name, deleting: deletingName === cmd.name }"
               @click="deleteCustom(cmd.name)"
               :title="deleteConfirmName === cmd.name ? 'Click again to confirm' : 'Delete'"
-            >{{ deletingName === cmd.name ? '…' : deleteConfirmName === cmd.name ? 'Sure?' : '✕' }}</button>
+            >{{ deletingName === cmd.name ? '…' : deleteConfirmName === cmd.name ? t('cmd.delete_sure') : t('cmd.delete') }}</button>
           </div>
         </div>
       </div>
@@ -621,17 +632,13 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       <div v-if="extrasLoading" class="state-msg">Loading…</div>
       <template v-else>
         <div class="extras-section">
-          <div class="extras-section-title">Bot Behaviour</div>
+          <div class="extras-section-title">{{ t('cmd.extras.section') }}</div>
 
           <!-- Mention trigger -->
           <div class="extras-row">
             <div class="extras-info">
-              <div class="extras-label">@shyboti / shyboti mention</div>
-              <div class="extras-desc">
-                When enabled, users can trigger the bot by starting a message with
-                <code class="extras-code">@shyboti</code> or <code class="extras-code">shyboti</code>.
-                Off by default.
-              </div>
+              <div class="extras-label">{{ t('cmd.extras.mention_label') }}</div>
+              <div class="extras-desc">{{ t('cmd.extras.mention_desc') }}</div>
             </div>
             <div
               class="extras-toggle"
@@ -643,7 +650,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
           </div>
         </div>
 
-        <div v-if="!isBroadcaster" class="extras-readonly-note">Only the broadcaster can change these settings.</div>
+        <div v-if="!isBroadcaster" class="extras-readonly-note">{{ t('cmd.extras.readonly') }}</div>
       </template>
     </template><!-- /Extras tab -->
   </div>
@@ -660,17 +667,17 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
   <Teleport to="body">
     <div v-if="shareOpen" class="modal-overlay" @click.self="shareOpen = false">
       <div class="modal">
-        <div class="modal-title">Share <span class="modal-cmd">+{{ shareCmd }}</span></div>
-        <div class="modal-sub">Copy this command to another channel you have access to.</div>
+        <div class="modal-title">{{ t('cmd.share.title') }} <span class="modal-cmd">+{{ shareCmd }}</span></div>
+        <div class="modal-sub">{{ t('cmd.share.sub') }}</div>
         <select v-model="shareTarget" class="field-select-sm" style="width:100%;margin-top:12px">
-          <option value="">Select target channel…</option>
+          <option value="">{{ t('cmd.share.select') }}</option>
           <option v-for="ch in availableChannels.filter(c => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
         </select>
         <div v-if="shareError"   class="modal-msg err">{{ shareError }}</div>
         <div v-if="shareSuccess" class="modal-msg ok">{{ shareSuccess }}</div>
         <div class="modal-footer">
-          <button class="btn-cancel" @click="shareOpen = false">Cancel</button>
-          <button class="btn-save" @click="doShare" :disabled="shareSaving || !shareTarget">{{ shareSaving ? 'Copying…' : 'Copy command' }}</button>
+          <button class="btn-cancel" @click="shareOpen = false">{{ t('settings.cancel') }}</button>
+          <button class="btn-save" @click="doShare" :disabled="shareSaving || !shareTarget">{{ shareSaving ? t('cmd.share.copying') : t('cmd.share.btn') }}</button>
         </div>
       </div>
     </div>

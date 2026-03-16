@@ -3,9 +3,11 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
+import { useI18n } from '../i18n'
 
 const { session, availableChannels } = useAuth()
 const router = useRouter()
+const { t } = useI18n()
 
 interface ActivityEntry {
   id:        number
@@ -46,23 +48,11 @@ const popupLoading  = ref(false)
 
 let sseSource: EventSource | null = null
 
-const TYPE_GROUPS = [
-  {
-    label: 'Commands',
-    types: ['cmd_added','cmd_changed','cmd_removed'],
-  },
-  {
-    label: 'Moderation',
-    types: ['ban','unban','timeout'],
-  },
-  {
-    label: 'Automations',
-    types: ['timer_added','timer_changed','timer_removed','timer_enabled','timer_disabled',
-            'trigger_added','trigger_changed','trigger_removed','trigger_enabled','trigger_disabled'],
-  },
-] as const
-
-const ALL_TYPES = TYPE_GROUPS.flatMap(g => g.types)
+const TYPE_GROUPS = computed(() => [
+  { label: t('dash.filter.commands'),    types: ['cmd_added','cmd_changed','cmd_removed'] as const },
+  { label: t('dash.filter.moderation'),  types: ['ban','unban','timeout'] as const },
+  { label: t('dash.filter.automations'), types: ['timer_added','timer_changed','timer_removed','timer_enabled','timer_disabled','trigger_added','trigger_changed','trigger_removed','trigger_enabled','trigger_disabled'] as const },
+])
 
 function toggleType(t: string) {
   const s = new Set(activeTypes.value)
@@ -158,10 +148,10 @@ function fmtTime(ts: number) {
 function fmtDate(ts: number) {
   const d = new Date(ts)
   const today = new Date()
-  if (d.toDateString() === today.toDateString()) return 'Today'
+  if (d.toDateString() === today.toDateString()) return t('dash.today')
   const yest = new Date(today); yest.setDate(yest.getDate() - 1)
-  if (d.toDateString() === yest.toDateString()) return 'Yesterday'
-  return d.toLocaleDateString([], { day: '2-digit', month: 'short' })
+  if (d.toDateString() === yest.toDateString()) return t('dash.yesterday')
+  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })
 }
 function toggleDay(date: string) {
   const s = new Set(collapsedDays.value)
@@ -181,24 +171,24 @@ function groupedActivity() {
 }
 
 // ── TYPE META ─────────────────────────────────────────────────────────────────
-const TYPE_META: Record<string, { icon: string; color: string; label: string }> = {
-  cmd_added:        { icon: '+',  color: '#23d18b', label: 'Command added'    },
-  cmd_changed:      { icon: '✎',  color: '#e5c07b', label: 'Command changed'  },
-  cmd_removed:      { icon: '−',  color: '#f14949', label: 'Command removed'  },
-  ban:              { icon: '⊘',  color: '#f14949', label: 'Banned'           },
-  unban:            { icon: '✓',  color: '#4ec9b0', label: 'Unbanned'         },
-  timeout:          { icon: '⏱', color: '#c792ea', label: 'Timed out'        },
-  timer_added:      { icon: '+',  color: '#23d18b', label: 'Timer added'      },
-  timer_changed:    { icon: '✎',  color: '#e5c07b', label: 'Timer changed'    },
-  timer_removed:    { icon: '−',  color: '#f14949', label: 'Timer removed'    },
-  timer_enabled:    { icon: '▶',  color: '#23d18b', label: 'Timer enabled'    },
-  timer_disabled:   { icon: '⏸', color: '#555555', label: 'Timer disabled'   },
-  trigger_added:    { icon: '+',  color: '#4ec9b0', label: 'Trigger added'    },
-  trigger_changed:  { icon: '✎',  color: '#e5c07b', label: 'Trigger changed'  },
-  trigger_removed:  { icon: '−',  color: '#f14949', label: 'Trigger removed'  },
-  trigger_enabled:  { icon: '▶',  color: '#4ec9b0', label: 'Trigger enabled'  },
-  trigger_disabled: { icon: '⏸', color: '#555555', label: 'Trigger disabled'  },
-}
+const TYPE_META = computed(() => ({
+  cmd_added:        { icon: '+',  color: '#23d18b', label: t('type.cmd_added')        },
+  cmd_changed:      { icon: '✎',  color: '#e5c07b', label: t('type.cmd_changed')      },
+  cmd_removed:      { icon: '−',  color: '#f14949', label: t('type.cmd_removed')      },
+  ban:              { icon: '⊘',  color: '#f14949', label: t('type.ban')              },
+  unban:            { icon: '✓',  color: '#4ec9b0', label: t('type.unban')            },
+  timeout:          { icon: '⏱', color: '#c792ea', label: t('type.timeout')          },
+  timer_added:      { icon: '+',  color: '#23d18b', label: t('type.timer_added')      },
+  timer_changed:    { icon: '✎',  color: '#e5c07b', label: t('type.timer_changed')    },
+  timer_removed:    { icon: '−',  color: '#f14949', label: t('type.timer_removed')    },
+  timer_enabled:    { icon: '▶',  color: '#23d18b', label: t('type.timer_enabled')    },
+  timer_disabled:   { icon: '⏸', color: '#555555', label: t('type.timer_disabled')   },
+  trigger_added:    { icon: '+',  color: '#4ec9b0', label: t('type.trigger_added')    },
+  trigger_changed:  { icon: '✎',  color: '#e5c07b', label: t('type.trigger_changed')  },
+  trigger_removed:  { icon: '−',  color: '#f14949', label: t('type.trigger_removed')  },
+  trigger_enabled:  { icon: '▶',  color: '#4ec9b0', label: t('type.trigger_enabled')  },
+  trigger_disabled: { icon: '⏸', color: '#555555', label: t('type.trigger_disabled') },
+} as Record<string, { icon: string; color: string; label: string }>))
 
 // ── Actions ───────────────────────────────────────────────────────────────────
 
@@ -283,7 +273,7 @@ function fmtDetail(e: ActivityEntry): string {
 
 // Actor display — 'mod' is generic (Twitch chat event, actor unknown), otherwise show name
 function fmtActor(actor: string) {
-  return actor === 'mod' ? 'a mod' : actor
+  return actor === 'mod' ? (t('dash.filter.moderation') === 'Moderation' ? 'a mod' : 'ein Mod') : actor
 }
 </script>
 
@@ -291,10 +281,10 @@ function fmtActor(actor: string) {
   <div class="dash" @click="closePopup">
     <div class="dash-header">
       <div>
-        <div class="dash-title">Dashboard</div>
-        <div class="dash-sub">Activity feed for
+        <div class="dash-title">{{ t('dash.title') }}</div>
+        <div class="dash-sub">{{ t('dash.sub') }}
           <select class="chan-select" v-model="viewChannel" @change="fetchActivity">
-            <option v-if="availableChannels.length > 1" :value="ALL_CHANNELS">All channels</option>
+            <option v-if="availableChannels.length > 1" :value="ALL_CHANNELS">{{ t('dash.all') }}</option>
             <option v-for="ch in (availableChannels.length ? availableChannels : [session?.channel ?? ''])" :key="ch" :value="ch">#{{ ch }}</option>
           </select>
         </div>
@@ -313,7 +303,7 @@ function fmtActor(actor: string) {
         :class="{ active: group.types.every(t => activeTypes.has(t)) }"
         @click="toggleGroup(group.types)"
       >{{ group.label }}</button>
-      <button v-if="activeTypes.size > 0" class="clear-chip" @click="activeTypes = new Set()">✕ Clear</button>
+      <button v-if="activeTypes.size > 0" class="clear-chip" @click="activeTypes = new Set()">{{ t('dash.filter.clear') }}</button>
     </div>
 
     <div v-if="error" class="feed-empty err">{{ error }}</div>

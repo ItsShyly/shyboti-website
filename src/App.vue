@@ -3,10 +3,13 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { API } from './api'
 import { useAuth } from './auth'
+import { useI18n, useLocale, type Locale } from './i18n'
 
 const { session, availableChannels, channelRole, restoreSession, switchChannel, logout, login } = useAuth()
 const router = useRouter()
 const route  = useRoute()
+const { t } = useI18n()
+const { locale, setLocale } = useLocale()
 
 const loginShaking = ref(false)
 function shakeLogin() {
@@ -94,11 +97,15 @@ function addBot() { window.location.href = `${API}/auth/add` }
           <span v-else class="logged-in-as hide-mobile">#{{ session.channel }}</span>
           <span class="logged-in-as hide-mobile" style="color:#555">·</span>
           <span class="logged-in-as hide-mobile">{{ session.login }}</span>
-          <button class="auth-btn logout-btn hide-mobile" @click="logout(); router.push('/')">Log out</button>
+          <button class="auth-btn logout-btn hide-mobile" @click="logout(); router.push('/')">{{ t('nav.logout') }}</button>
         </template>
         <button v-else class="auth-btn login-btn" :class="{ shake: loginShaking }" @click="login">
-          <span class="hide-mobile">Login with Twitch</span>
-          <span class="show-mobile">Login</span>
+          <span class="hide-mobile">{{ t('nav.login') }}</span>
+          <span class="show-mobile">{{ t('nav.login_short') }}</span>
+        </button>
+        <!-- Language toggle -->
+        <button class="lang-btn" @click="setLocale((locale as Locale) === 'en' ? 'de' : 'en')" :title="locale === 'en' ? 'Auf Deutsch wechseln' : 'Switch to English'">
+          {{ locale === 'en' ? 'DE' : 'EN' }}
         </button>
         <!-- Hamburger — mobile only -->
         <button class="hamburger show-mobile" @click="sidebarOpen = !sidebarOpen" :class="{ open: sidebarOpen }">
@@ -108,9 +115,9 @@ function addBot() { window.location.href = `${API}/auth/add` }
     </div>
 
     <div v-if="session && showAddBanner" class="add-banner">
-      <span>👋 Welcome! Add ShyBoti to your channel to get started.</span>
+      <span>👋 {{ t('banner.welcome') }}</span>
       <div class="banner-actions">
-        <button class="banner-btn add" @click="addBot">+ Add ShyBoti</button>
+        <button class="banner-btn add" @click="addBot">{{ t('banner.add') }}</button>
         <button class="banner-dismiss" @click="showAddBanner = false">✕</button>
       </div>
     </div>
@@ -124,51 +131,51 @@ function addBot() { window.location.href = `${API}/auth/add` }
         <div class="sidebar-mobile-header show-mobile">
           <template v-if="session">
             <span class="sidebar-user">#{{ session.channel }}</span>
-            <button class="sidebar-logout" @click="logout(); router.push('/'); sidebarOpen = false">Log out</button>
+            <button class="sidebar-logout" @click="logout(); router.push('/'); sidebarOpen = false">{{ t('nav.logout') }}</button>
           </template>
         </div>
 
         <button class="sidebar-btn" :class="{ active: activeRoute === 'dashboard', locked: !session }"
           @click="nav('dashboard')">
-          Dashboard <span v-if="!session" class="lock-icon">🔒</span>
+          {{ t('nav.dashboard') }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'commands', locked: !session }"
           @click="nav('commands')">
-          Commands <span v-if="!session" class="lock-icon">🔒</span>
+          {{ t('nav.commands') }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'moderation', locked: !session }"
           @click="nav('moderation')">
-          Moderation <span v-if="!session" class="lock-icon">🔒</span>
+          {{ t('nav.moderation') }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'automations', locked: !session }"
           @click="nav('automations')">
-          Automations <span v-if="!session" class="lock-icon">🔒</span>
+          {{ t('nav.automations') }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
         <button v-if="!session || channelRole?.role === 'broadcaster'"
           class="sidebar-btn" :class="{ active: activeRoute === 'roles', locked: !session }"
           @click="nav('roles')">
-          Roles <span v-if="!session" class="lock-icon">🔒</span>
+          {{ t('nav.roles') }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
-          Logs
+          {{ t('nav.logs') }}
         </button>
         <div class="sidebar-spacer"></div>
         <button v-if="!session || channelRole?.role === 'broadcaster'"
           class="sidebar-btn" :class="{ active: activeRoute === 'settings', locked: !session }"
           @click="nav('settings')">
-          Settings <span v-if="!session" class="lock-icon">🔒</span>
+          {{ t('nav.settings') }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
         <div v-if="session && !availableChannels.includes(session.login)" class="sidebar-bottom">
-          <button class="bot-btn add" @click="addBot">+ Add to your channel</button>
+          <button class="bot-btn add" @click="addBot">{{ t('nav.add_channel') }}</button>
         </div>
       </aside>
 
       <main class="main-panel">
         <router-view />
         <footer class="site-footer">
-          © 2026 shyboti.de
+          {{ t('footer.copy') }}
           <span class="footer-sep">|</span>
-          <router-link to="/privacy" class="footer-link">Privacy</router-link>
+          <router-link to="/privacy" class="footer-link">{{ t('footer.privacy') }}</router-link>
         </footer>
       </main>
     </div>
@@ -204,6 +211,8 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 .login-btn:hover { background: #7f3fff; }
 .logout-btn { background: #2c2c2e; color: #aaa; border: 1px solid #333; }
 .logout-btn:hover { background: #3a3a3e; color: #fff; }
+.lang-btn { height: 28px; padding: 0 10px; border: 1px solid #2a2a30; background: transparent; color: #666; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; letter-spacing: .04em; transition: color .15s, border-color .15s; flex-shrink: 0; }
+.lang-btn:hover { color: #9d6cff; border-color: #6f2bff55; }
 @keyframes shake { 0%{transform:translateX(0)} 15%{transform:translateX(-5px)} 30%{transform:translateX(5px)} 45%{transform:translateX(-4px)} 60%{transform:translateX(4px)} 75%{transform:translateX(-2px)} 90%{transform:translateX(2px)} 100%{transform:translateX(0)} }
 .shake { animation: shake 0.6s ease; }
 
