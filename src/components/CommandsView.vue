@@ -48,12 +48,12 @@ const search         = ref('')
 const saving         = ref<string | null>(null)
 const cdTimers       = ref<Record<string, ReturnType<typeof setTimeout>>>({})
 
-// Edit panel — isBuiltIn=true for hardcoded commands, false for custom
+// >>> Edit panel - isBuiltIn=true for hardcoded commands, false for custom
 const editOpen      = ref(false)
 const editingCmd    = ref('')
 const editIsBuiltIn = ref(true)
 
-// New command name input state
+// >>>  New command name input state
 const creatingNew   = ref(false)
 const newCmdName    = ref('')
 const newCmdError   = ref('')
@@ -99,10 +99,10 @@ async function confirmCreate() {
   openEdit(name, false)
 }
 
-// Internal tab state
+// >>>  Internal tab state
 const activeTab = ref<'Default' | 'Custom' | 'Extras'>('Default')
 
-// ── Extras / Feature flags ───────────────────────────────────────────────────
+// >>> Extras / Feature flags
 const mentionEnabled = ref(false)
 const extrasLoading  = ref(false)
 const extrasSaving   = ref(false)
@@ -138,7 +138,7 @@ async function saveExtras() {
 
 const isBroadcaster = computed(() => channelRole.value?.role === 'broadcaster')
 
-// Sort state for custom commands
+// >>> Sort state for custom commands
 const sortField = ref<'name' | 'cooldown' | 'isActive'>('name')
 const sortDir   = ref<'asc' | 'desc'>('asc')
 function setSort(field: typeof sortField.value) {
@@ -171,7 +171,7 @@ function filtered() {
 function filteredCustom() {
   let list = customCommands.value
   if (search.value.trim()) list = list.filter(c => c.name.includes(search.value.toLowerCase()))
-  // Sort
+  // >>> Sort
   list = [...list].sort((a, b) => {
     let av: any = a[sortField.value], bv: any = b[sortField.value]
     if (typeof av === 'boolean') av = av ? 1 : 0
@@ -261,13 +261,13 @@ function restrictionLabel(cmd: { modOnly: boolean; broadcasterOnly: boolean }): 
   return t('cmd.access.everyone')
 }
 
-// Use i18n description if available, fall back to backend string, then '—'
+// >>>  Use i18n description if available, fall back to backend string, then '-'
 function cmdDesc(cmd: Command): string {
   const key = `cmddesc.${cmd.name}`
   const translated = t(key)
-  // t() returns the key itself if not found
+  // >>> t() returns the key itself if not found
   if (translated !== key) return translated
-  return cmd.description || '—'
+  return cmd.description || '-'
 }
 
 const deletingName = ref<string | null>(null)
@@ -275,11 +275,11 @@ const deleteConfirmName = ref<string | null>(null)
 
 function deleteCustom(name: string) {
   if (deleteConfirmName.value === name) {
-    // second click — confirmed
+    // >>> second click - confirmed
     doDeleteCustom(name)
   } else {
     deleteConfirmName.value = name
-    // auto-cancel after 3s
+    // >>> auto-cancel after 3s
     setTimeout(() => { if (deleteConfirmName.value === name) deleteConfirmName.value = null }, 3000)
   }
 }
@@ -329,7 +329,7 @@ function onCooldownInput(cmd: Command, field: 'cooldown' | 'userCooldown', raw: 
   cdTimers.value[key] = setTimeout(() => updateCommand(cmd), 600)
 }
 
-// ── Share ────────────────────────────────────────────────────────────────
+// >>> Share
 const shareOpen    = ref(false)
 const shareCmd     = ref('')
 const shareTarget  = ref('')
@@ -358,7 +358,7 @@ async function doShare() {
   shareSaving.value = false
 }
 
-// ── Sync ─────────────────────────────────────────────────────────────────
+// >>> Sync
 const syncConf     = ref<{ sync_from: string; is_active: number; last_synced: number } | null>(null)
 const syncOpen     = ref(false)
 const syncFrom     = ref('')
@@ -511,12 +511,12 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
     </template>
     </template><!-- /Default tab -->
 
-    <!-- ── Custom commands tab ─────────────────────────────────────── -->
+    <!-- Custom commands tab -->
     <template v-if="activeTab === 'Custom'">
     <div class="custom-header">
       <div class="custom-header-left">
         <span class="custom-count">{{ customCommands.length }} {{ customCommands.length !== 1 ? t('cmd.count_plural') : t('cmd.count') }}</span>
-        <!-- Sync indicator — always visible when active, click to expand -->
+        <!-- Sync indicator - always visible when active, click to expand -->
           <button v-if="syncConf?.is_active" class="sync-indicator" @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from}`">
             <span class="sync-dot"></span>{{ t('cmd.sync.active') }} #{{ syncConf.sync_from }}
             <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
@@ -543,7 +543,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
         </div>
       </div>
 
-      <!-- Sync panel — compact dropdown -->
+      <!-- Sync panel - compact dropdown -->
       <div v-if="syncOpen" class="sync-panel">
         <div class="sync-row">
           <select v-model="syncFrom" class="field-select-sm">
@@ -627,7 +627,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       </div>
     </template><!-- /Custom tab -->
 
-    <!-- ── Extras tab ──────────────────────────────────────────────────────── -->
+    <!-- Extras tab -->
     <template v-if="activeTab === 'Extras'">
       <div v-if="extrasLoading" class="state-msg">Loading…</div>
       <template v-else>
@@ -787,7 +787,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .access-btn.access-bc:hover  { background: rgba(241,73,73,.15); }
 .access-btn.disabled    { opacity: .35; cursor: not-allowed; pointer-events: none; }
 
-/* ── Custom tab ─────────────────────────────────────────────────── */
+/* Custom tab */
 .custom-header {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #222;
@@ -886,7 +886,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .btn-cancel { height: 32px; padding: 0 12px; border: 1px solid #333; background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer; }
 .btn-cancel:hover { border-color: #555; color: #e0e0e0; }
 
-/* ── Extras tab ── */
+/*  Extras tab  */
 .extras-section       { background: #222226; border: 1px solid #2a2a30; padding: 20px; margin-top: 12px; }
 .extras-section-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #9d6cff; margin-bottom: 12px; }
 .extras-row   { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 0; border-top: 1px solid #2a2a30; }
@@ -917,7 +917,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .extras-save-btn.saved { background: #1a3d2a; color: #23d18b; cursor: default; }
 .extras-readonly-note { font-size: 11px; color: #555; margin-top: 16px; text-align: center; }
 
-/* ── Responsive ── */
+/*  Responsive  */
 @media (max-width: 680px) {
   /* Commands table: toggle | name+desc | edit button. Hide cooldown columns. */
   .table-header { display: none; }

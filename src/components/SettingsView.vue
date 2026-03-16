@@ -2,18 +2,20 @@
 import { ref, onMounted, watch } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
+import { useI18n } from '../i18n'
 
 const { session } = useAuth()
+const { t } = useI18n()
 
 const isBroadcaster = ref(false)
 
-// ── Prefix (broadcaster only) ─────────────────────────────────────────────────
+//  Prefix (broadcaster only) 
 const prefix       = ref('+')
 const prefixSaving = ref(false)
 const prefixSaved  = ref(false)
 const prefixError  = ref('')
 
-// ── Log opt-out (all users) ───────────────────────────────────────────────────
+//  Log opt-out (all users) 
 const optedOut   = ref(false)
 const optSaving  = ref(false)
 const optMsg     = ref('')
@@ -35,7 +37,7 @@ async function load() {
 
 async function savePrefix() {
   if (!session.value || !isBroadcaster.value) return
-  if (!prefix.value.trim()) { prefixError.value = 'Prefix cannot be empty'; return }
+  if (!prefix.value.trim()) { prefixError.value = t('settings.prefix.error.empty'); return }
   prefixError.value = ''
   prefixSaving.value = true
   try {
@@ -47,7 +49,7 @@ async function savePrefix() {
     if (!res.ok) throw new Error()
     prefixSaved.value = true
     setTimeout(() => prefixSaved.value = false, 2000)
-  } catch { prefixError.value = 'Could not save prefix.' }
+  } catch { prefixError.value = t('settings.prefix.error.save') }
   prefixSaving.value = false
 }
 
@@ -61,9 +63,9 @@ async function toggleOptOut() {
       headers: { Authorization: `Bearer ${session.value.token}` },
     })
     optedOut.value = !optedOut.value
-    optMsg.value = optedOut.value ? 'You are now opted out.' : 'You have opted back in.'
+    optMsg.value = optedOut.value ? t('settings.optout.msg.out') : t('settings.optout.msg.in')
     setTimeout(() => optMsg.value = '', 3000)
-  } catch { optMsg.value = 'Something went wrong.' }
+  } catch { optMsg.value = t('settings.optout.error') }
   optSaving.value = false
 }
 
@@ -74,61 +76,52 @@ watch(() => session.value?.channel, load)
 <template>
   <div class="settings">
     <div class="settings-header">
-      <h2 class="settings-title">Settings</h2>
-      <p class="settings-sub">Channel and account settings for <span class="chan">#{{ session?.channel }}</span>.</p>
+      <h2 class="settings-title">{{ t('settings.title') }}</h2>
+      <p class="settings-sub">{{ t('settings.sub') }} <span class="chan">#{{ session?.channel }}</span>.</p>
     </div>
 
-    <!-- Command prefix — broadcaster only -->
+    <!-- Command prefix - broadcaster only -->
     <div class="section" v-if="isBroadcaster">
       <div class="section-head">
         <div>
-          <div class="section-title">Command Prefix</div>
-          <div class="section-sub">The character(s) used to trigger bot commands in chat. Currently <code class="code">{{ prefix }}</code>command.</div>
+          <div class="section-title">{{ t('settings.prefix.title') }}</div>
+          <div class="section-sub">{{ t('settings.prefix.sub') }} <code class="code">{{ prefix }}</code>command.</div>
         </div>
-        <span class="badge bc">Broadcaster only</span>
+        <span class="badge bc">{{ t('settings.prefix.badge') }}</span>
       </div>
       <div class="prefix-row">
-        <input
-          v-model="prefix"
-          class="prefix-input"
-          maxlength="3"
-          placeholder="+"
-          @keydown.enter="savePrefix"
-          spellcheck="false"
-        />
+        <input v-model="prefix" class="prefix-input" maxlength="3" placeholder="+" @keydown.enter="savePrefix" spellcheck="false" />
         <div class="prefix-preview">
           <span class="prefix-example"><span class="pre">{{ prefix || '+' }}</span>ping</span>
-          <span class="prefix-hint">how commands look in chat</span>
+          <span class="prefix-hint">{{ t('settings.prefix.how') }}</span>
         </div>
         <button class="save-btn" @click="savePrefix" :disabled="prefixSaving || !prefix">
-          {{ prefixSaved ? '✓ Saved' : prefixSaving ? 'Saving…' : 'Save prefix' }}
+          {{ prefixSaved ? t('settings.saved') : prefixSaving ? t('settings.saving') : t('settings.prefix.save') }}
         </button>
       </div>
       <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
-      <div class="section-note">⚠ Changing the prefix will affect all commands immediately. Make sure to tell your chat!</div>
+      <div class="section-note">{{ t('settings.prefix.note') }}</div>
     </div>
 
-    <!-- Log opt-out — all users -->
+    <!-- Log opt-out - all users -->
     <div class="section">
       <div class="section-head">
         <div>
-          <div class="section-title">Chat Logs Opt-Out</div>
+          <div class="section-title">{{ t('settings.optout.title') }}</div>
           <div class="section-sub">
-            Control whether your username and messages appear in the bot's log viewer.
-            When opted out, your name is replaced with <code class="code">OptedOutUser</code> and your messages with <code class="code">&lt;message hidden&gt;</code>.
+            {{ t('settings.optout.sub') }}
+            {{ t('settings.optout.sub2') }}
           </div>
         </div>
-        <span class="badge" :class="optedOut ? 'out' : 'in'">{{ optedOut ? 'Opted out' : 'Visible' }}</span>
+        <span class="badge" :class="optedOut ? 'out' : 'in'">{{ optedOut ? t('settings.optout.badge.out') : t('settings.optout.badge.in') }}</span>
       </div>
-
       <div class="opt-row">
         <div class="opt-status">
           <div class="opt-dot" :class="{ out: optedOut }"></div>
-          <span v-if="optedOut" class="opt-label out">Your messages are anonymized in all log views.</span>
-          <span v-else class="opt-label">Your username and messages are visible in log views.</span>
+          <span class="opt-label" :class="{ out: optedOut }">{{ optedOut ? t('settings.optout.hidden') : t('settings.optout.visible') }}</span>
         </div>
         <button class="opt-btn" :class="{ out: optedOut }" @click="toggleOptOut" :disabled="optSaving">
-          {{ optSaving ? '…' : optedOut ? 'Opt back in' : 'Opt out of logs' }}
+          {{ optSaving ? '…' : optedOut ? t('settings.optout.btn.in') : t('settings.optout.btn.out') }}
         </button>
       </div>
       <div v-if="optMsg" class="opt-msg">{{ optMsg }}</div>

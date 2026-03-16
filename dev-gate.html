@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ShyBoti Dev — Access Required</title>
+  <title>ShyBoti Dev - Access Required</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -52,7 +52,7 @@
   <script>
     const p = new URLSearchParams(location.search)
 
-    // Called after OAuth — token passed in URL, set as cookie, then redirect to app
+    // Called after OAuth - token passed in URL, set as cookie, then redirect to app
     if (p.has('t')) {
       const token = p.get('t')
       const maxAge = 60 * 60 * 24 * 7 // 7 days

@@ -56,7 +56,7 @@ interface MockEnv {
   calls:  number
 }
 
-// ─── Condition evaluation ─────────────────────────────────────────────────────
+//  Condition evaluation 
 // After evalSrc resolves all $-vars in a condition, the raw string may still
 // contain comparison operators (>, <, ==, etc.) and boolean operators.
 // evalCondStr evaluates those operators on the resulting values.
@@ -108,7 +108,7 @@ function findLogicalOp(s: string, op: string): number {
   return -1
 }
 
-// ─── Source evaluator ─────────────────────────────────────────────────────────
+//  Source evaluator 
 
 function evalSrc(src: string, env: MockEnv): string {
   if (env.calls++ > 500) return '[overflow]'
@@ -409,7 +409,7 @@ function evalExpr(raw: string, env: MockEnv): string {
   return ''
 }
 
-// ─── Parser helpers ───────────────────────────────────────────────────────────
+//  Parser helpers 
 
 function findExprEnd(src: string, start: number): number {
   let i = start + 1, depth = 0

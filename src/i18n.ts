@@ -15,7 +15,7 @@ export function useLocale() {
   return { locale: _locale, setLocale }
 }
 
-// ── Translations ──────────────────────────────────────────────────────────────
+//  Translations 
 
 const translations: Record<Locale, Record<string, string>> = {
   en: {
@@ -225,7 +225,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'roles.overrides':             'Individual Overrides',
     'roles.overrides_sub':         'Per-mod overrides take priority over global defaults.',
     'roles.loading':               'Loading mods…',
-    'roles.no_mods':               'No mods found — make sure the bot is in your channel.',
+    'roles.no_mods':               'No mods found - make sure the bot is in your channel.',
     'roles.badge.custom':          'custom',
     'roles.badge.default':         'default',
     'roles.badge.blocked':         'blocked',
@@ -290,6 +290,27 @@ const translations: Record<Locale, Record<string, string>> = {
     'settings.saved':              '✓ Saved',
     'settings.saving':             'Saving…',
     'settings.cancel':             'Cancel',
+    'settings.title':              'Settings',
+    'settings.sub':                'Channel and account settings for',
+    'settings.prefix.title':       'Command Prefix',
+    'settings.prefix.sub':         'The character(s) used to trigger bot commands in chat. Currently',
+    'settings.prefix.how':         'how commands look in chat',
+    'settings.prefix.save':        'Save prefix',
+    'settings.prefix.note':        '⚠ Changing the prefix will affect all commands immediately. Make sure to tell your chat!',
+    'settings.prefix.error.empty': 'Prefix cannot be empty',
+    'settings.prefix.error.save':  'Could not save prefix.',
+    'settings.prefix.badge':       'Broadcaster only',
+    'settings.optout.title':       'Chat Logs Opt-Out',
+    'settings.optout.sub':         'Control whether your username and messages appear in the log viewer.',
+    'settings.optout.visible':     'Your username and messages are visible in log views.',
+    'settings.optout.hidden':      'Your messages are anonymized in all log views.',
+    'settings.optout.badge.in':    'Visible',
+    'settings.optout.badge.out':   'Opted out',
+    'settings.optout.btn.out':     'Opt out of logs',
+    'settings.optout.btn.in':      'Opt back in',
+    'settings.optout.msg.out':     'You are now opted out.',
+    'settings.optout.msg.in':      'You have opted back in.',
+    'settings.optout.error':       'Something went wrong.',
 
     // Command descriptions
     'cmddesc.ping':     'Check if the bot is online.',
@@ -521,7 +542,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'roles.overrides':             'Individuelle Überschreibungen',
     'roles.overrides_sub':         'Individuelle Einstellungen haben Vorrang vor den globalen Standards.',
     'roles.loading':               'Mods werden geladen…',
-    'roles.no_mods':               'Keine Mods gefunden — stelle sicher dass der Bot in deinem Channel ist.',
+    'roles.no_mods':               'Keine Mods gefunden - stelle sicher dass der Bot in deinem Channel ist.',
     'roles.badge.custom':          'angepasst',
     'roles.badge.default':         'standard',
     'roles.badge.blocked':         'gesperrt',
@@ -586,6 +607,27 @@ const translations: Record<Locale, Record<string, string>> = {
     'settings.saved':              '✓ Gespeichert',
     'settings.saving':             'Wird gespeichert…',
     'settings.cancel':             'Abbrechen',
+    'settings.title':              'Einstellungen',
+    'settings.sub':                'Kanal- und Kontoeinstellungen für',
+    'settings.prefix.title':       'Command-Präfix',
+    'settings.prefix.sub':         'Das Zeichen, mit dem Bot-Commands im Chat ausgelöst werden. Aktuell',
+    'settings.prefix.how':         'so sehen Commands im Chat aus',
+    'settings.prefix.save':        'Präfix speichern',
+    'settings.prefix.note':        '⚠ Das Ändern des Präfix wirkt sich sofort auf alle Commands aus. Informiere deinen Chat!',
+    'settings.prefix.error.empty': 'Präfix darf nicht leer sein',
+    'settings.prefix.error.save':  'Präfix konnte nicht gespeichert werden.',
+    'settings.prefix.badge':       'Nur Broadcaster',
+    'settings.optout.title':       'Chat-Logs Opt-Out',
+    'settings.optout.sub':         'Steuere ob dein Benutzername und deine Nachrichten im Log-Viewer erscheinen.',
+    'settings.optout.visible':     'Dein Benutzername und deine Nachrichten sind in Log-Ansichten sichtbar.',
+    'settings.optout.hidden':      'Deine Nachrichten werden in allen Log-Ansichten anonymisiert.',
+    'settings.optout.badge.in':    'Sichtbar',
+    'settings.optout.badge.out':   'Opt-out aktiv',
+    'settings.optout.btn.out':     'Aus Logs abmelden',
+    'settings.optout.btn.in':      'Wieder einmelden',
+    'settings.optout.msg.out':     'Du bist jetzt abgemeldet.',
+    'settings.optout.msg.in':      'Du bist wieder eingemeldet.',
+    'settings.optout.error':       'Ein Fehler ist aufgetreten.',
 
     // Command descriptions
     'cmddesc.ping':     'Prüft ob der Bot online ist.',

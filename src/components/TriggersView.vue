@@ -198,7 +198,7 @@ async function toggleActive(t: Trigger) {
   t.is_active = next
 }
 
-// ── Share
+//  Share
 const shareOpen    = ref(false)
 const shareTrigger = ref('')
 const shareTarget  = ref('')
@@ -226,7 +226,7 @@ async function doShare() {
   shareSaving.value = false
 }
 
-// ── Sync
+//  Sync
 const syncConf    = ref<{ sync_from: string; is_active: number; last_synced: number } | null>(null)
 const syncOpen    = ref(false)
 const syncFrom    = ref('')
@@ -295,7 +295,7 @@ function eventLabel(v: string) { return EVENT_TYPES.find(e => e.value === v)?.la
 function actionLabel(v: string) { return ACTION_TYPES.find(a => a.value === v)?.label ?? v }
 function matchLabel(v: string)  { return MATCH_TYPES.find(m => m.value === v)?.label ?? v }
 
-// Show pattern field only for message/command events
+// >>> Show pattern field only for message/command events
 const needsPattern = (ev: string) => ['message','command'].includes(ev)
 </script>
 
@@ -391,7 +391,7 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
               </div>
             </div>
 
-            <!-- Match pattern — only for message/command -->
+            <!-- Match pattern - only for message/command -->
             <div v-if="needsPattern(editTrigger.event_type ?? 'message')" class="field-group">
               <label class="field-label">Match pattern</label>
               <div class="match-row">

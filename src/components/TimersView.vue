@@ -190,7 +190,7 @@ async function toggleActive(t: Timer) {
   t.is_active = next
 }
 
-// ── Share ───────────────────────────────────────────────────────────
+//  Share 
 const shareOpen    = ref(false)
 const shareTimer   = ref('')
 const shareTarget  = ref('')
@@ -218,7 +218,7 @@ async function doShare() {
   shareSaving.value = false
 }
 
-// ── Sync ───────────────────────────────────────────────────────────
+//  Sync 
 const syncConf    = ref<{ sync_from: string; is_active: number; last_synced: number } | null>(null)
 const syncOpen    = ref(false)
 const syncFrom    = ref('')

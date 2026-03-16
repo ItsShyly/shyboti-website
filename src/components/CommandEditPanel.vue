@@ -66,7 +66,7 @@ async function load() {
   loading.value = true
   try {
     if (props.isBuiltIn) {
-      // For built-ins: load description from /commands/:channel
+      // >>> For built-ins: load description from /commands/:channel
       const res = await fetch(`${API}/commands/${props.channel}`, {
         headers: { Authorization: `Bearer ${session.value.token}` }
       })
@@ -93,7 +93,7 @@ async function load() {
   } catch {}
   loading.value = false
   await nextTick()
-  // Normal editor — load response into the script editor
+  // >>> Normal editor - load response into the script editor
   const nel = normalEditorRef.value
   if (nel) {
     const src = form.value.response || (props.isBuiltIn ? BUILTIN_PREFIX : '')
@@ -101,7 +101,7 @@ async function load() {
     applyNormalHighlight(nel, src)
   }
   updatePreview()
-  // Puzzle editor (legacy, kept as fallback)
+  // >>> Puzzle editor (legacy, kept as fallback)
   const el = editorRef.value
   if (el) el.innerHTML = highlight(form.value.rule)
   const rel = responseRef.value
@@ -191,10 +191,10 @@ function tokenClass(tok: string): string {
 }
 function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES, ...PARAMS.value] }
 
-// ── Inline SVG puzzle piece ──────────────────────────────────────────────────
+// Inline SVG puzzle piece 
 // All pieces: tab-left (sticks OUT left), configurable right side
-// rightFlat: wrapper open/close pieces — they terminate, nothing slots into them
-// rightNotch (IN): value, operator, action, param — something can slot in from right
+// rightFlat: wrapper open/close pieces - they terminate, nothing slots into them
+// rightNotch (IN): value, operator, action, param - something can slot in from right
 // rightFlat overrides the right-side shape to flat (used for <do and >) wrapper tokens)
 function puzzleSVG(label: string, kind: PieceKind, rightFlat = false, leftTabOverride?: boolean, displayLabel?: string): string {
   const H = 32, R = 4, TW = 8, TH = 8, TR = 2.5, PX = 12, CW = 6.6
@@ -240,11 +240,11 @@ function puzzleSVG(label: string, kind: PieceKind, rightFlat = false, leftTabOve
     + `</svg>`
 }
 
-// Wrap a puzzle SVG as an atomic inline token
-// data-tok is used by getPlainText to recover the raw token string
+// >>> Wrap a puzzle SVG as an atomic inline token
+// >>> data-tok is used by getPlainText to recover the raw token string
 function puzzleSpan(tok: string, kind: PieceKind, rightFlat = false, leftTabOverride?: boolean, displayLabel?: string): string {
   const svg = puzzleSVG(tok, kind, rightFlat, leftTabOverride, displayLabel)
-  // draggable="true" enables reordering; data-tok-drag marks it as a draggable piece
+  // >>> draggable="true" enables reordering; data-tok-drag marks it as a draggable piece
   return `<span class="pz-tok" data-tok="${tok}" contenteditable="false" draggable="true" data-tok-drag="1" style="display:inline-block;vertical-align:middle;margin:0 2px;cursor:grab">${svg}</span>`
 }
 
@@ -268,7 +268,7 @@ function highlight(src: string): string {
   function renderPH(ph: string): string {
     const cls   = PH_CLASS[ph] ?? ''
     const label = PH_LABEL[ph] ?? '?'
-    // Render placeholder as a puzzle piece of appropriate kind
+    // >>> Render placeholder as a puzzle piece of appropriate kind
     const kindMap: Record<string, PieceKind> = {
       [PH.value]: 'value', [PH.param]: 'param', [PH.op]: 'operator',
       [PH.action]: 'action', [PH.arg]: 'param',
@@ -299,11 +299,11 @@ function highlight(src: string): string {
         else if (cj === ')') { if (depth === 0) break; depth-- }
         inner += cj; j++
       }
-      // highlight(inner) processes <do...> and leaves do-block intentionally unclosed.
-      // We inject >)  into that open do-block, then close do-block, then close if-block.
+      // >>> highlight(inner) processes <do...> and leaves do-block intentionally unclosed.
+      // >>> We inject >)  into that open do-block, then close do-block, then close if-block.
       const innerHtml = highlight(inner)
       out += `<span class="if-block">${puzzleSpan('$if(', 'wrapper', true)}${innerHtml}${puzzleSpan('>)', 'wrapper', true, true, '')}</span></span>`
-      // The extra </span> closes the do-block that highlight(inner) left open
+      // >>> The extra </span> closes the do-block that highlight(inner) left open
       i = j + 1; continue
     }
 
@@ -320,39 +320,39 @@ function highlight(src: string): string {
     }
 
     if (src.startsWith('<do', i)) {
-      // find closing > (not consumed by $if — $if's parser stops at ')' not '>')
+      // >>> find closing > (not consumed by $if - $if's parser stops at ')' not '>')
       let j = i + 3
       while (j < src.length && src.charAt(j) !== '>') j++
       const inner = src.slice(i + 3, j)
-      // <do has notch-right (things slot into it); no standalone '>' piece needed here —
-      // the closing '>' is part of the >)  piece rendered by the $if wrapper
-      // <do shows 'then do'; leave do-block UNCLOSED so $if handler can inject >)  inside it
+      // >>> <do has notch-right (things slot into it); no standalone '>' piece needed here -
+      // >>> the closing '>' is part of the >)  piece rendered by the $if wrapper
+      // >>> <do shows 'then do'; leave do-block UNCLOSED so $if handler can inject >)  inside it
       out += `<span class="do-block">${puzzleSpan('<do', 'wrapper', false, true, 'then do')}${highlight(inner.trim())}`
-      // intentionally no </span> here — $if handler closes it after appending >) piece
+      // intentionally no </span> here - $if handler closes it after appending >) piece
       i = j + 1; continue
     }
 
-    // Action: [name...] with known name, OR [PH...] skeleton with placeholder action
+    // >>> Action: [name...] with known name, OR [PH...] skeleton with placeholder action
     const actionMatch = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)
     const actionPhMatch = src.charAt(i) === '[' && (PH_SET.has(src.charAt(i + 1)) || src.charAt(i + 1) === ']')
     if (actionMatch || actionPhMatch) {
       if (actionPhMatch) {
-        // Skeleton [▪action▪arg] — collect everything between [ and matching ]
-        i++ // skip '['
+        // >>> Skeleton [▪action▪arg] - collect everything between [ and matching ]
+        i++ // <<<< skip '['
         const phArgs: string[] = []
         while (i < src.length && src.charAt(i) !== ']') {
           if (PH_SET.has(src.charAt(i))) { phArgs.push(src.charAt(i)); i++ }
-          else i++ // skip unexpected chars
+          else i++ // <<< skip unexpected chars
         }
         if (src.charAt(i) === ']') i++ // skip ']'
-        // render as action-block: first PH is the action slot, rest are arg slots
+        // >>> render as action-block: first PH is the action slot, rest are arg slots
         const actionSlot = phArgs[0] ? renderPH(phArgs[0]) : ''
         const argSlots   = phArgs.slice(1).map(renderPH).join('')
         out += `<span class="action-block" style="display:inline-flex;align-items:center">${actionSlot}${argSlots}</span>`
         continue
       }
       const name = actionMatch![1] ?? ''
-      let j = i + 1 + name.length  // skip '[' + name letters
+      let j = i + 1 + name.length  // <<< skip '[' + name letters
       let args: string[] = []
       let foundClose = false
       while (j < src.length) {
@@ -380,7 +380,7 @@ function highlight(src: string): string {
       i = j; continue
     }
 
-    // scan a plain chunk (no special tokens), then pass to colourTokens
+    // >>> scan a plain chunk (no special tokens), then pass to colourTokens
     let chunk = ''
     while (i < src.length) {
       if (PH_SET.has(src.charAt(i))) break
@@ -394,14 +394,14 @@ function highlight(src: string): string {
   return out
 }
 
-// colourSegment no longer needed separately — highlight() handles everything
+// >>> colourSegment no longer needed separately - highlight() handles everything
 function colourSegment(src: string): string { return highlight(src) }
 
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-// colourTokens: operates on RAW (un-escaped) source text now, returns HTML with puzzle spans
+// >>> colourTokens: operates on RAW (un-escaped) source text now, returns HTML with puzzle spans
 function colourTokens(raw: string): string {
   const paramKeys = userParams.value.map(p => p.key).join('|')
   const paramPat  = paramKeys ? `|\\{(?:${paramKeys})\\}` : ''
@@ -416,7 +416,7 @@ function colourTokens(raw: string): string {
   return raw.replace(pat, tok => {
     const k = tokenKind(tok)
     if (k) return puzzleSpan(tok, k)
-    // structural punctuation: keep plain but styled
+    // >>> structural punctuation: keep plain but styled
     if (tok === '<do' || tok === '<do>' || tok === '>') return `<span class="tk-wrapper" style="vertical-align:middle">${escHtml(tok)}</span>`
     return escHtml(tok)
   })
@@ -430,7 +430,7 @@ const ruleWarnings = computed((): string[] => {
   if (ph > 0) w.push(`${ph} unfilled slot${ph > 1 ? 's' : ''} remaining`)
   const ifN = (r.match(/\$if\(/g) || []).length
   const doN = (r.match(/<do/g)    || []).length
-  if (ifN !== doN) w.push(`${ifN} $if but ${doN} <do> — must match`)
+  if (ifN !== doN) w.push(`${ifN} $if but ${doN} <do> - must match`)
   const bOpen  = (r.match(/\[/g) || []).length
   const bClose = (r.match(/\]/g) || []).length
   if (bOpen !== bClose) w.push(`Unmatched [ ] : ${bOpen} vs ${bClose}`)
@@ -529,7 +529,7 @@ function ruleForSave(rule: string) {
   let r = rule; for (const p of PH_ALL) r = r.split(p).join(''); return r
 }
 
-// ── Normal Mode state ──────────────────────────────────────────────────────
+// >>> Normal Mode state
 const editorMode     = ref<'normal' | 'puzzle'>('normal')
 const normalEditorRef = ref<HTMLDivElement | null>(null)
 const previewOutput  = ref('')
@@ -538,21 +538,21 @@ const mockCtx        = ref<MockContext>({ ...DEFAULT_MOCK })
 let   _normalHighlighting = false
 let   _ghostEl: HTMLElement | null = null
 
-// Ghost autocomplete — shown inline after cursor
-const ghostSuggestion = ref('')  // the suffix to complete (e.g. 'f(' when you typed '$i')
-const ghostFull       = ref('')  // the full match that would be inserted
-const ghostMatches    = ref<string[]>([])  // all matches for cycling
-const ghostMatchIdx   = ref(0)             // current cycle position
+// >>> Ghost autocomplete - shown inline after cursor
+const ghostSuggestion = ref('')  // <<< the suffix to complete (e.g. 'f(' when you typed '$i')
+const ghostFull       = ref('')  // <<< the full match that would be inserted
+const ghostMatches    = ref<string[]>([])  // <<< all matches for cycling
+const ghostMatchIdx   = ref(0)             // <<< current cycle position
 
-// Autocomplete dropdown for Normal Mode
+// >>> Autocomplete dropdown for Normal Mode
 const nmAcVisible  = ref(false)
 const nmAcItems    = ref<{ token: string; group: string; desc: string }[]>([])
 const nmAcIndex    = ref(0)
 const nmAcPos      = ref({ top: 0, left: 0 })
-const nmAcPartial  = ref('')  // current partial text, e.g. '$co'
+const nmAcPartial  = ref('')  // <<< current partial text, e.g. '$co'
 const nmAcRef      = ref<HTMLDivElement | null>(null)
 
-// All completable tokens for Normal Mode
+//  >>>  All completable tokens for Normal Mode
 const COMPLETIONS = [
   '$if()', '$else', '$end', '$foreach()', '$repeat()', '$define',
   '$counter.', '$ucounter.', '$var.', '$uvar.', '$list.',
@@ -581,7 +581,7 @@ const COMPLETIONS = [
   '$index', '$last_error',
 ]
 
-// ── Variable reference data ─────────────────────────────────────────────
+//  >>>  Variable reference data
 const REF_GROUPS = [
   { label: 'Control Flow', items: [
     { token: '$if(condition)', desc: 'Conditional block', example: '$if($user.is(mod))' },
@@ -689,7 +689,7 @@ const REF_GROUPS = [
   ]},
 ]
 
-// Render a reference token with user-supplied name segments in a distinct colour.
+//  Render a reference token with user-supplied name segments in a distinct colour.
 // Two cases:
 //   1. Name after a dotted prefix: $counter.name, $var.name, $list.name etc.
 //   2. Argument placeholders inside (): url, user, min, max, seconds, fmt, etc.
@@ -707,13 +707,13 @@ function renderRefToken(token: string): string {
       break
     }
   }
-  // Step 2: highlight word-args inside () — these are always placeholder names
+  // Step 2: highlight word-args inside () - these are always placeholder names
   // e.g. $http.get(url), $mod.timeout(user,seconds), $random.int(min,max)
   // Match the paren section and wrap each comma-separated word in a span.
   result = result.replace(/\(([^)]+)\)/g, (_, inner: string) => {
     const colored = inner.split(',').map(part => {
       const trimmed = part.trim()
-      // Only color pure word tokens (no $ or special chars) — these are param names
+      // Only color pure word tokens (no $ or special chars) - these are param names
       if (/^[a-zA-Z_]\w*$/.test(trimmed)) {
         return `<span class="ref-token-name">${trimmed}</span>`
       }
@@ -837,7 +837,7 @@ watch(() => form.value.response, () => updatePreview(), { flush: 'post' })
 
 watch(mockCtx, () => updatePreview(), { deep: true })
 
-// ── Normal editor input handler ──────────────────────────────────────────────
+//  Normal editor input handler 
 
 const BUILTIN_PREFIX = '$command.output'
 
@@ -944,7 +944,7 @@ function updateGhost(el: HTMLElement, text: string) {
   nextTick(() => insertGhostSpan(suffix))
 }
 
-// Accept the current ghost suggestion — shared by Tab and ArrowRight
+// Accept the current ghost suggestion - shared by Tab and ArrowRight
 function acceptCurrentGhost() {
   const el = normalEditorRef.value; if (!el) return
   const offset  = getTextOffset(el)
@@ -1004,7 +1004,7 @@ function onNormalKeydown(e: KeyboardEvent) {
     if (ghostSuggestion.value) {
       acceptCurrentGhost()
     } else {
-      // No suggestion — insert 2 spaces (stay in editor like a code editor)
+      // No suggestion - insert 2 spaces (stay in editor like a code editor)
       removeGhostSpan()
       const offset = getTextOffset(el)
       const text   = el.innerText.replace(/\n$/, '')
@@ -1165,7 +1165,7 @@ function onEditorContextMenu(e: MouseEvent) {
   // so orphaned arg placeholders don't linger
   if (ACTIONS.includes(tok)) {
     // The action token in plain text is e.g. "[remove]" stored as data-tok
-    // Around it in the rule string is [...args...] — find the enclosing action block
+    // Around it in the rule string is [...args...] - find the enclosing action block
     const actionStart = plain.lastIndexOf('[', idx)  // opening '[' before the action name
     let actionEnd = idx + tok.length
     // skip past any following arg tokens (PH or real) until ']'
@@ -1248,7 +1248,7 @@ function insertAcItem() {
     const idx   = plain.indexOf(ph); if (idx === -1) return
     if (ph === PH.action && ACTIONS.includes(item)) {
       const skel = actionSkeleton(item)
-      // [ and ] are eaten by highlight()/getPlainText — plain has just ▪action▪arg▪arg...
+      // [ and ] are eaten by highlight()/getPlainText - plain has just ▪action▪arg▪arg...
       // Replace from ▪action through all consecutive ▪arg PHs with the new skeleton.
       let sliceEnd = idx + 1
       while (plain.charAt(sliceEnd) === PH.arg) sliceEnd++
@@ -1358,7 +1358,7 @@ function onEditorDragover(e: DragEvent) {
   getPhSpanAt(e)?.classList.add('drag-over')
 }
 
-// ─── Response field highlighting ───────────────────────────────────────────
+//  Response field highlighting 
 const responseRef = ref<HTMLDivElement | null>(null)
 let _applyingResponseHighlight = false
 
@@ -1574,17 +1574,17 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
         <div v-if="loading" class="panel-loading">Loading…</div>
         <div v-else class="panel-body">
 
-          <!-- ── Response / Script editor ── -->
+          <!--  Response / Script editor  -->
           <div class="field-group">
             <label class="field-label">
               Response
-              <span class="field-hint">full scripting language — <code class="hint-code">$</code> to start a variable</span>
+              <span class="field-hint">full scripting language - <code class="hint-code">$</code> to start a variable</span>
             </label>
 
             <!-- locked $command.output prefix for built-in commands -->
             <div v-if="isBuiltIn" class="builtin-prefix-row">
               <span class="builtin-prefix-token">$command.output</span>
-              <span class="builtin-prefix-hint">locked — wrap your script around this</span>
+              <span class="builtin-prefix-hint">locked - wrap your script around this</span>
             </div>
 
             <div class="normal-editor-container">
@@ -1607,7 +1607,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             <!-- Preview -->
             <div class="preview-section">
               <div class="preview-label">Preview <span class="preview-note">(mock values)</span></div>
-              <div class="preview-output">{{ previewOutput || '—' }}</div>
+              <div class="preview-output">{{ previewOutput || '-' }}</div>
             </div>
 
             <!-- Mock values -->
@@ -1648,10 +1648,10 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
           <div class="field-group">
             <label class="field-label">
               Description
-              <span v-if="isBuiltIn" class="field-hint">read-only — set in the command file</span>
+              <span v-if="isBuiltIn" class="field-hint">read-only - set in the command file</span>
               <span v-else class="field-hint">short description shown in the commands list</span>
             </label>
-            <div v-if="isBuiltIn" class="desc-readonly">{{ form.description || '—' }}</div>
+            <div v-if="isBuiltIn" class="desc-readonly">{{ form.description || '-' }}</div>
             <input
               v-else
               v-model="form.description"
@@ -1825,7 +1825,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .btn-delete.confirm { border-color: #f14949aa; background: #f1494922; font-weight: 700; }
 .desc-readonly { font-size: 12px; color: #555; background: #0d0d10; border: 1px solid #1e1e22; padding: 7px 10px; font-style: italic; }
 
-/* ── Rule section collapsible ── */
+/*  Rule section collapsible  */
 .rule-section { border: 1px solid #222; background: #141418; }
 .rule-toggle { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border: none; background: transparent; color: #888; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; text-align: left; transition: background .1s, color .1s; }
 .rule-toggle:hover { background: #1e1e22; color: #ccc; }
@@ -1835,7 +1835,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .rule-toggle-warn { margin-left: auto; font-size: 10px; color: #f5a623; }
 .rule-section-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid #222; }
 
-/* ── Rule target toggle ── */
+/*  Rule target toggle  */
 .rule-target-row { display: flex; align-items: center; gap: 8px; }
 .rule-target-label { font-size: 10px; color: #555; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0; }
 .rule-target-btn { height: 26px; padding: 0 10px; border: 1px solid #2a2a30; background: #111217; color: #555; font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; cursor: pointer; transition: background .15s, color .15s, border-color .15s; }
@@ -1861,7 +1861,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .sim-output-label { font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0; }
 .sim-output-val { font-size: 13px; font-family: 'Consolas','Fira Mono',monospace; color: #23d18b; background: rgba(35,209,139,.08); border: 1px solid rgba(35,209,139,.25); padding: 4px 10px; word-break: break-all; flex: 1; }
 
-/* ── Built-in prefix lock ── */
+/*  Built-in prefix lock  */
 .builtin-prefix-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
 .builtin-prefix-token {
   font-family: 'Consolas','Fira Mono',monospace; font-size: 12px;
@@ -1873,14 +1873,14 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .builtin-prefix-token::after { content: '🔒'; font-size: 9px; margin-left: 5px; opacity: .5; }
 .builtin-prefix-hint { font-size: 10px; color: #383838; }
 
-/* ── Mode toggle ── */
+/*  Mode toggle  */
 .mode-toggle-row { display: flex; align-items: center; gap: 6px; }
 .mode-btn { height: 26px; padding: 0 12px; border: 1px solid #2a2a30; background: #111217; color: #555; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; transition: all .15s; }
 .mode-btn:hover { color: #888; border-color: #444; }
 .mode-btn.active { border-color: #6f2bff66; color: #9d6cff; background: rgba(111,43,255,.1); }
 .mode-hint { font-size: 10px; color: #383838; margin-left: 4px; }
 
-/* ── Normal Mode editor ── */
+/*  Normal Mode editor  */
 .normal-mode-wrap { display: flex; flex-direction: column; gap: 8px; }
 .normal-editor-container { position: relative; }
 .normal-editor {
@@ -1897,7 +1897,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .normal-hint { font-size: 10px; color: #383838; }
 .normal-hint code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; }
 
-/* ── Preview ── */
+/*  Preview  */
 .preview-section { display: flex; flex-direction: column; gap: 4px; }
 .preview-label { font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; }
 .preview-note { font-size: 9px; color: #333; font-weight: 400; text-transform: none; letter-spacing: 0; }
@@ -1908,7 +1908,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
   padding: 8px 12px; min-height: 32px; word-break: break-all;
 }
 
-/* ── Mock context ── */
+/*  Mock context  */
 .mock-ctx-details, .ref-panel { border: 1px solid #1e1e22; }
 .mock-ctx-summary, .ref-summary {
   padding: 6px 10px; font-size: 10px; font-weight: 600; color: #555;
@@ -1928,7 +1928,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .mock-check-label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #666; cursor: pointer; }
 .mock-check-label input { accent-color: #6f2bff; }
 
-/* ── Reference panel ── */
+/*  Reference panel  */
 .ref-content { max-height: 320px; overflow-y: scroll; padding: 8px 10px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: none; }
 .ref-content::-webkit-scrollbar { display: none; }
 .ref-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9d6cff; margin-bottom: 3px; }
@@ -1947,7 +1947,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .ref-row.has-example:hover .ref-example { display: block; }
 .ref-row.has-example:hover .ref-desc { opacity: 0.4; }
 
-/* ── Syntax highlight colours ── */
+/*  Syntax highlight colours  */
 </style>
 
 <style>

@@ -8,23 +8,23 @@ const { session, channelRole } = useAuth()
 const canView   = computed(() => channelRole.value?.permissions.moderation_view   ?? false)
 const canManage = computed(() => channelRole.value?.permissions.moderation_manage ?? false)
 
-// ── Types ──────────────────────────────────────────────────────────────────
+//  Types 
 interface BlockedTerm   { id: number; term: string; action: string; duration: number; is_regex: number }
 interface SpamFilter    { id: number; type: string; threshold: number; action: string; duration: number }
 interface NukeConfig    { id: number; trigger: string; duration: number; label: string; lookback: number; stay_active: number; match_exact: number; is_regex: number; expires_at: number | null }
 
-// ── Tab ────────────────────────────────────────────────────────────────────
+//  Tab 
 type Tab = 'blocked' | 'spam' | 'nukes'
 const activeTab = ref<Tab>('blocked')
 
-// ── Blocked Terms ──────────────────────────────────────────────────────────
+//  Blocked Terms 
 const blockedTerms    = ref<BlockedTerm[]>([])
 const newTerm         = ref('')
 const newTermAction   = ref<'delete' | 'timeout' | 'ban'>('delete')
 const newTermDur      = ref(300)
 const newTermIsRegex  = ref(false)
 
-// ── Spam Filters ───────────────────────────────────────────────────────────
+//  Spam Filters 
 const spamFilters   = ref<SpamFilter[]>([])
 const SPAM_TYPES = [
   { value: 'caps',    label: 'Caps spam',     hint: '% of message in caps' },
@@ -38,7 +38,7 @@ const newSpamThreshold = ref(70)
 const newSpamAction    = ref<'delete' | 'timeout' | 'ban'>('delete')
 const newSpamDur       = ref(300)
 
-// ── Nukes ──────────────────────────────────────────────────────────────────
+//  Nukes 
 const nukes           = ref<NukeConfig[]>([])
 const newNuke         = ref('')
 const newNukeDur      = ref(600)
@@ -50,7 +50,7 @@ const newNukeIsRegex    = ref(false)
 const newNukeExpiry     = ref(false)  // whether to set an expiry
 const newNukeExpiryMins = ref(60)     // minutes until auto-deactivate
 
-// ── Shared ────────────────────────────────────────────────────────────────
+//  Shared 
 const loading = ref(false)
 const saving  = ref(false)
 const error   = ref('')
@@ -249,7 +249,7 @@ onMounted(load)
 
     <div v-if="loading" class="mod-empty">Loading…</div>
 
-    <!-- ── Blocked Terms ── -->
+    <!--  Blocked Terms  -->
     <template v-else-if="activeTab === 'blocked'">
       <div v-if="canManage" class="add-row">
         <input v-model="newTerm" class="field-input flex1" :placeholder="newTermIsRegex ? 'regex pattern, e.g. bad(word|phrase)' : 'word or phrase to block'" @keydown.enter="addBlockedTerm" />
@@ -279,7 +279,7 @@ onMounted(load)
       </div>
     </template>
 
-    <!-- ── Spam Filters ── -->
+    <!--  Spam Filters  -->
     <template v-else-if="activeTab === 'spam'">
       <div v-if="canManage" class="add-row">
         <select v-model="newSpamType" class="field-select flex1">
@@ -310,7 +310,7 @@ onMounted(load)
       </div>
     </template>
 
-    <!-- ── Nukes ── -->
+    <!--  Nukes  -->
     <template v-else-if="activeTab === 'nukes'">
       <div class="nuke-hint">
         A nuke watches for a trigger word in recent chat. Fire it to timeout everyone who said it.
@@ -373,7 +373,7 @@ onMounted(load)
       <div v-else class="item-list">
         <div v-for="n in nukes" :key="n.id" class="item-row">
           <div class="nuke-row-badges">
-            <span v-if="n.stay_active" class="item-badge stay-badge" title="Stay active — auto-times out new messages">active</span>
+            <span v-if="n.stay_active" class="item-badge stay-badge" title="Stay active - auto-times out new messages">active</span>
             <span v-if="n.is_regex"    class="item-badge regex-badge" title="Trigger is a regular expression">regex</span>
             <span v-if="n.match_exact" class="item-badge exact-badge" title="Must match the entire message exactly">exact</span>
           </div>
@@ -469,7 +469,7 @@ onMounted(load)
 .add-btn:hover:not(:disabled) { background: #7f3fff; }
 .add-btn:disabled { opacity: .4; cursor: default; }
 
-/* ── Toggle switch ── */
+/*  Toggle switch  */
 .toggle-label {
   display: flex; align-items: center; gap: 6px;
   cursor: pointer; user-select: none; flex-shrink: 0;
@@ -495,7 +495,7 @@ onMounted(load)
 }
 .info-icon:hover { color: #9d6cff; }
 
-/* ── Item list ── */
+/*  Item list  */
 .item-list { display: flex; flex-direction: column; gap: 1px; }
 .item-row {
   display: flex; align-items: center; gap: 10px;
@@ -510,7 +510,7 @@ onMounted(load)
 .item-del    { margin-left: auto; background: transparent; border: 1px solid #f1494933; color: #f14949; font-size: 11px; padding: 2px 7px; cursor: pointer; }
 .item-del:hover { background: rgba(241,73,73,.1); }
 
-/* ── Badges ── */
+/*  Badges  */
 .item-badge {
   font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
   padding: 1px 5px; border-radius: 2px; flex-shrink: 0;
@@ -520,7 +520,7 @@ onMounted(load)
 .exact-badge { color: #e5c07b; background: rgba(229,192,123,.12); border: 1px solid rgba(229,192,123,.3); }
 .nuke-row-badges { display: flex; gap: 4px; align-items: center; }
 
-/* ── Nuke fire button ── */
+/*  Nuke fire button  */
 .nuke-fire-btn { height: 28px; padding: 0 12px; background: rgba(241,73,73,.15); border: 1px solid #f1494966; color: #f14949; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; margin-left: auto; transition: background .15s, border-color .15s; }
 .nuke-fire-btn:hover { background: rgba(241,73,73,.3); }
 .nuke-fire-btn.confirm { background: rgba(241,73,73,.35); border-color: #f14949; animation: pulse-red .6s infinite alternate; }

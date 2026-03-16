@@ -6,7 +6,7 @@ import type { RolePermissions } from '../auth'
 
 const { session } = useAuth()
 
-// ── Permission groups for the UI ─────────────────────────────────────────────
+//  Permission groups for the UI 
 const PERM_GROUPS: { label: string; perms: { key: keyof Omit<RolePermissions,'modsEnabled'>; label: string; desc: string }[] }[] = [
   { label: 'Dashboard', perms: [
     { key: 'dashboard',       label: 'View Dashboard', desc: 'Access the activity feed and dashboard.' },
@@ -41,11 +41,11 @@ const DEFAULT_PERMS: Omit<RolePermissions, 'modsEnabled'> = {
   moderation_manage:  false,
 }
 
-// ── Global mod defaults ──────────────────────────────────────────────────────
+//  Global mod defaults 
 const modsEnabled = ref(true)
 const globalPerms = ref<Omit<RolePermissions,'modsEnabled'>>({ ...DEFAULT_PERMS })
 
-// ── Mod list ─────────────────────────────────────────────────────────────────
+//  Mod list 
 interface ModEntry {
   username:    string
   blocked:     boolean
@@ -56,14 +56,14 @@ const mods        = ref<ModEntry[]>([])
 const modsLoading = ref(false)
 const expandedMod = ref<string | null>(null)
 
-// ── Save state ───────────────────────────────────────────────────────────────
+//  Save state 
 const saving   = ref(false)
 const saved    = ref(false)
 const modSaving = ref<string | null>(null)
 
 function showSaved() { saved.value = true; setTimeout(() => saved.value = false, 2000) }
 
-// ── Load ─────────────────────────────────────────────────────────────────────
+//  Load 
 async function load() {
   if (!session.value) return
   try {
@@ -93,7 +93,7 @@ async function loadMods() {
   }
 }
 
-// ── Save global ───────────────────────────────────────────────────────────────
+//  Save global 
 async function save() {
   if (!session.value) return
   saving.value = true
@@ -108,7 +108,7 @@ async function save() {
   saving.value = false
 }
 
-// ── Per-mod ───────────────────────────────────────────────────────────────────
+//  Per-mod 
 function toggleExpand(username: string) {
   expandedMod.value = expandedMod.value === username ? null : username
 }
@@ -187,7 +187,7 @@ onMounted(() => { load(); loadMods() })
         </div>
       </div>
 
-      <!-- Permission grid — dimmed when mods disabled -->
+      <!-- Permission grid - dimmed when mods disabled -->
       <div class="perm-grid" :class="{ dimmed: !modsEnabled }">
         <div v-for="group in PERM_GROUPS" :key="group.label" class="perm-group">
           <div class="perm-group-label">{{ group.label }}</div>
@@ -217,7 +217,7 @@ onMounted(() => { load(); loadMods() })
       <p class="section-sub">Per-mod overrides take priority over global defaults. You can grant more or less than the defaults for specific mods.</p>
 
       <div v-if="modsLoading" class="mods-empty">Loading mods…</div>
-      <div v-else-if="mods.length === 0" class="mods-empty">No mods found — make sure the bot is in your channel.</div>
+      <div v-else-if="mods.length === 0" class="mods-empty">No mods found - make sure the bot is in your channel.</div>
 
       <div v-else class="mod-list">
         <div v-for="mod in mods" :key="mod.username" class="mod-item" :class="{ expanded: expandedMod === mod.username, blocked: mod.blocked, overridden: !mod.blocked && mod.permissions !== null }">

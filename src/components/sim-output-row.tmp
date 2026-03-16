@@ -1,7 +1,7 @@
                     <div class="sim-row">
                       <label class="sim-label">output</label>
                       <template v-if="isBuiltIn">
-                        <span class="sim-builtin-output">bot-generated — use <code>{output}</code> in your rule to reference it</span>
+                        <span class="sim-builtin-output">bot-generated - use <code>{output}</code> in your rule to reference it</span>
                       </template>
                       <template v-else>
                         <input v-model="simOutput" class="field-input sim-input" :placeholder="form.response || '(command response)'" />

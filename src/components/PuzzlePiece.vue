@@ -10,7 +10,7 @@ interface Props {
 }
 const props = defineProps<Props>()
 
-// ── constants (must match puzzleSVG in CommandEditPanel) ──────────────────
+//  constants (must match puzzleSVG in CommandEditPanel) 
 const H  = 32
 const R  = 4
 const TW = 8

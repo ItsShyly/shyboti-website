@@ -29,16 +29,16 @@ const ALL_CHANNELS = '__all__'
 const viewChannel  = ref(session.value?.channel ?? '')
 const activeTypes  = ref<Set<string>>(new Set())
 
-// Collapsed day groups — only today open by default
+// >>> Collapsed day groups - only today open by default
 const collapsedDays = ref<Set<string>>(new Set())
 
-// User popup
+// >>> User popup
 interface TwitchUser {
   login: string; displayName: string; avatar: string
   createdAt: string
   ownFollowers: number | null
-  followedAt:  string | null   // ISO — if they follow the channel
-  subbedSince: string | null   // ISO — if they're subbed
+  followedAt:  string | null   // ISO - if they follow the channel
+  subbedSince: string | null   // ISO - if they're subbed
   subTier:     string | null   // '1000' | '2000' | '3000'
   nameHistory: { name: string; lastSeen: string }[]
 }
@@ -100,7 +100,7 @@ async function fetchActivity() {
     }
   } catch { error.value = 'Could not load activity.' }
   loading.value = false
-  // Collapse all days except today
+  // >>> Collapse all days except today
   const today = fmtDate(Date.now())
   const days = new Set(filteredActivity.value.map(e => fmtDate(e.timestamp)))
   collapsedDays.value = new Set([...days].filter(d => d !== today))
@@ -141,7 +141,7 @@ async function startSSE() {
   }
 }
 
-// ── Grouping & collapse ───────────────────────────────────────────────────────
+// >>> Grouping & collapse
 function fmtTime(ts: number) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
@@ -170,48 +170,48 @@ function groupedActivity() {
   return groups
 }
 
-// ── TYPE META ─────────────────────────────────────────────────────────────────
+// vvv TYPE META vvv
 const TYPE_META = computed(() => ({
   cmd_added:        { icon: '+',  color: '#23d18b', label: t('type.cmd_added')        },
   cmd_changed:      { icon: '✎',  color: '#e5c07b', label: t('type.cmd_changed')      },
-  cmd_removed:      { icon: '−',  color: '#f14949', label: t('type.cmd_removed')      },
+  cmd_removed:      { icon: '-',  color: '#f14949', label: t('type.cmd_removed')      },
   ban:              { icon: '⊘',  color: '#f14949', label: t('type.ban')              },
   unban:            { icon: '✓',  color: '#4ec9b0', label: t('type.unban')            },
   timeout:          { icon: '⏱', color: '#c792ea', label: t('type.timeout')          },
   timer_added:      { icon: '+',  color: '#23d18b', label: t('type.timer_added')      },
   timer_changed:    { icon: '✎',  color: '#e5c07b', label: t('type.timer_changed')    },
-  timer_removed:    { icon: '−',  color: '#f14949', label: t('type.timer_removed')    },
+  timer_removed:    { icon: '-',  color: '#f14949', label: t('type.timer_removed')    },
   timer_enabled:    { icon: '▶',  color: '#23d18b', label: t('type.timer_enabled')    },
   timer_disabled:   { icon: '⏸', color: '#555555', label: t('type.timer_disabled')   },
   trigger_added:    { icon: '+',  color: '#4ec9b0', label: t('type.trigger_added')    },
   trigger_changed:  { icon: '✎',  color: '#e5c07b', label: t('type.trigger_changed')  },
-  trigger_removed:  { icon: '−',  color: '#f14949', label: t('type.trigger_removed')  },
+  trigger_removed:  { icon: '-',  color: '#f14949', label: t('type.trigger_removed')  },
   trigger_enabled:  { icon: '▶',  color: '#4ec9b0', label: t('type.trigger_enabled')  },
   trigger_disabled: { icon: '⏸', color: '#555555', label: t('type.trigger_disabled') },
 } as Record<string, { icon: string; color: string; label: string }>))
 
-// ── Actions ───────────────────────────────────────────────────────────────────
+// >>> Actions
 
-// Navigate to commands view and open the edit panel for this command
+// >>> Navigate to commands view and open the edit panel for this command
 function goToCommand(e: ActivityEntry) {
   const name = e.target.replace(/^\+/, '')
   router.push({ path: '/commands', query: { edit: name } })
 }
 
-// Open logs filtered to this user around the time of the event
+// >>> Open logs filtered to this user around the time of the event
 function goToLogs(e: ActivityEntry) {
   const ch = e.channel
   const user = e.target
   router.push({ path: '/logs', query: { channel: ch, user } })
 }
 
-// Navigate to automations for timer/trigger events
+// >>> Navigate to automations for timer/trigger events
 function goToAutomations(e: ActivityEntry) {
   const tab = e.type.startsWith('timer') ? 'timers' : 'triggers'
   router.push({ path: '/automations', query: { tab } })
 }
 
-// Open user popup + fetch Twitch profile
+// >>>Open user popup + fetch Twitch profile
 function openUserPopup(e: ActivityEntry, evt: MouseEvent) {
   if (!['ban','timeout','unban'].includes(e.type)) return
   evt.stopPropagation()
@@ -241,7 +241,7 @@ function fmtJoined(iso: string): string {
   return new Date(iso).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-// How long ago an ISO date was, e.g. "2y 3m" or "4 months"
+// >>> How long ago an ISO date was, e.g. "2y 3m" or "4 months"
 function fmtDuration(iso: string): string {
   const ms      = Date.now() - new Date(iso).getTime()
   const days    = Math.floor(ms / 86_400_000)
@@ -258,7 +258,7 @@ function subTierLabel(tier: string): string {
   return tier === '3000' ? 'Tier 3' : tier === '2000' ? 'Tier 2' : 'Tier 1'
 }
 
-// Format detail nicely
+// >>> Format detail nicely
 function fmtDetail(e: ActivityEntry): string {
   if (e.type === 'timeout' && e.detail) {
     const s = parseInt(e.detail)
@@ -271,7 +271,7 @@ function fmtDetail(e: ActivityEntry): string {
   return e.detail || ''
 }
 
-// Actor display — 'mod' is generic (Twitch chat event, actor unknown), otherwise show name
+// >>> Actor display - 'mod' is generic (Twitch chat event, actor unknown), otherwise show name
 function fmtActor(actor: string) {
   return actor === 'mod' ? (t('dash.filter.moderation') === 'Moderation' ? 'a mod' : 'ein Mod') : actor
 }
@@ -313,7 +313,7 @@ function fmtActor(actor: string) {
     <div v-else class="feed">
       <template v-for="group in groupedActivity()" :key="group.date">
 
-        <!-- Day header — clickable to collapse -->
+        <!-- Day header - clickable to collapse -->
         <div class="feed-day-header" @click.stop="toggleDay(group.date)">
           <span class="day-chevron">{{ collapsedDays.has(group.date) ? '▶' : '▼' }}</span>
           <span class="day-label">{{ group.date }}</span>

@@ -26,7 +26,7 @@ const emoteMap    = ref<EmoteMap>({})
 const bodyRef     = ref<HTMLDivElement | null>(null)
 const highlightId = ref<string | null>(null)
 const copyToast     = ref(false)
-const searchExpanded = ref(true)  // mobile: collapse search after first search
+const searchExpanded = ref(true)  // <<< mobile: collapse search after first search
 
 let cursorDate:  Date | null = null
 let cursorMonth: { y: number; m: number } | null = null
@@ -36,7 +36,7 @@ let windowScrollAttached  = false
 
 const isMobile = () => window.matchMedia('(max-width: 680px)').matches
 
-// ── URL state sync ───────────────────────────────────────────────────────────
+// >>> URL state sync
 function buildUrl(msgId: string | null = null) {
   const p = new URLSearchParams()
   if (channel.value.trim())    p.set('channel', channel.value.trim().toLowerCase().replace(/^#/, ''))
@@ -69,7 +69,7 @@ function readHashId(): string | null {
   return m ? m[1]! : null
 }
 
-// ── Longest name width ───────────────────────────────────────────────────────
+// >>> Longest name width
 // nameColWidth: recalculate only when msgs changes, stored in a plain ref
 // so typing in input fields never triggers re-evaluation of 10k+ entries.
 const nameColWidth = ref(140)
@@ -83,7 +83,7 @@ watch(msgs, (list: LogMsg[]) => {
   nameColWidth.value = Math.min(240, Math.max(80, max * 7.8))
 }, { flush: 'post' })
 
-// ── Emotes ───────────────────────────────────────────────────────────────────
+// >>> Emotes
 async function fetchEmotes(ch: string) {
   emoteMap.value = {}
   for (const path of [`/emotes/${ch}`, `/emotes/twitch/${ch}`]) {
@@ -94,7 +94,7 @@ async function fetchEmotes(ch: string) {
   }
 }
 
-// ── Fetch one day (channel mode) ───────────────────────────────────────
+// >>> Fetch one day (channel mode)
 async function fetchDay(ch: string, y: number, m: number, d: number, signal: AbortSignal): Promise<LogMsg[]> {
   const mm  = String(m).padStart(2, '0')
   const dd  = String(d).padStart(2, '0')
@@ -111,7 +111,7 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
   return messages
 }
 
-// ── Fetch one month (user mode) ───────────────────────────────────────
+// >>> Fetch one month (user mode)
 async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal): Promise<LogMsg[]> {
   const mm  = String(m).padStart(2, '0')
   const u   = userFilter.value.trim().toLowerCase()
@@ -134,7 +134,7 @@ function prevMonth(ym: { y: number; m: number }): { y: number; m: number } {
   return ym.m === 1 ? { y: ym.y - 1, m: 12 } : { y: ym.y, m: ym.m - 1 }
 }
 
-// ── Prepend messages while keeping scroll position stable ─────────────────────
+// >>> Prepend messages while keeping scroll position stable
 async function prependMsgs(newMsgs: LogMsg[]) {
   const body   = bodyRef.value
   const prevST = body?.scrollTop ?? 0
@@ -144,8 +144,8 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
 
-// ── Load one older chunk on scroll ────────────────────────────────────────────
-// Channel-only → one day at a time. User set → one month at a time.
+// >>> Load one older chunk on scroll
+// >>> Channel-only → one day at a time. User set → one month at a time.
 async function loadOlder() {
   if (loadingMore.value || noMore.value) return
   const ch     = channel.value.trim().toLowerCase().replace(/^#/, '')
@@ -162,7 +162,7 @@ async function loadOlder() {
       const newMsgs = await fetchMonth(ch, cur.y, cur.m, signal)
       if (signal.aborted) { loadingMore.value = false; return }
       if (newMsgs.length > 0) await prependMsgs(newMsgs)
-      else { loadingMore.value = false; return loadOlder() }  // skip empty month
+      else { loadingMore.value = false; return loadOlder() }  // <<< skip empty month
     } catch {}
     loadingMore.value = false
   } else {
@@ -181,7 +181,7 @@ async function loadOlder() {
   }
 }
 
-// ── Walk backwards until targetId is found in msgs ───────────────────────────
+// >>> Walk backwards until targetId is found in msgs
 async function loadUntilMsg(targetId: string): Promise<boolean> {
   const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2)
   const ch     = channel.value.trim().toLowerCase().replace(/^#/, '')
@@ -227,11 +227,11 @@ function detachScrollListeners() {
   windowScrollAttached   = false
 }
 
-// ── Main search ──────────────────────────────────────────────────────────────
+// >>> Main search
 async function search() {
   if (!channel.value.trim()) { error.value = 'Channel is required.'; return }
 
-  // Read hash BEFORE pushSearchUrl strips it
+  // >>> Read hash BEFORE pushSearchUrl strips it
   const hashId = readHashId()
   pushSearchUrl()
 
@@ -248,7 +248,7 @@ async function search() {
   const isUser  = !!userFilter.value.trim()
 
   if (dateFilter.value) {
-    // Specific date — just load that single day/month, no scroll-back
+    // >>> Specific date - just load that single day/month, no scroll-back
     const [y, m, d] = dateFilter.value.split('-').map(Number)
     try {
       msgs.value = isUser
@@ -261,7 +261,7 @@ async function search() {
   }
 
   if (isUser) {
-    // User mode: load current month first
+    // >>> User mode: load current month first
     const y = today.getFullYear(), m = today.getMonth() + 1
     try { msgs.value = await fetchMonth(ch, y, m, abortCtrl.signal) } catch {}
     cursorMonth = prevMonth({ y, m })
@@ -278,7 +278,7 @@ async function search() {
       scrollToBottom()
     }
   } else {
-    // Channel mode: load today first
+    // >>> Channel mode: load today first
     try { msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal) } catch {}
     cursorDate = prevDay(today)
     loading.value = false
@@ -297,7 +297,7 @@ async function search() {
 
   await nextTick()
   attachScrollListener()
-  // If content doesn't fill the container, auto-load older days until it does
+  // >>> If content doesn't fill the container, auto-load older days until it does
   await autoFillIfShort()
 }
 
@@ -317,7 +317,7 @@ function scrollToBottom() {
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
-  // Poll until the element exists in the DOM (msgs may still be rendering)
+  // >>> Poll until the element exists in the DOM (msgs may still be rendering)
   const deadline = Date.now() + 3000
   let el: HTMLElement | null = null
   while (Date.now() < deadline) {
@@ -356,7 +356,7 @@ onUnmounted(() => {
   detachScrollListeners()
 })
 
-// ── Rendering ────────────────────────────────────────────────────────────────
+// >>> Rendering
 function fmtTs(ts: string) {
   const d = new Date(ts)
   return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
@@ -586,11 +586,11 @@ function esc(s: string) {
 
 :deep(.chat-emote) { height: 28px; vertical-align: middle; display: inline-block; margin: 0 1px; }
 
-/* ── Mobile summary bar (hidden on desktop) ── */
+/* >>> Mobile summary bar (hidden on desktop) */
 .search-summary { display: none; }
 
 @media (max-width: 680px) {
-  /* Fixed-height layout — page does NOT scroll, only .logs-tbody scrolls */
+  /* Fixed-height layout - page does NOT scroll, only .logs-tbody scrolls */
   .logs-view {
     height: calc(100vh - 52px); /* full viewport minus topbar */
     overflow: hidden;
