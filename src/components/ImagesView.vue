@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
@@ -8,11 +8,12 @@ import { useI18n } from '../i18n'
 const { session } = useAuth()
 const { t } = useI18n()
 const router = useRouter()
+const route  = useRoute()
 
-// >>> View mode: 'upload' | 'gallery' <<<
+// >>> View mode
 const view = ref<'upload' | 'gallery'>('upload')
 
-// >>> Upload state <<<
+// >>> Upload state
 const isDragging   = ref(false)
 const uploading    = ref(false)
 const uploadError  = ref('')
@@ -20,27 +21,26 @@ const lastLink     = ref('')
 const lastCopied   = ref(false)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
-// >>> Gallery state <<<
+// >>> Gallery state
 interface UploadedImage {
-  id: string
-  filename: string
-  url: string
-  size: number
-  created_at: number
-  expires_at: number | null
+  id: string; filename: string; url: string; size: number
+  created_at: number; expires_at: number | null
 }
 const images      = ref<UploadedImage[]>([])
 const galleryLoad = ref(false)
-const deleteId    = ref<string | null>(null)  // confirm state
+const deleteId    = ref<string | null>(null)
 
-// >>> Derived <<<
 const isGuest  = computed(() => !session.value)
 const imageUrl = (id: string) => `https://i.shyboti.de/${id}`
 
-// >>> Drag events <<<
+// >>> If ?gallery=1 was passed from MoreView, open gallery directly
+onMounted(() => {
+  if (route.query.gallery) switchView('gallery')
+})
+
+// >>> Drag events
 function onDragEnter(e: DragEvent) { e.preventDefault(); isDragging.value = true }
 function onDragLeave(e: DragEvent) {
-  // only fire if leaving the root dropzone (not a child)
   const rel = e.relatedTarget as HTMLElement | null
   if (!rel || !(e.currentTarget as HTMLElement).contains(rel)) isDragging.value = false
 }
@@ -49,8 +49,7 @@ function onDragOver(e: DragEvent) { e.preventDefault() }
 async function onDrop(e: DragEvent) {
   e.preventDefault(); isDragging.value = false
   const files = Array.from(e.dataTransfer?.files ?? []).filter(f => f.type.startsWith('image/'))
-  if (!files.length) return
-  await uploadFiles(files)
+  if (files.length) await uploadFiles(files)
 }
 
 function onFileInputChange(e: Event) {
@@ -58,23 +57,107 @@ function onFileInputChange(e: Event) {
   if (files.length) uploadFiles(files)
 }
 
+// >>> Client-side image compression using Canvas
+// >>> Reduces large images to at most maxMB at quality 0.82 before sending.
+// >>> GIFs are not compressed (Canvas loses animation).
+async function compressImage(file: File, maxMB = 3): Promise<Blob> {
+  const maxBytes = maxMB * 1024 * 1024
+  // >>> Don't compress GIFs — Canvas destroys animation
+  if (file.type === 'image/gif' || file.size <= maxBytes) return file
+
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      let { width, height } = img
+
+      // >>> Scale down if image is very large (> 4K in either dimension)
+      const MAX_DIM = 3840
+      if (width > MAX_DIM || height > MAX_DIM) {
+        const scale = Math.min(MAX_DIM / width, MAX_DIM / height)
+        width  = Math.round(width  * scale)
+        height = Math.round(height * scale)
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width  = width
+      canvas.height = height
+      const ctx = canvas.getContext('2d')!
+      ctx.drawImage(img, 0, 0, width, height)
+
+      // >>> Try JPEG at decreasing quality until under maxBytes
+      let quality = 0.82
+      const tryEncode = () => {
+        canvas.toBlob(blob => {
+          if (!blob) { reject(new Error('Canvas encode failed')); return }
+          if (blob.size <= maxBytes || quality < 0.25) {
+            resolve(blob)
+          } else {
+            quality -= 0.12
+            tryEncode()
+          }
+        }, 'image/jpeg', quality)
+      }
+      tryEncode()
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file) } // fallback: upload original
+    img.src = url
+  })
+}
+
 async function uploadFiles(files: File[]) {
   uploading.value = true; uploadError.value = ''; lastLink.value = ''
   try {
     for (const file of files) {
-      if (file.size > 20 * 1024 * 1024) { uploadError.value = `${file.name} exceeds 20 MB`; continue }
+      // >>> Hard reject: not an image type at all
+      if (!file.type.startsWith('image/')) {
+        uploadError.value = `${file.name} is not an image`; continue
+      }
+
+      // >>> Compress before upload — reduces large photos to ~3 MB
+      let blob: Blob = file
+      if (file.size > 3 * 1024 * 1024) {
+        try { blob = await compressImage(file) }
+        catch { /* compression failed, try original */ }
+      }
+
+      // >>> Hard server-side limit guard: 8 MB
+      if (blob.size > 8 * 1024 * 1024) {
+        uploadError.value = `${file.name} is too large even after compression (max 8 MB)`
+        continue
+      }
+
       const fd = new FormData()
-      fd.append('file', file)
+      // >>> Use compressed blob but keep original filename
+      fd.append('file', new File([blob], file.name, { type: blob.type || file.type }))
+
       const headers: Record<string, string> = {}
       if (session.value) headers['Authorization'] = `Bearer ${session.value.token}`
+
       const res = await fetch(`${API}/images/upload`, { method: 'POST', headers, body: fd })
-      if (!res.ok) { const d = await res.json() as any; throw new Error(d.error ?? 'Upload failed') }
-      const data = await res.json() as { id: string }
+
+      // >>> Always try to parse JSON — but handle plain-text 404/errors gracefully
+      let data: any = {}
+      const ct = res.headers.get('content-type') ?? ''
+      if (ct.includes('application/json')) {
+        data = await res.json()
+      } else {
+        const text = await res.text()
+        data = { error: text || `Server error (${res.status})` }
+      }
+
+      if (!res.ok) {
+        uploadError.value = data.error ?? `Upload failed (${res.status})`
+        continue
+      }
+
       lastLink.value = imageUrl(data.id)
-      // Reset file input
       if (fileInputRef.value) fileInputRef.value.value = ''
     }
-  } catch (e: any) { uploadError.value = e.message ?? 'Upload failed' }
+  } catch (e: any) {
+    uploadError.value = e.message ?? 'Upload failed'
+  }
   uploading.value = false
 }
 
@@ -84,7 +167,7 @@ async function copyLink(url: string) {
   setTimeout(() => lastCopied.value = false, 1800)
 }
 
-// >>> Gallery <<<
+// >>> Gallery
 async function loadGallery() {
   galleryLoad.value = true
   try {
@@ -125,16 +208,12 @@ function switchView(v: 'upload' | 'gallery') {
   view.value = v
   if (v === 'gallery') loadGallery()
 }
-
-onMounted(() => {
-  // Check if we should open to gallery directly (via query param)
-})
 </script>
 
 <template>
   <div class="images-page">
 
-    <!-- >>> Gallery view <<< -->
+    <!-- Gallery view -->
     <div v-if="view === 'gallery'" class="gallery-view">
       <div class="gallery-header">
         <button class="back-btn" @click="view = 'upload'">{{ t('images.back') }}</button>
@@ -165,7 +244,7 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- >>> Upload view <<< -->
+    <!-- Upload view -->
     <div v-else class="upload-view">
       <!-- Guest warning -->
       <div v-if="isGuest" class="guest-banner">
@@ -173,7 +252,7 @@ onMounted(() => {
         {{ t('images.guest_note') }}
       </div>
 
-      <!-- Drop zone: fills remaining height -->
+      <!-- Drop zone -->
       <div
         class="dropzone"
         :class="{ dragging: isDragging, has_link: !!lastLink }"
@@ -181,7 +260,7 @@ onMounted(() => {
         @dragleave="onDragLeave"
         @dragover="onDragOver"
         @drop="onDrop"
-        @click="!uploading && fileInputRef?.click()"
+        @click="!uploading && !lastLink && fileInputRef?.click()"
       >
         <input
           ref="fileInputRef"
@@ -192,15 +271,15 @@ onMounted(() => {
           @change="onFileInputChange"
         />
 
+        <!-- Uploading state -->
         <div v-if="uploading" class="drop-state">
           <div class="upload-spinner"></div>
           <div class="drop-label">{{ t('images.uploading') }}</div>
         </div>
 
+        <!-- Link result state -->
         <div v-else-if="lastLink" class="drop-state link-state" @click.stop>
-          <!-- Image preview -->
           <img :src="lastLink" class="upload-preview" alt="uploaded" />
-          <!-- Link bar -->
           <div class="link-bar">
             <span class="link-label">{{ t('images.link') }}</span>
             <code class="link-code">{{ lastLink }}</code>
@@ -208,18 +287,19 @@ onMounted(() => {
               {{ lastCopied ? t('images.copied') : t('images.copy') }}
             </button>
           </div>
-          <div class="drop-hint-small">{{ t('images.drop') }}</div>
+          <div class="drop-more-hint" @click.stop="lastLink = ''; uploadError = ''">
+            {{ t('images.drop') }}
+          </div>
         </div>
 
+        <!-- Idle state -->
         <div v-else class="drop-state">
-          <!-- Upload icon - SVG -->
           <svg class="drop-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="4" y="4" width="56" height="56" rx="8" stroke="currentColor" stroke-width="3" stroke-dasharray="6 4" opacity="0.4"/>
-            <path d="M32 40V24" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
-            <path d="M24 32L32 24L40 32" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-            <path d="M20 44h24" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
-            <!-- Mountain + sun: image icon at bottom -->
-            <circle cx="22" cy="28" r="3" fill="currentColor" opacity="0.25"/>
+            <rect x="4" y="10" width="56" height="44" rx="5" stroke="currentColor" stroke-width="2.5" stroke-dasharray="6 4" opacity="0.45"/>
+            <path d="M32 42V26" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M24 34L32 26L40 34" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="20" cy="24" r="3.5" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+            <path d="M8 46L20 32L28 40L38 28L56 46" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.25"/>
           </svg>
           <div class="drop-label">{{ t('images.drop') }}</div>
           <div class="drop-hint">{{ t('images.drop_hint') }}</div>
@@ -228,14 +308,14 @@ onMounted(() => {
         <div v-if="uploadError" class="upload-error" @click.stop>{{ uploadError }}</div>
       </div>
 
-      <!-- Bottom bar: "Your Images" button -->
+      <!-- Bottom bar -->
       <div class="bottom-bar">
         <button class="your-btn" @click.stop="switchView('gallery')">
           <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="your-icon">
-            <rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
-            <rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" stroke-width="1.5"/>
+            <rect x="1" y="1" width="6" height="6" rx="0.8" stroke="currentColor" stroke-width="1.4"/>
+            <rect x="9" y="1" width="6" height="6" rx="0.8" stroke="currentColor" stroke-width="1.4"/>
+            <rect x="1" y="9" width="6" height="6" rx="0.8" stroke="currentColor" stroke-width="1.4"/>
+            <rect x="9" y="9" width="6" height="6" rx="0.8" stroke="currentColor" stroke-width="1.4"/>
           </svg>
           {{ t('images.your') }}
         </button>
@@ -248,7 +328,6 @@ onMounted(() => {
 <style scoped>
 .images-page { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 
-/* >>> Guest banner <<< */
 .guest-banner {
   display: flex; align-items: center; gap: 8px;
   padding: 8px 14px; font-size: 11px; color: #888;
@@ -257,7 +336,6 @@ onMounted(() => {
 }
 .guest-icon { color: #e5c07b; font-size: 13px; }
 
-/* >>> Upload view <<< */
 .upload-view { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 
 .dropzone {
@@ -270,7 +348,6 @@ onMounted(() => {
 .dropzone:hover  { border-color: #6f2bff44; background: #13121a; }
 .dropzone.dragging { border-color: #9d6cff; background: #0e0d16; }
 .dropzone.has_link { cursor: default; border-style: solid; border-color: #2a2a30; }
-
 .file-input-hidden { display: none; }
 
 .drop-state {
@@ -278,16 +355,19 @@ onMounted(() => {
   gap: 12px; padding: 40px; width: 100%; height: 100%;
   pointer-events: none;
 }
-.drop-state.link-state { pointer-events: auto; gap: 16px; }
+.drop-state.link-state { pointer-events: auto; gap: 16px; cursor: default; }
 
-.drop-icon { width: 72px; height: 72px; color: #444; }
+.drop-icon { width: 72px; height: 72px; color: #444; transition: color .2s; }
 .dropzone.dragging .drop-icon { color: #9d6cff; }
-.drop-label { font-size: 16px; font-weight: 600; color: #666; text-align: center; }
+.drop-label { font-size: 15px; font-weight: 600; color: #666; text-align: center; transition: color .2s; }
 .dropzone.dragging .drop-label { color: #9d6cff; }
 .drop-hint { font-size: 12px; color: #383838; }
-.drop-hint-small { font-size: 11px; color: #383838; margin-top: 4px; }
+.drop-more-hint {
+  font-size: 11px; color: #444; cursor: pointer; text-decoration: underline;
+  text-underline-offset: 3px; transition: color .15s;
+}
+.drop-more-hint:hover { color: #9d6cff; }
 
-/* Spinner */
 .upload-spinner {
   width: 40px; height: 40px; border: 3px solid #2a2a30;
   border-top-color: #9d6cff; border-radius: 50%;
@@ -296,7 +376,7 @@ onMounted(() => {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .upload-preview {
-  max-width: min(420px, 80vw); max-height: 280px;
+  max-width: min(420px, 80vw); max-height: 260px;
   object-fit: contain; border: 1px solid #2a2a30;
 }
 
@@ -315,13 +395,12 @@ onMounted(() => {
 .copy-btn:hover { background: #6f2bff30; }
 
 .upload-error {
-  position: absolute; bottom: 60px; left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: 56px; left: 50%; transform: translateX(-50%);
   font-size: 12px; color: #f14949; background: rgba(241,73,73,.1);
-  border: 1px solid #f1494944; padding: 6px 14px;
-  pointer-events: auto;
+  border: 1px solid #f1494944; padding: 7px 16px; white-space: nowrap;
+  pointer-events: auto; max-width: 90vw; text-align: center;
 }
 
-/* >>> Bottom bar <<< */
 .bottom-bar {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 16px; background: #0d0d10; border-top: 1px solid #1e1e24;
@@ -337,7 +416,6 @@ onMounted(() => {
 .your-icon { width: 14px; height: 14px; flex-shrink: 0; }
 .limit-hint { font-size: 10px; color: #383838; }
 
-/* >>> Gallery <<< */
 .gallery-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .gallery-header {
   display: flex; align-items: center; gap: 12px;
@@ -358,8 +436,7 @@ onMounted(() => {
 }
 .gallery-item {
   position: relative; background: #141418; border: 1px solid #2a2a30;
-  display: flex; flex-direction: column; overflow: hidden;
-  transition: border-color .15s;
+  display: flex; flex-direction: column; overflow: hidden; transition: border-color .15s;
 }
 .gallery-item:hover { border-color: #3a3a44; }
 
