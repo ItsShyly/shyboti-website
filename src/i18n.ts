@@ -41,7 +41,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'home.sub':   'A Twitch bot with some extra features.\nLogin to manage commands, view logs and configure settings.',
     'home.login': 'Login with Twitch',
 
-    // >>> Dashboard
+    // >>> Dashboard <<<
     'dash.title':                  'Dashboard',
     'dash.sub':                    'Activity feed for',
     'dash.all':                    'All channels',
@@ -79,7 +79,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'type.countdown_started':      'Countdown started',
     'type.countdown_stopped':      'Countdown stopped',
 
-    // >>> Commands
+    // >>> Commands <<<
     'cmd.title_default':           'Default',
     'cmd.title_custom':            'Custom',
     'cmd.title_extras':            'Extras',
@@ -217,7 +217,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'timer.sync.stop':             'Stop',
     'timer.sync.last':             'Last pull:',
 
-    // >>> Triggers
+    // >>> Triggers <<<
     'trigger.title':               'Triggers',
     'trigger.sub':                 'Automatic actions on events for',
     'trigger.new':                 '+ New trigger',
@@ -260,7 +260,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'trigger.sync.stop':           'Stop',
     'trigger.sync.last':           'Last pull:',
 
-    // >>> Countdowns
+    // >>> Countdowns <<<
     'countdown.title':             'Countdowns',
     'countdown.sub':               'Timed countdowns that fire actions for',
     'countdown.new':               '+ New countdown',
@@ -272,6 +272,8 @@ const translations: Record<Locale, Record<string, string>> = {
     'countdown.loading':           'Loading…',
     'countdown.edit_new':          'New countdown',
     'countdown.edit_title':        'Edit ·',
+    'countdown.edit':              'Edit',
+    'countdown.view':              'View',
     'countdown.field.name':        'Name',
     'countdown.field.name_hint':   'lowercase, no spaces',
     'countdown.field.seconds':     'Duration',
@@ -299,7 +301,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'countdown.var.elapsed':       '$countdown.name.elapsed',
     'countdown.var.percent':       '$countdown.name.percent',
 
-    // >>> Moderation
+    // >>> Moderation <<<
     'mod.title':                   'Moderation',
     'mod.sub':                     'Automod rules for',
     'mod.tab.blocked':             'Blocked Terms',
@@ -375,7 +377,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'mod.badge.stay':              'active',
     'mod.badge.exact':             'exact',
 
-    // >>> Roles
+    // >>> Roles <<<
     'roles.title':                 'Roles',
     'roles.sub':                   'Control what mods can access in',
     'roles.save':                  'Save changes',
@@ -428,7 +430,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'perm.moderation_manage':      'Manage',
     'perm.moderation_manage.desc': 'Add, delete, and fire nukes. Full moderation control.',
 
-    // >>> Logs
+    // >>> Logs <<<
     'logs.title':                  'Logs',
     'logs.sub':                    'Search chat history via Spanix',
     'logs.field.channel':          'Channel',
@@ -448,7 +450,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'logs.no_older':               '↑ No older logs',
     'logs.copied':                 '✓ Copied to clipboard',
 
-    // >>> Settings
+    // >>> Settings <<<
     'settings.save':               'Save',
     'settings.saved':              '✓ Saved',
     'settings.saving':             'Saving…',
@@ -486,7 +488,58 @@ const translations: Record<Locale, Record<string, string>> = {
     'settings.remove.done':        'ShyBoti has left the channel.',
     'settings.remove.error':       'Could not remove bot.',
 
-    // >>> Command descriptions
+    // >>> More <<<
+    'more.images':            'Images',
+    'more.images.sub':        'Host images, share links',
+    'more.images.your':       'Your Images',
+    'more.notes':             'Notes',
+    'more.notes.sub':         'Create and share text snippets',
+    'more.notes.your':        'Your Notes',
+
+    // >>> Images page <<<
+    'images.title':           'Image Hosting',
+    'images.drop':            'Drop images here or click to upload',
+    'images.drop_hint':       'PNG, JPG, GIF, WEBP · max 20 MB each',
+    'images.uploading':       'Uploading…',
+    'images.link':            'Link',
+    'images.copy':            'Copy',
+    'images.copied':          '✓',
+    'images.delete':          'Delete',
+    'images.your':            'Your Images',
+    'images.back':            '← Back',
+    'images.empty':           'No images yet.',
+    'images.loading':         'Loading…',
+    'images.guest_note':      'Not logged in — images expire after 30 days · max 100 active per IP',
+    'images.limit':           'max 100 active',
+    'images.delete_sure':     'Delete this image?',
+
+    // >>> Notes page <<<
+    'notes.title':            'Notes',
+    'notes.placeholder':      'Paste or type your note here…',
+    'notes.expiry':           'Expires',
+    'notes.expiry.1h':        '1 hour',
+    'notes.expiry.1d':        '1 day',
+    'notes.expiry.7d':        '7 days',
+    'notes.expiry.30d':       '30 days',
+    'notes.expiry.forever':   'Never',
+    'notes.create':           'Create note',
+    'notes.creating':         'Creating…',
+    'notes.link':             'Link',
+    'notes.copy':             'Copy',
+    'notes.copied':           '✓',
+    'notes.your':             'Your Notes',
+    'notes.back':             '← Back',
+    'notes.empty':            'No notes yet.',
+    'notes.loading':          'Loading…',
+    'notes.delete':           'Delete',
+    'notes.guest_note':       'Not logged in — notes expire after 30 days max · max 100 active per IP',
+    'notes.limit':            'max 100 active',
+    'notes.chars':            'characters',
+    'notes.expires_in':       'Expires in',
+    'notes.expired':          'Expired',
+    'notes.delete_sure':      'Delete this note?',
+
+    // >>> Command descriptions <<<
     'cmddesc.ping':     'Check if the bot is online.',
     'cmddesc.commands': 'List all available commands.',
     'cmddesc.ask':      'Ask the bot a yes/no question.',
@@ -532,7 +585,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'home.sub':   'Ein Twitch-Bot mit ein paar extra Features.\nMelde dich an um Commands zu verwalten, Logs anzuzeigen und Einstellungen zu konfigurieren.',
     'home.login': 'Mit Twitch anmelden',
 
-    // >>> Dashboard
+    // >>> Dashboard <<<
     'dash.title':                  'Dashboard',
     'dash.sub':                    'Aktivitätsfeed für',
     'dash.all':                    'Alle Kanäle',
@@ -570,7 +623,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'type.countdown_started':      'Countdown gestartet',
     'type.countdown_stopped':      'Countdown gestoppt',
 
-    // >>> Commands
+    // >>> Commands <<<
     'cmd.title_default':           'Default',
     'cmd.title_custom':            'Eigene',
     'cmd.title_extras':            'Extras',
@@ -626,7 +679,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'cmd.share.btn':               'Command kopieren',
     'cmd.share.copying':           'Wird kopiert…',
 
-    // >>> Command Edit Panel
+    // >>> Command Edit Panel <<<
     'edit.response':               'Antwort',
     'edit.response_hint':          'vollständige Skriptsprache · $ für eine Variable',
     'edit.description':            'Beschreibung',
@@ -658,12 +711,12 @@ const translations: Record<Locale, Record<string, string>> = {
     'edit.tab_complete':           'Tab zum Vervollständigen',
     'edit.builtin_locked':         'gesperrt - schreibe dein Skript darum herum',
 
-    // >>> Automations
+    // >>> Automations <<<
     'auto.timers':                 'Timer',
     'auto.triggers':               'Trigger',
     'auto.countdowns':             'Countdowns',
 
-    // >>> Timers
+    // >>> Timers <<<
     'timer.title':                 'Timer',
     'timer.sub':                   'Automatische Nachrichten in einem Intervall für',
     'timer.new':                   '+ Neuer Timer',
@@ -708,7 +761,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'timer.sync.stop':             'Stoppen',
     'timer.sync.last':             'Letzter Abruf:',
 
-    // >>> Triggers
+    // >>> Triggers <<<
     'trigger.title':               'Trigger',
     'trigger.sub':                 'Automatische Aktionen bei Ereignissen für',
     'trigger.new':                 '+ Neuer Trigger',
@@ -751,7 +804,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'trigger.sync.stop':           'Stoppen',
     'trigger.sync.last':           'Letzter Abruf:',
 
-    // >>> Countdowns
+    // >>> Countdowns <<<
     'countdown.title':             'Countdowns',
     'countdown.sub':               'Zeitgesteuerte Countdowns mit Aktionen für',
     'countdown.new':               '+ Neuer Countdown',
@@ -763,6 +816,8 @@ const translations: Record<Locale, Record<string, string>> = {
     'countdown.loading':           'Wird geladen…',
     'countdown.edit_new':          'Neuer Countdown',
     'countdown.edit_title':        'Bearbeiten ·',
+    'countdown.edit':              'Bearbeiten',
+    'countdown.view':              'Ansehen',
     'countdown.field.name':        'Name',
     'countdown.field.name_hint':   'kleinbuchstaben, keine leerzeichen',
     'countdown.field.seconds':     'Dauer',
@@ -790,7 +845,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'countdown.var.elapsed':       '$countdown.name.elapsed',
     'countdown.var.percent':       '$countdown.name.percent',
 
-    // >>> Moderation
+    // >>> Moderation <<<
     'mod.title':                   'Moderation',
     'mod.sub':                     'Automod-Regeln für',
     'mod.tab.blocked':             'Gesperrte Begriffe',
@@ -866,7 +921,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'mod.badge.stay':              'aktiv',
     'mod.badge.exact':             'exakt',
 
-    // >>> Roles
+    // >>> Roles <<<
     'roles.title':                 'Rollen',
     'roles.sub':                   'Stelle ein, was Mods sehen können in',
     'roles.save':                  'Änderungen speichern',
@@ -919,7 +974,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'perm.moderation_manage':      'Verwalten',
     'perm.moderation_manage.desc': 'Hinzufügen, Löschen und Nukes zünden. Vollständige Moderationskontrolle.',
 
-    // >>> Logs
+    // >>> Logs <<<
     'logs.title':                  'Logs',
     'logs.sub':                    'Chatverlauf über Spanix durchsuchen',
     'logs.field.channel':          'Channel',
@@ -939,7 +994,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'logs.no_older':               '↑ Keine älteren Logs',
     'logs.copied':                 '✓ In Zwischenablage kopiert',
 
-    // >>> Settings
+    // >>> Settings <<<
     'settings.save':               'Speichern',
     'settings.saved':              '✓ Gespeichert',
     'settings.saving':             'Wird gespeichert…',
@@ -977,7 +1032,58 @@ const translations: Record<Locale, Record<string, string>> = {
     'settings.remove.done':        'ShyBoti hat den Channel verlassen.',
     'settings.remove.error':       'Bot konnte nicht entfernt werden.',
 
-    // >>> Command descriptions
+    // >>> More <<<
+    'more.images':            'Bilder',
+    'more.images.sub':        'Bilder hosten, Links teilen',
+    'more.images.your':       'Deine Bilder',
+    'more.notes':             'Notizen',
+    'more.notes.sub':         'Texte erstellen und teilen',
+    'more.notes.your':        'Deine Notizen',
+
+    // >>> Images page <<<
+    'images.title':           'Bild-Hosting',
+    'images.drop':            'Bilder hier ablegen oder klicken zum Hochladen',
+    'images.drop_hint':       'PNG, JPG, GIF, WEBP · max. 20 MB pro Bild',
+    'images.uploading':       'Wird hochgeladen…',
+    'images.link':            'Link',
+    'images.copy':            'Kopieren',
+    'images.copied':          '✓',
+    'images.delete':          'Löschen',
+    'images.your':            'Deine Bilder',
+    'images.back':            '← Zurück',
+    'images.empty':           'Noch keine Bilder.',
+    'images.loading':         'Wird geladen…',
+    'images.guest_note':      'Nicht eingeloggt — Bilder laufen nach 30 Tagen ab · max. 100 aktiv pro IP',
+    'images.limit':           'max. 100 aktiv',
+    'images.delete_sure':     'Dieses Bild löschen?',
+
+    // >>> Notes page <<<
+    'notes.title':            'Notizen',
+    'notes.placeholder':      'Notiz hier einfügen oder eingeben…',
+    'notes.expiry':           'Ablauf',
+    'notes.expiry.1h':        '1 Stunde',
+    'notes.expiry.1d':        '1 Tag',
+    'notes.expiry.7d':        '7 Tage',
+    'notes.expiry.30d':       '30 Tage',
+    'notes.expiry.forever':   'Nie',
+    'notes.create':           'Notiz erstellen',
+    'notes.creating':         'Wird erstellt…',
+    'notes.link':             'Link',
+    'notes.copy':             'Kopieren',
+    'notes.copied':           '✓',
+    'notes.your':             'Deine Notizen',
+    'notes.back':             '← Zurück',
+    'notes.empty':            'Noch keine Notizen.',
+    'notes.loading':          'Wird geladen…',
+    'notes.delete':           'Löschen',
+    'notes.guest_note':       'Nicht eingeloggt — Notizen laufen nach max. 30 Tagen ab · max. 100 aktiv pro IP',
+    'notes.limit':            'max. 100 aktiv',
+    'notes.chars':            'Zeichen',
+    'notes.expires_in':       'Läuft ab in',
+    'notes.expired':          'Abgelaufen',
+    'notes.delete_sure':      'Diese Notiz löschen?',
+
+    // >>> Command descriptions <<<
     'cmddesc.ping':     'Prüft ob der Bot online ist.',
     'cmddesc.commands': 'Listet alle verfügbaren Commands auf.',
     'cmddesc.ask':      'Stelle dem Bot eine Ja/Nein-Frage.',

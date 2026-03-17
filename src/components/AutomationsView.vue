@@ -2,34 +2,42 @@
 import { ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from '../i18n'
-import TimersView   from './TimersView.vue'
-import TriggersView from './TriggersView.vue'
+import TimersView    from './TimersView.vue'
+import TriggersView  from './TriggersView.vue'
+import CountdownView from './CountdownView.vue'
 
-type Tab = 'timers' | 'triggers'
+// >>> Tab type extended with countdown <<<
+type Tab = 'timers' | 'triggers' | 'countdowns'
 const route  = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 
-// Keep tab in sync with ?tab= query param so direct links work
-const activeTab = ref<Tab>((route.query.tab as Tab) === 'triggers' ? 'triggers' : 'timers')
+function parseTab(v: unknown): Tab {
+  if (v === 'triggers' || v === 'countdowns') return v
+  return 'timers'
+}
+
+const activeTab = ref<Tab>(parseTab(route.query.tab))
 
 watch(activeTab, tab => {
   router.replace({ path: '/automations', query: { tab } })
 })
 watch(() => route.query.tab, tab => {
-  if (tab === 'triggers' || tab === 'timers') activeTab.value = tab
+  activeTab.value = parseTab(tab)
 })
 </script>
 
 <template>
   <div class="automations">
     <div class="auto-tabs">
-      <button class="auto-tab" :class="{ active: activeTab === 'timers' }"   @click="activeTab = 'timers'">{{ t('auto.timers') }}</button>
-      <button class="auto-tab" :class="{ active: activeTab === 'triggers' }" @click="activeTab = 'triggers'">{{ t('auto.triggers') }}</button>
+      <button class="auto-tab" :class="{ active: activeTab === 'timers' }"     @click="activeTab = 'timers'">{{ t('auto.timers') }}</button>
+      <button class="auto-tab" :class="{ active: activeTab === 'triggers' }"   @click="activeTab = 'triggers'">{{ t('auto.triggers') }}</button>
+      <button class="auto-tab" :class="{ active: activeTab === 'countdowns' }" @click="activeTab = 'countdowns'">{{ t('auto.countdowns') }}</button>
     </div>
     <div class="auto-body">
-      <TimersView   v-if="activeTab === 'timers'" />
-      <TriggersView v-else />
+      <TimersView    v-if="activeTab === 'timers'" />
+      <TriggersView  v-else-if="activeTab === 'triggers'" />
+      <CountdownView v-else />
     </div>
   </div>
 </template>

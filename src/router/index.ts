@@ -18,6 +18,8 @@ const router = createRouter({
     { path: '/commands',    component: CommandsView },
     { path: '/logs',        component: LogsView },
     { path: '/more',        component: MoreView },
+    { path: '/images',      component: () => import('../components/ImagesView.vue') },
+    { path: '/notes',       component: () => import('../components/NotesView.vue') },
     { path: '/moderation',  component: () => import('../components/ModerationView.vue') },
     { path: '/automations', component: AutomationsView },
     { path: '/timers',      redirect: '/automations?tab=timers' },
