@@ -31,7 +31,7 @@ const galleryLoad = ref(false)
 const deleteId    = ref<string | null>(null)
 
 const isGuest  = computed(() => !session.value)
-const imageUrl = (id: string) => `${API}/images/${id}`
+const imageUrl = (id: string) => `https://i.shyboti.de/${id}`
 
 // >>> If ?gallery=1 was passed from MoreView, open gallery directly
 onMounted(() => {
