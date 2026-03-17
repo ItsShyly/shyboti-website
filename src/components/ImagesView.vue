@@ -477,7 +477,7 @@ function switchView(v: 'upload' | 'gallery') {
 
 .gallery-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px; overflow-y: auto; flex: 1; padding-bottom: 8px;
+  gap: 12px; overflow-y: auto; padding-bottom: 8px;
 }
 .gallery-item {
   position: relative; background: #141418; border: 1px solid #2a2a30;
