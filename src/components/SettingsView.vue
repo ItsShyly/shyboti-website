@@ -9,16 +9,22 @@ const { t } = useI18n()
 
 const isBroadcaster = ref(false)
 
-//  Prefix (broadcaster only) 
+// >>> Prefix (broadcaster only)
 const prefix       = ref('+')
 const prefixSaving = ref(false)
 const prefixSaved  = ref(false)
 const prefixError  = ref('')
 
-//  Log opt-out (all users) 
+// >>> Log opt-out (all users)
 const optedOut   = ref(false)
 const optSaving  = ref(false)
 const optMsg     = ref('')
+
+// >>> Remove bot (broadcaster only)
+const removeConfirm  = ref(false)
+const removeRemoving = ref(false)
+const removeMsg      = ref('')
+const removeError    = ref('')
 
 async function load() {
   if (!session.value) return
@@ -69,6 +75,33 @@ async function toggleOptOut() {
   optSaving.value = false
 }
 
+// >>> Remove bot from channel
+function clickRemoveBot() {
+  if (!removeConfirm.value) {
+    removeConfirm.value = true
+    // Auto-cancel after 8s if user does nothing
+    setTimeout(() => { removeConfirm.value = false }, 8000)
+    return
+  }
+  doRemoveBot()
+}
+
+async function doRemoveBot() {
+  if (!session.value || !isBroadcaster.value) return
+  removeConfirm.value = false
+  removeRemoving.value = true
+  removeError.value = ''
+  try {
+    const res = await fetch(`${API}/bot/leave/${session.value.channel}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    })
+    if (!res.ok) throw new Error()
+    removeMsg.value = t('settings.remove.done')
+  } catch { removeError.value = t('settings.remove.error') }
+  removeRemoving.value = false
+}
+
 onMounted(load)
 watch(() => session.value?.channel, load)
 </script>
@@ -80,7 +113,7 @@ watch(() => session.value?.channel, load)
       <p class="settings-sub">{{ t('settings.sub') }} <span class="chan">#{{ session?.channel }}</span>.</p>
     </div>
 
-    <!-- Command prefix - broadcaster only -->
+    <!-- >>> Command prefix - broadcaster only -->
     <div class="section" v-if="isBroadcaster">
       <div class="section-head">
         <div>
@@ -103,15 +136,12 @@ watch(() => session.value?.channel, load)
       <div class="section-note">{{ t('settings.prefix.note') }}</div>
     </div>
 
-    <!-- Log opt-out - all users -->
+    <!-- >>> Log opt-out - all users -->
     <div class="section">
       <div class="section-head">
         <div>
           <div class="section-title">{{ t('settings.optout.title') }}</div>
-          <div class="section-sub">
-            {{ t('settings.optout.sub') }}  
-            {{ t('settings.optout.sub2') }}
-          </div>
+          <div class="section-sub">{{ t('settings.optout.sub') }}</div>
         </div>
         <span class="badge" :class="optedOut ? 'out' : 'in'">{{ optedOut ? t('settings.optout.badge.out') : t('settings.optout.badge.in') }}</span>
       </div>
@@ -126,6 +156,39 @@ watch(() => session.value?.channel, load)
       </div>
       <div v-if="optMsg" class="opt-msg">{{ optMsg }}</div>
     </div>
+
+    <!-- >>> Remove Bot - broadcaster only -->
+    <div class="section danger-section" v-if="isBroadcaster">
+      <div class="section-head">
+        <div>
+          <div class="section-title">{{ t('settings.remove.title') }}</div>
+          <div class="section-sub">{{ t('settings.remove.sub') }}</div>
+        </div>
+        <span class="badge bc">{{ t('settings.remove.badge') }}</span>
+      </div>
+
+      <div v-if="removeMsg" class="opt-msg">{{ removeMsg }}</div>
+      <div v-else-if="removeError" class="field-error">{{ removeError }}</div>
+
+      <!-- Normal state - show remove button -->
+      <div v-if="!removeConfirm && !removeMsg" class="remove-row">
+        <button class="remove-btn" @click="clickRemoveBot" :disabled="removeRemoving">
+          {{ removeRemoving ? t('settings.remove.removing') : t('settings.remove.btn') }}
+        </button>
+      </div>
+
+      <!-- Confirm dialog - shown after first click -->
+      <div v-if="removeConfirm" class="confirm-box">
+        <div class="confirm-text">
+          {{ t('settings.remove.confirm') }}<strong>#{{ session?.channel }}</strong>?
+          {{ t('settings.remove.confirm2') }}
+        </div>
+        <div class="confirm-actions">
+          <button class="confirm-no"  @click="removeConfirm = false">{{ t('settings.remove.no') }}</button>
+          <button class="confirm-yes" @click="doRemoveBot">{{ t('settings.remove.yes') }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -138,6 +201,7 @@ watch(() => session.value?.channel, load)
 .chan            { color: #9d6cff; }
 
 .section { background: #1a1a1e; border: 1px solid #2a2a30; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.danger-section { border-color: #f1494933; background: #1c1215; }
 
 .section-head  { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .section-title { font-size: 14px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
@@ -189,4 +253,32 @@ watch(() => session.value?.channel, load)
 .opt-btn.out:hover:not(:disabled) { background: rgba(35,209,139,.15); }
 .opt-btn:disabled { opacity: .4; cursor: not-allowed; }
 .opt-msg { font-size: 11px; color: #23d18b; }
+
+/* Remove bot section */
+.remove-row { display: flex; }
+.remove-btn {
+  height: 36px; padding: 0 18px; border: 1px solid #f1494966;
+  background: transparent; color: #f14949; font-family: inherit; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: background .15s, border-color .15s;
+}
+.remove-btn:hover:not(:disabled) { background: rgba(241,73,73,.12); border-color: #f14949; }
+.remove-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.confirm-box {
+  background: rgba(241,73,73,.06); border: 1px solid #f1494944;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;
+}
+.confirm-text { font-size: 12px; color: #ccc; line-height: 1.6; }
+.confirm-text strong { color: #9d6cff; }
+.confirm-actions { display: flex; gap: 10px; }
+.confirm-no {
+  height: 34px; padding: 0 16px; border: 1px solid #2a2a30;
+  background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer;
+}
+.confirm-no:hover { border-color: #555; color: #e0e0e0; }
+.confirm-yes {
+  height: 34px; padding: 0 16px; border: none;
+  background: #f14949; color: #fff; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.confirm-yes:hover { background: #ff5a5a; }
 </style>

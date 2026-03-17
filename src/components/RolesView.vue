@@ -1,36 +1,38 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
+import { useI18n } from '../i18n'
 import type { RolePermissions } from '../auth'
 
 const { session } = useAuth()
+const { t } = useI18n()
 
-//  Permission groups for the UI 
-const PERM_GROUPS: { label: string; perms: { key: keyof Omit<RolePermissions,'modsEnabled'>; label: string; desc: string }[] }[] = [
-  { label: 'Dashboard', perms: [
-    { key: 'dashboard',       label: 'View Dashboard', desc: 'Access the activity feed and dashboard.' },
+// >>> Permission groups for the UI - labels pulled from i18n
+const PERM_GROUPS = computed(() => [
+  { label: t('perm.group.dashboard'), perms: [
+    { key: 'dashboard' as keyof Omit<RolePermissions,'modsEnabled'>,       label: t('perm.dashboard'),       desc: t('perm.dashboard.desc') },
   ]},
-  { label: 'Commands', perms: [
-    { key: 'commands_view',   label: 'View',   desc: 'See the commands list.' },
-    { key: 'commands_toggle', label: 'Toggle', desc: 'Enable or disable commands.' },
-    { key: 'commands_edit',   label: 'Edit',   desc: 'Edit responses, cooldowns, and settings. Create new commands.' },
-    { key: 'commands_delete', label: 'Delete', desc: 'Permanently delete custom commands.' },
+  { label: t('perm.group.commands'), perms: [
+    { key: 'commands_view'   as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.commands_view'),   desc: t('perm.commands_view.desc') },
+    { key: 'commands_toggle' as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.commands_toggle'), desc: t('perm.commands_toggle.desc') },
+    { key: 'commands_edit'   as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.commands_edit'),   desc: t('perm.commands_edit.desc') },
+    { key: 'commands_delete' as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.commands_delete'), desc: t('perm.commands_delete.desc') },
   ]},
-  { label: 'Automations', perms: [
-    { key: 'automations_view',   label: 'View',   desc: 'See timers and triggers.' },
-    { key: 'automations_toggle', label: 'Toggle', desc: 'Enable or disable timers and triggers.' },
-    { key: 'automations_edit',   label: 'Edit',   desc: 'Edit and create timers and triggers.' },
-    { key: 'automations_delete', label: 'Delete', desc: 'Permanently delete timers and triggers.' },
+  { label: t('perm.group.automations'), perms: [
+    { key: 'automations_view'   as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.automations_view'),   desc: t('perm.automations_view.desc') },
+    { key: 'automations_toggle' as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.automations_toggle'), desc: t('perm.automations_toggle.desc') },
+    { key: 'automations_edit'   as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.automations_edit'),   desc: t('perm.automations_edit.desc') },
+    { key: 'automations_delete' as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.automations_delete'), desc: t('perm.automations_delete.desc') },
   ]},
-  { label: 'Logs', perms: [
-    { key: 'logs_view', label: 'View Logs', desc: 'Access the chat logs viewer.' },
+  { label: t('perm.group.logs'), perms: [
+    { key: 'logs_view' as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.logs_view'), desc: t('perm.logs_view.desc') },
   ]},
-  { label: 'Moderation', perms: [
-    { key: 'moderation_view',   label: 'View',   desc: 'See blocked terms, spam filters, and nukes.' },
-    { key: 'moderation_manage', label: 'Manage', desc: 'Add, delete, and fire nukes. Full moderation control.' },
+  { label: t('perm.group.moderation'), perms: [
+    { key: 'moderation_view'   as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.moderation_view'),   desc: t('perm.moderation_view.desc') },
+    { key: 'moderation_manage' as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.moderation_manage'), desc: t('perm.moderation_manage.desc') },
   ]},
-]
+])
 
 const DEFAULT_PERMS: Omit<RolePermissions, 'modsEnabled'> = {
   dashboard:        true,
@@ -41,29 +43,29 @@ const DEFAULT_PERMS: Omit<RolePermissions, 'modsEnabled'> = {
   moderation_manage:  false,
 }
 
-//  Global mod defaults 
+// >>> Global mod defaults
 const modsEnabled = ref(true)
 const globalPerms = ref<Omit<RolePermissions,'modsEnabled'>>({ ...DEFAULT_PERMS })
 
-//  Mod list 
+// >>> Mod list
 interface ModEntry {
   username:    string
   blocked:     boolean
-  permissions: Omit<RolePermissions,'modsEnabled'> | null  // null = use global
+  permissions: Omit<RolePermissions,'modsEnabled'> | null
 }
 
 const mods        = ref<ModEntry[]>([])
 const modsLoading = ref(false)
 const expandedMod = ref<string | null>(null)
 
-//  Save state 
-const saving   = ref(false)
-const saved    = ref(false)
+// >>> Save state
+const saving    = ref(false)
+const saved     = ref(false)
 const modSaving = ref<string | null>(null)
 
 function showSaved() { saved.value = true; setTimeout(() => saved.value = false, 2000) }
 
-//  Load 
+// >>> Load
 async function load() {
   if (!session.value) return
   try {
@@ -93,7 +95,7 @@ async function loadMods() {
   }
 }
 
-//  Save global 
+// >>> Save global
 async function save() {
   if (!session.value) return
   saving.value = true
@@ -108,7 +110,7 @@ async function save() {
   saving.value = false
 }
 
-//  Per-mod 
+// >>> Per-mod
 function toggleExpand(username: string) {
   expandedMod.value = expandedMod.value === username ? null : username
 }
@@ -136,13 +138,12 @@ async function saveModOverride(mod: ModEntry) {
 
 async function blockMod(mod: ModEntry) {
   mod.blocked = !mod.blocked
-  if (mod.blocked) mod.permissions = null  // clear overrides when blocking
+  if (mod.blocked) mod.permissions = null
   await saveModOverride(mod)
 }
 
 function setModOverride(mod: ModEntry) {
   if (!mod.permissions) {
-    // Start an override from current global defaults
     mod.permissions = { ...globalPerms.value }
   }
 }
@@ -166,10 +167,10 @@ onMounted(() => { load(); loadMods() })
   <div class="roles">
     <div class="roles-header">
       <div>
-        <h2 class="roles-title">Roles</h2>
-        <p class="roles-sub">Control what mods can access in <span class="chan">#{{ session?.channel }}</span>.</p>
+        <h2 class="roles-title">{{ t('roles.title') }}</h2>
+        <p class="roles-sub">{{ t('roles.sub') }} <span class="chan">#{{ session?.channel }}</span>.</p>
       </div>
-      <span v-if="saved" class="autosave-indicator">✓ Saved</span>
+      <span v-if="saved" class="autosave-indicator">{{ t('roles.saved') }}</span>
     </div>
 
     <!-- Master enable/disable -->
@@ -178,9 +179,9 @@ onMounted(() => { load(); loadMods() })
         <div class="master-info">
           <div class="section-title">
             <span class="badge mod">MOD</span>
-            Moderator Access
+            {{ t('roles.mod_access') }}
           </div>
-          <p class="section-sub">Allow mods to access the dashboard at all. When off, mods see nothing.</p>
+          <p class="section-sub">{{ t('roles.mod_sub') }}</p>
         </div>
         <div class="toggle" :class="{ on: modsEnabled }" @click="modsEnabled = !modsEnabled; save()">
           <div class="toggle-knob"></div>
@@ -212,12 +213,12 @@ onMounted(() => { load(); loadMods() })
     <div class="section">
       <div class="section-title">
         <span class="badge mod">MODS</span>
-        Individual Overrides
+        {{ t('roles.overrides') }}
       </div>
-      <p class="section-sub">Per-mod overrides take priority over global defaults. You can grant more or less than the defaults for specific mods.</p>
+      <p class="section-sub">{{ t('roles.overrides_sub') }}</p>
 
-      <div v-if="modsLoading" class="mods-empty">Loading mods…</div>
-      <div v-else-if="mods.length === 0" class="mods-empty">No mods found - make sure the bot is in your channel.</div>
+      <div v-if="modsLoading" class="mods-empty">{{ t('roles.loading') }}</div>
+      <div v-else-if="mods.length === 0" class="mods-empty">{{ t('roles.no_mods') }}</div>
 
       <div v-else class="mod-list">
         <div v-for="mod in mods" :key="mod.username" class="mod-item" :class="{ expanded: expandedMod === mod.username, blocked: mod.blocked, overridden: !mod.blocked && mod.permissions !== null }">
@@ -226,12 +227,12 @@ onMounted(() => { load(); loadMods() })
           <div class="mod-header" @click="toggleExpand(mod.username)">
             <span class="mod-dot" :class="{ blocked: mod.blocked, override: !mod.blocked && mod.permissions !== null }"></span>
             <span class="mod-name">{{ mod.username }}</span>
-            <span class="mod-badge" v-if="mod.blocked">blocked</span>
-            <span class="mod-badge override" v-else-if="mod.permissions !== null">custom</span>
-            <span class="mod-badge default" v-else>default</span>
+            <span class="mod-badge" v-if="mod.blocked">{{ t('roles.badge.blocked') }}</span>
+            <span class="mod-badge override" v-else-if="mod.permissions !== null">{{ t('roles.badge.custom') }}</span>
+            <span class="mod-badge default" v-else>{{ t('roles.badge.default') }}</span>
             <div class="mod-header-actions" @click.stop>
               <button class="mod-block-btn" :class="{ 'mod-block-btn-allow': mod.blocked }" @click="blockMod(mod)" :disabled="modSaving === mod.username">
-                {{ mod.blocked ? 'Unblock' : 'Block' }}
+                {{ mod.blocked ? t('roles.unblock') : t('roles.block') }}
               </button>
             </div>
             <span class="mod-chevron">{{ expandedMod === mod.username ? '▲' : '▼' }}</span>
@@ -240,9 +241,9 @@ onMounted(() => { load(); loadMods() })
           <!-- Expanded permission overrides -->
           <div v-if="expandedMod === mod.username && !mod.blocked" class="mod-perms">
             <div class="mod-perms-header">
-              <span class="mod-perms-sub">{{ mod.permissions !== null ? 'Custom permissions (overrides global defaults)' : 'Using global defaults' }}</span>
-              <button v-if="mod.permissions !== null" class="reset-btn" @click="clearModOverride(mod)" :disabled="modSaving === mod.username">↺ Reset to defaults</button>
-              <button v-else class="override-btn" @click="setModOverride(mod)">Set custom…</button>
+              <span class="mod-perms-sub">{{ mod.permissions !== null ? t('roles.custom_perms') : t('roles.using_default') }}</span>
+              <button v-if="mod.permissions !== null" class="reset-btn" @click="clearModOverride(mod)" :disabled="modSaving === mod.username">{{ t('roles.reset') }}</button>
+              <button v-else class="override-btn" @click="setModOverride(mod)">{{ t('roles.set_custom') }}</button>
             </div>
 
             <div v-if="mod.permissions !== null" class="mod-perm-grid">
@@ -255,7 +256,7 @@ onMounted(() => { load(); loadMods() })
                     </div>
                     <div class="toggle-wrap">
                       <span class="default-val" :class="{ active: (globalPerms as any)[perm.key] }">
-                        default: {{ (globalPerms as any)[perm.key] ? 'on' : 'off' }}
+                        {{ (globalPerms as any)[perm.key] ? t('roles.default_on') : t('roles.default_off') }}
                       </span>
                       <div class="toggle sm"
                         :class="{ on: (mod.permissions as any)[perm.key] }"
@@ -301,7 +302,6 @@ onMounted(() => { load(); loadMods() })
 
 .autosave-indicator { font-size: 11px; color: #23d18b; padding: 4px 10px; background: rgba(35,209,139,.08); border: 1px solid rgba(35,209,139,.3); }
 
-/* Section */
 .section { background: #1a1a1e; border: 1px solid #2a2a30; padding: 18px 20px; }
 .section-title {
   display: flex; align-items: center; gap: 8px;
@@ -314,7 +314,6 @@ onMounted(() => { load(); loadMods() })
 }
 .badge.mod { background: #6f2bff22; color: #9d6cff; border: 1px solid #6f2bff44; }
 
-/* Master toggle row */
 .master-row {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
   padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid #222;
@@ -322,7 +321,6 @@ onMounted(() => { load(); loadMods() })
 .master-info { flex: 1; }
 .master-info .section-sub { margin-top: 4px; }
 
-/* Permission grid */
 .perm-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px;
   transition: opacity .2s;
@@ -347,7 +345,6 @@ onMounted(() => { load(); loadMods() })
 .perm-label { font-size: 12px; font-weight: 600; color: #d0d0d0; }
 .perm-desc  { font-size: 10px; color: #555; margin-top: 1px; }
 
-/* Toggle */
 .toggle {
   width: 38px; height: 20px;
   background: #111217; cursor: pointer;
@@ -364,7 +361,6 @@ onMounted(() => { load(); loadMods() })
 .toggle.on .toggle-knob { transform: translateX(18px); background: #fff; }
 .toggle.sm.on .toggle-knob { transform: translateX(14px); }
 
-/* Mod list */
 .mods-empty { font-size: 12px; color: #555; padding: 16px 0 4px; }
 .mod-list { display: flex; flex-direction: column; gap: 2px; margin-top: 14px; }
 
@@ -409,7 +405,6 @@ onMounted(() => { load(); loadMods() })
 
 .mod-chevron { font-size: 8px; color: #444; }
 
-/* Expanded perm section */
 .mod-perms { padding: 12px 14px 14px; border-top: 1px solid #222; background: #111115; }
 .mod-perms-header {
   display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;
@@ -438,7 +433,6 @@ onMounted(() => { load(); loadMods() })
 
 @media (max-width: 680px) {
   .roles-header { flex-direction: column; align-items: stretch; }
-  .save-btn { width: 100%; }
   .perm-grid { grid-template-columns: 1fr; }
   .mod-perm-grid { grid-template-columns: 1fr; }
   .master-row { flex-direction: column; }

@@ -2,43 +2,45 @@
 import { ref, computed, onMounted } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
+import { useI18n } from '../i18n'
 
 const { session, channelRole } = useAuth()
+const { t } = useI18n()
 
 const canView   = computed(() => channelRole.value?.permissions.moderation_view   ?? false)
 const canManage = computed(() => channelRole.value?.permissions.moderation_manage ?? false)
 
-//  Types 
+// >>> Types
 interface BlockedTerm   { id: number; term: string; action: string; duration: number; is_regex: number }
 interface SpamFilter    { id: number; type: string; threshold: number; action: string; duration: number }
 interface NukeConfig    { id: number; trigger: string; duration: number; label: string; lookback: number; stay_active: number; match_exact: number; is_regex: number; expires_at: number | null }
 
-//  Tab 
+// >>> Tab
 type Tab = 'blocked' | 'spam' | 'nukes'
 const activeTab = ref<Tab>('blocked')
 
-//  Blocked Terms 
+// >>> Blocked Terms
 const blockedTerms    = ref<BlockedTerm[]>([])
 const newTerm         = ref('')
 const newTermAction   = ref<'delete' | 'timeout' | 'ban'>('delete')
 const newTermDur      = ref(300)
 const newTermIsRegex  = ref(false)
 
-//  Spam Filters 
+// >>> Spam Filters
 const spamFilters   = ref<SpamFilter[]>([])
-const SPAM_TYPES = [
-  { value: 'caps',    label: 'Caps spam',     hint: '% of message in caps' },
-  { value: 'links',   label: 'Link spam',     hint: 'links per message' },
-  { value: 'emoji',   label: 'Emoji spam',    hint: 'emojis per message' },
-  { value: 'repeat',  label: 'Repeat chars',  hint: 'same char repeated' },
-  { value: 'flood',   label: 'Message flood', hint: 'messages per 10s' },
-]
+const SPAM_TYPES = computed(() => [
+  { value: 'caps',    label: t('mod.spam.caps'),   hint: t('mod.spam.caps_hint') },
+  { value: 'links',   label: t('mod.spam.links'),  hint: t('mod.spam.links_hint') },
+  { value: 'emoji',   label: t('mod.spam.emoji'),  hint: t('mod.spam.emoji_hint') },
+  { value: 'repeat',  label: t('mod.spam.repeat'), hint: t('mod.spam.repeat_hint') },
+  { value: 'flood',   label: t('mod.spam.flood'),  hint: t('mod.spam.flood_hint') },
+])
 const newSpamType      = ref('caps')
 const newSpamThreshold = ref(70)
 const newSpamAction    = ref<'delete' | 'timeout' | 'ban'>('delete')
 const newSpamDur       = ref(300)
 
-//  Nukes 
+// >>> Nukes
 const nukes           = ref<NukeConfig[]>([])
 const newNuke         = ref('')
 const newNukeDur      = ref(600)
@@ -47,10 +49,10 @@ const newNukeLookback = ref(30)
 const newNukeStayActive = ref(false)
 const newNukeMatchExact = ref(false)
 const newNukeIsRegex    = ref(false)
-const newNukeExpiry     = ref(false)  // whether to set an expiry
-const newNukeExpiryMins = ref(60)     // minutes until auto-deactivate
+const newNukeExpiry     = ref(false)
+const newNukeExpiryMins = ref(60)
 
-//  Shared 
+// >>> Shared
 const loading = ref(false)
 const saving  = ref(false)
 const error   = ref('')
@@ -74,7 +76,7 @@ async function load() {
     if (bRes.ok) blockedTerms.value  = (await bRes.json()).items  ?? []
     if (sRes.ok) spamFilters.value   = (await sRes.json()).items  ?? []
     if (nRes.ok) nukes.value         = (await nRes.json()).items  ?? []
-  } catch { error.value = 'Could not load moderation config.' }
+  } catch { error.value = t('mod.error.load') }
   loading.value = false
 }
 
@@ -91,8 +93,8 @@ async function addBlockedTerm() {
     const data = await res.json()
     blockedTerms.value.push(data.item)
     newTerm.value = ''; newTermIsRegex.value = false
-    showSuccess('Term added.')
-  } catch { error.value = 'Could not add term.' }
+    showSuccess(t('mod.success.added'))
+  } catch { error.value = t('mod.error.add_term') }
   saving.value = false
 }
 
@@ -103,8 +105,8 @@ async function removeBlockedTerm(id: number) {
       method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
     })
     blockedTerms.value = blockedTerms.value.filter(t => t.id !== id)
-    showSuccess('Removed.')
-  } catch { error.value = 'Could not remove.' }
+    showSuccess(t('mod.success.removed'))
+  } catch { error.value = t('mod.error.remove') }
 }
 
 async function addSpamFilter() {
@@ -119,8 +121,8 @@ async function addSpamFilter() {
     if (!res.ok) throw new Error()
     const data = await res.json()
     spamFilters.value.push(data.item)
-    showSuccess('Spam filter added.')
-  } catch { error.value = 'Could not add spam filter.' }
+    showSuccess(t('mod.success.spam_added'))
+  } catch { error.value = t('mod.error.add_spam') }
   saving.value = false
 }
 
@@ -131,8 +133,8 @@ async function removeSpamFilter(id: number) {
       method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
     })
     spamFilters.value = spamFilters.value.filter(f => f.id !== id)
-    showSuccess('Removed.')
-  } catch { error.value = 'Could not remove.' }
+    showSuccess(t('mod.success.removed'))
+  } catch { error.value = t('mod.error.remove') }
 }
 
 async function addNuke() {
@@ -159,8 +161,8 @@ async function addNuke() {
     nukes.value.push(data.item)
     newNuke.value = ''; newNukeLabel.value = ''
     newNukeStayActive.value = false; newNukeMatchExact.value = false; newNukeIsRegex.value = false
-    showSuccess('Nuke created.')
-  } catch { error.value = 'Could not create nuke.' }
+    showSuccess(t('mod.success.nuke_created'))
+  } catch { error.value = t('mod.error.create_nuke') }
   saving.value = false
 }
 
@@ -174,17 +176,17 @@ async function setNukeExpiry(nuke: NukeConfig, mins: number | null) {
       body: JSON.stringify({ expires_at })
     })
     nuke.expires_at = expires_at
-    showSuccess(mins ? `Nuke expires in ${mins}m.` : 'Expiry cleared.')
-  } catch { error.value = 'Could not set expiry.' }
+    showSuccess(mins ? `${t('mod.nuke.expire_in')} ${mins} ${t('mod.nuke.min')}.` : t('mod.nuke.expiry_cleared'))
+  } catch { error.value = t('mod.error.set_expiry') }
 }
 
 function nukeExpiresIn(n: NukeConfig): string | null {
   if (!n.expires_at) return null
   const rem = n.expires_at - Date.now()
-  if (rem <= 0) return 'expired'
+  if (rem <= 0) return t('mod.nuke.expired')
   const m = Math.floor(rem / 60_000)
   const h = Math.floor(m / 60)
-  return h > 0 ? `${h}h ${m % 60}m` : `${m}m`
+  return h > 0 ? `${h}h ${m % 60}${t('mod.nuke.min')}` : `${m}${t('mod.nuke.min')}`
 }
 
 async function removeNuke(id: number) {
@@ -194,8 +196,8 @@ async function removeNuke(id: number) {
       method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
     })
     nukes.value = nukes.value.filter(n => n.id !== id)
-    showSuccess('Removed.')
-  } catch { error.value = 'Could not remove.' }
+    showSuccess(t('mod.success.removed'))
+  } catch { error.value = t('mod.error.remove') }
 }
 
 const nukeLookbackOverride = ref<Record<number, number>>({})
@@ -215,12 +217,12 @@ async function fireNuke(id: number) {
       method: 'POST', headers: { Authorization: `Bearer ${session.value.token}` }
     })
     const data = await res.json() as any
-    showSuccess(`Nuke fired! ${data.affected ?? 0} users timed out.`)
-  } catch { error.value = 'Nuke failed.' }
+    showSuccess(`${t('mod.nuke.fired')} ${data.affected ?? 0} ${t('mod.nuke.users_timed_out')}`)
+  } catch { error.value = t('mod.error.fire_nuke') }
 }
 
 function fmtDur(s: number) {
-  if (s < 60) return `${s}s`
+  if (s < 60) return `${s}${t('mod.field.secs')}`
   if (s < 3600) return `${Math.floor(s/60)}m`
   return `${Math.floor(s/3600)}h`
 }
@@ -233,53 +235,55 @@ onMounted(load)
 <template>
   <div class="mod-view">
     <div class="mod-header">
-      <div class="mod-title">Moderation</div>
-      <div class="mod-sub">Automod rules for <span class="chan">#{{ session?.channel }}</span></div>
+      <div class="mod-title">{{ t('mod.title') }}</div>
+      <div class="mod-sub">{{ t('mod.sub') }} <span class="chan">#{{ session?.channel }}</span></div>
     </div>
 
     <div v-if="error"   class="mod-error">{{ error }}</div>
     <div v-if="success" class="mod-success">{{ success }}</div>
 
     <div class="tabs">
-      <button v-for="t in (['blocked','spam','nukes'] as Tab[])" :key="t"
-        class="tab-btn" :class="{ active: activeTab === t }" @click="activeTab = t">
-        {{ t === 'blocked' ? 'Blocked Terms' : t === 'spam' ? 'Spam Filters' : 'Nukes' }}
+      <button v-for="tab in (['blocked','spam','nukes'] as Tab[])" :key="tab"
+        class="tab-btn" :class="{ active: activeTab === tab }" @click="activeTab = tab">
+        {{ tab === 'blocked' ? t('mod.tab.blocked') : tab === 'spam' ? t('mod.tab.spam') : t('mod.tab.nukes') }}
       </button>
     </div>
 
-    <div v-if="loading" class="mod-empty">Loading…</div>
+    <div v-if="loading" class="mod-empty">{{ t('mod.loading') }}</div>
 
-    <!--  Blocked Terms  -->
+    <!-- >>> Blocked Terms -->
     <template v-else-if="activeTab === 'blocked'">
       <div v-if="canManage" class="add-row">
-        <input v-model="newTerm" class="field-input flex1" :placeholder="newTermIsRegex ? 'regex pattern, e.g. bad(word|phrase)' : 'word or phrase to block'" @keydown.enter="addBlockedTerm" />
+        <input v-model="newTerm" class="field-input flex1"
+          :placeholder="newTermIsRegex ? t('mod.field.term_re') : t('mod.field.term')"
+          @keydown.enter="addBlockedTerm" />
         <label class="toggle-label">
           <input type="checkbox" v-model="newTermIsRegex" class="toggle-cb" />
           <span class="toggle-track" :class="{ on: newTermIsRegex }"><span class="toggle-thumb"></span></span>
-          <span class="toggle-text">Regex</span>
-          <span class="info-icon" title="When enabled, the term is treated as a regular expression. Use this for complex patterns like bad(word|phrase) or \bexact\b.">ⓘ</span>
+          <span class="toggle-text">{{ t('mod.nuke.regex') }}</span>
+          <span class="info-icon" :title="t('mod.nuke.regex_hint')">ⓘ</span>
         </label>
         <select v-model="newTermAction" class="field-select">
-          <option value="delete">Delete</option>
-          <option value="timeout">Timeout</option>
-          <option value="ban">Ban</option>
+          <option value="delete">{{ t('mod.action.delete') }}</option>
+          <option value="timeout">{{ t('mod.action.timeout') }}</option>
+          <option value="ban">{{ t('mod.action.ban') }}</option>
         </select>
-        <input v-if="newTermAction !== 'delete'" v-model.number="newTermDur" type="number" min="1" class="field-input dur-input" placeholder="secs" />
-        <button class="add-btn" @click="addBlockedTerm" :disabled="saving">+ Add</button>
+        <input v-if="newTermAction !== 'delete'" v-model.number="newTermDur" type="number" min="1" class="field-input dur-input" :placeholder="t('mod.field.secs')" />
+        <button class="add-btn" @click="addBlockedTerm" :disabled="saving">{{ t('mod.add') }}</button>
       </div>
-      <div v-if="!blockedTerms.length" class="mod-empty">No blocked terms yet.</div>
+      <div v-if="!blockedTerms.length" class="mod-empty">{{ t('mod.empty.blocked') }}</div>
       <div v-else class="item-list">
-        <div v-for="t in blockedTerms" :key="t.id" class="item-row">
-          <span class="item-badge regex-badge" v-if="t.is_regex">regex</span>
-          <span class="item-term">{{ t.term }}</span>
-          <span class="item-action" :style="{ color: ACTION_COLORS[t.action] }">{{ t.action }}</span>
-          <span v-if="t.action !== 'delete'" class="item-dur">{{ fmtDur(t.duration) }}</span>
-          <button v-if="canManage" class="item-del" @click="removeBlockedTerm(t.id)">✕</button>
+        <div v-for="term in blockedTerms" :key="term.id" class="item-row">
+          <span class="item-badge regex-badge" v-if="term.is_regex">{{ t('mod.badge.regex') }}</span>
+          <span class="item-term">{{ term.term }}</span>
+          <span class="item-action" :style="{ color: ACTION_COLORS[term.action] }">{{ term.action === 'delete' ? t('mod.action.delete') : term.action === 'timeout' ? t('mod.action.timeout') : t('mod.action.ban') }}</span>
+          <span v-if="term.action !== 'delete'" class="item-dur">{{ fmtDur(term.duration) }}</span>
+          <button v-if="canManage" class="item-del" @click="removeBlockedTerm(term.id)">✕</button>
         </div>
       </div>
     </template>
 
-    <!--  Spam Filters  -->
+    <!-- >>> Spam Filters -->
     <template v-else-if="activeTab === 'spam'">
       <div v-if="canManage" class="add-row">
         <select v-model="newSpamType" class="field-select flex1">
@@ -291,91 +295,90 @@ onMounted(load)
           <span class="threshold-hint">{{ SPAM_TYPES.find(s => s.value === newSpamType)?.hint }}</span>
         </div>
         <select v-model="newSpamAction" class="field-select">
-          <option value="delete">Delete</option>
-          <option value="timeout">Timeout</option>
-          <option value="ban">Ban</option>
+          <option value="delete">{{ t('mod.action.delete') }}</option>
+          <option value="timeout">{{ t('mod.action.timeout') }}</option>
+          <option value="ban">{{ t('mod.action.ban') }}</option>
         </select>
-        <input v-if="newSpamAction !== 'delete'" v-model.number="newSpamDur" type="number" min="1" class="field-input dur-input" placeholder="secs" />
-        <button class="add-btn" @click="addSpamFilter" :disabled="saving">+ Add</button>
+        <input v-if="newSpamAction !== 'delete'" v-model.number="newSpamDur" type="number" min="1" class="field-input dur-input" :placeholder="t('mod.field.secs')" />
+        <button class="add-btn" @click="addSpamFilter" :disabled="saving">{{ t('mod.add') }}</button>
       </div>
-      <div v-if="!spamFilters.length" class="mod-empty">No spam filters yet.</div>
+      <div v-if="!spamFilters.length" class="mod-empty">{{ t('mod.empty.spam') }}</div>
       <div v-else class="item-list">
         <div v-for="f in spamFilters" :key="f.id" class="item-row">
           <span class="item-term">{{ SPAM_TYPES.find(s => s.value === f.type)?.label ?? f.type }}</span>
           <span class="item-dur" style="color:#888">≥ {{ f.threshold }}</span>
-          <span class="item-action" :style="{ color: ACTION_COLORS[f.action] }">{{ f.action }}</span>
+          <span class="item-action" :style="{ color: ACTION_COLORS[f.action] }">{{ f.action === 'delete' ? t('mod.action.delete') : f.action === 'timeout' ? t('mod.action.timeout') : t('mod.action.ban') }}</span>
           <span v-if="f.action !== 'delete'" class="item-dur">{{ fmtDur(f.duration) }}</span>
           <button v-if="canManage" class="item-del" @click="removeSpamFilter(f.id)">✕</button>
         </div>
       </div>
     </template>
 
-    <!--  Nukes  -->
+    <!-- >>> Nukes -->
     <template v-else-if="activeTab === 'nukes'">
       <div class="nuke-hint">
-        A nuke watches for a trigger word in recent chat. Fire it to timeout everyone who said it.
-        <strong>Stay active</strong> nukes also auto-timeout anyone who says it going forward.
+        {{ t('mod.nuke.hint') }}
+        <strong>{{ t('mod.nuke.stay') }}</strong> — {{ t('mod.nuke.hint2') }}
       </div>
 
       <!-- Create nuke form -->
       <div v-if="canManage" class="add-row nuke-add-row">
-      <div class="nuke-inputs-top">
-      <input v-model="newNuke" class="field-input flex1"
-      :placeholder="newNukeIsRegex ? 'regex pattern, e.g. bad(spam|ad)' : 'trigger word/phrase'"
-      @keydown.enter="addNuke" />
-      <input v-model="newNukeLabel" class="field-input" style="width:120px" placeholder="label (optional)" />
-      <div class="threshold-wrap">
-      <span class="threshold-lbl">⏱ timeout</span>
-      <input v-model.number="newNukeDur" type="number" min="1" class="field-input dur-input" />
-      <span class="threshold-hint">sec</span>
-      </div>
-      <div class="threshold-wrap">
-      <span class="threshold-lbl">↩ lookback</span>
-      <input v-model.number="newNukeLookback" type="number" min="1" max="1440" class="field-input dur-input" />
-      <span class="threshold-hint">min</span>
-      </div>
-      </div>
-      <div class="nuke-toggles-row">
-      <label class="toggle-label">
-        <input type="checkbox" v-model="newNukeStayActive" class="toggle-cb" />
-      <span class="toggle-track" :class="{ on: newNukeStayActive }"><span class="toggle-thumb"></span></span>
-      <span class="toggle-text">Stay active</span>
-      <span class="info-icon" title="Auto-timeout anyone who says trigger going forward.">ⓘ</span>
-      </label>
-      <label class="toggle-label" :class="{ dimmed: newNukeIsRegex }">
-        <input type="checkbox" v-model="newNukeMatchExact" class="toggle-cb" :disabled="newNukeIsRegex" />
-        <span class="toggle-track" :class="{ on: newNukeMatchExact && !newNukeIsRegex }"><span class="toggle-thumb"></span></span>
-      <span class="toggle-text">Match exact</span>
-      <span class="info-icon" title="Only match the full message, not partial.">ⓘ</span>
-      </label>
-      <label class="toggle-label">
-        <input type="checkbox" v-model="newNukeIsRegex" class="toggle-cb" @change="newNukeIsRegex && (newNukeMatchExact = false)" />
-        <span class="toggle-track" :class="{ on: newNukeIsRegex }"><span class="toggle-thumb"></span></span>
-        <span class="toggle-text">Regex</span>
-      <span class="info-icon" title="Treat trigger as a regular expression.">ⓘ</span>
-      </label>
-      <!-- Expiry toggle -->
-      <label class="toggle-label" :class="{ dimmed: !newNukeStayActive }">
-        <input type="checkbox" v-model="newNukeExpiry" class="toggle-cb" :disabled="!newNukeStayActive" />
-        <span class="toggle-track" :class="{ on: newNukeExpiry && newNukeStayActive }"><span class="toggle-thumb"></span></span>
-          <span class="toggle-text">Auto-expire</span>
-            <span class="info-icon" title="Only applies to Stay active nukes. Automatically deactivates the nuke after the specified time.">ⓘ</span>
+        <div class="nuke-inputs-top">
+          <input v-model="newNuke" class="field-input flex1"
+            :placeholder="newNukeIsRegex ? t('mod.nuke.trigger_re_ph') : t('mod.nuke.trigger_ph')"
+            @keydown.enter="addNuke" />
+          <input v-model="newNukeLabel" class="field-input" style="width:120px" :placeholder="t('mod.nuke.label')" />
+          <div class="threshold-wrap">
+            <span class="threshold-lbl">{{ t('mod.nuke.timeout') }}</span>
+            <input v-model.number="newNukeDur" type="number" min="1" class="field-input dur-input" />
+            <span class="threshold-hint">{{ t('mod.nuke.sec') }}</span>
+          </div>
+          <div class="threshold-wrap">
+            <span class="threshold-lbl">{{ t('mod.nuke.lookback') }}</span>
+            <input v-model.number="newNukeLookback" type="number" min="1" max="1440" class="field-input dur-input" />
+            <span class="threshold-hint">{{ t('mod.nuke.min') }}</span>
+          </div>
+        </div>
+        <div class="nuke-toggles-row">
+          <label class="toggle-label">
+            <input type="checkbox" v-model="newNukeStayActive" class="toggle-cb" />
+            <span class="toggle-track" :class="{ on: newNukeStayActive }"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">{{ t('mod.nuke.stay') }}</span>
+            <span class="info-icon" :title="t('mod.nuke.stay_hint')">ⓘ</span>
+          </label>
+          <label class="toggle-label" :class="{ dimmed: newNukeIsRegex }">
+            <input type="checkbox" v-model="newNukeMatchExact" class="toggle-cb" :disabled="newNukeIsRegex" />
+            <span class="toggle-track" :class="{ on: newNukeMatchExact && !newNukeIsRegex }"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">{{ t('mod.nuke.exact') }}</span>
+            <span class="info-icon" :title="t('mod.nuke.exact_hint')">ⓘ</span>
+          </label>
+          <label class="toggle-label">
+            <input type="checkbox" v-model="newNukeIsRegex" class="toggle-cb" @change="newNukeIsRegex && (newNukeMatchExact = false)" />
+            <span class="toggle-track" :class="{ on: newNukeIsRegex }"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">{{ t('mod.nuke.regex') }}</span>
+            <span class="info-icon" :title="t('mod.nuke.regex_hint')">ⓘ</span>
+          </label>
+          <label class="toggle-label" :class="{ dimmed: !newNukeStayActive }">
+            <input type="checkbox" v-model="newNukeExpiry" class="toggle-cb" :disabled="!newNukeStayActive" />
+            <span class="toggle-track" :class="{ on: newNukeExpiry && newNukeStayActive }"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">{{ t('mod.nuke.expiry') }}</span>
+            <span class="info-icon" :title="t('mod.nuke.expiry_hint')">ⓘ</span>
           </label>
           <div v-if="newNukeExpiry && newNukeStayActive" class="threshold-wrap">
             <input v-model.number="newNukeExpiryMins" type="number" min="1" class="field-input dur-input" />
-            <span class="threshold-hint">min</span>
+            <span class="threshold-hint">{{ t('mod.nuke.min') }}</span>
           </div>
-          <button v-if="canManage" class="add-btn" @click="addNuke" :disabled="saving" style="margin-left:auto">+ Create</button>
+          <button class="add-btn" @click="addNuke" :disabled="saving" style="margin-left:auto">{{ t('mod.create') }}</button>
         </div>
       </div>
 
-      <div v-if="!nukes.length" class="mod-empty">No nukes configured.</div>
+      <div v-if="!nukes.length" class="mod-empty">{{ t('mod.empty.nukes') }}</div>
       <div v-else class="item-list">
         <div v-for="n in nukes" :key="n.id" class="item-row">
           <div class="nuke-row-badges">
-            <span v-if="n.stay_active" class="item-badge stay-badge" title="Stay active - auto-times out new messages">active</span>
-            <span v-if="n.is_regex"    class="item-badge regex-badge" title="Trigger is a regular expression">regex</span>
-            <span v-if="n.match_exact" class="item-badge exact-badge" title="Must match the entire message exactly">exact</span>
+            <span v-if="n.stay_active" class="item-badge stay-badge" :title="t('mod.nuke.stay_hint')">{{ t('mod.badge.stay') }}</span>
+            <span v-if="n.is_regex"    class="item-badge regex-badge" :title="t('mod.nuke.regex_hint')">{{ t('mod.badge.regex') }}</span>
+            <span v-if="n.match_exact" class="item-badge exact-badge" :title="t('mod.nuke.exact_hint')">{{ t('mod.badge.exact') }}</span>
           </div>
           <span class="item-label">{{ n.label }}</span>
           <span class="item-term" style="color:#555">{{ n.trigger }}</span>
@@ -385,27 +388,27 @@ onMounted(load)
             <input type="number" min="1" max="1440"
               :value="nukeLookbackOverride[n.id] ?? n.lookback ?? 30"
               @input="nukeLookbackOverride[n.id] = parseInt(($event.target as HTMLInputElement).value)"
-              class="field-input dur-input" style="width:52px" title="Minutes to look back when firing" />
-            <span class="threshold-hint">min</span>
+              class="field-input dur-input" style="width:52px" :title="t('mod.nuke.lookback')" />
+            <span class="threshold-hint">{{ t('mod.nuke.min') }}</span>
           </div>
           <!-- Expiry indicator + controls -->
           <div v-if="n.stay_active" class="expiry-wrap">
-            <span v-if="n.expires_at" class="expiry-badge" :class="{ expired: nukeExpiresIn(n) === 'expired' }">
-              {{ nukeExpiresIn(n) === 'expired' ? 'expired' : `expires ${nukeExpiresIn(n)}` }}
-              <button v-if="canManage" class="expiry-clear" @click="setNukeExpiry(n, null)" title="Clear expiry">✕</button>
+            <span v-if="n.expires_at" class="expiry-badge" :class="{ expired: nukeExpiresIn(n) === t('mod.nuke.expired') }">
+              {{ nukeExpiresIn(n) === t('mod.nuke.expired') ? t('mod.nuke.expired') : `${t('mod.nuke.expires')} ${nukeExpiresIn(n)}` }}
+              <button v-if="canManage" class="expiry-clear" @click="setNukeExpiry(n, null)" title="✕">✕</button>
             </span>
-            <select v-else-if="canManage" class="expiry-select" @change="setNukeExpiry(n, parseInt(($event.target as HTMLSelectElement).value))" title="Set auto-expiry">
-              <option value="0">set expiry…</option>
-              <option value="15">15 min</option>
-              <option value="30">30 min</option>
-              <option value="60">1 hour</option>
-              <option value="120">2 hours</option>
-              <option value="240">4 hours</option>
-              <option value="480">8 hours</option>
+            <select v-else-if="canManage" class="expiry-select" @change="setNukeExpiry(n, parseInt(($event.target as HTMLSelectElement).value))" :title="t('mod.nuke.expiry')">
+              <option value="0">{{ t('mod.nuke.set_expiry') }}</option>
+              <option value="15">{{ t('mod.nuke.expiry_15') }}</option>
+              <option value="30">{{ t('mod.nuke.expiry_30') }}</option>
+              <option value="60">{{ t('mod.nuke.expiry_1h') }}</option>
+              <option value="120">{{ t('mod.nuke.expiry_2h') }}</option>
+              <option value="240">{{ t('mod.nuke.expiry_4h') }}</option>
+              <option value="480">{{ t('mod.nuke.expiry_8h') }}</option>
             </select>
           </div>
           <button v-if="canManage" class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }" @click="fireNuke(n.id)">
-            {{ nukeConfirm === n.id ? '⚠️ Sure?' : '💣 Fire' }}
+            {{ nukeConfirm === n.id ? t('mod.nuke.sure') : t('mod.nuke.fire') }}
           </button>
           <button v-if="canManage" class="item-del" @click="removeNuke(n.id)">✕</button>
         </div>
@@ -469,7 +472,7 @@ onMounted(load)
 .add-btn:hover:not(:disabled) { background: #7f3fff; }
 .add-btn:disabled { opacity: .4; cursor: default; }
 
-/*  Toggle switch  */
+/* >>> Toggle switch */
 .toggle-label {
   display: flex; align-items: center; gap: 6px;
   cursor: pointer; user-select: none; flex-shrink: 0;
@@ -489,13 +492,10 @@ onMounted(load)
 }
 .toggle-track.on .toggle-thumb { left: 16px; background: #9d6cff; }
 .toggle-text { font-size: 11px; color: #888; font-weight: 600; }
-.info-icon {
-  font-size: 11px; color: #444; cursor: help;
-  transition: color .15s;
-}
+.info-icon { font-size: 11px; color: #444; cursor: help; transition: color .15s; }
 .info-icon:hover { color: #9d6cff; }
 
-/*  Item list  */
+/* >>> Item list */
 .item-list { display: flex; flex-direction: column; gap: 1px; }
 .item-row {
   display: flex; align-items: center; gap: 10px;
@@ -510,7 +510,7 @@ onMounted(load)
 .item-del    { margin-left: auto; background: transparent; border: 1px solid #f1494933; color: #f14949; font-size: 11px; padding: 2px 7px; cursor: pointer; }
 .item-del:hover { background: rgba(241,73,73,.1); }
 
-/*  Badges  */
+/* >>> Badges */
 .item-badge {
   font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
   padding: 1px 5px; border-radius: 2px; flex-shrink: 0;
@@ -520,7 +520,7 @@ onMounted(load)
 .exact-badge { color: #e5c07b; background: rgba(229,192,123,.12); border: 1px solid rgba(229,192,123,.3); }
 .nuke-row-badges { display: flex; gap: 4px; align-items: center; }
 
-/*  Nuke fire button  */
+/* >>> Nuke fire button */
 .nuke-fire-btn { height: 28px; padding: 0 12px; background: rgba(241,73,73,.15); border: 1px solid #f1494966; color: #f14949; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; margin-left: auto; transition: background .15s, border-color .15s; }
 .nuke-fire-btn:hover { background: rgba(241,73,73,.3); }
 .nuke-fire-btn.confirm { background: rgba(241,73,73,.35); border-color: #f14949; animation: pulse-red .6s infinite alternate; }

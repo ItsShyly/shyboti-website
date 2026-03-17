@@ -2,15 +2,17 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
+import { useI18n } from '../i18n'
 import { highlightScript } from '../composables/scriptHighlight'
 
 const { session, availableChannels, channelRole } = useAuth()
+const { t } = useI18n()
 
 const canToggle = computed(() => channelRole.value?.permissions.automations_toggle ?? false)
 const canEdit   = computed(() => channelRole.value?.permissions.automations_edit   ?? false)
 const canDelete = computed(() => channelRole.value?.permissions.automations_delete ?? false)
 
-const REF_GROUPS = [
+const REF_GROUPS = computed(() => [
   { label: 'Channel', items: [
     { token: '$channel.name',    desc: 'Channel login name' },
     { token: '$channel.title',   desc: 'Stream title' },
@@ -51,7 +53,7 @@ const REF_GROUPS = [
     { token: '$calc(expr)',        desc: 'Math expression e.g. $calc(2+2)' },
     { token: '$http.get(url)',     desc: 'GET request, returns text' },
   ]},
-]
+])
 
 interface Timer {
   id: number; name: string; response: string
@@ -66,7 +68,7 @@ const saving  = ref<string | null>(null)
 const error   = ref('')
 const success = ref('')
 
-// Edit panel
+// >>> Edit panel
 const editOpen = ref(false)
 const editTimer = ref<Partial<Timer> & { name: string }>({
   name: '', response: '', interval_sec: 300, min_messages: 0,
@@ -107,12 +109,12 @@ function openNew() {
   }, 50)
 }
 
-function openEdit(t: Timer) {
+function openEdit(timer: Timer) {
   isNew.value = false
-  editTimer.value = { ...t }
+  editTimer.value = { ...timer }
   editOpen.value = true
   setTimeout(() => {
-    if (editorRef.value) { editorRef.value.innerText = t.response; applyHL() }
+    if (editorRef.value) { editorRef.value.innerText = timer.response; applyHL() }
   }, 50)
 }
 
@@ -126,7 +128,6 @@ function applyHL() {
     offset = pre.toString().length
   }
   el.innerHTML = highlightScript(el.innerText.replace(/\n$/, ''))
-  // restore caret
   let rem = offset, placed = false
   function walk(node: Node) {
     if (placed) return
@@ -159,7 +160,7 @@ async function saveTimer() {
       body: JSON.stringify(editTimer.value),
     })
     if (!res.ok) throw new Error(await res.text())
-    showSuccess('Timer saved!')
+    showSuccess(t('timer.save') + '!')
     editOpen.value = false
     load()
   } catch (e: any) { error.value = 'Could not save timer: ' + (e?.message ?? e) }
@@ -173,24 +174,24 @@ async function deleteTimer(name: string) {
     await fetch(`${API}/timers/${session.value.channel}/${name}`, {
       method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
     })
-    timers.value = timers.value.filter(t => t.name !== name)
+    timers.value = timers.value.filter(timer => timer.name !== name)
     if (editOpen.value && editTimer.value.name === name) editOpen.value = false
   } catch { error.value = 'Could not delete timer.' }
   saving.value = null
 }
 
-async function toggleActive(t: Timer) {
+async function toggleActive(timer: Timer) {
   if (!session.value) return
-  const next = t.is_active ? 0 : 1
-  await fetch(`${API}/timers/${session.value.channel}/${t.name}`, {
+  const next = timer.is_active ? 0 : 1
+  await fetch(`${API}/timers/${session.value.channel}/${timer.name}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
     body: JSON.stringify({ is_active: next }),
   })
-  t.is_active = next
+  timer.is_active = next
 }
 
-//  Share 
+// >>> Share
 const shareOpen    = ref(false)
 const shareTimer   = ref('')
 const shareTarget  = ref('')
@@ -218,7 +219,7 @@ async function doShare() {
   shareSaving.value = false
 }
 
-//  Sync 
+// >>> Sync
 const syncConf    = ref<{ sync_from: string; is_active: number; last_synced: number } | null>(null)
 const syncOpen    = ref(false)
 const syncFrom    = ref('')
@@ -247,7 +248,6 @@ async function saveSync() {
       body: JSON.stringify({ sync_from: syncFrom.value, is_active: true }),
     })
     await fetchSync()
-    // Auto-pull immediately on enable/update
     await runSync()
   } catch { syncMsg.value = 'Failed to save.' }
   syncSaving.value = false
@@ -289,60 +289,60 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
     <div class="view-header">
       <div class="view-header-left">
         <div>
-          <div class="view-title">Timers</div>
-          <div class="view-sub">Automated messages on an interval for #{{ session?.channel }}</div>
-          <button v-if="syncConf?.is_active" class="sync-indicator" @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from}`">
-            <span class="sync-dot"></span>synced from #{{ syncConf.sync_from }}
+          <div class="view-title">{{ t('timer.title') }}</div>
+          <div class="view-sub">{{ t('timer.sub') }} #{{ session?.channel }}</div>
+          <button v-if="syncConf?.is_active" class="sync-indicator" @click="syncOpen = !syncOpen" :title="`${t('timer.sync.active')} #${syncConf.sync_from}`">
+            <span class="sync-dot"></span>{{ t('timer.sync.active') }} #{{ syncConf.sync_from }}
             <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
           </button>
-          <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">↻ Sync from channel... <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span></button>
+          <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">{{ t('timer.sync.config') }} <span class="sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span></button>
         </div>
       </div>
-      <button class="btn-new" @click="canEdit && openNew()" :disabled="!canEdit" :class="{ 'btn-new-disabled': !canEdit }">+ New timer</button>
+      <button class="btn-new" @click="canEdit && openNew()" :disabled="!canEdit" :class="{ 'btn-new-disabled': !canEdit }">{{ t('timer.new') }}</button>
     </div>
 
     <!-- Sync panel -->
     <div v-if="syncOpen" class="sync-panel">
       <div class="sync-row">
         <select v-model="syncFrom" class="field-select-sm">
-          <option value="">{{ syncConf?.is_active ? 'Change source…' : 'Select channel…' }}</option>
+          <option value="">{{ syncConf?.is_active ? t('timer.sync.change') : t('timer.sync.select') }}</option>
           <option v-for="ch in availableChannels.filter(c => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
         </select>
-        <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">{{ syncSaving ? '…' : syncConf?.is_active ? 'Update' : 'Enable' }}</button>
-        <button v-if="syncConf?.is_active" class="sync-stop-btn" @click="stopSync">Stop</button>
+        <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">{{ syncSaving ? '…' : syncConf?.is_active ? t('timer.sync.update') : t('timer.sync.enable') }}</button>
+        <button v-if="syncConf?.is_active" class="sync-stop-btn" @click="stopSync">{{ t('timer.sync.stop') }}</button>
       </div>
-      <div v-if="syncConf?.last_synced" class="sync-last">Last pull: {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
+      <div v-if="syncConf?.last_synced" class="sync-last">{{ t('timer.sync.last') }} {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
       <div v-if="syncMsg" class="sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{ syncMsg }}</div>
     </div>
 
     <div v-if="success" class="toast success">{{ success }}</div>
     <div v-if="error"   class="toast error">{{ error }}</div>
 
-    <div v-if="loading" class="empty">Loading…</div>
-    <div v-else-if="!timers.length" class="empty">No timers yet. Create one to get started.</div>
+    <div v-if="loading" class="empty">{{ t('timer.loading') }}</div>
+    <div v-else-if="!timers.length" class="empty">{{ t('timer.empty') }}</div>
 
     <div v-else class="timer-list">
-      <div v-for="t in timers" :key="t.id" class="timer-row" :class="{ inactive: !t.is_active }">
+      <div v-for="timer in timers" :key="timer.id" class="timer-row" :class="{ inactive: !timer.is_active }">
         <div class="timer-toggle-wrap">
-          <button class="toggle-btn" :class="{ on: t.is_active, 'toggle-disabled': !canToggle }" @click="canToggle && toggleActive(t)" :title="t.is_active ? 'Disable' : 'Enable'">
+          <button class="toggle-btn" :class="{ on: timer.is_active, 'toggle-disabled': !canToggle }" @click="canToggle && toggleActive(timer)" :title="timer.is_active ? 'Disable' : 'Enable'">
             <span class="toggle-knob"></span>
           </button>
         </div>
-        <div class="timer-info" @click="openEdit(t)">
-          <div class="timer-name">{{ t.name }}</div>
+        <div class="timer-info" @click="openEdit(timer)">
+          <div class="timer-name">{{ timer.name }}</div>
           <div class="timer-meta">
-            <span class="meta-pill interval">⏱ {{ fmtInterval(t.interval_sec) }}</span>
-            <span v-if="t.min_messages" class="meta-pill msgs">💬 {{ t.min_messages }}+ msgs</span>
-            <span v-if="t.enabled_when !== 'always'" class="meta-pill when">{{ t.enabled_when }}</span>
-            <span v-if="t.required_game" class="meta-pill game">🎮 {{ t.required_game }}</span>
-            <span v-if="t.condition" class="meta-pill cond">if …</span>
+            <span class="meta-pill interval">⏱ {{ fmtInterval(timer.interval_sec) }}</span>
+            <span v-if="timer.min_messages" class="meta-pill msgs">💬 {{ timer.min_messages }}+ msgs</span>
+            <span v-if="timer.enabled_when !== 'always'" class="meta-pill when">{{ timer.enabled_when }}</span>
+            <span v-if="timer.required_game" class="meta-pill game">🎮 {{ timer.required_game }}</span>
+            <span v-if="timer.condition" class="meta-pill cond">if …</span>
           </div>
-          <div class="timer-response">{{ t.response.slice(0, 80) }}{{ t.response.length > 80 ? '…' : '' }}</div>
+          <div class="timer-response">{{ timer.response.slice(0, 80) }}{{ timer.response.length > 80 ? '…' : '' }}</div>
         </div>
         <div class="row-actions">
-          <button class="btn-action edit" @click.stop="canEdit && openEdit(t)" :class="{ 'btn-action-disabled': !canEdit }">{{ canEdit ? 'Edit' : 'View' }}</button>
-          <button class="btn-action share" @click.stop="openShare(t.name)" title="Copy to another channel">↪</button>
-          <button v-if="canDelete" class="btn-action del" @click.stop="deleteTimer(t.name)" :disabled="saving === t.name">✕</button>
+          <button class="btn-action edit" @click.stop="canEdit && openEdit(timer)" :class="{ 'btn-action-disabled': !canEdit }">{{ canEdit ? t('timer.edit') : t('timer.view') }}</button>
+          <button class="btn-action share" @click.stop="openShare(timer.name)" :title="t('timer.share')">↪</button>
+          <button v-if="canDelete" class="btn-action del" @click.stop="deleteTimer(timer.name)" :disabled="saving === timer.name">✕</button>
         </div>
       </div>
     </div>
@@ -353,7 +353,7 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
         <div class="panel">
           <div class="panel-header">
             <div>
-              <div class="panel-title">{{ isNew ? 'New timer' : `Edit · ${editTimer.name}` }}</div>
+              <div class="panel-title">{{ isNew ? t('timer.edit_new') : `${t('timer.edit_title')} ${editTimer.name}` }}</div>
               <div class="panel-sub">#{{ session?.channel }}</div>
             </div>
             <button class="panel-close" @click="editOpen = false">✕</button>
@@ -361,12 +361,12 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
 
           <div class="panel-body">
             <div class="field-group">
-              <label class="field-label">Name <span class="field-hint">lowercase, no spaces</span></label>
+              <label class="field-label">{{ t('timer.field.name') }} <span class="field-hint">{{ t('timer.field.name_hint') }}</span></label>
               <input v-model="editTimer.name" class="field-input" :disabled="!isNew" placeholder="welcome" />
             </div>
 
             <div class="field-group">
-              <label class="field-label">Response <span class="field-hint">supports $variables</span></label>
+              <label class="field-label">{{ t('timer.field.response') }} <span class="field-hint">{{ t('timer.field.resp_hint') }}</span></label>
               <div
                 ref="editorRef"
                 class="script-editor"
@@ -376,7 +376,7 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
                 @input="onEditorInput"
               ></div>
               <details class="ref-panel">
-                <summary class="ref-summary">Variable reference</summary>
+                <summary class="ref-summary">{{ t('edit.var_ref') }}</summary>
                 <div class="ref-content">
                   <div v-for="g in REF_GROUPS" :key="g.label" class="ref-group">
                     <div class="ref-group-label">{{ g.label }}</div>
@@ -391,45 +391,45 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
 
             <div class="row-2">
               <div class="field-group">
-                <label class="field-label">Interval</label>
+                <label class="field-label">{{ t('timer.field.interval') }}</label>
                 <div class="interval-row">
                   <input v-model.number="editTimer.interval_sec" type="number" min="30" class="field-input" />
-                  <span class="field-hint">seconds · {{ fmtInterval(editTimer.interval_sec ?? 300) }}</span>
+                  <span class="field-hint">{{ t('timer.field.interval_hint') }} · {{ fmtInterval(editTimer.interval_sec ?? 300) }}</span>
                 </div>
               </div>
               <div class="field-group">
-                <label class="field-label">Min messages <span class="field-hint">per interval</span></label>
+                <label class="field-label">{{ t('timer.field.min_msgs') }} <span class="field-hint">{{ t('timer.field.min_msgs_hint') }}</span></label>
                 <input v-model.number="editTimer.min_messages" type="number" min="0" class="field-input" />
               </div>
             </div>
 
             <div class="row-3">
               <div class="field-group">
-                <label class="field-label">Active when</label>
+                <label class="field-label">{{ t('timer.field.active_when') }}</label>
                 <select v-model="editTimer.enabled_when" class="field-select">
-                  <option value="always">Always</option>
-                  <option value="online">Online only</option>
-                  <option value="offline">Offline only</option>
+                  <option value="always">{{ t('timer.when.always') }}</option>
+                  <option value="online">{{ t('timer.when.online') }}</option>
+                  <option value="offline">{{ t('timer.when.offline') }}</option>
                 </select>
               </div>
               <div class="field-group">
-                <label class="field-label">Required game <span class="field-hint">optional</span></label>
+                <label class="field-label">{{ t('timer.field.game') }} <span class="field-hint">{{ t('timer.field.game_hint') }}</span></label>
                 <input v-model="editTimer.required_game" class="field-input" placeholder="Just Chatting" />
               </div>
             </div>
 
             <div class="field-group">
-              <label class="field-label">Condition <span class="field-hint">optional · $variable expression</span></label>
+              <label class="field-label">{{ t('timer.field.condition') }} <span class="field-hint">{{ t('timer.field.cond_hint') }}</span></label>
               <input v-model="editTimer.condition" class="field-input mono" placeholder="$channel.viewers > 10" />
             </div>
 
             <div class="panel-footer">
-              <button v-if="!isNew && canDelete" class="btn-delete" @click="deleteTimer(editTimer.name); editOpen = false">Delete</button>
+              <button v-if="!isNew && canDelete" class="btn-delete" @click="deleteTimer(editTimer.name); editOpen = false">{{ t('timer.delete') }}</button>
               <div v-else></div>
               <div class="footer-right">
-                <button class="btn-cancel" @click="editOpen = false">Cancel</button>
+                <button class="btn-cancel" @click="editOpen = false">{{ t('timer.cancel') }}</button>
                 <button class="btn-save" @click="saveTimer" :disabled="!!saving || !editTimer.name || !editTimer.response">
-                  {{ saving ? 'Saving…' : 'Save timer' }}
+                  {{ saving ? t('timer.saving') : t('timer.save') }}
                 </button>
               </div>
             </div>
@@ -442,17 +442,17 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
   <Teleport to="body">
     <div v-if="shareOpen" class="modal-overlay" @click.self="shareOpen = false">
       <div class="modal">
-        <div class="modal-title">Share timer <span class="modal-name">{{ shareTimer }}</span></div>
-        <div class="modal-sub">Copy this timer to another channel you have access to.</div>
+        <div class="modal-title">{{ t('timer.share.title') }} <span class="modal-name">{{ shareTimer }}</span></div>
+        <div class="modal-sub">{{ t('timer.share.sub') }}</div>
         <select v-model="shareTarget" class="field-select-sm" style="width:100%;margin-top:12px">
-          <option value="">Select target channel…</option>
+          <option value="">{{ t('timer.share.select') }}</option>
           <option v-for="ch in availableChannels.filter(c => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
         </select>
         <div v-if="shareError"   class="modal-msg err">{{ shareError }}</div>
         <div v-if="shareSuccess" class="modal-msg ok">{{ shareSuccess }}</div>
         <div class="modal-footer">
-          <button class="btn-cancel" @click="shareOpen = false">Cancel</button>
-          <button class="btn-save" @click="doShare" :disabled="shareSaving || !shareTarget">{{ shareSaving ? 'Copying…' : 'Copy timer' }}</button>
+          <button class="btn-cancel" @click="shareOpen = false">{{ t('timer.cancel') }}</button>
+          <button class="btn-save" @click="doShare" :disabled="shareSaving || !shareTarget">{{ shareSaving ? t('timer.share.copying') : t('timer.share.btn') }}</button>
         </div>
       </div>
     </div>
@@ -483,9 +483,6 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
 .sync-save-btn { height: 32px; padding: 0 12px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
 .sync-save-btn:hover:not(:disabled) { background: #7f3fff; }
 .sync-save-btn:disabled { opacity: .4; cursor: not-allowed; }
-.sync-run-btn { height: 32px; padding: 0 12px; border: 1px solid #23d18b44; background: rgba(35,209,139,.08); color: #23d18b; font-family: inherit; font-size: 11px; cursor: pointer; }
-.sync-run-btn:hover:not(:disabled) { background: rgba(35,209,139,.2); }
-.sync-run-btn:disabled { opacity: .4; cursor: not-allowed; }
 .sync-stop-btn { height: 28px; padding: 0 8px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 11px; cursor: pointer; }
 .sync-stop-btn:hover { background: rgba(241,73,73,.1); }
 
@@ -559,7 +556,6 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
 .btn-action.del:hover { background: #f1494911; }
 .btn-action:disabled { opacity: .4; cursor: not-allowed; }
 
-/* Panel */
 .panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: flex-start; justify-content: flex-end; z-index: 1000; }
 .panel { width: 560px; max-width: 100vw; height: 100vh; background: #1a1a1e; border-left: 1px solid #2a2a30; display: flex; flex-direction: column; overflow: hidden; animation: slideIn .2s ease; }
 @keyframes slideIn { from { transform: translateX(40px); opacity: 0 } to { transform: none; opacity: 1 } }

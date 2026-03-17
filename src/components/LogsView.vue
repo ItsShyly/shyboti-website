@@ -2,8 +2,10 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
+import { useI18n } from '../i18n'
 
 const { session } = useAuth()
+const { t } = useI18n()
 
 interface LogMsg {
   id: string; text: string; username: string; displayName: string
@@ -11,6 +13,7 @@ interface LogMsg {
 }
 interface EmoteMap { [name: string]: string }
 
+// >>> Local input state (not reactive to msgs, avoids lag)
 const channel    = ref('')
 const userFilter = ref('')
 const termFilter = ref('')
@@ -26,7 +29,7 @@ const emoteMap    = ref<EmoteMap>({})
 const bodyRef     = ref<HTMLDivElement | null>(null)
 const highlightId = ref<string | null>(null)
 const copyToast     = ref(false)
-const searchExpanded = ref(true)  // <<< mobile: collapse search after first search
+const searchExpanded = ref(true)
 
 let cursorDate:  Date | null = null
 let cursorMonth: { y: number; m: number } | null = null
@@ -69,9 +72,7 @@ function readHashId(): string | null {
   return m ? m[1]! : null
 }
 
-// >>> Longest name width
-// nameColWidth: recalculate only when msgs changes, stored in a plain ref
-// so typing in input fields never triggers re-evaluation of 10k+ entries.
+// >>> nameColWidth: computed only when msgs changes, never on input typing
 const nameColWidth = ref(140)
 watch(msgs, (list: LogMsg[]) => {
   if (!list.length) { nameColWidth.value = 140; return }
@@ -94,7 +95,6 @@ async function fetchEmotes(ch: string) {
   }
 }
 
-// >>> Fetch one day (channel mode)
 async function fetchDay(ch: string, y: number, m: number, d: number, signal: AbortSignal): Promise<LogMsg[]> {
   const mm  = String(m).padStart(2, '0')
   const dd  = String(d).padStart(2, '0')
@@ -105,13 +105,12 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
   const data = await res.json() as any
   let messages: LogMsg[] = data?.messages ?? []
   if (termFilter.value.trim()) {
-    const t = termFilter.value.trim().toLowerCase()
-    messages = messages.filter(m => m.text.toLowerCase().includes(t))
+    const term = termFilter.value.trim().toLowerCase()
+    messages = messages.filter(m => m.text.toLowerCase().includes(term))
   }
   return messages
 }
 
-// >>> Fetch one month (user mode)
 async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal): Promise<LogMsg[]> {
   const mm  = String(m).padStart(2, '0')
   const u   = userFilter.value.trim().toLowerCase()
@@ -121,8 +120,8 @@ async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal)
   const data = await res.json() as any
   let messages: LogMsg[] = data?.messages ?? []
   if (termFilter.value.trim()) {
-    const t = termFilter.value.trim().toLowerCase()
-    messages = messages.filter(m => m.text.toLowerCase().includes(t))
+    const term = termFilter.value.trim().toLowerCase()
+    messages = messages.filter(m => m.text.toLowerCase().includes(term))
   }
   return messages
 }
@@ -134,7 +133,6 @@ function prevMonth(ym: { y: number; m: number }): { y: number; m: number } {
   return ym.m === 1 ? { y: ym.y - 1, m: 12 } : { y: ym.y, m: ym.m - 1 }
 }
 
-// >>> Prepend messages while keeping scroll position stable
 async function prependMsgs(newMsgs: LogMsg[]) {
   const body   = bodyRef.value
   const prevST = body?.scrollTop ?? 0
@@ -144,8 +142,6 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
 
-// >>> Load one older chunk on scroll
-// >>> Channel-only → one day at a time. User set → one month at a time.
 async function loadOlder() {
   if (loadingMore.value || noMore.value) return
   const ch     = channel.value.trim().toLowerCase().replace(/^#/, '')
@@ -162,7 +158,7 @@ async function loadOlder() {
       const newMsgs = await fetchMonth(ch, cur.y, cur.m, signal)
       if (signal.aborted) { loadingMore.value = false; return }
       if (newMsgs.length > 0) await prependMsgs(newMsgs)
-      else { loadingMore.value = false; return loadOlder() }  // <<< skip empty month
+      else { loadingMore.value = false; return loadOlder() }
     } catch {}
     loadingMore.value = false
   } else {
@@ -175,13 +171,12 @@ async function loadOlder() {
       const newMsgs = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)
       if (signal.aborted) { loadingMore.value = false; return }
       if (newMsgs.length > 0) await prependMsgs(newMsgs)
-      else { loadingMore.value = false; return loadOlder() }  // skip empty day
+      else { loadingMore.value = false; return loadOlder() }
     } catch {}
     loadingMore.value = false
   }
 }
 
-// >>> Walk backwards until targetId is found in msgs
 async function loadUntilMsg(targetId: string): Promise<boolean> {
   const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2)
   const ch     = channel.value.trim().toLowerCase().replace(/^#/, '')
@@ -231,7 +226,6 @@ function detachScrollListeners() {
 async function search() {
   if (!channel.value.trim()) { error.value = 'Channel is required.'; return }
 
-  // >>> Read hash BEFORE pushSearchUrl strips it
   const hashId = readHashId()
   pushSearchUrl()
 
@@ -248,7 +242,6 @@ async function search() {
   const isUser  = !!userFilter.value.trim()
 
   if (dateFilter.value) {
-    // >>> Specific date - just load that single day/month, no scroll-back
     const [y, m, d] = dateFilter.value.split('-').map(Number)
     try {
       msgs.value = isUser
@@ -261,7 +254,6 @@ async function search() {
   }
 
   if (isUser) {
-    // >>> User mode: load current month first
     const y = today.getFullYear(), m = today.getMonth() + 1
     try { msgs.value = await fetchMonth(ch, y, m, abortCtrl.signal) } catch {}
     cursorMonth = prevMonth({ y, m })
@@ -278,7 +270,6 @@ async function search() {
       scrollToBottom()
     }
   } else {
-    // >>> Channel mode: load today first
     try { msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal) } catch {}
     cursorDate = prevDay(today)
     loading.value = false
@@ -297,7 +288,6 @@ async function search() {
 
   await nextTick()
   attachScrollListener()
-  // >>> If content doesn't fill the container, auto-load older days until it does
   await autoFillIfShort()
 }
 
@@ -317,7 +307,6 @@ function scrollToBottom() {
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
-  // >>> Poll until the element exists in the DOM (msgs may still be rendering)
   const deadline = Date.now() + 3000
   let el: HTMLElement | null = null
   while (Date.now() < deadline) {
@@ -377,6 +366,7 @@ type DisplayItem =
   | { kind: 'day';  label: string }
   | { kind: 'msg';  msg: LogMsg }
 
+// >>> displayItems only recomputes when msgs changes, NOT when filter inputs change
 const displayItems = computed<DisplayItem[]>(() => {
   const items: DisplayItem[] = []
   let lastDay = ''
@@ -417,8 +407,8 @@ function esc(s: string) {
 <template>
   <div class="logs-view">
     <div class="logs-header">
-      <div class="logs-title">Logs</div>
-      <div class="logs-sub">Search chat history via Spanix</div>
+      <div class="logs-title">{{ t('logs.title') }}</div>
+      <div class="logs-sub">{{ t('logs.sub') }}</div>
     </div>
 
     <!-- Mobile: collapsed summary bar -->
@@ -432,25 +422,58 @@ function esc(s: string) {
       <span class="summary-chevron">{{ searchExpanded ? '▲' : '▼' }}</span>
     </div>
 
+    <!-- >>> Search fields use lazy updates (no v-model on reactive computeds)
+         Each input uses :value + @change to avoid triggering Vue reactivity on every keystroke,
+         which would otherwise cause lag when msgs array is large. -->
     <div class="search-bar" :class="{ 'search-bar-collapsed': !searchExpanded }">
       <div class="field-wrap">
-        <label class="field-lbl">Channel</label>
-        <input v-model="channel" class="field-input" placeholder="channelname" @keydown.enter="search" />
+        <label class="field-lbl">{{ t('logs.field.channel') }}</label>
+        <input
+          :value="channel"
+          @input="channel = ($event.target as HTMLInputElement).value"
+          class="field-input"
+          placeholder="channelname"
+          @keydown.enter="search"
+          autocomplete="off"
+          spellcheck="false"
+        />
       </div>
       <div class="field-wrap">
-        <label class="field-lbl">User <span class="opt">optional</span></label>
-        <input v-model="userFilter" class="field-input" placeholder="username" @keydown.enter="search" />
+        <label class="field-lbl">{{ t('logs.field.user') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
+        <input
+          :value="userFilter"
+          @input="userFilter = ($event.target as HTMLInputElement).value"
+          class="field-input"
+          placeholder="username"
+          @keydown.enter="search"
+          autocomplete="off"
+          spellcheck="false"
+        />
       </div>
       <div class="field-wrap">
-        <label class="field-lbl">Term <span class="opt">optional</span></label>
-        <input v-model="termFilter" class="field-input" placeholder="search term" @keydown.enter="search" />
+        <label class="field-lbl">{{ t('logs.field.term') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
+        <input
+          :value="termFilter"
+          @input="termFilter = ($event.target as HTMLInputElement).value"
+          class="field-input"
+          placeholder="search term"
+          @keydown.enter="search"
+          autocomplete="off"
+          spellcheck="false"
+        />
       </div>
       <div class="field-wrap">
-        <label class="field-lbl">Date <span class="opt">optional</span></label>
-        <input v-model="dateFilter" class="field-input date-input" type="date" @keydown.enter="search" />
+        <label class="field-lbl">{{ t('logs.field.date') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
+        <input
+          :value="dateFilter"
+          @input="dateFilter = ($event.target as HTMLInputElement).value"
+          class="field-input date-input"
+          type="date"
+          @keydown.enter="search"
+        />
       </div>
       <button class="search-btn" @click="search" :disabled="loading">
-        {{ loading ? '…' : 'Search' }}
+        {{ loading ? '…' : t('logs.search') }}
       </button>
     </div>
 
@@ -458,24 +481,24 @@ function esc(s: string) {
 
     <!-- Copy toast -->
     <transition name="toast-fade">
-      <div v-if="copyToast" class="copy-toast">✓ Copied to clipboard</div>
+      <div v-if="copyToast" class="copy-toast">{{ t('logs.copied') }}</div>
     </transition>
 
-    <div v-if="!searched && !loading" class="logs-empty">Enter a channel and press Search.</div>
-    <div v-else-if="loading" class="logs-empty">Searching…</div>
-    <div v-else-if="searched && !msgs.length && !loadingMore" class="logs-empty">No messages found.</div>
+    <div v-if="!searched && !loading" class="logs-empty">{{ t('logs.empty') }}</div>
+    <div v-else-if="loading" class="logs-empty">{{ t('logs.searching') }}</div>
+    <div v-else-if="searched && !msgs.length && !loadingMore" class="logs-empty">{{ t('logs.no_results') }}</div>
 
     <div v-else-if="searched" class="logs-results">
-      <div class="logs-count">{{ msgs.length.toLocaleString() }} messages loaded</div>
+      <div class="logs-count">{{ msgs.length.toLocaleString() }} {{ t('logs.count') }}</div>
       <div class="logs-table">
         <div class="logs-thead">
-          <div>Time</div><div>User</div><div>Message</div>
+          <div>{{ t('logs.col.time') }}</div><div>{{ t('logs.col.user') }}</div><div>{{ t('logs.col.msg') }}</div>
         </div>
         <div class="logs-tbody" ref="bodyRef">
           <div class="top-loader" :class="{ visible: loadingMore }">
-            <span class="spinner">⟳</span> Loading older messages…
+            <span class="spinner">⟳</span> {{ t('logs.load_older') }}
           </div>
-          <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">↑ No older logs</div>
+          <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
 
           <template v-for="item in displayItems" :key="item.kind === 'day' ? 'day-' + item.label : item.msg.id">
             <!-- Day separator -->
@@ -488,13 +511,12 @@ function esc(s: string) {
               v-memo="[item.msg.id, highlightId === item.msg.id]"
               class="log-row"
               :class="{ highlighted: highlightId === item.msg.id }"
-
             >
               <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
               <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
               <div class="log-user" :style="{ color: userColor(item.msg) }">{{ item.msg.displayName || item.msg.username }}</div>
               <div class="log-msg" v-html="renderMsg(item.msg.text)"></div>
-              <div class="log-share" @click="shareMsg(item.msg)" title="Copy link to this message">
+              <div class="log-share" @click="shareMsg(item.msg)" title="Copy link">
                 <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M10 2L14 6L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                   <path d="M14 6H6C4.34 6 3 7.34 3 9V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -529,7 +551,6 @@ function esc(s: string) {
 .logs-empty  { color: #444; font-size: 13px; padding: 40px; text-align: center; }
 .logs-count  { font-size: 11px; color: #555; padding: 0 2px 4px; flex-shrink: 0; }
 
-/* Copy toast */
 .copy-toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
   background: #1e2a1e; border: 1px solid #23d18b55; color: #23d18b;
@@ -569,8 +590,8 @@ function esc(s: string) {
 }
 
 .log-time       { color: #444; font-size: 11px; flex-shrink: 0; margin-right: 10px; }
-.log-time-short { display: none; } /* shown only on mobile */
-.log-day-sep    { display: none; } /* shown only on mobile */
+.log-time-short { display: none; }
+.log-day-sep    { display: none; }
 .log-user { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
 .log-user::after { content: ':'; color: #555; margin-right: 5px; }
 .log-msg  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
@@ -586,20 +607,17 @@ function esc(s: string) {
 
 :deep(.chat-emote) { height: 28px; vertical-align: middle; display: inline-block; margin: 0 1px; }
 
-/* >>> Mobile summary bar (hidden on desktop) */
 .search-summary { display: none; }
 
 @media (max-width: 680px) {
-  /* Fixed-height layout - page does NOT scroll, only .logs-tbody scrolls */
   .logs-view {
-    height: calc(100vh - 52px); /* full viewport minus topbar */
+    height: calc(100vh - 52px);
     overflow: hidden;
     gap: 0;
   }
   .logs-header { padding: 10px 14px 6px; flex-shrink: 0; }
   .logs-title  { font-size: 15px; margin-bottom: 2px; }
 
-  /* Summary bar: always visible, tap to expand/collapse search */
   .search-summary {
     display: flex; align-items: center; justify-content: space-between;
     padding: 7px 14px; background: #141418; border-bottom: 1px solid #1e1e24;
@@ -610,7 +628,6 @@ function esc(s: string) {
   .summary-tag   { color: #888; background: #1e1e24; padding: 1px 6px; }
   .summary-chevron { font-size: 9px; color: #555; flex-shrink: 0; }
 
-  /* Search bar: expand/collapse */
   .search-bar {
     flex-direction: column; align-items: stretch; gap: 8px;
     padding: 10px 14px; flex-shrink: 0;
@@ -622,13 +639,11 @@ function esc(s: string) {
   .date-input  { width: 100% !important; }
   .search-btn  { width: 100%; }
 
-  /* Results take all remaining space, tbody scrolls */
   .logs-results { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .logs-table   { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .logs-thead   { display: none !important; }
   .logs-tbody   { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
-  /* Day separator */
   .log-day-sep {
     display: block;
     padding: 6px 12px 3px;
@@ -639,7 +654,6 @@ function esc(s: string) {
     position: sticky; top: 0; z-index: 1;
   }
 
-  /* Rows: HH:MM Username: message (Chatterino style) */
   .log-row {
     display: flex !important;
     flex-wrap: nowrap;
@@ -648,7 +662,7 @@ function esc(s: string) {
     padding: 3px 12px;
     grid-template-columns: unset !important;
   }
-  .log-time       { display: none; }                      /* hide full timestamp */
+  .log-time       { display: none; }
   .log-time-short { display: block; flex-shrink: 0; color: #555; font-size: 11px; white-space: nowrap; }
   .log-user  { flex-shrink: 0; font-size: 12px; padding-right: 0; white-space: nowrap; }
   .log-msg   { flex: 1; font-size: 12px; min-width: 0; word-break: break-word; }

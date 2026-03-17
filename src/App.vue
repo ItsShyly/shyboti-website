@@ -71,6 +71,11 @@ onMounted(async () => {
 })
 
 function addBot() { window.location.href = `${API}/auth/add` }
+
+// >>> Routes that are kept alive in the component cache so navigating back to them
+// >>> is instant and state (scroll position, loaded data) is preserved.
+// >>> Logs is intentionally NOT cached - it loads fresh each visit.
+const KEEP_ALIVE_ROUTES = ['DashboardView', 'CommandsView', 'AutomationsView']
 </script>
 
 <template>
@@ -176,7 +181,14 @@ function addBot() { window.location.href = `${API}/auth/add` }
       </aside>
 
       <main class="main-panel">
-        <router-view />
+        <!-- >>> KeepAlive wraps the router-view so that Dashboard, Commands and Automations
+             stay mounted in memory between navigations. This makes switching back to
+             these routes instant. Logs is excluded – it always loads fresh. -->
+        <RouterView v-slot="{ Component }">
+          <KeepAlive :include="KEEP_ALIVE_ROUTES">
+            <component :is="Component" />
+          </KeepAlive>
+        </RouterView>
         <footer class="site-footer">
           {{ t('footer.copy') }}
           <span class="footer-sep">|</span>
