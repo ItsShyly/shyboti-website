@@ -26,11 +26,11 @@ function selectChannel(ch: string) {
   showChannelMenu.value = false
 }
 
-type NavItem = 'dashboard' | 'commands' | 'logs' | 'moderation' | 'roles' | 'automations' | 'settings'
+type NavItem = 'dashboard' | 'commands' | 'logs' | 'moderation' | 'roles' | 'automations' |'more' | 'settings'
 const activeRoute = computed(() => route.path.replace('/', '') || 'dashboard')
 
 function nav(to: NavItem) {
-  const PUBLIC: NavItem[] = ['logs']
+  const PUBLIC: NavItem[] = ['logs', 'more']
   if (!PUBLIC.includes(to) && !session.value) { shakeLogin(); return }
   sidebarOpen.value = false
   router.push('/' + to)
@@ -160,6 +160,9 @@ function addBot() { window.location.href = `${API}/auth/add` }
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
           {{ t('nav.logs') }}
+        </button>
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'more' }" @click="nav('more')">
+          {{ t('nav.more') }}
         </button>
         <div class="sidebar-spacer"></div>
         <button v-if="!session || channelRole?.role === 'broadcaster'"

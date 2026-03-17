@@ -8,6 +8,7 @@ const router = createRouter({
     { path: '/dashboard',   component: () => import('../components/DashboardView.vue') },
     { path: '/commands',    component: () => import('../components/CommandsView.vue') },
     { path: '/logs',        component: () => import('../components/LogsView.vue') },
+    { path: '/more',        component: () => import('../components/MoreView.vue') },
     { path: '/moderation',  component: () => import('../components/ModerationView.vue') },
     { path: '/automations', component: () => import('../components/AutomationsView.vue') },
     { path: '/timers',      redirect: '/automations?tab=timers' },

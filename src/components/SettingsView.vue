@@ -109,7 +109,7 @@ watch(() => session.value?.channel, load)
         <div>
           <div class="section-title">{{ t('settings.optout.title') }}</div>
           <div class="section-sub">
-            {{ t('settings.optout.sub') }}
+            {{ t('settings.optout.sub') }}  
             {{ t('settings.optout.sub2') }}
           </div>
         </div>

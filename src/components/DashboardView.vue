@@ -205,6 +205,12 @@ function goToLogs(e: ActivityEntry) {
   router.push({ path: '/logs', query: { channel: ch, user } })
 }
 
+function goToMore(e: ActivityEntry) {
+  const ch = e.channel
+  const user = e.target
+  router.push({ path: '/more', query: { channel: ch, user } })
+}
+
 // >>> Navigate to automations for timer/trigger events
 function goToAutomations(e: ActivityEntry) {
   const tab = e.type.startsWith('timer') ? 'timers' : 'triggers'
