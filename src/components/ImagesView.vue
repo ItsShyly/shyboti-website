@@ -34,10 +34,8 @@ const isGuest  = computed(() => !session.value)
 const imageUrl = (id: string) => `https://i.shyboti.de/${id}`
 
 // >>> URL bar state
-const urlInput      = ref('')
-const urlPasted     = ref(false)
-const showChatterino = ref(false)
-const showToken     = ref(false)
+const urlInput  = ref('')
+const urlPasted = ref(false)
 
 function onUrlPaste() {
   const v = urlInput.value.trim()
@@ -349,40 +347,6 @@ function switchView(v: 'upload' | 'gallery') {
           {{ t('images.your') }}
         </button>
         <span class="limit-hint">{{ t('images.limit') }}</span>
-        <button class="chatterino-btn" @click.stop="showChatterino = !showChatterino">Chatterino</button>
-      </div>
-
-      <!-- Chatterino info panel -->
-      <div v-if="showChatterino" class="chatterino-panel">
-        <div class="cp-row">
-          <span class="cp-label">Request URL</span>
-          <code class="cp-val">https://shyboti.de/api/images/upload</code>
-          <button class="cp-copy" @click="copyLink('https://shyboti.de/api/images/upload')">copy</button>
-        </div>
-        <div class="cp-row">
-          <span class="cp-label">Form field</span>
-          <code class="cp-val">file</code>
-          <button class="cp-copy" @click="copyLink('file')">copy</button>
-        </div>
-        <div class="cp-row">
-          <span class="cp-label">Image link</span>
-          <code class="cp-val">https://i.shyboti.de/{id}</code>
-          <button class="cp-copy" @click="copyLink('https://i.shyboti.de/{id}')">copy</button>
-        </div>
-        <div class="cp-row">
-          <span class="cp-label">Extra headers <span class="cp-optional">optional</span></span>
-          <button class="cp-reveal-btn" @click="showToken = !showToken">{{ showToken ? 'hide' : 'show' }}</button>
-        </div>
-        <template v-if="showToken">
-          <div class="cp-warning">⚠ Never share this with anyone. Your token gives full access to your account.</div>
-          <div class="cp-row" v-if="session">
-            <code class="cp-val cp-token">Authorization: Bearer {{ session.token }}</code>
-            <button class="cp-copy" @click="copyLink('Authorization: Bearer ' + session.token)">copy</button>
-          </div>
-          <div class="cp-row" v-else>
-            <span class="cp-val" style="color:#555">Log in to see your token</span>
-          </div>
-        </template>
       </div>
     </div>
   </div>
@@ -496,41 +460,6 @@ function switchView(v: 'upload' | 'gallery') {
 }
 .url-go-btn:hover { background: #6f2bff18; color: #9d6cff; }
 
-.chatterino-btn {
-  height: 24px; padding: 0 10px; border: 1px solid #2a2a30;
-  background: transparent; color: #555; font-family: inherit; font-size: 10px;
-  cursor: pointer; transition: all .15s;
-}
-.chatterino-btn:hover { border-color: #9d6cff55; color: #9d6cff; background: rgba(111,43,255,.06); }
-
-.chatterino-panel {
-  background: #0d0d10; border-top: 1px solid #1e1e24;
-  padding: 10px 16px; display: flex; flex-direction: column; gap: 6px; flex-shrink: 0;
-}
-.cp-row { display: flex; align-items: center; gap: 8px; min-height: 22px; }
-.cp-label { font-size: 10px; color: #555; width: 110px; flex-shrink: 0; display: flex; align-items: center; gap: 5px; }
-.cp-optional { font-size: 9px; color: #3a3a44; background: #1a1a20; padding: 1px 5px; }
-.cp-val {
-  flex: 1; font-family: 'Consolas','Fira Mono',monospace; font-size: 10px; color: #9d6cff;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.cp-token { color: #e5c07b; font-size: 9px; }
-.cp-copy {
-  height: 18px; padding: 0 7px; border: 1px solid #2a2a3044;
-  background: transparent; color: #555; font-family: inherit; font-size: 9px;
-  cursor: pointer; flex-shrink: 0; transition: background .1s;
-}
-.cp-copy:hover { background: #6f2bff18; color: #9d6cff; border-color: #6f2bff44; }
-.cp-reveal-btn {
-  height: 18px; padding: 0 8px; border: 1px solid #2a2a30;
-  background: transparent; color: #666; font-family: inherit; font-size: 9px;
-  cursor: pointer; transition: all .1s;
-}
-.cp-reveal-btn:hover { color: #e0e0e0; border-color: #444; }
-.cp-warning {
-  font-size: 10px; color: #e5c07b; background: rgba(229,192,123,.06);
-  border: 1px solid rgba(229,192,123,.2); padding: 5px 10px;
-}
 
 .gallery-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .gallery-header {

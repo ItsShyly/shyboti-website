@@ -1,9 +1,22 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '../i18n'
+import { useAuth } from '../auth'
 
 const { t } = useI18n()
 const router = useRouter()
+const { session } = useAuth()
+
+const showChatterino = ref(false)
+const showToken      = ref(false)
+const copied         = ref('')
+
+function copyText(text: string, key: string) {
+  navigator.clipboard.writeText(text).catch(() => {})
+  copied.value = key
+  setTimeout(() => { if (copied.value === key) copied.value = '' }, 1500)
+}
 </script>
 
 <template>
@@ -31,6 +44,14 @@ const router = useRouter()
         <div class="card-sub">{{ t('more.images.sub') }}</div>
         <div class="card-url">i.shyboti.de/<span class="url-id">id</span></div>
       </div>
+
+      <button class="chatterino-btn" @click.stop="showChatterino = true">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M7 6v4M7 4.5v.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        Chatterino
+      </button>
 
       <button class="your-btn" @click.stop="router.push('/images?gallery=1')">
         <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -75,6 +96,58 @@ const router = useRouter()
     </div>
 
   </div>
+
+  <!-- Chatterino popup -->
+  <Teleport to="body">
+    <div v-if="showChatterino" class="modal-backdrop" @click.self="showChatterino = false; showToken = false">
+      <div class="modal">
+        <div class="modal-header">
+          <span class="modal-title">Chatterino setup</span>
+          <button class="modal-close" @click="showChatterino = false; showToken = false">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="mc-row">
+            <span class="mc-label">Request URL</span>
+            <code class="mc-val">https://shyboti.de/api/images/upload</code>
+            <button class="mc-copy" @click="copyText('https://shyboti.de/api/images/upload', 'url')">{{ copied === 'url' ? '✓' : 'copy' }}</button>
+          </div>
+          <div class="mc-row">
+            <span class="mc-label">Form field</span>
+            <code class="mc-val">file</code>
+            <button class="mc-copy" @click="copyText('file', 'field')">{{ copied === 'field' ? '✓' : 'copy' }}</button>
+          </div>
+          <div class="mc-row">
+            <span class="mc-label">Image link</span>
+            <code class="mc-val">https://i.shyboti.de/{id}</code>
+            <button class="mc-copy" @click="copyText('https://i.shyboti.de/{id}', 'link')">{{ copied === 'link' ? '✓' : 'copy' }}</button>
+          </div>
+          <div class="mc-row">
+            <span class="mc-label">Deletion URL</span>
+            <code class="mc-val mc-muted">(leave empty)</code>
+          </div>
+
+          <div class="mc-divider"></div>
+
+          <div class="mc-row">
+            <span class="mc-label">Extra headers <span class="mc-optional">optional</span></span>
+            <button class="mc-reveal" @click="showToken = !showToken">{{ showToken ? 'hide' : 'show' }}</button>
+          </div>
+
+          <template v-if="showToken">
+            <div class="mc-warning">⚠ Never share this with anyone — it gives full access to your account.</div>
+            <div class="mc-row" v-if="session">
+              <code class="mc-val mc-token">Authorization: Bearer {{ session.token }}</code>
+              <button class="mc-copy" @click="copyText('Authorization: Bearer ' + session.token, 'token')">{{ copied === 'token' ? '✓' : 'copy' }}</button>
+            </div>
+            <div class="mc-row" v-else>
+              <span class="mc-val mc-muted">Log in to see your token</span>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -131,5 +204,75 @@ const router = useRouter()
 @media (max-width: 680px) {
   .more-view { gap: 14px; }
   .service-card { width: 100%; }
+}
+
+/* >>> Chatterino button <<< */
+.chatterino-btn {
+  display: flex; align-items: center; gap: 6px;
+  margin: 0 0 0 12px; height: 32px; padding: 0 12px;
+  border: 1px solid #2a2a30; background: transparent;
+  color: #555; font-family: inherit; font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: all .15s; align-self: flex-start;
+}
+.chatterino-btn:hover { border-color: #9d6cff55; color: #9d6cff; background: rgba(111,43,255,.06); }
+.chatterino-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
+
+/* Fix button row layout */
+.service-card .your-btn,
+.service-card .chatterino-btn { margin-bottom: 14px; }
+
+/* >>> Modal backdrop <<< */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,.6); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center;
+}
+.modal {
+  background: #141418; border: 1px solid #2a2a30;
+  width: min(480px, 95vw); display: flex; flex-direction: column;
+  box-shadow: 0 24px 64px rgba(0,0,0,.6);
+}
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid #1e1e24;
+}
+.modal-title { font-size: 13px; font-weight: 700; color: #e0e0e0; }
+.modal-close {
+  width: 24px; height: 24px; border: none; background: transparent;
+  color: #555; font-size: 12px; cursor: pointer; transition: color .15s;
+}
+.modal-close:hover { color: #e0e0e0; }
+
+.modal-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+
+.mc-row { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.mc-label {
+  font-size: 10px; color: #555; width: 100px; flex-shrink: 0;
+  display: flex; align-items: center; gap: 5px;
+}
+.mc-optional { font-size: 9px; color: #333; background: #1a1a20; padding: 1px 5px; }
+.mc-val {
+  flex: 1; font-family: 'Consolas','Fira Mono',monospace; font-size: 11px;
+  color: #9d6cff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.mc-muted { color: #3a3a44; }
+.mc-token { color: #e5c07b; font-size: 10px; }
+.mc-copy {
+  height: 20px; padding: 0 8px; border: 1px solid #2a2a3055;
+  background: transparent; color: #555; font-family: inherit; font-size: 9px;
+  cursor: pointer; flex-shrink: 0; transition: all .1s; white-space: nowrap;
+}
+.mc-copy:hover { background: #6f2bff18; color: #9d6cff; border-color: #6f2bff44; }
+.mc-reveal {
+  height: 20px; padding: 0 8px; border: 1px solid #2a2a30;
+  background: transparent; color: #555; font-family: inherit; font-size: 9px;
+  cursor: pointer; transition: all .1s;
+}
+.mc-reveal:hover { color: #e0e0e0; border-color: #444; }
+.mc-divider { height: 1px; background: #1e1e24; margin: 4px 0; }
+.mc-warning {
+  font-size: 10px; color: #e5c07b;
+  background: rgba(229,192,123,.06); border: 1px solid rgba(229,192,123,.2);
+  padding: 6px 10px;
 }
 </style>
