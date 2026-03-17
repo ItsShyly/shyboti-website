@@ -31,7 +31,7 @@ const galleryLoad = ref(false)
 const deleteId    = ref<string | null>(null)
 
 const isGuest  = computed(() => !session.value)
-const imageUrl = (id: string) => `https://i.shyboti.de/${id}`
+const imageUrl = (id: string) => `${API}/images/${id}`
 
 // >>> If ?gallery=1 was passed from MoreView, open gallery directly
 onMounted(() => {
@@ -231,7 +231,7 @@ function switchView(v: 'upload' | 'gallery') {
             <div class="gallery-item-name">{{ img.filename }}</div>
             <div class="gallery-item-meta">{{ fmtSize(img.size) }} · {{ fmtDate(img.created_at) }}</div>
             <div class="gallery-item-link">
-              <code class="img-link-code">i.shyboti.de/{{ img.id }}</code>
+              <code class="img-link-code">{{ imageUrl(img.id) }}</code>
               <button class="copy-btn-sm" @click="copyLink(imageUrl(img.id))">{{ t('images.copy') }}</button>
             </div>
           </div>
