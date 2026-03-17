@@ -45,14 +45,7 @@ function copyText(text: string, key: string) {
         <div class="card-url">i.shyboti.de/<span class="url-id">id</span></div>
       </div>
 
-      <button class="chatterino-btn" @click.stop="showChatterino = true">
-        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4"/>
-          <path d="M7 6v4M7 4.5v.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        </svg>
-        Chatterino
-      </button>
-
+      <div class="card-btns">
       <button class="your-btn" @click.stop="router.push('/images?gallery=1')">
         <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect x="1" y="1" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.4"/>
@@ -60,8 +53,16 @@ function copyText(text: string, key: string) {
           <rect x="1" y="8" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.4"/>
           <rect x="8" y="8" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.4"/>
         </svg>
-        {{ t('more.images.your') }}
-      </button>
+          {{ t('more.images.your') }}
+        </button>
+        <button class="chatterino-btn" @click.stop="showChatterino = true">
+          <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4"/>
+            <path d="M7 6v4M7 4.5v.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+          </svg>
+          Chatterino
+        </button>
+      </div>
     </div>
 
     <!-- >>> Notes card <<< -->
@@ -99,11 +100,11 @@ function copyText(text: string, key: string) {
 
   <!-- Chatterino popup -->
   <Teleport to="body">
-    <div v-if="showChatterino" class="modal-backdrop" @click.self="showChatterino = false; showToken = false">
+    <div v-if="showChatterino" class="modal-backdrop" @click.self="showChatterino = false">
       <div class="modal">
         <div class="modal-header">
           <span class="modal-title">Chatterino setup</span>
-          <button class="modal-close" @click="showChatterino = false; showToken = false">✕</button>
+          <button class="modal-close" @click="showChatterino = false">✕</button>
         </div>
 
         <div class="modal-body">
@@ -129,21 +130,22 @@ function copyText(text: string, key: string) {
 
           <div class="mc-divider"></div>
 
+          <div class="mc-warning">🔒 DON'T SHOW THIS TO ANYONE — it gives full access to your account.</div>
           <div class="mc-row">
             <span class="mc-label">Extra headers <span class="mc-optional">optional</span></span>
-            <button class="mc-reveal" @click="showToken = !showToken">{{ showToken ? 'hide' : 'show' }}</button>
+            <code v-if="session" class="mc-val mc-token">{{ showToken ? 'Authorization: Bearer ' + session.token : '••••••••••••••••••••••' }}</code>
+            <code v-else class="mc-val mc-muted">Log in to see</code>
+            <button v-if="session" class="mc-eye" @click="showToken = !showToken" :title="showToken ? 'Hide' : 'Show'">
+              <svg v-if="!showToken" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <ellipse cx="7" cy="7" rx="5.5" ry="3.5" stroke="currentColor" stroke-width="1.3"/>
+                <circle cx="7" cy="7" r="1.5" fill="currentColor"/>
+              </svg>
+              <svg v-else viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 2l10 10M5.5 4.2A5.5 3.5 0 0 1 7 3.5c3 0 5.5 3.5 5.5 3.5s-.8 1.2-2.1 2.2M8.5 9.8A5.3 5.3 0 0 1 7 10.5c-3 0-5.5-3.5-5.5-3.5s.8-1.2 2.1-2.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <button v-if="session" class="mc-copy" @click="copyText('Authorization: Bearer ' + session.token, 'token')">{{ copied === 'token' ? '✓' : 'copy' }}</button>
           </div>
-
-          <template v-if="showToken">
-            <div class="mc-warning">⚠ Never share this with anyone — it gives full access to your account.</div>
-            <div class="mc-row" v-if="session">
-              <code class="mc-val mc-token">Authorization: Bearer {{ session.token }}</code>
-              <button class="mc-copy" @click="copyText('Authorization: Bearer ' + session.token, 'token')">{{ copied === 'token' ? '✓' : 'copy' }}</button>
-            </div>
-            <div class="mc-row" v-else>
-              <span class="mc-val mc-muted">Log in to see your token</span>
-            </div>
-          </template>
         </div>
       </div>
     </div>
@@ -206,20 +208,23 @@ function copyText(text: string, key: string) {
   .service-card { width: 100%; }
 }
 
+/* >>> Button row <<< */
+.card-btns {
+  display: flex; align-items: center; gap: 8px;
+  margin: 0 12px 14px; flex-wrap: wrap;
+}
+.card-btns .your-btn { margin: 0; }
+
 /* >>> Chatterino button <<< */
 .chatterino-btn {
-  display: flex; align-items: center; gap: 6px;
-  margin: 0 0 0 12px; height: 32px; padding: 0 12px;
+  display: flex; align-items: center; gap: 5px;
+  height: 32px; padding: 0 10px;
   border: 1px solid #2a2a30; background: transparent;
-  color: #555; font-family: inherit; font-size: 11px; font-weight: 600;
-  cursor: pointer; transition: all .15s; align-self: flex-start;
+  color: #555; font-family: inherit; font-size: 10px; font-weight: 600;
+  cursor: pointer; transition: all .15s;
 }
 .chatterino-btn:hover { border-color: #9d6cff55; color: #9d6cff; background: rgba(111,43,255,.06); }
-.chatterino-btn svg { width: 12px; height: 12px; flex-shrink: 0; }
-
-/* Fix button row layout */
-.service-card .your-btn,
-.service-card .chatterino-btn { margin-bottom: 14px; }
+.chatterino-btn svg { width: 11px; height: 11px; flex-shrink: 0; }
 
 /* >>> Modal backdrop <<< */
 .modal-backdrop {
@@ -263,12 +268,14 @@ function copyText(text: string, key: string) {
   cursor: pointer; flex-shrink: 0; transition: all .1s; white-space: nowrap;
 }
 .mc-copy:hover { background: #6f2bff18; color: #9d6cff; border-color: #6f2bff44; }
-.mc-reveal {
-  height: 20px; padding: 0 8px; border: 1px solid #2a2a30;
-  background: transparent; color: #555; font-family: inherit; font-size: 9px;
-  cursor: pointer; transition: all .1s;
+.mc-eye {
+  width: 22px; height: 20px; border: 1px solid #2a2a30;
+  background: transparent; color: #555;
+  cursor: pointer; flex-shrink: 0; transition: all .1s;
+  display: flex; align-items: center; justify-content: center; padding: 0;
 }
-.mc-reveal:hover { color: #e0e0e0; border-color: #444; }
+.mc-eye:hover { color: #9d6cff; border-color: #6f2bff44; }
+.mc-eye svg { width: 12px; height: 12px; }
 .mc-divider { height: 1px; background: #1e1e24; margin: 4px 0; }
 .mc-warning {
   font-size: 10px; color: #e5c07b;
