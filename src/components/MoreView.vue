@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from '../i18n'
 import { useAuth } from '../auth'
+import { API } from '../api'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -11,11 +12,32 @@ const { session } = useAuth()
 const showChatterino = ref(false)
 const showToken      = ref(false)
 const copied         = ref('')
+const uploadToken    = ref('')
+const tokenLoading   = ref(false)
 
 function copyText(text: string, key: string) {
   navigator.clipboard.writeText(text).catch(() => {})
   copied.value = key
   setTimeout(() => { if (copied.value === key) copied.value = '' }, 1500)
+}
+
+async function openChatterino() {
+  showChatterino.value = true
+  if (!session.value || uploadToken.value) return
+  // >>> Generate a permanent storage ID on first open (uses session only to prove identity, result is safe to share)
+  tokenLoading.value = true
+  try {
+    const res = await fetch(`${API}/upload-tokens`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${session.value.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label: 'Chatterino' }),
+    })
+    if (res.ok) {
+      const data = await res.json() as { token: string }
+      uploadToken.value = data.token
+    }
+  } catch {}
+  tokenLoading.value = false
 }
 </script>
 
@@ -55,7 +77,7 @@ function copyText(text: string, key: string) {
         </svg>
           {{ t('more.images.your') }}
         </button>
-        <button class="chatterino-btn" @click.stop="showChatterino = true">
+        <button class="chatterino-btn" @click.stop="openChatterino()">
           <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
             <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4"/>
             <path d="M7 6v4M7 4.5v.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
@@ -100,10 +122,10 @@ function copyText(text: string, key: string) {
 
   <!-- Chatterino popup -->
   <Teleport to="body">
-    <div v-if="showChatterino" class="modal-backdrop" @click.self="showChatterino = false">
+    <div v-if="showChatterino" class="modal-backdrop" @click.self="showChatterino = false; showToken = false">
       <div class="modal">
         <div class="modal-header">
-          <span class="modal-title">Chatterino setup</span>
+          <span class="modal-title">{{ t('more.chatterino.header') }}</span>
           <button class="modal-close" @click="showChatterino = false">✕</button>
         </div>
 
@@ -130,12 +152,13 @@ function copyText(text: string, key: string) {
 
           <div class="mc-divider"></div>
 
-          <div class="mc-warning">🔒 DON'T SHOW THIS TO ANYONE — it gives full access to your account.</div>
+          <div class="mc-bind-hint">{{ t('more.chatterino.bind_hint') }}</div>
           <div class="mc-row">
             <span class="mc-label">Extra headers <span class="mc-optional">optional</span></span>
-            <code v-if="session" class="mc-val mc-token">{{ showToken ? 'Authorization: Bearer ' + session.token : '••••••••••••••••••••••' }}</code>
-            <code v-else class="mc-val mc-muted">Log in to see</code>
-            <button v-if="session" class="mc-eye" @click="showToken = !showToken" :title="showToken ? 'Hide' : 'Show'">
+            <code v-if="!session" class="mc-val mc-muted">Log in to see</code>
+            <code v-else-if="tokenLoading" class="mc-val mc-muted">Generating…</code>
+            <code v-else class="mc-val mc-token">{{ showToken ? 'Upload-ID: ' + uploadToken : '••••••••••••••••••••••' }}</code>
+            <button v-if="session && !tokenLoading" class="mc-eye" @click="showToken = !showToken" :title="showToken ? 'Hide' : 'Show'">
               <svg v-if="!showToken" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <ellipse cx="7" cy="7" rx="5.5" ry="3.5" stroke="currentColor" stroke-width="1.3"/>
                 <circle cx="7" cy="7" r="1.5" fill="currentColor"/>
@@ -144,7 +167,7 @@ function copyText(text: string, key: string) {
                 <path d="M2 2l10 10M5.5 4.2A5.5 3.5 0 0 1 7 3.5c3 0 5.5 3.5 5.5 3.5s-.8 1.2-2.1 2.2M8.5 9.8A5.3 5.3 0 0 1 7 10.5c-3 0-5.5-3.5-5.5-3.5s.8-1.2 2.1-2.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
               </svg>
             </button>
-            <button v-if="session" class="mc-copy" @click="copyText('Authorization: Bearer ' + session.token, 'token')">{{ copied === 'token' ? '✓' : 'copy' }}</button>
+            <button v-if="session && !tokenLoading" class="mc-copy" @click="copyText('Upload-ID: ' + uploadToken, 'token')">{{ copied === 'token' ? '✓' : 'copy' }}</button>
           </div>
         </div>
       </div>
@@ -277,9 +300,7 @@ function copyText(text: string, key: string) {
 .mc-eye:hover { color: #9d6cff; border-color: #6f2bff44; }
 .mc-eye svg { width: 12px; height: 12px; }
 .mc-divider { height: 1px; background: #1e1e24; margin: 4px 0; }
-.mc-warning {
-  font-size: 10px; color: #e5c07b;
-  background: rgba(229,192,123,.06); border: 1px solid rgba(229,192,123,.2);
-  padding: 6px 10px;
+.mc-bind-hint {
+  font-size: 10px; color: #666; padding: 2px 0 4px;
 }
 </style>

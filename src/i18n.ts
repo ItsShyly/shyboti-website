@@ -489,12 +489,14 @@ const translations: Record<Locale, Record<string, string>> = {
     'settings.remove.error':       'Could not remove bot.',
 
     // >>> More <<<
-    'more.images':            'Images',
-    'more.images.sub':        'Host images, share links',
-    'more.images.your':       'Your Images',
-    'more.notes':             'Notes',
-    'more.notes.sub':         'Create and share text snippets',
-    'more.notes.your':        'Your Notes',
+    'more.images':                  'Images',
+    'more.images.sub':              'Host images, share links',
+    'more.images.your':             'Your Images',
+    'more.notes':                   'Notes',
+    'more.notes.sub':               'Create and share text snippets',
+    'more.notes.your':              'Your Notes',
+    'more.chatterino.header':       'Chatterino setup',
+    'more.chatterino.bind_hint':    'To bind uploads to your account (shows in gallery, counts toward your limit):',
 
     // >>> Images page <<<
     'images.title':           'Image Hosting',
@@ -1033,12 +1035,14 @@ const translations: Record<Locale, Record<string, string>> = {
     'settings.remove.error':       'Bot konnte nicht entfernt werden.',
 
     // >>> More <<<
-    'more.images':            'Bilder',
-    'more.images.sub':        'Bilder hosten, Links teilen',
-    'more.images.your':       'Deine Bilder',
-    'more.notes':             'Notizen',
-    'more.notes.sub':         'Texte erstellen und teilen',
-    'more.notes.your':        'Deine Notizen',
+    'more.images':                  'Bilder',
+    'more.images.sub':              'Bilder hosten, Links teilen',
+    'more.images.your':             'Deine Bilder',
+    'more.notes':                   'Notizen',
+    'more.notes.sub':               'Texte erstellen und teilen',
+    'more.notes.your':              'Deine Notizen',
+    'more.chatterino.header':       'Chatterino-Einrichtung',
+    'more.chatterino.bind_hint':    'Um Uploads mit deinem Account zu verknüpfen (erscheint in der Galerie, zählt zu deinem Limit):',
 
     // >>> Images page <<<
     'images.title':           'Bild-Hosting',
