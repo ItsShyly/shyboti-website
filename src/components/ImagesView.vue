@@ -485,7 +485,7 @@ function switchView(v: 'upload' | 'gallery') {
 }
 .gallery-item:hover { border-color: #3a3a44; }
 
-.gallery-thumb-wrap { display: block; aspect-ratio: 16/10; overflow: hidden; background: #0d0d10; }
+.gallery-thumb-wrap { display: block; aspect-ratio: 1/1; overflow: hidden; background: #0d0d10; }
 .gallery-thumb { width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity .15s; }
 .gallery-thumb-wrap:hover .gallery-thumb { opacity: .85; }
 
