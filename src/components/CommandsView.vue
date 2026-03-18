@@ -681,7 +681,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 
 <style scoped>
 .cmd-root { display: flex; flex-direction: column; }
-.cmd-tabs { display: flex; gap: 0; border-bottom: 1px solid #222; margin-bottom: 0; }
+.cmd-tabs { display: flex; gap: 0; margin-bottom: 0; }
 .cmd-tab { padding: 8px 20px; border: none; background: transparent; color: #555; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; }
 .cmd-tab:hover { color: #aaa; }
 .cmd-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
@@ -702,7 +702,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .sort-arrow { font-size: 9px; color: #555; margin-left: 3px; }
 
 .table-header {
-  padding: 0 16px 10px;
+  padding: 10px 16px 10px;
   color: #666; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
   border-bottom: 1px solid #2a2a2a;
 }
@@ -776,7 +776,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 /* Custom tab */
 .custom-header {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #222;
+  margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #222; padding: 10px 0 10px 0;
 }
 .custom-count { font-size: 11px; color: #555; }
 .create-btn {
