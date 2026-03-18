@@ -6,7 +6,7 @@ import DashboardView   from '../components/DashboardView.vue'
 import CommandsView    from '../components/CommandsView.vue'
 import AutomationsView from '../components/AutomationsView.vue'
 import LogsView        from '../components/LogsView.vue'
-import MoreView        from '../components/MoreView.vue'
+import ToolsView       from '../components/ToolsView.vue'
 
 
 const router = createRouter({
@@ -17,7 +17,9 @@ const router = createRouter({
     { path: '/dashboard',   component: DashboardView },
     { path: '/commands',    component: CommandsView },
     { path: '/logs',        component: LogsView },
-    { path: '/more',        component: MoreView },
+    { path: '/tools',       component: ToolsView },
+    { path: '/features',    component: () => import('../components/FeaturesView.vue') },
+    { path: '/more',        redirect: '/tools' },
     { path: '/images',      component: () => import('../components/ImagesView.vue') },
     { path: '/obs-widgets', component: () => import('../components/ObsView.vue') },
     { path: '/notes',       component: () => import('../components/NotesView.vue') },

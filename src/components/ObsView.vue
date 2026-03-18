@@ -52,8 +52,7 @@ const editOrigName = ref('')
 const previewValue = ref('…')
 const previewing   = ref(false)
 
-const OBS_BASE = 'https://shyboti.de'
-const widgetUrl = (id: string) => `${OBS_BASE}/obs/${id}`
+const widgetUrl = (id: string) => `https://obs.shyboti.de/${id}`
 
 async function load() {
   if (!session.value) return
@@ -261,7 +260,7 @@ watch(() => session.value?.channel, load)
 
         <div class="widget-actions">
           <div class="url-row">
-            <code class="widget-url">shyboti.de/obs/{{ w.id }}</code>
+            <code class="widget-url">obs.shyboti.de/{{ w.id }}</code>
             <button class="copy-btn" @click="copyUrl(w.id, w.id)">
               {{ copied === w.id ? '✓' : 'Copy URL' }}
             </button>

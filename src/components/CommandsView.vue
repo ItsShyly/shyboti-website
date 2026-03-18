@@ -436,12 +436,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       <button class="cmd-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">{{ t('cmd.title_custom') }}</button>
       <button class="cmd-tab" :class="{ active: activeTab === 'Extras' }" @click="activeTab = 'Extras'">{{ t('cmd.title_extras') }}</button>
     </div>
-    <div class="cmd-search-wrap">
-      <svg class="cmd-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="22" y2="22"/>
-      </svg>
-      <input v-model="search" class="cmd-search" :placeholder="t('cmd.search')" />
-    </div>
+
 
     <template v-if="activeTab === 'Default'">
     <div v-if="loading" class="state-msg">{{ t('cmd.loading') }}</div>
@@ -691,16 +686,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .cmd-tab:hover { color: #aaa; }
 .cmd-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
 
-.cmd-search-wrap {
-  position: relative; height: 38px; background: #2c2c2e;
-  display: flex; align-items: center; margin-bottom: 12px;
-}
-.cmd-search-icon { position: absolute; left: 10px; width: 16px; height: 16px; color: #666; pointer-events: none; }
-.cmd-search {
-  width: 100%; height: 100%; background: transparent; border: none; outline: none;
-  color: #fff; font-family: inherit; font-size: 13px; padding: 0 12px 0 34px;
-}
-.cmd-search::placeholder { color: #555; }
+
 
 .state-msg { color: #555; padding: 40px; text-align: center; font-size: 14px; }
 

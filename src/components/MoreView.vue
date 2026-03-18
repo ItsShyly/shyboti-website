@@ -227,7 +227,7 @@ async function openChatterino() {
       <div class="card-body">
         <div class="card-title">OBS Widgets</div>
         <div class="card-sub">Live browser sources for OBS</div>
-        <div class="card-url">shyboti.de/obs/<span class="url-id obs-id">id</span></div>
+        <div class="card-url">obs.shyboti.de/<span class="url-id obs-id">id</span></div>
       </div>
       <button class="your-btn obs-btn" @click.stop="router.push('/obs-widgets')">
         <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">

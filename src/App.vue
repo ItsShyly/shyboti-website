@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { API } from './api'
 import { useAuth } from './auth'
@@ -19,22 +19,204 @@ function shakeLogin() {
 }
 
 const showChannelMenu = ref(false)
-const sidebarOpen = ref(false)
+const sidebarOpen     = ref(false)
 
 function selectChannel(ch: string) {
   switchChannel(ch)
   showChannelMenu.value = false
 }
 
-type NavItem = 'dashboard' | 'commands' | 'logs' | 'moderation' | 'roles' | 'automations' |'more' | 'settings'
-const activeRoute = computed(() => route.path.replace('/', '') || 'dashboard')
+type NavItem = 'dashboard' | 'commands' | 'logs' | 'moderation' | 'roles' | 'automations' | 'tools' | 'features' | 'settings'
+const activeRoute = computed(() => {
+  const p = route.path.replace('/', '') || 'dashboard'
+  // >>> treat /more as /tools (backwards compat)
+  return p === 'more' ? 'tools' : p
+})
 
 function nav(to: NavItem) {
-  const PUBLIC: NavItem[] = ['logs', 'more']
+  const PUBLIC: NavItem[] = ['logs', 'tools']
   if (!PUBLIC.includes(to) && !session.value) { shakeLogin(); return }
   sidebarOpen.value = false
   router.push('/' + to)
 }
+
+// === Universal Search ===
+
+interface SearchResult {
+  label: string
+  sub?: string
+  category: string
+  action: () => void
+  icon?: string
+}
+
+const searchQuery   = ref('')
+const searchOpen    = ref(false)
+const searchInput   = ref<HTMLInputElement | null>(null)
+const searchResults = ref<SearchResult[]>([])
+const searchIndex   = ref(0)
+let   searchDebounce: ReturnType<typeof setTimeout> | null = null
+
+// >>> Static searchable items - always available
+function buildStaticIndex(): SearchResult[] {
+  const items: SearchResult[] = [
+    // >>> Nav pages
+    { label: 'Dashboard',       category: 'Page',     icon: '◈', action: () => router.push('/dashboard') },
+    { label: 'Commands',        category: 'Page',     icon: '◈', action: () => router.push('/commands') },
+    { label: 'Moderation',      category: 'Page',     icon: '◈', action: () => router.push('/moderation') },
+    { label: 'Automations',     category: 'Page',     icon: '◈', action: () => router.push('/automations') },
+    { label: 'Timers',          category: 'Page',     icon: '◈', action: () => router.push('/automations?tab=timers'), sub: 'Automations → Timers' },
+    { label: 'Triggers',        category: 'Page',     icon: '◈', action: () => router.push('/automations?tab=triggers'), sub: 'Automations → Triggers' },
+    { label: 'Countdowns',      category: 'Page',     icon: '◈', action: () => router.push('/automations?tab=countdowns'), sub: 'Automations → Countdowns' },
+    { label: 'Roles',           category: 'Page',     icon: '◈', action: () => router.push('/roles') },
+    { label: 'Logs',            category: 'Page',     icon: '◈', action: () => router.push('/logs') },
+    { label: 'Tools',           category: 'Page',     icon: '◈', action: () => router.push('/tools') },
+    { label: 'Features',        category: 'Page',     icon: '◈', action: () => router.push('/features') },
+    { label: 'Settings',        category: 'Page',     icon: '◈', action: () => router.push('/settings') },
+    // >>> Sub-pages
+    { label: 'Images',          category: 'Tools',    icon: '🖼', action: () => router.push('/images'), sub: 'Upload and host images' },
+    { label: 'Notes',           category: 'Tools',    icon: '📄', action: () => router.push('/notes'),  sub: 'Create and share text snippets' },
+    { label: 'OBS Widgets',     category: 'Features', icon: '📺', action: () => router.push('/obs-widgets'), sub: 'Live browser sources for OBS' },
+    { label: 'Variables & Counters', category: 'Features', icon: '⚙', action: () => router.push('/features'), sub: 'View and edit $counter and $var values' },
+    // >>> Settings sub-sections
+    { label: 'Command Prefix',  category: 'Settings', icon: '⚙', action: () => router.push('/settings'), sub: 'Change the bot command prefix' },
+    { label: 'Logs Opt-Out',    category: 'Settings', icon: '⚙', action: () => router.push('/settings'), sub: 'Control chat log visibility' },
+    { label: 'Remove Bot',      category: 'Settings', icon: '⚙', action: () => router.push('/settings'), sub: 'Remove ShyBoti from your channel' },
+    // >>> Custom commands tab
+    { label: 'Custom Commands', category: 'Commands', icon: '+', action: () => { router.push('/commands'); nextActiveTab.value = 'Custom' }, sub: 'Your custom +commands' },
+    { label: 'New Command',     category: 'Commands', icon: '+', action: () => { router.push('/commands'); nextActiveTab.value = 'Custom' }, sub: 'Create a new command' },
+  ]
+  return items
+}
+
+// >>> nextActiveTab is read by CommandsView to pre-select a tab after navigation
+const nextActiveTab = ref('')
+
+// >>> Dynamic search: fetch commands + timers from API
+let _dynamicCache: SearchResult[] | null = null
+async function loadDynamic(): Promise<SearchResult[]> {
+  if (_dynamicCache) return _dynamicCache
+  if (!session.value) return []
+  const results: SearchResult[] = []
+  try {
+    const [cmdRes, timerRes, trigRes] = await Promise.allSettled([
+      fetch(`${API}/commands/${session.value.channel}`,        { headers: { Authorization: `Bearer ${session.value.token}` } }),
+      fetch(`${API}/timers/${session.value.channel}`,          { headers: { Authorization: `Bearer ${session.value.token}` } }),
+      fetch(`${API}/triggers/${session.value.channel}`,        { headers: { Authorization: `Bearer ${session.value.token}` } }),
+    ])
+    if (cmdRes.status === 'fulfilled' && cmdRes.value.ok) {
+      const d = await cmdRes.value.json() as { commands: { name: string; description: string }[]; prefix: string }
+      for (const c of d.commands) {
+        results.push({ label: `${d.prefix}${c.name}`, category: 'Command', icon: '+', sub: c.description || undefined, action: () => router.push('/commands') })
+      }
+    }
+    if (timerRes.status === 'fulfilled' && timerRes.value.ok) {
+      const d = await timerRes.value.json() as { timers: { name: string; response: string }[] }
+      for (const ti of d.timers) {
+        results.push({ label: ti.name, category: 'Timer', icon: '⏱', sub: ti.response.slice(0, 50) || undefined, action: () => router.push('/automations?tab=timers') })
+      }
+    }
+    if (trigRes.status === 'fulfilled' && trigRes.value.ok) {
+      const d = await trigRes.value.json() as { triggers: { name: string; match_pattern: string }[] }
+      for (const tr of d.triggers) {
+        results.push({ label: tr.name, category: 'Trigger', icon: '⚡', sub: tr.match_pattern || undefined, action: () => router.push('/automations?tab=triggers') })
+      }
+    }
+    // >>> Also fetch custom commands
+    const ccRes = await fetch(`${API}/custom-commands/${session.value.channel}`, { headers: { Authorization: `Bearer ${session.value.token}` } })
+    if (ccRes.ok) {
+      const d = await ccRes.json() as { commands: { name: string; description?: string; response?: string }[] }
+      for (const c of (d.commands ?? [])) {
+        results.push({ label: `+${c.name}`, category: 'Custom Command', icon: '+', sub: c.description || c.response?.slice(0, 50) || undefined, action: () => router.push('/commands') })
+      }
+    }
+  } catch {}
+  _dynamicCache = results
+  return results
+}
+
+// >>> Invalidate cache when channel changes
+watch(() => session.value?.channel, () => { _dynamicCache = null })
+
+async function runSearch(q: string) {
+  if (!q.trim()) { searchResults.value = []; searchIndex.value = 0; return }
+  const query = q.toLowerCase().trim()
+  const static_ = buildStaticIndex()
+  const dynamic = await loadDynamic()
+  const all = [...static_, ...dynamic]
+  const scored = all
+    .map(item => {
+      const label = item.label.toLowerCase()
+      const sub   = (item.sub ?? '').toLowerCase()
+      let score = 0
+      if (label === query)           score = 100
+      else if (label.startsWith(query)) score = 80
+      else if (label.includes(query))   score = 60
+      else if (sub.includes(query))     score = 30
+      else return null
+      return { item, score }
+    })
+    .filter(Boolean)
+    .sort((a, b) => b!.score - a!.score)
+    .slice(0, 12)
+    .map(x => x!.item)
+  searchResults.value = scored
+  searchIndex.value   = 0
+}
+
+function onSearchInput() {
+  searchOpen.value = true
+  if (searchDebounce) clearTimeout(searchDebounce)
+  searchDebounce = setTimeout(() => runSearch(searchQuery.value), 120)
+}
+
+function onSearchKeydown(e: KeyboardEvent) {
+  if (!searchOpen.value || !searchResults.value.length) {
+    if (e.key === 'Escape') { searchQuery.value = ''; searchOpen.value = false; searchInput.value?.blur() }
+    return
+  }
+  if (e.key === 'ArrowDown')  { e.preventDefault(); searchIndex.value = Math.min(searchIndex.value + 1, searchResults.value.length - 1) }
+  if (e.key === 'ArrowUp')    { e.preventDefault(); searchIndex.value = Math.max(searchIndex.value - 1, 0) }
+  if (e.key === 'Enter')      { e.preventDefault(); selectResult(searchResults.value[searchIndex.value]!) }
+  if (e.key === 'Escape')     { searchQuery.value = ''; searchOpen.value = false; searchInput.value?.blur() }
+}
+
+function selectResult(r: SearchResult) {
+  searchQuery.value = ''
+  searchOpen.value  = false
+  searchInput.value?.blur()
+  searchResults.value = []
+  r.action()
+}
+
+function onSearchFocus() { searchOpen.value = true; if (searchQuery.value) runSearch(searchQuery.value) }
+function onSearchBlur()  { setTimeout(() => { searchOpen.value = false }, 150) }
+
+// >>> Ctrl+F or / to focus search
+function onGlobalKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    e.preventDefault()
+    searchInput.value?.focus()
+    searchInput.value?.select()
+  }
+}
+
+onMounted(() => { document.addEventListener('keydown', onGlobalKeydown) })
+onUnmounted(() => { document.removeEventListener('keydown', onGlobalKeydown) })
+
+// >>> Group results by category for display
+const groupedResults = computed(() => {
+  const groups: Record<string, SearchResult[]> = {}
+  for (const r of searchResults.value) {
+    if (!groups[r.category]) groups[r.category] = []
+    groups[r.category]!.push(r)
+  }
+  return groups
+})
+
+const flatResults = computed(() => searchResults.value)
+
+// === Rest of App ===
 
 const showAddBanner = ref(false)
 const toast = ref('')
@@ -72,10 +254,11 @@ onMounted(async () => {
 
 function addBot() { window.location.href = `${API}/auth/add` }
 
-// >>> Routes that are kept alive in the component cache so navigating back to them
-// >>> is instant and state (scroll position, loaded data) is preserved.
-// >>> Logs is intentionally NOT cached - it loads fresh each visit.
 const KEEP_ALIVE_ROUTES = ['DashboardView', 'CommandsView', 'AutomationsView']
+
+// >>> Expose nextActiveTab for CommandsView via provide
+import { provide } from 'vue'
+provide('nextActiveTab', nextActiveTab)
 </script>
 
 <template>
@@ -86,6 +269,50 @@ const KEEP_ALIVE_ROUTES = ['DashboardView', 'CommandsView', 'AutomationsView']
         <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/1x.gif" alt="shy" class="brand-emote" />
         <span class="brand-name">ShyBoti</span>
       </div>
+
+      <!-- Universal search bar -->
+      <div class="search-wrap" :class="{ open: searchOpen && searchResults.length > 0 }">
+        <svg class="search-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <input
+          ref="searchInput"
+          v-model="searchQuery"
+          class="search-input"
+          placeholder="Search… (Ctrl+F)"
+          @input="onSearchInput"
+          @keydown="onSearchKeydown"
+          @focus="onSearchFocus"
+          @blur="onSearchBlur"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <kbd v-if="!searchQuery" class="search-kbd">Ctrl+F</kbd>
+        <button v-if="searchQuery" class="search-clear" @mousedown.prevent="searchQuery = ''; searchResults = []; searchOpen = false">✕</button>
+
+        <!-- Results dropdown -->
+        <div v-if="searchOpen && flatResults.length > 0" class="search-results">
+          <template v-for="(items, category) in groupedResults" :key="category">
+            <div class="result-group-label">{{ category }}</div>
+            <button
+              v-for="(r, idx) in items"
+              :key="r.label + idx"
+              class="result-item"
+              :class="{ active: flatResults.indexOf(r) === searchIndex }"
+              @mousedown.prevent="selectResult(r)"
+            >
+              <span class="result-icon">{{ r.icon }}</span>
+              <span class="result-label">{{ r.label }}</span>
+              <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
+            </button>
+          </template>
+        </div>
+        <div v-else-if="searchOpen && searchQuery.trim() && !flatResults.length" class="search-results search-empty">
+          No results for "{{ searchQuery }}"
+        </div>
+      </div>
+
       <div class="topbar-right">
         <span v-if="toast" class="toast">{{ toast }}</span>
         <template v-if="session">
@@ -108,13 +335,11 @@ const KEEP_ALIVE_ROUTES = ['DashboardView', 'CommandsView', 'AutomationsView']
           <span class="hide-mobile">{{ t('nav.login') }}</span>
           <span class="show-mobile">{{ t('nav.login_short') }}</span>
         </button>
-        <!-- Language toggle -->
         <div class="lang-switcher">
           <button class="lang-opt" :class="{ active: locale === 'en' }" @click="setLocale('en')">EN</button>
           <span class="lang-sep">|</span>
           <button class="lang-opt" :class="{ active: locale === 'de' }" @click="setLocale('de')">DE</button>
         </div>
-        <!-- Hamburger - mobile only -->
         <button class="hamburger show-mobile" @click="sidebarOpen = !sidebarOpen" :class="{ open: sidebarOpen }">
           <span></span><span></span><span></span>
         </button>
@@ -130,11 +355,9 @@ const KEEP_ALIVE_ROUTES = ['DashboardView', 'CommandsView', 'AutomationsView']
     </div>
 
     <div class="body">
-      <!-- Overlay for mobile sidebar -->
       <div v-if="sidebarOpen" class="sidebar-overlay" @click="sidebarOpen = false"></div>
 
       <aside class="sidebar" :class="{ 'sidebar-open': sidebarOpen }">
-        <!-- Mobile sidebar header -->
         <div class="sidebar-mobile-header show-mobile">
           <template v-if="session">
             <span class="sidebar-user">#{{ session.channel }}</span>
@@ -163,14 +386,22 @@ const KEEP_ALIVE_ROUTES = ['DashboardView', 'CommandsView', 'AutomationsView']
           @click="nav('roles')">
           {{ t('nav.roles') }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
+
         <div class="sidebar-divider"></div>
+
         <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
           {{ t('nav.logs') }}
         </button>
-        <button class="sidebar-btn" :class="{ active: activeRoute === 'more' }" @click="nav('more')">
-          {{ t('nav.more') }}
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'tools' }" @click="nav('tools')">
+          Tools
         </button>
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'features', locked: !session }"
+          @click="nav('features')">
+          Features <span v-if="!session" class="lock-icon">🔒</span>
+        </button>
+
         <div class="sidebar-spacer"></div>
+
         <button v-if="!session || channelRole?.role === 'broadcaster'"
           class="sidebar-btn" :class="{ active: activeRoute === 'settings', locked: !session }"
           @click="nav('settings')">
@@ -182,9 +413,6 @@ const KEEP_ALIVE_ROUTES = ['DashboardView', 'CommandsView', 'AutomationsView']
       </aside>
 
       <main class="main-panel">
-        <!-- >>> KeepAlive wraps the router-view so that Dashboard, Commands and Automations
-             stay mounted in memory between navigations. This makes switching back to
-             these routes instant. Logs is excluded – it always loads fresh. -->
         <RouterView v-slot="{ Component }">
           <KeepAlive :include="KEEP_ALIVE_ROUTES">
             <component :is="Component" />
@@ -208,18 +436,65 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 .page { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
 /*  Topbar  */
-.topbar { height: 52px; flex-shrink: 0; background: #0e0e12; border-bottom: 1px solid #1e1e24; display: flex; align-items: center; padding: 0 20px; gap: 12px; }
-.topbar-brand { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
+.topbar { height: 52px; flex-shrink: 0; background: #0e0e12; border-bottom: 1px solid #1e1e24; display: flex; align-items: center; padding: 0 16px; gap: 10px; }
+.topbar-brand { display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 0; }
 .brand-emote  { width: 28px; height: 28px; flex-shrink: 0; image-rendering: pixelated; }
 .brand-name   { font-size: 1rem; font-weight: 700; color: #ffd569; letter-spacing: 0.04em; white-space: nowrap; }
-.topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
 .logged-in-as { font-size: 12px; color: #9d6cff; font-weight: 600; white-space: nowrap; }
 
+/*  Universal Search  */
+.search-wrap {
+  flex: 1; max-width: 420px; position: relative;
+  display: flex; align-items: center; height: 34px;
+  background: #1a1a1e; border: 1px solid #2a2a30;
+  transition: border-color .15s;
+}
+.search-wrap:focus-within { border-color: #6f2bff66; }
+.search-icon { position: absolute; left: 9px; width: 14px; height: 14px; color: #555; pointer-events: none; flex-shrink: 0; }
+.search-input {
+  flex: 1; height: 100%; background: transparent; border: none; outline: none;
+  color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 0 8px 0 30px;
+  min-width: 0;
+}
+.search-input::placeholder { color: #444; }
+.search-kbd { font-size: 9px; color: #333; border: 1px solid #2a2a30; padding: 1px 5px; margin-right: 6px; flex-shrink: 0; pointer-events: none; background: #111217; }
+.search-clear { background: transparent; border: none; color: #555; font-size: 11px; cursor: pointer; padding: 0 8px; height: 100%; flex-shrink: 0; }
+.search-clear:hover { color: #e0e0e0; }
+
+.search-results {
+  position: absolute; top: calc(100% + 4px); left: -1px; right: -1px;
+  background: #1a1a1e; border: 1px solid #2a2a30;
+  z-index: 9999; max-height: 400px; overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6); scrollbar-width: none;
+}
+.search-results::-webkit-scrollbar { display: none; }
+.search-empty { padding: 14px 16px; color: #555; font-size: 12px; }
+
+.result-group-label {
+  padding: 6px 12px 3px; font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em; color: #555;
+  border-top: 1px solid #1e1e24;
+}
+.result-group-label:first-child { border-top: none; }
+
+.result-item {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 7px 12px; border: none; background: transparent;
+  color: #ccc; font-family: inherit; font-size: 12px; text-align: left;
+  cursor: pointer; transition: background .1s;
+}
+.result-item:hover, .result-item.active { background: #6f2bff18; color: #e0e0e0; }
+.result-icon  { width: 16px; flex-shrink: 0; text-align: center; font-size: 11px; color: #9d6cff; }
+.result-label { font-weight: 600; flex-shrink: 0; }
+.result-sub   { font-size: 10px; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+
+/*  Channel switcher  */
 .channel-switcher { position: relative; }
 .channel-btn { height: 30px; padding: 0 12px; border: 1px solid #333; background: #1e1e26; color: #9d6cff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
 .channel-btn:hover { background: #252530; border-color: #6f2bff55; }
 .channel-menu { position: absolute; top: calc(100% + 6px); right: 0; background: #1b1b1d; border: 1px solid #2a2a30; min-width: 160px; z-index: 200; display: flex; flex-direction: column; box-shadow: 0 8px 24px #00000066; }
-.channel-menu-item { padding: 9px 16px; border: none; background: transparent; color: #888; font-family: inherit; font-size: 12px; text-align: left; cursor: pointer; transition: background 0.1s, color 0.1s; }
+.channel-menu-item { padding: 9px 16px; border: none; background: transparent; color: #888; font-family: inherit; font-size: 12px; text-align: left; cursor: pointer; }
 .channel-menu-item:hover { background: #222; color: #fff; }
 .channel-menu-item.active { color: #9d6cff; font-weight: 700; }
 
@@ -231,7 +506,7 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 .logout-btn:hover { background: #3a3a3e; color: #fff; }
 .lang-switcher { display: flex; align-items: center; gap: 2px; flex-shrink: 0; border: 1px solid #2a2a30; padding: 0 2px; height: 28px; }
 .lang-sep { color: #333; font-size: 10px; }
-.lang-opt { height: 22px; padding: 0 7px; border: none; background: transparent; color: #555; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; letter-spacing: .04em; transition: color .15s, background .15s; }
+.lang-opt { height: 22px; padding: 0 7px; border: none; background: transparent; color: #555; font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; letter-spacing: .04em; }
 .lang-opt:hover { color: #aaa; }
 .lang-opt.active { color: #9d6cff; background: #6f2bff18; }
 @keyframes shake { 0%{transform:translateX(0)} 15%{transform:translateX(-5px)} 30%{transform:translateX(5px)} 45%{transform:translateX(-4px)} 60%{transform:translateX(4px)} 75%{transform:translateX(-2px)} 90%{transform:translateX(2px)} 100%{transform:translateX(0)} }
@@ -254,8 +529,6 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 
 /*  Body / Layout  */
 .body { display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative; }
-
-/*  Sidebar overlay (mobile)  */
 .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 99; }
 
 /*  Sidebar  */
@@ -290,49 +563,34 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 .footer-link:hover { color: #9d6cff; }
 
 /*  Responsive helpers  */
-.hide-mobile  { }
-.show-mobile  { display: none; }
+.hide-mobile { }
+.show-mobile { display: none; }
 
-/* Logs page: prevent outer scroll on mobile */
 @media (max-width: 680px) {
-  body.logs-open,
-  body.logs-open .page,
-  body.logs-open .main-panel { overflow: hidden !important; height: 100%; }
+  body.logs-open, body.logs-open .page, body.logs-open .main-panel { overflow: hidden !important; height: 100%; }
 }
 
-/*  Mobile (≤ 680px)  */
 @media (max-width: 680px) {
   html, body { overflow: auto; }
   .page { height: auto; min-height: 100vh; overflow: visible; }
-
-  .topbar { padding: 0 14px; gap: 8px; }
-  .brand-name { font-size: 14px; }
-
+  .topbar { padding: 0 10px; gap: 6px; }
+  .brand-name { font-size: 13px; }
   .hide-mobile { display: none !important; }
   .show-mobile { display: flex !important; }
-
   .add-banner { padding: 8px 14px; font-size: 11px; }
-
   .body { overflow: visible; flex-direction: column; }
-
-  /* Sidebar: slide-in drawer from right */
-  .sidebar {
-    position: fixed; top: 52px; right: 0; bottom: 0;
-    width: 240px; z-index: 100;
-    transform: translateX(100%);
-    border-left: 1px solid #2a2a30;
-    box-shadow: -4px 0 24px #00000066;
-  }
+  .search-wrap { max-width: none; flex: 1; }
+  .search-kbd { display: none; }
+  .sidebar { position: fixed; top: 52px; right: 0; bottom: 0; width: 240px; z-index: 100; transform: translateX(100%); border-left: 1px solid #2a2a30; box-shadow: -4px 0 24px #00000066; }
   .sidebar.sidebar-open { transform: translateX(0); }
-
   .main-panel { padding: 14px; flex: none; min-height: calc(100vh - 52px); }
 }
 
-/*  Tablet (681px – 960px)  */
 @media (min-width: 681px) and (max-width: 960px) {
-  .topbar { padding: 0 16px; }
+  .topbar { padding: 0 12px; gap: 8px; }
   .sidebar { width: 170px; }
   .sidebar-btn { padding: 10px 14px; font-size: 12px; }
   .main-panel { padding: 16px; }
+  .search-wrap { max-width: 300px; }
 }
 </style>
