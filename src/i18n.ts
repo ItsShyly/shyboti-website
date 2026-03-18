@@ -38,7 +38,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'footer.copy':    '© 2026 shyboti.de',
     'footer.privacy': 'Privacy',
 
-    'home.sub':   'A Twitch bot with some extra features.\nLogin to manage commands, view logs and configure settings.',
+    'home.sub':   'A Twitch bot with some extra features.\nLogin to access manage commands, add moderation or use tools like obs widgets.',
     'home.login': 'Login with Twitch',
 
     // >>> Dashboard <<<
@@ -584,7 +584,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'footer.copy':    '© 2026 shyboti.de',
     'footer.privacy': 'Datenschutz',
 
-    'home.sub':   'Ein Twitch-Bot mit ein paar extra Features.\nMelde dich an um Commands zu verwalten, Logs anzuzeigen und Einstellungen zu konfigurieren.',
+    'home.sub':   'Ein Twitch-Bot mit ein paar extra Features.\nMelde dich an um Commands zu verwalten, Moderation zu nutzen oder Tools wie OBS Widgets zu verwenden.',
     'home.login': 'Mit Twitch anmelden',
 
     // >>> Dashboard <<<
