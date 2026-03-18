@@ -298,7 +298,7 @@ onMounted(load)
         <div v-if="newSpamType === 'caps'" class="threshold-wrap">
           <span class="threshold-lbl" style="white-space:nowrap">min.</span>
           <input v-model.number="newSpamMinLetters" type="number" min="0" max="999" class="field-input dur-input" />
-          <span class="threshold-hint">Buchstaben</span>
+          <span class="threshold-hint">Letters</span>
         </div>
         <select v-model="newSpamAction" class="field-select">
           <option value="delete">{{ t('mod.action.delete') }}</option>
@@ -311,9 +311,17 @@ onMounted(load)
       <div v-if="!spamFilters.length" class="mod-empty">{{ t('mod.empty.spam') }}</div>
       <div v-else class="item-list">
         <div v-for="f in spamFilters" :key="f.id" class="item-row">
-          <span class="item-term">{{ SPAM_TYPES.find(s => s.value === f.type)?.label ?? f.type }}</span>
-          <span class="item-dur" style="color:#888">≥ {{ f.threshold }}</span>
-          <span v-if="f.type === 'caps' && f.min_letters > 0" class="item-dur" style="color:#666">min. {{ f.min_letters }} Buchst.</span>
+          <span class="item-term" style="flex:1">
+            <template v-if="f.type === 'caps'">
+              Caps-Spam<template v-if="f.min_letters > 0"> min. {{ f.min_letters }} Letters</template> AND ≥ {{ f.threshold }}% Caps
+            </template>
+            <template v-if="f.type === 'repeat'">
+              Repeated chars<template v-if="f.min_letters > 0"> min. {{ f.min_letters }} Letters</template> AND ≥ {{ f.threshold }}% Repeated chars
+            </template>
+            <template v-else>
+              {{ SPAM_TYPES.find(s => s.value === f.type)?.label ?? f.type }} ≥ {{ f.threshold }}
+            </template>
+          </span>
           <span class="item-action" :style="{ color: ACTION_COLORS[f.action] }">{{ f.action === 'delete' ? t('mod.action.delete') : f.action === 'timeout' ? t('mod.action.timeout') : t('mod.action.ban') }}</span>
           <span v-if="f.action !== 'delete'" class="item-dur">{{ fmtDur(f.duration) }}</span>
           <button v-if="canManage" class="item-del" @click="removeSpamFilter(f.id)">✕</button>
