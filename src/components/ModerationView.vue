@@ -318,7 +318,7 @@ onMounted(load)
     <template v-else-if="activeTab === 'nukes'">
       <div class="nuke-hint">
         {{ t('mod.nuke.hint') }}
-        <strong>{{ t('mod.nuke.stay') }}</strong> — {{ t('mod.nuke.hint2') }}
+        <strong>{{ t('mod.nuke.stay') }}</strong> - {{ t('mod.nuke.hint2') }}
       </div>
 
       <!-- Create nuke form -->

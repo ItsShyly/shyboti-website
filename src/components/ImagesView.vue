@@ -78,7 +78,7 @@ function onFileInputChange(e: Event) {
 // >>> GIFs are not compressed (Canvas loses animation).
 async function compressImage(file: File, maxMB = 3): Promise<Blob> {
   const maxBytes = maxMB * 1024 * 1024
-  // >>> Don't compress GIFs — Canvas destroys animation
+  // >>> Don't compress GIFs - Canvas destroys animation
   if (file.type === 'image/gif' || file.size <= maxBytes) return file
 
   return new Promise((resolve, reject) => {
@@ -131,7 +131,7 @@ async function uploadFiles(files: File[]) {
         uploadError.value = `${file.name} is not an image`; continue
       }
 
-      // >>> Compress before upload — reduces large photos to ~3 MB
+      // >>> Compress before upload - reduces large photos to ~3 MB
       let blob: Blob = file
       if (file.size > 3 * 1024 * 1024) {
         try { blob = await compressImage(file) }
@@ -153,7 +153,7 @@ async function uploadFiles(files: File[]) {
 
       const res = await fetch(`${API}/images/upload`, { method: 'POST', headers, body: fd })
 
-      // >>> Always try to parse JSON — but handle plain-text 404/errors gracefully
+      // >>> Always try to parse JSON - but handle plain-text 404/errors gracefully
       let data: any = {}
       const ct = res.headers.get('content-type') ?? ''
       if (ct.includes('application/json')) {
