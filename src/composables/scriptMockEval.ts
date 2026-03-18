@@ -42,6 +42,12 @@ export function resetMockState() {
   for (const k in mockLists)    delete mockLists[k]
 }
 
+// >>> Seed mock state with real values from the API so preview shows actual counter/var values
+export function seedMockState(realCounters: Record<string, number>, realVars: Record<string, string>) {
+  for (const [k, v] of Object.entries(realCounters)) mockCounters[k] = v
+  for (const [k, v] of Object.entries(realVars))     mockVars[k]     = v
+}
+
 export function mockEval(src: string, ctx: MockContext = DEFAULT_MOCK): string {
   if (!src?.trim()) return ''
   const env: MockEnv = { ctx, macros: {}, locals: {}, index: 0, calls: 0 }

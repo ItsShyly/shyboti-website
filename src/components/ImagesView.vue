@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
@@ -33,20 +33,112 @@ const deleteId    = ref<string | null>(null)
 const isGuest  = computed(() => !session.value)
 const imageUrl = (id: string) => `https://i.shyboti.de/${id}`
 
-// >>> URL bar state
-const urlInput  = ref('')
-const urlPasted = ref(false)
+// >>> Upload from URL
+const urlInput     = ref('')
+const urlUploading = ref(false)
+const urlError     = ref('')
 
-function onUrlPaste() {
+async function uploadFromUrl() {
   const v = urlInput.value.trim()
   if (!v) return
-  // >>> Accept i.shyboti.de/<id> or bare id
-  const match = v.match(/(?:https?:\/\/i\.shyboti\.de\/)?([A-Za-z0-9_-]{5,16})$/)
-  if (!match) return
-  lastLink.value = imageUrl(match[1]!)
-  urlInput.value = ''
-  urlPasted.value = true
-  setTimeout(() => urlPasted.value = false, 1500)
+  urlUploading.value = true; urlError.value = ''; uploadError.value = ''
+  try {
+    const res = await fetch(v)
+    if (!res.ok) throw new Error(`Could not fetch image (${res.status})`)
+    const ct = res.headers.get('content-type') ?? ''
+    if (!ct.startsWith('image/')) throw new Error('URL does not point to an image')
+    const blob = await res.blob()
+    const name = v.split('/').pop()?.split('?')[0] ?? 'image'
+    await uploadFiles([new File([blob], name, { type: ct })])
+    urlInput.value = ''
+  } catch (e: any) {
+    urlError.value = e.message ?? 'Failed to fetch image'
+  }
+  urlUploading.value = false
+}
+
+// >>> Crop state
+const cropOpen     = ref(false)
+const cropCanvas   = ref<HTMLCanvasElement | null>(null)
+const cropImg      = ref<HTMLImageElement | null>(null)
+const cropStart    = ref({ x: 0, y: 0 })
+const cropEnd      = ref({ x: 0, y: 0 })
+const cropDragging = ref(false)
+const cropApplying = ref(false)
+
+function openCrop() {
+  const img = new Image()
+  img.crossOrigin = 'anonymous'
+  img.onload = () => { cropImg.value = img; cropOpen.value = true }
+  img.src = lastLink.value
+}
+
+function cropMouseDown(e: MouseEvent) {
+  const canvas = cropCanvas.value; if (!canvas) return
+  const rect = canvas.getBoundingClientRect()
+  const scaleX = canvas.width  / rect.width
+  const scaleY = canvas.height / rect.height
+  cropStart.value = { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY }
+  cropEnd.value   = { ...cropStart.value }
+  cropDragging.value = true
+  drawCrop()
+}
+
+function cropMouseMove(e: MouseEvent) {
+  if (!cropDragging.value) return
+  const canvas = cropCanvas.value; if (!canvas) return
+  const rect = canvas.getBoundingClientRect()
+  const scaleX = canvas.width  / rect.width
+  const scaleY = canvas.height / rect.height
+  cropEnd.value = { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY }
+  drawCrop()
+}
+
+function cropMouseUp() { cropDragging.value = false }
+
+function drawCrop() {
+  const canvas = cropCanvas.value; const img = cropImg.value; if (!canvas || !img) return
+  const ctx = canvas.getContext('2d')!;
+  canvas.width = img.naturalWidth; canvas.height = img.naturalHeight
+  ctx.drawImage(img, 0, 0)
+  const x1 = Math.min(cropStart.value.x, cropEnd.value.x)
+  const y1 = Math.min(cropStart.value.y, cropEnd.value.y)
+  const w  = Math.abs(cropEnd.value.x - cropStart.value.x)
+  const h  = Math.abs(cropEnd.value.y - cropStart.value.y)
+  if (w > 2 && h > 2) {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, x1, y1, w, h, x1, y1, w, h)
+    ctx.strokeStyle = '#9d6cff'; ctx.lineWidth = 2
+    ctx.strokeRect(x1, y1, w, h)
+  }
+}
+
+// >>> Draw image on canvas when crop modal opens
+watch(cropOpen, async (val) => {
+  if (!val) return
+  await nextTick()
+  drawCrop()
+})
+
+async function applyCrop() {
+  const canvas = cropCanvas.value; const img = cropImg.value; if (!canvas || !img) return
+  const x1 = Math.min(cropStart.value.x, cropEnd.value.x)
+  const y1 = Math.min(cropStart.value.y, cropEnd.value.y)
+  const w  = Math.abs(cropEnd.value.x - cropStart.value.x)
+  const h  = Math.abs(cropEnd.value.y - cropStart.value.y)
+  if (w < 2 || h < 2) return
+  cropApplying.value = true
+  const out = document.createElement('canvas')
+  out.width = w; out.height = h
+  out.getContext('2d')!.drawImage(img, x1, y1, w, h, 0, 0, w, h)
+  out.toBlob(async (blob) => {
+    if (!blob) { cropApplying.value = false; return }
+    cropOpen.value = false
+    lastLink.value = ''
+    await uploadFiles([new File([blob], 'cropped.jpg', { type: 'image/jpeg' })])
+    cropApplying.value = false
+  }, 'image/jpeg', 0.92)
 }
 
 // >>> If ?gallery=1 was passed from MoreView, open gallery directly
@@ -299,6 +391,7 @@ function switchView(v: 'upload' | 'gallery') {
           <div class="link-bar">
             <span class="link-label">{{ t('images.link') }}</span>
             <code class="link-code">{{ lastLink }}</code>
+            <button class="crop-btn" @click.stop="openCrop()">✂ Crop</button>
             <button class="copy-btn" @click.stop="copyLink(lastLink)">
               {{ lastCopied ? t('images.copied') : t('images.copy') }}
             </button>
@@ -324,16 +417,20 @@ function switchView(v: 'upload' | 'gallery') {
         <div v-if="uploadError" class="upload-error" @click.stop>{{ uploadError }}</div>
       </div>
 
-      <!-- URL paste bar -->
+      <!-- Upload from URL -->
       <div class="url-bar">
         <input
           v-model="urlInput"
           class="url-input"
-          placeholder="Paste an i.shyboti.de/… link to preview it"
-          @keydown.enter="onUrlPaste"
+          placeholder="Paste any image URL to upload it…"
+          @keydown.enter="uploadFromUrl"
+          :disabled="urlUploading"
         />
-        <button class="url-go-btn" @click="onUrlPaste">{{ urlPasted ? '✓' : '→' }}</button>
+        <button class="url-go-btn" @click="uploadFromUrl" :disabled="urlUploading">
+          {{ urlUploading ? '…' : '↑' }}
+        </button>
       </div>
+      <div v-if="urlError" class="url-error">{{ urlError }}</div>
 
       <!-- Bottom bar -->
       <div class="bottom-bar">
@@ -350,6 +447,33 @@ function switchView(v: 'upload' | 'gallery') {
       </div>
     </div>
   </div>
+
+  <!-- Crop modal -->
+  <Teleport to="body">
+    <div v-if="cropOpen" class="crop-backdrop" @click.self="cropOpen = false">
+      <div class="crop-modal">
+        <div class="crop-header">
+          <span class="crop-title">✂ Crop Image</span>
+          <button class="crop-close" @click="cropOpen = false">✕</button>
+        </div>
+        <div class="crop-hint">Click and drag to select crop area</div>
+        <canvas
+          ref="cropCanvas"
+          class="crop-canvas"
+          @mousedown="cropMouseDown"
+          @mousemove="cropMouseMove"
+          @mouseup="cropMouseUp"
+          @mouseleave="cropMouseUp"
+        />
+        <div class="crop-actions">
+          <button class="crop-cancel" @click="cropOpen = false">Cancel</button>
+          <button class="crop-apply" :disabled="cropApplying" @click="applyCrop">
+            {{ cropApplying ? 'Applying…' : 'Apply Crop' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -511,4 +635,48 @@ function switchView(v: 'upload' | 'gallery') {
 .gallery-item:hover .delete-btn { opacity: 1; }
 .delete-btn:hover { background: rgba(241,73,73,.2); }
 .delete-btn.confirm { opacity: 1; border-color: #f14949; background: rgba(241,73,73,.2); font-weight: 700; }
+
+.crop-btn {
+  height: 28px; padding: 0 10px; border: 1px solid #6f2bff44;
+  background: transparent; color: #9d6cff; font-family: inherit; font-size: 11px;
+  cursor: pointer; flex-shrink: 0; transition: background .1s;
+}
+.crop-btn:hover { background: #6f2bff18; }
+
+.url-error { font-size: 11px; color: #f14949; padding: 4px 12px; background: rgba(241,73,73,.06); border-top: 1px solid rgba(241,73,73,.2); flex-shrink: 0; }
+
+.crop-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.85);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.crop-modal {
+  background: #141418; border: 1px solid #2a2a30;
+  display: flex; flex-direction: column; max-width: 90vw; max-height: 90vh;
+}
+.crop-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid #1e1e24; flex-shrink: 0;
+}
+.crop-title { font-size: 13px; font-weight: 700; color: #e0e0e0; }
+.crop-close {
+  background: none; border: none; color: #666; font-size: 16px; cursor: pointer;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+}
+.crop-close:hover { color: #e0e0e0; }
+.crop-hint { font-size: 11px; color: #555; padding: 6px 14px; border-bottom: 1px solid #1e1e24; flex-shrink: 0; }
+.crop-canvas {
+  max-width: 85vw; max-height: 70vh; object-fit: contain;
+  cursor: crosshair; display: block;
+}
+.crop-actions {
+  display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid #1e1e24; flex-shrink: 0; justify-content: flex-end;
+}
+.crop-cancel { height: 28px; padding: 0 14px; border: 1px solid #2a2a30; background: transparent; color: #888; font-family: inherit; font-size: 11px; cursor: pointer; }
+.crop-cancel:hover { border-color: #3a3a44; color: #ccc; }
+.crop-apply {
+  height: 28px; padding: 0 16px; border: none; background: #6f2bff; color: #fff;
+  font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; transition: background .15s;
+}
+.crop-apply:hover:not(:disabled) { background: #7f3fff; }
+.crop-apply:disabled { opacity: .5; cursor: default; }
 </style>

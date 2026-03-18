@@ -4,7 +4,7 @@ import { API } from '../api'
 import { useAuth } from '../auth'
 import PuzzlePiece from './PuzzlePiece.vue'
 import { highlightScript } from '../composables/scriptHighlight'
-import { mockEval, resetMockState, DEFAULT_MOCK, type MockContext } from '../composables/scriptMockEval'
+import { mockEval, resetMockState, seedMockState, DEFAULT_MOCK, type MockContext } from '../composables/scriptMockEval'
 import { useI18n } from '../i18n'
 
 export interface CustomCommand {
@@ -94,6 +94,25 @@ async function load() {
     }
   } catch {}
   loading.value = false
+
+  // >>> Fetch real counter/var values to seed the preview with actual state
+  try {
+    const vres = await fetch(`${API}/variables/${props.channel}`, {
+      headers: { Authorization: `Bearer ${session.value!.token}` }
+    })
+    if (vres.ok) {
+      const vdata = await vres.json() as {
+        counters:  { name: string; value: number }[]
+        vars:      { name: string; value: string }[]
+      }
+      const realCounters: Record<string, number> = {}
+      const realVars:     Record<string, string>  = {}
+      for (const c of vdata.counters) realCounters[c.name] = c.value
+      for (const v of vdata.vars)     realVars[v.name]     = v.value
+      seedMockState(realCounters, realVars)
+    }
+  } catch {}
+
   await nextTick()
   // >>> Normal editor - load response into the script editor
   const nel = normalEditorRef.value
@@ -830,7 +849,8 @@ const GROUP_COLORS: Record<string, { bg: string; text: string }> = {
 
 function updatePreview() {
   try {
-    resetMockState()
+    // >>> Don't resetMockState here - real values were seeded at load time.
+    // >>> Resetting would wipe real counter values every keystroke.
     previewOutput.value = mockEval(form.value.response, mockCtx.value)
   } catch { previewOutput.value = '[preview error]' }
 }

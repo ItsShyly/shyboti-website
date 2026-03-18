@@ -257,6 +257,16 @@ async function search() {
     const y = today.getFullYear(), m = today.getMonth() + 1
     try { msgs.value = await fetchMonth(ch, y, m, abortCtrl.signal) } catch {}
     cursorMonth = prevMonth({ y, m })
+    // >>> If current month empty, walk backwards up to 1 year to find logs
+    if (!msgs.value.length && !abortCtrl.signal.aborted) {
+      const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 1)
+      while (!msgs.value.length && !abortCtrl.signal.aborted) {
+        const cur = cursorMonth
+        if (new Date(cur.y, cur.m - 1, 1) < cutoff) break
+        cursorMonth = prevMonth(cur)
+        try { msgs.value = await fetchMonth(ch, cur.y, cur.m, abortCtrl.signal) } catch {}
+      }
+    }
     loading.value = false
     if (hashId) {
       if (!msgs.value.some(msg => msg.id === hashId)) {
@@ -272,6 +282,15 @@ async function search() {
   } else {
     try { msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal) } catch {}
     cursorDate = prevDay(today)
+    // >>> If today empty, walk backwards up to 1 year to find logs
+    if (!msgs.value.length && !abortCtrl.signal.aborted) {
+      const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 1)
+      while (!msgs.value.length && cursorDate && cursorDate > cutoff && !abortCtrl.signal.aborted) {
+        const d = cursorDate
+        cursorDate = prevDay(d)
+        try { msgs.value = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal) } catch {}
+      }
+    }
     loading.value = false
     if (hashId) {
       if (!msgs.value.some(msg => msg.id === hashId)) {

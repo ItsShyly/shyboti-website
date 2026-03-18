@@ -163,7 +163,7 @@ const CAT_COLOR: Record<string, string> = {
 }
 
 function filtered() {
-  let list = commands.value
+  let list = commands.value.filter(c => !BLOCKED.includes(c.name))
   if (search.value.trim()) list = list.filter(c => c.name.includes(search.value.toLowerCase()))
   return list
 }
