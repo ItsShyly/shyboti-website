@@ -400,6 +400,10 @@ watch(() => session.value?.channel, load)
               </div>
             </div>
 
+            <div class="obs-cache-hint">
+              💡 After changing the style, right-click your Browser Source in OBS → <strong>Properties</strong> → <strong>Refresh cache of current page</strong> to apply visual changes.
+            </div>
+
             <div v-if="saveError" class="save-error">{{ saveError }}</div>
 
             <div class="panel-footer">
@@ -513,6 +517,8 @@ watch(() => session.value?.channel, load)
 .clear-btn { height: 32px; padding: 0 10px; border: 1px solid #2a2a30; background: transparent; color: #555; font-family: inherit; font-size: 11px; cursor: pointer; flex-shrink: 0; }
 .clear-btn:hover { color: #e0e0e0; border-color: #444; }
 
+.obs-cache-hint { font-size: 11px; color: #666; background: #111217; border: 1px solid #2a2a30; padding: 8px 12px; line-height: 1.6; }
+.obs-cache-hint strong { color: #aaa; font-weight: 600; }
 .save-error { font-size: 11px; color: #f14949; padding: 6px 10px; background: rgba(241,73,73,.08); border: 1px solid #f1494933; }
 
 .panel-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 16px; border-top: 1px solid #222; margin-top: 4px; }
