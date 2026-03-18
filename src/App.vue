@@ -270,8 +270,8 @@ provide('nextActiveTab', nextActiveTab)
         <span class="brand-name">ShyBoti</span>
       </div>
 
-      <!-- Universal search bar -->
-      <div class="search-wrap" :class="{ open: searchOpen && searchResults.length > 0 }">
+      <!-- Universal search bar - desktop only -->
+      <div class="search-wrap hide-mobile" :class="{ open: searchOpen && searchResults.length > 0 }">
         <svg class="search-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
           <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -361,6 +361,47 @@ provide('nextActiveTab', nextActiveTab)
             <span class="sidebar-user">#{{ session.channel }}</span>
             <button class="sidebar-logout" @click="logout(); router.push('/'); sidebarOpen = false">{{ t('nav.logout') }}</button>
           </template>
+        </div>
+
+        <!-- Search bar inside sidebar - mobile only -->
+        <div class="sidebar-search show-mobile" :class="{ open: searchOpen && searchResults.length > 0 }">
+          <svg class="search-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <input
+            ref="searchInput"
+            v-model="searchQuery"
+            class="search-input"
+            placeholder="Search…"
+            @input="onSearchInput"
+            @keydown="onSearchKeydown"
+            @focus="onSearchFocus"
+            @blur="onSearchBlur"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button v-if="searchQuery" class="search-clear" @mousedown.prevent="searchQuery = ''; searchResults = []; searchOpen = false">✕</button>
+          <!-- Results dropdown -->
+          <div v-if="searchOpen && flatResults.length > 0" class="search-results">
+            <template v-for="(items, category) in groupedResults" :key="category">
+              <div class="result-group-label">{{ category }}</div>
+              <button
+                v-for="(r, idx) in items"
+                :key="r.label + idx"
+                class="result-item"
+                :class="{ active: flatResults.indexOf(r) === searchIndex }"
+                @mousedown.prevent="selectResult(r); sidebarOpen = false"
+              >
+                <span class="result-icon">{{ r.icon }}</span>
+                <span class="result-label">{{ r.label }}</span>
+                <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
+              </button>
+            </template>
+          </div>
+          <div v-else-if="searchOpen && searchQuery.trim() && !flatResults.length" class="search-results search-empty">
+            No results for "{{ searchQuery }}"
+          </div>
         </div>
 
         <button class="sidebar-btn" :class="{ active: activeRoute === 'dashboard', locked: !session }"
@@ -546,6 +587,27 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 .bot-btn.add { background: #6f2bff; color: #fff; }
 .bot-btn.add:hover { background: #7f3fff; }
 
+/* Mobile search in sidebar */
+.sidebar-search {
+  display: none; /* shown via show-mobile */
+  position: relative; margin: 8px 12px 4px; height: 36px;
+  background: #111217; border: 1px solid #2a2a30;
+  align-items: center;
+}
+.sidebar-search:focus-within { border-color: #6f2bff66; }
+.sidebar-search .search-icon { position: absolute; left: 9px; width: 13px; height: 13px; color: #555; pointer-events: none; }
+.sidebar-search .search-input { flex: 1; height: 100%; background: transparent; border: none; outline: none; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 0 8px 0 28px; }
+.sidebar-search .search-input::placeholder { color: #444; }
+.sidebar-search .search-clear { background: transparent; border: none; color: #555; font-size: 11px; cursor: pointer; padding: 0 8px; height: 100%; }
+.sidebar-search .search-clear:hover { color: #e0e0e0; }
+.sidebar-search .search-results {
+  position: absolute; top: calc(100% + 2px); left: -1px; right: -1px;
+  background: #1a1a1e; border: 1px solid #2a2a30; z-index: 9999;
+  max-height: 320px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,.6);
+  scrollbar-width: none;
+}
+.sidebar-search .search-results::-webkit-scrollbar { display: none; }
+
 /* Mobile sidebar header */
 .sidebar-mobile-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px 8px; border-bottom: 1px solid #1e1e24; margin-bottom: 4px; }
 .sidebar-user { font-size: 12px; color: #9d6cff; font-weight: 600; }
@@ -578,7 +640,6 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
   .show-mobile { display: flex !important; }
   .add-banner { padding: 8px 14px; font-size: 11px; }
   .body { overflow: visible; flex-direction: column; }
-  .search-wrap { position: static; transform: none; width: auto; flex: 1; }
   .search-kbd { display: none; }
   .sidebar { position: fixed; top: 52px; right: 0; bottom: 0; width: 240px; z-index: 100; transform: translateX(100%); border-left: 1px solid #2a2a30; box-shadow: -4px 0 24px #00000066; }
   .sidebar.sidebar-open { transform: translateX(0); }
