@@ -211,7 +211,7 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 .topbar { height: 52px; flex-shrink: 0; background: #0e0e12; border-bottom: 1px solid #1e1e24; display: flex; align-items: center; padding: 0 20px; gap: 12px; }
 .topbar-brand { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .brand-emote  { width: 28px; height: 28px; flex-shrink: 0; image-rendering: pixelated; }
-.brand-name   { font-size: 1rem; font-weight: 700; color: #bf94ff; letter-spacing: 0.04em; white-space: nowrap; }
+.brand-name   { font-size: 1rem; font-weight: 700; color: #ffd569; letter-spacing: 0.04em; white-space: nowrap; }
 .topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .logged-in-as { font-size: 12px; color: #9d6cff; font-weight: 600; white-space: nowrap; }
 

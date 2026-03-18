@@ -31,7 +31,7 @@ const { t } = useI18n()
 .hero-inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 20px; }
 .hero-title {
   display: flex; align-items: center; gap: 18px;
-  font-size: clamp(40px, 5.5vw, 68px); font-weight: 700; color: #bf94ff; line-height: 1;
+  font-size: clamp(40px, 5.5vw, 68px); font-weight: 700; color: #ffd569; line-height: 1;
 }
 .hero-emote { width: clamp(44px, 6vw, 72px); height: clamp(44px, 6vw, 72px); image-rendering: pixelated; }
 .hero-sub { font-size: clamp(12px, 1.3vw, 15px); color: #666; line-height: 1.9; }
