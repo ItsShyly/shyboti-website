@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
@@ -60,6 +60,7 @@ interface Timer {
   interval_sec: number; min_messages: number
   enabled_when: string; required_game: string
   condition: string; is_active: number
+  last_fired: number
 }
 
 const timers  = ref<Timer[]>([])
@@ -67,6 +68,23 @@ const loading = ref(false)
 const saving  = ref<string | null>(null)
 const error   = ref('')
 const success = ref('')
+
+// >>> Live clock for next-fire countdowns
+const now = ref(Date.now())
+let _clockInterval: ReturnType<typeof setInterval> | null = null
+onUnmounted(() => { if (_clockInterval) clearInterval(_clockInterval) })
+
+function fmtNextFire(timer: Timer): string {
+  if (!timer.is_active) return ''
+  const fired = timer.last_fired ?? 0
+  const nextMs = fired + timer.interval_sec * 1000
+  const diffMs = nextMs - now.value
+  if (diffMs <= 0) return 'firing soon'
+  const s = Math.ceil(diffMs / 1000)
+  if (s >= 3600) return `in ${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`
+  if (s >= 60)   return `in ${Math.floor(s/60)}m ${s%60}s`
+  return `in ${s}s`
+}
 
 // >>> Edit panel
 const editOpen = ref(false)
@@ -280,7 +298,7 @@ async function runSync() {
   syncRunning.value = false
 }
 
-onMounted(() => { load(); fetchSync() })
+onMounted(() => { load(); fetchSync(); _clockInterval = setInterval(() => now.value = Date.now(), 1000) })
 watch(() => session.value?.channel, () => { load(); fetchSync() })
 </script>
 
@@ -338,6 +356,7 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
             <span v-if="timer.condition" class="meta-pill cond">if …</span>
           </div>
           <div class="timer-response">{{ timer.response.slice(0, 80) }}{{ timer.response.length > 80 ? '…' : '' }}</div>
+          <div v-if="timer.is_active" class="timer-next">{{ fmtNextFire(timer) }}</div>
         </div>
         <div class="row-actions">
           <button class="btn-action edit" @click.stop="canEdit && openEdit(timer)" :class="{ 'btn-action-disabled': !canEdit }">{{ canEdit ? t('timer.edit') : t('timer.view') }}</button>
@@ -541,6 +560,7 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
 .timer-name   { font-size: 13px; font-weight: 600; color: #e0e0e0; margin-bottom: 4px; }
 .timer-meta   { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
 .timer-response { font-size: 11px; color: #555; font-family: 'Consolas','Fira Mono',monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.timer-next     { font-size: 10px; color: #9d6cff88; margin-top: 2px; font-family: 'Consolas','Fira Mono',monospace; }
 .meta-pill    { font-size: 10px; padding: 1px 6px; border: 1px solid; }
 .meta-pill.interval { color: #9d6cff; border-color: #9d6cff44; background: #9d6cff11; }
 .meta-pill.msgs     { color: #4ec9b0; border-color: #4ec9b044; background: #4ec9b011; }

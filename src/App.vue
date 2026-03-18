@@ -163,6 +163,7 @@ const KEEP_ALIVE_ROUTES = ['DashboardView', 'CommandsView', 'AutomationsView']
           @click="nav('roles')">
           {{ t('nav.roles') }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
+        <div class="sidebar-divider"></div>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
           {{ t('nav.logs') }}
         </button>
@@ -267,6 +268,7 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 .sidebar-btn.locked { opacity: 0.45; }
 .sidebar-btn.locked:hover { opacity: 0.75; }
 .lock-icon { font-size: 10px; opacity: 0.6; }
+.sidebar-divider { height: 1px; background: #1e1e24; margin: 6px 14px; flex-shrink: 0; }
 .sidebar-bottom { padding: 12px 16px; border-top: 1px solid #1e1e24; }
 .bot-btn { width: 100%; height: 32px; border: none; font-family: inherit; font-size: 12px; cursor: pointer; }
 .bot-btn.add { background: #6f2bff; color: #fff; }

@@ -179,24 +179,6 @@ async function openChatterino() {
       </div>
     </div>
 
-    <!-- >>> Variables & Counters card <<< -->
-    <div class="service-card" @click="openVars">
-      <div class="card-icon vars-icon">
-        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="4" y="8" width="18" height="10" rx="2" stroke="currentColor" stroke-width="2.5"/>
-          <rect x="4" y="26" width="18" height="10" rx="2" stroke="currentColor" stroke-width="2.5"/>
-          <path d="M26 13h18M26 31h12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-          <path d="M40 27l4 4-4 4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">Variables &amp; Counters</div>
-        <div class="card-sub">View and edit your $counter and $var values</div>
-        <div class="card-url" v-if="totalCount > 0">{{ totalCount }} entr{{ totalCount === 1 ? 'y' : 'ies' }}</div>
-        <div class="card-url" v-else style="color:#444">No entries yet</div>
-      </div>
-    </div>
-
     <!-- >>> Notes card <<< -->
     <div class="service-card" @click="router.push('/notes')">
       <!-- Icon -->
@@ -226,6 +208,24 @@ async function openChatterino() {
         </svg>
         {{ t('more.notes.your') }}
       </button>
+    </div>
+
+        <!-- >>> Variables & Counters card (logged-in only) <<< -->
+    <div v-if="session" class="service-card" @click="openVars">
+      <div class="card-icon vars-icon">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="4" y="8" width="18" height="10" rx="2" stroke="currentColor" stroke-width="2.5"/>
+          <rect x="4" y="26" width="18" height="10" rx="2" stroke="currentColor" stroke-width="2.5"/>
+          <path d="M26 13h18M26 31h12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <path d="M40 27l4 4-4 4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">Variables &amp; Counters</div>
+        <div class="card-sub">View and edit your $counter and $var values</div>
+        <div class="card-url" v-if="totalCount > 0">{{ totalCount }} entr{{ totalCount === 1 ? 'y' : 'ies' }}</div>
+        <div class="card-url" v-else style="color:#444">No entries yet</div>
+      </div>
     </div>
 
   </div>

@@ -23,7 +23,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 
 // >>> Gallery state
 interface UploadedImage {
-  id: string; filename: string; url: string; size: number
+  id: string; filename: string; url: string; size: number; mime: string
   created_at: number; expires_at: number | null
 }
 const images      = ref<UploadedImage[]>([])
@@ -154,14 +154,18 @@ function onDragLeave(e: DragEvent) {
 }
 function onDragOver(e: DragEvent) { e.preventDefault() }
 
+function isAcceptedFile(f: File) {
+  return f.type.startsWith('image/') || f.type.startsWith('video/')
+}
+
 async function onDrop(e: DragEvent) {
   e.preventDefault(); isDragging.value = false
-  const files = Array.from(e.dataTransfer?.files ?? []).filter(f => f.type.startsWith('image/'))
+  const files = Array.from(e.dataTransfer?.files ?? []).filter(isAcceptedFile)
   if (files.length) await uploadFiles(files)
 }
 
 function onFileInputChange(e: Event) {
-  const files = Array.from((e.target as HTMLInputElement).files ?? []).filter(f => f.type.startsWith('image/'))
+  const files = Array.from((e.target as HTMLInputElement).files ?? []).filter(isAcceptedFile)
   if (files.length) uploadFiles(files)
 }
 
@@ -214,30 +218,47 @@ async function compressImage(file: File, maxMB = 3): Promise<Blob> {
   })
 }
 
+// >>> Video pre-compression: shrink videos over 50MB via canvas frame extraction (best-effort)
+// >>> Full video transcoding isn't possible in-browser without ffmpeg.wasm.
+// >>> We shrink images aggressively. Videos over 50MB are rejected with a clear message.
+async function prepareFile(file: File): Promise<Blob | null> {
+  const MAX = 50 * 1024 * 1024
+  if (file.type.startsWith('video/')) {
+    // >>> Videos: try to shrink images only; full video transcode needs server-side ffmpeg
+    // >>> If the file is under 50MB, upload as-is. Over 50MB, reject clearly.
+    if (file.size > MAX) return null
+    return file
+  }
+  // >>> Images: compress with Canvas
+  if (file.type === 'image/gif') return file // GIFs lose animation in Canvas
+  if (file.size <= 3 * 1024 * 1024) return file // small enough, skip compression
+  try { return await compressImage(file, 3) } catch { return file }
+}
+
 async function uploadFiles(files: File[]) {
   uploading.value = true; uploadError.value = ''; lastLink.value = ''
   try {
     for (const file of files) {
-      // >>> Hard reject: not an image type at all
-      if (!file.type.startsWith('image/')) {
-        uploadError.value = `${file.name} is not an image`; continue
+      // >>> Hard reject: not an accepted type
+      if (!isAcceptedFile(file)) {
+        uploadError.value = `${file.name} is not an accepted image or video`; continue
       }
 
-      // >>> Compress before upload - reduces large photos to ~3 MB
-      let blob: Blob = file
-      if (file.size > 3 * 1024 * 1024) {
-        try { blob = await compressImage(file) }
-        catch { /* compression failed, try original */ }
+      // >>> Pre-compress / validate size before upload
+      const blob = await prepareFile(file)
+      if (!blob) {
+        uploadError.value = `${file.name} exceeds 50 MB and cannot be compressed in-browser. Please compress it first.`
+        continue
       }
 
-      // >>> Hard server-side limit guard: 8 MB
-      if (blob.size > 8 * 1024 * 1024) {
-        uploadError.value = `${file.name} is too large even after compression (max 8 MB)`
+      // >>> Hard server-side limit guard
+      if (blob.size > 50 * 1024 * 1024) {
+        uploadError.value = `${file.name} is too large (max 50 MB)`
         continue
       }
 
       const fd = new FormData()
-      // >>> Use compressed blob but keep original filename
+      // >>> Use compressed/validated blob, keep original filename
       fd.append('file', new File([blob], file.name, { type: blob.type || file.type }))
 
       const headers: Record<string, string> = {}
@@ -333,7 +354,8 @@ function switchView(v: 'upload' | 'gallery') {
       <div v-else class="gallery-grid">
         <div v-for="img in images" :key="img.id" class="gallery-item">
           <a :href="imageUrl(img.id)" target="_blank" rel="noopener" class="gallery-thumb-wrap">
-            <img :src="imageUrl(img.id)" :alt="img.filename" class="gallery-thumb" loading="lazy" />
+            <video v-if="img.mime?.startsWith('video/')" :src="imageUrl(img.id)" class="gallery-thumb" muted loop preload="metadata" />
+            <img v-else :src="imageUrl(img.id)" :alt="img.filename" class="gallery-thumb" loading="lazy" />
           </a>
           <div class="gallery-item-info">
             <div class="gallery-item-name">{{ img.filename }}</div>
@@ -373,7 +395,7 @@ function switchView(v: 'upload' | 'gallery') {
         <input
           ref="fileInputRef"
           type="file"
-          accept="image/*"
+          accept="image/*,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/mpeg"
           multiple
           class="file-input-hidden"
           @change="onFileInputChange"
@@ -411,7 +433,7 @@ function switchView(v: 'upload' | 'gallery') {
             <path d="M8 46L20 32L28 40L38 28L56 46" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.25"/>
           </svg>
           <div class="drop-label">{{ t('images.drop') }}</div>
-          <div class="drop-hint">{{ t('images.drop_hint') }}</div>
+          <div class="drop-hint">PNG, JPG, GIF, WEBP, MP4, WEBM · max 50 MB</div>
         </div>
 
         <div v-if="uploadError" class="upload-error" @click.stop>{{ uploadError }}</div>
