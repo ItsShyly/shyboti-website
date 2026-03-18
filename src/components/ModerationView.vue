@@ -12,7 +12,7 @@ const canManage = computed(() => channelRole.value?.permissions.moderation_manag
 
 // >>> Types
 interface BlockedTerm   { id: number; term: string; action: string; duration: number; is_regex: number }
-interface SpamFilter    { id: number; type: string; threshold: number; action: string; duration: number }
+interface SpamFilter    { id: number; type: string; threshold: number; min_letters: number; action: string; duration: number }
 interface NukeConfig    { id: number; trigger: string; duration: number; label: string; lookback: number; stay_active: number; match_exact: number; is_regex: number; expires_at: number | null }
 
 // >>> Tab
@@ -35,10 +35,11 @@ const SPAM_TYPES = computed(() => [
   { value: 'repeat',  label: t('mod.spam.repeat'), hint: t('mod.spam.repeat_hint') },
   { value: 'flood',   label: t('mod.spam.flood'),  hint: t('mod.spam.flood_hint') },
 ])
-const newSpamType      = ref('caps')
-const newSpamThreshold = ref(70)
-const newSpamAction    = ref<'delete' | 'timeout' | 'ban'>('delete')
-const newSpamDur       = ref(300)
+const newSpamType       = ref('caps')
+const newSpamThreshold  = ref(70)
+const newSpamMinLetters = ref(0)
+const newSpamAction     = ref<'delete' | 'timeout' | 'ban'>('delete')
+const newSpamDur        = ref(300)
 
 // >>> Nukes
 const nukes           = ref<NukeConfig[]>([])
@@ -116,7 +117,7 @@ async function addSpamFilter() {
     const res = await fetch(`${API}/moderation/${session.value.channel}/spam-filters`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${session.value.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: newSpamType.value, threshold: newSpamThreshold.value, action: newSpamAction.value, duration: newSpamDur.value })
+      body: JSON.stringify({ type: newSpamType.value, threshold: newSpamThreshold.value, min_letters: newSpamMinLetters.value, action: newSpamAction.value, duration: newSpamDur.value })
     })
     if (!res.ok) throw new Error()
     const data = await res.json()
@@ -294,6 +295,11 @@ onMounted(load)
           <input v-model.number="newSpamThreshold" type="number" min="1" max="9999" class="field-input dur-input" />
           <span class="threshold-hint">{{ SPAM_TYPES.find(s => s.value === newSpamType)?.hint }}</span>
         </div>
+        <div v-if="newSpamType === 'caps'" class="threshold-wrap">
+          <span class="threshold-lbl" style="white-space:nowrap">min.</span>
+          <input v-model.number="newSpamMinLetters" type="number" min="0" max="999" class="field-input dur-input" />
+          <span class="threshold-hint">Buchstaben</span>
+        </div>
         <select v-model="newSpamAction" class="field-select">
           <option value="delete">{{ t('mod.action.delete') }}</option>
           <option value="timeout">{{ t('mod.action.timeout') }}</option>
@@ -307,6 +313,7 @@ onMounted(load)
         <div v-for="f in spamFilters" :key="f.id" class="item-row">
           <span class="item-term">{{ SPAM_TYPES.find(s => s.value === f.type)?.label ?? f.type }}</span>
           <span class="item-dur" style="color:#888">≥ {{ f.threshold }}</span>
+          <span v-if="f.type === 'caps' && f.min_letters > 0" class="item-dur" style="color:#666">min. {{ f.min_letters }} Buchst.</span>
           <span class="item-action" :style="{ color: ACTION_COLORS[f.action] }">{{ f.action === 'delete' ? t('mod.action.delete') : f.action === 'timeout' ? t('mod.action.timeout') : t('mod.action.ban') }}</span>
           <span v-if="f.action !== 'delete'" class="item-dur">{{ fmtDur(f.duration) }}</span>
           <button v-if="canManage" class="item-del" @click="removeSpamFilter(f.id)">✕</button>
