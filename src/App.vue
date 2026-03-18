@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, provide } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { API } from './api'
 import { useAuth } from './auth'
@@ -107,7 +107,9 @@ async function loadDynamic(): Promise<SearchResult[]> {
     if (cmdRes.status === 'fulfilled' && cmdRes.value.ok) {
       const d = await cmdRes.value.json() as { commands: { name: string; description: string }[]; prefix: string }
       for (const c of d.commands) {
-        results.push({ label: `${d.prefix}${c.name}`, category: 'Command', icon: '+', sub: c.description || undefined, action: () => router.push('/commands') })
+        results.push({ label: `${d.prefix}${c.name}`, category: 'Command', icon: '+', sub: c.description || undefined,
+          action: () => { router.push('/commands'); nextTick(() => { searchOpenEdit.value = { name: c.name, builtIn: true } }) }
+        })
       }
     }
     if (timerRes.status === 'fulfilled' && timerRes.value.ok) {
@@ -127,7 +129,9 @@ async function loadDynamic(): Promise<SearchResult[]> {
     if (ccRes.ok) {
       const d = await ccRes.json() as { commands: { name: string; description?: string; response?: string }[] }
       for (const c of (d.commands ?? [])) {
-        results.push({ label: `+${c.name}`, category: 'Custom Command', icon: '+', sub: c.description || c.response?.slice(0, 50) || undefined, action: () => router.push('/commands') })
+        results.push({ label: `+${c.name}`, category: 'Custom Command', icon: '+', sub: c.description || c.response?.slice(0, 50) || undefined,
+          action: () => { router.push('/commands'); nextTick(() => { searchOpenEdit.value = { name: c.name, builtIn: false } }) }
+        })
       }
     }
   } catch {}
@@ -192,9 +196,13 @@ function selectResult(r: SearchResult) {
 function onSearchFocus() { searchOpen.value = true; if (searchQuery.value) runSearch(searchQuery.value) }
 function onSearchBlur()  { setTimeout(() => { searchOpen.value = false }, 150) }
 
-// >>> Ctrl+F or / to focus search
+// >>> Ctrl+F to focus search
 function onGlobalKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+    // Only intercept if we're not already in a text input or textarea
+    const tag = (document.activeElement as HTMLElement)?.tagName
+    const isEditable = (document.activeElement as HTMLElement)?.isContentEditable
+    if (tag === 'TEXTAREA' || isEditable) return
     e.preventDefault()
     searchInput.value?.focus()
     searchInput.value?.select()
@@ -256,9 +264,12 @@ function addBot() { window.location.href = `${API}/auth/add` }
 
 const KEEP_ALIVE_ROUTES = ['DashboardView', 'CommandsView', 'AutomationsView']
 
-// >>> Expose nextActiveTab for CommandsView via provide
-import { provide } from 'vue'
+// >>> Expose nextActiveTab and searchOpenEdit for CommandsView via provide
 provide('nextActiveTab', nextActiveTab)
+
+// >>> searchOpenEdit: when set to { name, builtIn }, CommandsView opens that edit panel directly
+const searchOpenEdit = ref<{ name: string; builtIn: boolean } | null>(null)
+provide('searchOpenEdit', searchOpenEdit)
 </script>
 
 <template>

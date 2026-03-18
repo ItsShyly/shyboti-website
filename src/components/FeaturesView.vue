@@ -2,10 +2,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../auth'
+import { useI18n } from '../i18n'
 import { API } from '../api'
 
 const router = useRouter()
 const { session } = useAuth()
+const { t } = useI18n()
 
 // >>> Variables & Counters
 interface Counter  { name: string; value: number }
@@ -114,8 +116,8 @@ async function addEntry() {
         </svg>
       </div>
       <div class="card-body">
-        <div class="card-title">OBS Widgets</div>
-        <div class="card-sub">Live browser sources for OBS</div>
+        <div class="card-title">{{ t('feat.obs.title') }}</div>
+        <div class="card-sub">{{ t('feat.obs.sub') }}</div>
         <div class="card-url">obs.shyboti.de/<span class="url-id obs-url-id">id</span></div>
       </div>
       <button class="your-btn obs-btn" @click.stop="router.push('/obs-widgets')">
@@ -123,7 +125,7 @@ async function addEntry() {
           <rect x="1" y="1" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
           <path d="M4 13h6M7 10v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
         </svg>
-        Manage
+        {{ t('feat.obs.btn') }}
       </button>
     </div>
 
@@ -138,10 +140,10 @@ async function addEntry() {
         </svg>
       </div>
       <div class="card-body">
-        <div class="card-title">Variables &amp; Counters</div>
-        <div class="card-sub">View and edit your $counter and $var values</div>
+        <div class="card-title">{{ t('feat.vars.title') }}</div>
+        <div class="card-sub">{{ t('feat.vars.sub') }}</div>
         <div class="card-url" v-if="totalCount > 0">{{ totalCount }} entr{{ totalCount === 1 ? 'y' : 'ies' }}</div>
-        <div class="card-url" v-else style="color:#444">No entries yet</div>
+        <div class="card-url" v-else style="color:#444">{{ t('feat.vars.none') }}</div>
       </div>
       <button class="your-btn vars-btn" @click.stop="openVars">
         <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -150,7 +152,7 @@ async function addEntry() {
           <rect x="1" y="8" width="5" height="5" rx="0.5" stroke="currentColor" stroke-width="1.4"/>
           <path d="M8 10.5h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
         </svg>
-        View all
+        {{ t('feat.vars.btn') }}
       </button>
     </div>
 
@@ -161,113 +163,113 @@ async function addEntry() {
     <div v-if="showVars" class="vars-backdrop" @click.self="showVars = false">
       <div class="vars-modal">
         <div class="vars-header">
-          <span class="vars-title">Variables &amp; Counters</span>
+          <span class="vars-title">{{ t('feat.vars.modal.title') }}</span>
           <button class="vars-close" @click="showVars = false">✕</button>
         </div>
         <div class="vars-tabs">
           <button class="vars-tab" :class="{ active: varsTab === 'counters' }" @click="varsTab = 'counters'">
-            Counters <span v-if="counters.length">({{ counters.length }})</span>
+            {{ t('feat.vars.tab.counters') }} <span v-if="counters.length">({{ counters.length }})</span>
           </button>
           <button class="vars-tab" :class="{ active: varsTab === 'vars' }" @click="varsTab = 'vars'">
-            Vars <span v-if="vars.length">({{ vars.length }})</span>
+            {{ t('feat.vars.tab.vars') }} <span v-if="vars.length">({{ vars.length }})</span>
           </button>
           <button class="vars-tab" :class="{ active: varsTab === 'ucounters' }" @click="varsTab = 'ucounters'">
-            User Counters <span v-if="ucounters.length">({{ ucounters.length }})</span>
+            {{ t('feat.vars.tab.ucounters') }} <span v-if="ucounters.length">({{ ucounters.length }})</span>
           </button>
           <button class="vars-tab" :class="{ active: varsTab === 'uvars' }" @click="varsTab = 'uvars'">
-            User Vars <span v-if="uvars.length">({{ uvars.length }})</span>
+            {{ t('feat.vars.tab.uvars') }} <span v-if="uvars.length">({{ uvars.length }})</span>
           </button>
         </div>
 
         <div class="vars-body">
-          <div v-if="varsLoading" class="vars-empty">Loading…</div>
+          <div v-if="varsLoading" class="vars-empty">{{ t('feat.vars.loading') }}</div>
           <div v-else-if="varsError" class="vars-empty" style="color:#f14949">{{ varsError }}</div>
 
           <table v-else-if="varsTab === 'counters'" class="vars-table">
-            <thead><tr><th>Name</th><th>Value</th><th></th></tr></thead>
+            <thead><tr><th>{{ t('feat.vars.col.name') }}</th><th>{{ t('feat.vars.col.value') }}</th><th></th></tr></thead>
             <tbody>
-              <tr v-if="!counters.length"><td colspan="3" class="vars-empty">No counters yet</td></tr>
+              <tr v-if="!counters.length"><td colspan="3" class="vars-empty">{{ t('feat.vars.empty.counters') }}</td></tr>
               <tr v-for="c in counters" :key="c.name">
                 <td class="vars-name">$counter.{{ c.name }}</td>
                 <td>
                   <template v-if="editingKey === 'counter:' + c.name + ':'">
                     <input class="vars-edit-input" v-model="editingVal" type="number" @keydown.enter="saveEdit('counter', c.name)" @keydown.esc="editingKey = ''" />
-                    <button class="vars-btn-sm save" @click="saveEdit('counter', c.name)" :disabled="varSaving">Save</button>
-                    <button class="vars-btn-sm" @click="editingKey = ''">Cancel</button>
+                    <button class="vars-btn-sm save" @click="saveEdit('counter', c.name)" :disabled="varSaving">{{ t('feat.vars.save') }}</button>
+                    <button class="vars-btn-sm" @click="editingKey = ''">{{ t('feat.vars.cancel') }}</button>
                   </template>
                   <span v-else class="vars-val">{{ c.value }}</span>
                 </td>
                 <td style="white-space:nowrap">
-                  <button v-if="editingKey !== 'counter:' + c.name + ':'" class="vars-btn-sm" @click="startEdit('counter', c.name, c.value)">Edit</button>
-                  <button class="vars-btn-sm del" @click="deleteEntry('counter', c.name)">✕</button>
+                  <button v-if="editingKey !== 'counter:' + c.name + ':'" class="vars-btn-sm" @click="startEdit('counter', c.name, c.value)">{{ t('feat.vars.edit') }}</button>
+                  <button class="vars-btn-sm del" @click="deleteEntry('counter', c.name)">{{ t('feat.vars.delete') }}</button>
                 </td>
               </tr>
             </tbody>
           </table>
 
           <table v-else-if="varsTab === 'vars'" class="vars-table">
-            <thead><tr><th>Name</th><th>Value</th><th></th></tr></thead>
+            <thead><tr><th>{{ t('feat.vars.col.name') }}</th><th>{{ t('feat.vars.col.value') }}</th><th></th></tr></thead>
             <tbody>
-              <tr v-if="!vars.length"><td colspan="3" class="vars-empty">No vars yet</td></tr>
+              <tr v-if="!vars.length"><td colspan="3" class="vars-empty">{{ t('feat.vars.empty.vars') }}</td></tr>
               <tr v-for="v in vars" :key="v.name">
                 <td class="vars-name">$var.{{ v.name }}</td>
                 <td>
                   <template v-if="editingKey === 'var:' + v.name + ':'">
                     <input class="vars-edit-input" v-model="editingVal" @keydown.enter="saveEdit('var', v.name)" @keydown.esc="editingKey = ''" />
-                    <button class="vars-btn-sm save" @click="saveEdit('var', v.name)" :disabled="varSaving">Save</button>
-                    <button class="vars-btn-sm" @click="editingKey = ''">Cancel</button>
+                    <button class="vars-btn-sm save" @click="saveEdit('var', v.name)" :disabled="varSaving">{{ t('feat.vars.save') }}</button>
+                    <button class="vars-btn-sm" @click="editingKey = ''">{{ t('feat.vars.cancel') }}</button>
                   </template>
                   <span v-else class="vars-val">{{ v.value || '(empty)' }}</span>
                 </td>
                 <td style="white-space:nowrap">
-                  <button v-if="editingKey !== 'var:' + v.name + ':'" class="vars-btn-sm" @click="startEdit('var', v.name, v.value)">Edit</button>
-                  <button class="vars-btn-sm del" @click="deleteEntry('var', v.name)">✕</button>
+                  <button v-if="editingKey !== 'var:' + v.name + ':'" class="vars-btn-sm" @click="startEdit('var', v.name, v.value)">{{ t('feat.vars.edit') }}</button>
+                  <button class="vars-btn-sm del" @click="deleteEntry('var', v.name)">{{ t('feat.vars.delete') }}</button>
                 </td>
               </tr>
             </tbody>
           </table>
 
           <table v-else-if="varsTab === 'ucounters'" class="vars-table">
-            <thead><tr><th>Name</th><th>User</th><th>Value</th><th></th></tr></thead>
+            <thead><tr><th>{{ t('feat.vars.col.name') }}</th><th>{{ t('feat.vars.col.user') }}</th><th>{{ t('feat.vars.col.value') }}</th><th></th></tr></thead>
             <tbody>
-              <tr v-if="!ucounters.length"><td colspan="4" class="vars-empty">No user counters yet</td></tr>
+              <tr v-if="!ucounters.length"><td colspan="4" class="vars-empty">{{ t('feat.vars.empty.ucounters') }}</td></tr>
               <tr v-for="c in ucounters" :key="c.name + c.username">
                 <td class="vars-name">$ucounter.{{ c.name }}</td>
                 <td style="color:#888;font-size:11px">{{ c.username }}</td>
                 <td>
                   <template v-if="editingKey === 'ucounter:' + c.name + ':' + c.username">
                     <input class="vars-edit-input" v-model="editingVal" type="number" @keydown.enter="saveEdit('ucounter', c.name, c.username)" @keydown.esc="editingKey = ''" />
-                    <button class="vars-btn-sm save" @click="saveEdit('ucounter', c.name, c.username)" :disabled="varSaving">Save</button>
-                    <button class="vars-btn-sm" @click="editingKey = ''">Cancel</button>
+                    <button class="vars-btn-sm save" @click="saveEdit('ucounter', c.name, c.username)" :disabled="varSaving">{{ t('feat.vars.save') }}</button>
+                    <button class="vars-btn-sm" @click="editingKey = ''">{{ t('feat.vars.cancel') }}</button>
                   </template>
                   <span v-else class="vars-val">{{ c.value }}</span>
                 </td>
                 <td style="white-space:nowrap">
-                  <button v-if="editingKey !== 'ucounter:' + c.name + ':' + c.username" class="vars-btn-sm" @click="startEdit('ucounter', c.name, c.value, c.username)">Edit</button>
-                  <button class="vars-btn-sm del" @click="deleteEntry('ucounter', c.name, c.username)">✕</button>
+                  <button v-if="editingKey !== 'ucounter:' + c.name + ':' + c.username" class="vars-btn-sm" @click="startEdit('ucounter', c.name, c.value, c.username)">{{ t('feat.vars.edit') }}</button>
+                  <button class="vars-btn-sm del" @click="deleteEntry('ucounter', c.name, c.username)">{{ t('feat.vars.delete') }}</button>
                 </td>
               </tr>
             </tbody>
           </table>
 
           <table v-else-if="varsTab === 'uvars'" class="vars-table">
-            <thead><tr><th>Name</th><th>User</th><th>Value</th><th></th></tr></thead>
+            <thead><tr><th>{{ t('feat.vars.col.name') }}</th><th>{{ t('feat.vars.col.user') }}</th><th>{{ t('feat.vars.col.value') }}</th><th></th></tr></thead>
             <tbody>
-              <tr v-if="!uvars.length"><td colspan="4" class="vars-empty">No user vars yet</td></tr>
+              <tr v-if="!uvars.length"><td colspan="4" class="vars-empty">{{ t('feat.vars.empty.uvars') }}</td></tr>
               <tr v-for="v in uvars" :key="v.name + v.username">
                 <td class="vars-name">$uvar.{{ v.name }}</td>
                 <td style="color:#888;font-size:11px">{{ v.username }}</td>
                 <td>
                   <template v-if="editingKey === 'uvar:' + v.name + ':' + v.username">
                     <input class="vars-edit-input" v-model="editingVal" @keydown.enter="saveEdit('uvar', v.name, v.username)" @keydown.esc="editingKey = ''" />
-                    <button class="vars-btn-sm save" @click="saveEdit('uvar', v.name, v.username)" :disabled="varSaving">Save</button>
-                    <button class="vars-btn-sm" @click="editingKey = ''">Cancel</button>
+                    <button class="vars-btn-sm save" @click="saveEdit('uvar', v.name, v.username)" :disabled="varSaving">{{ t('feat.vars.save') }}</button>
+                    <button class="vars-btn-sm" @click="editingKey = ''">{{ t('feat.vars.cancel') }}</button>
                   </template>
                   <span v-else class="vars-val">{{ v.value || '(empty)' }}</span>
                 </td>
                 <td style="white-space:nowrap">
-                  <button v-if="editingKey !== 'uvar:' + v.name + ':' + v.username" class="vars-btn-sm" @click="startEdit('uvar', v.name, v.value, v.username)">Edit</button>
-                  <button class="vars-btn-sm del" @click="deleteEntry('uvar', v.name, v.username)">✕</button>
+                  <button v-if="editingKey !== 'uvar:' + v.name + ':' + v.username" class="vars-btn-sm" @click="startEdit('uvar', v.name, v.value, v.username)">{{ t('feat.vars.edit') }}</button>
+                  <button class="vars-btn-sm del" @click="deleteEntry('uvar', v.name, v.username)">{{ t('feat.vars.delete') }}</button>
                 </td>
               </tr>
             </tbody>
@@ -277,15 +279,15 @@ async function addEntry() {
         <div class="vars-footer">
           <template v-if="!addingType">
             <button class="vars-add-btn" @click="addingType = varsTab.replace('s','').replace('counter','counter').replace('var','var')">
-              + Add {{ varsTab === 'counters' ? 'Counter' : varsTab === 'vars' ? 'Var' : varsTab === 'ucounters' ? 'User Counter' : 'User Var' }}
+              {{ varsTab === 'counters' ? t('feat.vars.add.counter') : varsTab === 'vars' ? t('feat.vars.add.var') : varsTab === 'ucounters' ? t('feat.vars.add.ucounter') : t('feat.vars.add.uvar') }}
             </button>
           </template>
           <div v-else class="vars-add-form">
-            <input class="vars-add-input" v-model="addForm.name" placeholder="name" />
-            <input class="vars-add-input" v-model="addForm.value" :placeholder="addingType.includes('counter') ? '0' : 'value'" style="width:100px" />
-            <input v-if="addingType.includes('u')" class="vars-add-input" v-model="addForm.username" placeholder="username" style="width:110px" />
-            <button class="vars-add-submit" @click="addEntry" :disabled="varSaving || !addForm.name.trim()">Add</button>
-            <button class="vars-add-cancel" @click="addingType = ''">Cancel</button>
+            <input class="vars-add-input" v-model="addForm.name" :placeholder="t('feat.vars.add.placeholder.name')" />
+            <input class="vars-add-input" v-model="addForm.value" :placeholder="addingType.includes('counter') ? '0' : t('feat.vars.add.placeholder.value')" style="width:100px" />
+            <input v-if="addingType.includes('u')" class="vars-add-input" v-model="addForm.username" :placeholder="t('feat.vars.add.placeholder.user')" style="width:110px" />
+            <button class="vars-add-submit" @click="addEntry" :disabled="varSaving || !addForm.name.trim()">{{ t('feat.vars.add.btn') }}</button>
+            <button class="vars-add-cancel" @click="addingType = ''">{{ t('feat.vars.cancel') }}</button>
           </div>
         </div>
       </div>

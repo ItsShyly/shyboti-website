@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, watch, nextTick, inject, type Ref } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
@@ -64,6 +64,17 @@ function openEdit(name: string, builtIn: boolean) {
   editIsBuiltIn.value = builtIn
   editOpen.value      = true
 }
+
+// >>> When App.vue search selects a command, open its edit panel directly
+const searchOpenEdit = inject<Ref<{ name: string; builtIn: boolean } | null>>('searchOpenEdit', ref(null))
+watch(searchOpenEdit, (val) => {
+  if (!val) return
+  // Wait for the page to mount before opening the panel
+  nextTick(() => {
+    openEdit(val.name, val.builtIn)
+    searchOpenEdit.value = null
+  })
+})
 
 function onEditSaved() {
   fetchCommands()
@@ -146,7 +157,10 @@ function setSort(field: typeof sortField.value) {
   else { sortField.value = field; sortDir.value = 'asc' }
 }
 
-const BLOCKED = ['join','leave','pm2','refresh','whitelist','git']
+const BLOCKED     = ['join','leave','pm2','refresh','whitelist','git']
+// Commands that must be at least mod - the cycle skips "everyone" for these
+const MINIMUM_MOD = new Set(['nuke','pm2','refresh','join','leave','create','say','to','cmd'])
+const MINIMUM_BC  = new Set(['pm2','refresh','join','leave'])
 
 function inferCategory(name: string): string {
   const utility = ['ping','commands','join','leave','pm2','refresh','say','to','user','whitelist','git','cmd','message', 'to']
@@ -247,10 +261,22 @@ function toggle(cmd: Command | CustomCommand, field: 'isActive' | 'modOnly' | 'b
 
 function cycleRestriction(cmd: Command | CustomCommand) {
   if (!canEdit.value) return
-  const c = cmd as any
-  if (!c.modOnly && !c.broadcasterOnly) { c.modOnly = true;  c.broadcasterOnly = false }
-  else if (c.modOnly)                   { c.modOnly = false; c.broadcasterOnly = true  }
-  else                                  { c.modOnly = false; c.broadcasterOnly = false }
+  const c    = cmd as any
+  const name = c.name as string
+  const isBC  = MINIMUM_BC.has(name)
+  const isMod = !isBC && MINIMUM_MOD.has(name)
+  if (!c.modOnly && !c.broadcasterOnly) {
+    // everyone -> mod (always allowed)
+    c.modOnly = true; c.broadcasterOnly = false
+  } else if (c.modOnly) {
+    // mod -> broadcaster
+    c.modOnly = false; c.broadcasterOnly = true
+  } else {
+    // broadcaster -> everyone (only if not locked)
+    if (isBC)  { c.modOnly = false; c.broadcasterOnly = true  } // stay at broadcaster
+    else if (isMod) { c.modOnly = true;  c.broadcasterOnly = false } // back to mod
+    else        { c.modOnly = false; c.broadcasterOnly = false }   // allow everyone
+  }
   if (customCommands.value.includes(cmd as CustomCommand)) updateCustomActive(cmd as CustomCommand)
   else updateCommand(cmd as Command)
 }

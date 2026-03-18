@@ -2,8 +2,10 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
+import { useI18n } from '../i18n'
 
 const { session, channelRole } = useAuth()
+const { t } = useI18n()
 
 const canEdit = computed(() => channelRole.value?.role === 'broadcaster' || channelRole.value?.permissions?.automations_edit)
 
@@ -220,18 +222,18 @@ watch(() => session.value?.channel, () => { load(); varRefsLoaded.value = false 
   <div class="obs-view">
     <div class="obs-header">
       <div>
-        <div class="obs-title">OBS Browser Sources</div>
+        <div class="obs-title">{{ t('obs.title') }}</div>
         <div class="obs-sub">Live widgets for #{{ session?.channel }}</div>
       </div>
-      <button class="btn-new" @click="openNew" :disabled="!canEdit">+ New widget</button>
+      <button class="btn-new" @click="openNew" :disabled="!canEdit">{{ t('obs.new') }}</button>
     </div>
 
     <div v-if="saveSuccess" class="toast ok">{{ saveSuccess }}</div>
 
-    <div v-if="loading" class="empty">Loading…</div>
+    <div v-if="loading" class="empty">{{ t('obs.loading') }}</div>
     <div v-else-if="!widgets.length" class="empty">
-      No widgets yet.<br>
-      <span class="empty-hint">Create one to get a URL you can paste into OBS as a Browser Source.</span>
+      {{ t('obs.empty') }}<br>
+      <span class="empty-hint">{{ t('obs.empty.hint') }}</span>
     </div>
 
     <div v-else class="widget-list">
@@ -250,12 +252,12 @@ watch(() => session.value?.channel, () => { load(); varRefsLoaded.value = false 
         <div class="widget-actions">
           <div class="url-row">
             <code class="widget-url">obs.shyboti.de/{{ w.id }}</code>
-            <button class="copy-btn" @click="copyUrl(w.id, w.id)">{{ copied === w.id ? '✓' : 'Copy URL' }}</button>
+            <button class="copy-btn" @click="copyUrl(w.id, w.id)">{{ copied === w.id ? t('obs.copied') : t('obs.copy') }}</button>
           </div>
           <div class="row-btns">
-            <button class="btn-action edit" @click="canEdit && openEdit(w)">Edit</button>
+            <button class="btn-action edit" @click="canEdit && openEdit(w)">{{ t('obs.edit') }}</button>
             <button class="btn-action del" :class="{ confirm: deleteId === w.id }"
-              @click="deleteWidget(w.id, w.name)">{{ deleteId === w.id ? 'Sure?' : '✕' }}</button>
+              @click="deleteWidget(w.id, w.name)">{{ deleteId === w.id ? t('obs.delete.confirm') : '✕' }}</button>
           </div>
         </div>
       </div>
@@ -268,7 +270,7 @@ watch(() => session.value?.channel, () => { load(); varRefsLoaded.value = false 
 
           <div class="panel-header">
             <div>
-              <div class="panel-title">{{ isNew ? 'New widget' : `Edit · ${editOrigName}` }}</div>
+              <div class="panel-title">{{ isNew ? t('obs.panel.new') : t('obs.panel.edit') + editOrigName }}</div>
               <div class="panel-sub">#{{ session?.channel }}</div>
             </div>
             <button class="panel-close" @click="editOpen = false">✕</button>
@@ -278,27 +280,27 @@ watch(() => session.value?.channel, () => { load(); varRefsLoaded.value = false 
 
             <!-- Name -->
             <div class="field-group">
-              <label class="field-label">Name <span class="field-hint">internal label</span></label>
+              <label class="field-label">{{ t('obs.panel.name') }} <span class="field-hint">{{ t('obs.panel.name.hint') }}</span></label>
               <input v-model="form.name" class="field-input" placeholder="kills-counter" :disabled="!isNew" />
             </div>
 
             <!-- Content -->
             <div class="field-group">
-              <label class="field-label">Content <span class="field-hint">script expression or plain text</span></label>
+              <label class="field-label">{{ t('obs.panel.content') }} <span class="field-hint">{{ t('obs.panel.content.hint') }}</span></label>
               <input v-model="form.content" class="field-input mono" placeholder="$counter.kills.get" />
             </div>
 
             <!-- Variable Reference -->
             <details class="ref-panel">
-              <summary class="ref-summary">Variable reference</summary>
+              <summary class="ref-summary">{{ t('obs.panel.ref') }}</summary>
               <div class="ref-content">
                 <!-- Live var refs from channel -->
                 <div v-if="varRefs.length" class="ref-group">
-                  <div class="ref-group-label">Your Counters &amp; Vars</div>
+                  <div class="ref-group-label">{{ t('obs.panel.ref.yours') }}</div>
                   <div v-for="v in varRefs" :key="v.expr" class="ref-row has-example" @click="form.content = v.expr"
                     style="cursor:pointer">
                     <code class="ref-token">{{ v.label }}</code>
-                    <span class="ref-desc">click to use</span>
+                    <span class="ref-desc">{{ t('obs.panel.ref.click') }}</span>
                     <span class="ref-example">{{ v.expr }}</span>
                   </div>
                 </div>
@@ -318,9 +320,9 @@ watch(() => session.value?.channel, () => { load(); varRefsLoaded.value = false 
             <!-- Preview -->
             <div class="preview-section">
               <div class="preview-bar">
-                <span class="field-label">Preview</span>
+                <span class="field-label">{{ t('obs.panel.preview') }}</span>
                 <button class="preview-btn" @click="previewContent" :disabled="previewing || !form.content.trim()">
-                  {{ previewing ? 'Evaluating…' : '▶ Run' }}
+                  {{ previewing ? t('obs.panel.preview.eval') : t('obs.panel.preview.run') }}
                 </button>
               </div>
               <div class="preview-box" :style="{ background: form.style.background || '#111217' }">
@@ -330,7 +332,7 @@ watch(() => session.value?.channel, () => { load(); varRefsLoaded.value = false 
 
             <!-- Refresh -->
             <div class="field-group">
-              <label class="field-label">Refresh every</label>
+              <label class="field-label">{{ t('obs.panel.refresh') }}</label>
               <div class="refresh-row">
                 <button v-for="ms in [1000, 2000, 5000, 10000, 30000]" :key="ms" class="ms-btn"
                   :class="{ active: form.refresh_ms === ms }" @click="form.refresh_ms = ms">{{ ms >= 1000 ?
@@ -339,66 +341,63 @@ watch(() => session.value?.channel, () => { load(); varRefsLoaded.value = false 
               </div>
             </div>
 
-            <div class="obs-cache-hint">
-              After changing style, right-click Browser Source in OBS → <strong>Properties</strong> → <strong>Refresh
-                cache of current page</strong>
-            </div>
+            <div class="obs-cache-hint">{{ t('obs.panel.cache.hint') }}</div>
 
             <!-- Style -->
             <div class="style-section">
-              <div class="style-title">Style</div>
+              <div class="style-title">{{ t('obs.panel.style') }}</div>
               <div class="style-grid">
                 <div class="field-group">
-                  <label class="field-label">Size (px)</label>
+                  <label class="field-label">{{ t('obs.panel.size') }}</label>
                   <input v-model.number="form.style.fontSize" type="number" min="8" max="200" class="field-input" />
                 </div>
                 <div class="field-group">
-                  <label class="field-label">Color</label>
+                  <label class="field-label">{{ t('obs.panel.color') }}</label>
                   <div class="color-row">
                     <input type="color" v-model="form.style.color" class="color-pick" />
                     <input v-model="form.style.color" class="field-input" placeholder="#ffffff" />
                   </div>
                 </div>
                 <div class="field-group">
-                  <label class="field-label">Font</label>
+                  <label class="field-label">{{ t('obs.panel.font') }}</label>
                   <select v-model="form.style.fontFamily" class="field-select">
                     <option v-for="f in FONT_FAMILIES" :key="f.value" :value="f.value">{{ f.label }}</option>
                   </select>
                 </div>
                 <div class="field-group">
-                  <label class="field-label">Weight</label>
+                  <label class="field-label">{{ t('obs.panel.weight') }}</label>
                   <select v-model="form.style.fontWeight" class="field-select">
-                    <option value="normal">Normal</option>
-                    <option value="bold">Bold</option>
-                    <option value="900">Black</option>
+                    <option value="normal">{{ t('obs.panel.weight.normal') }}</option>
+                    <option value="bold">{{ t('obs.panel.weight.bold') }}</option>
+                    <option value="900">{{ t('obs.panel.weight.black') }}</option>
                   </select>
                 </div>
                 <div class="field-group">
-                  <label class="field-label">Align</label>
+                  <label class="field-label">{{ t('obs.panel.align') }}</label>
                   <select v-model="form.style.textAlign" class="field-select">
-                    <option value="left">Left</option>
-                    <option value="center">Center</option>
-                    <option value="right">Right</option>
+                    <option value="left">{{ t('obs.panel.align.left') }}</option>
+                    <option value="center">{{ t('obs.panel.align.center') }}</option>
+                    <option value="right">{{ t('obs.panel.align.right') }}</option>
                   </select>
                 </div>
                 <div class="field-group">
-                  <label class="field-label">Padding (px)</label>
+                  <label class="field-label">{{ t('obs.panel.padding') }}</label>
                   <input v-model.number="form.style.padding" type="number" min="0" class="field-input" />
                 </div>
               </div>
               <div class="toggle-row">
-                <label class="toggle-label"><input type="checkbox" v-model="form.style.stroke" /> Text stroke</label>
+                <label class="toggle-label"><input type="checkbox" v-model="form.style.stroke" /> {{ t('obs.panel.stroke') }}</label>
                 <input v-if="form.style.stroke" type="color" v-model="form.style.strokeColor" class="color-pick" />
               </div>
               <div class="toggle-row">
-                <label class="toggle-label"><input type="checkbox" v-model="form.style.shadow" /> Drop shadow</label>
+                <label class="toggle-label"><input type="checkbox" v-model="form.style.shadow" /> {{ t('obs.panel.shadow') }}</label>
               </div>
               <div class="field-group">
-                <label class="field-label">Background <span class="field-hint">empty = transparent</span></label>
+                <label class="field-label">{{ t('obs.panel.bg') }} <span class="field-hint">{{ t('obs.panel.bg.hint') }}</span></label>
                 <div class="color-row">
                   <input type="color" v-model="form.style.background" class="color-pick" />
                   <input v-model="form.style.background" class="field-input" placeholder="transparent" />
-                  <button class="clear-btn" @click="form.style.background = ''">Clear</button>
+                  <button class="clear-btn" @click="form.style.background = ''">{{ t('obs.panel.bg.clear') }}</button>
                 </div>
               </div>
             </div>
@@ -410,9 +409,9 @@ watch(() => session.value?.channel, () => { load(); varRefsLoaded.value = false 
             <div v-if="saveError" class="save-error">{{ saveError }}</div>
             <div v-else></div>
             <div class="footer-right">
-              <button class="btn-cancel" @click="editOpen = false">Cancel</button>
+              <button class="btn-cancel" @click="editOpen = false">{{ t('obs.panel.cancel') }}</button>
               <button class="btn-save" @click="save" :disabled="saving || !form.name.trim() || !form.content.trim()">
-                {{ saving ? 'Saving…' : 'Save' }}
+                {{ saving ? t('obs.panel.saving') : t('obs.panel.save') }}
               </button>
             </div>
           </div>

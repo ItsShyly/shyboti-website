@@ -13,11 +13,25 @@ interface LogMsg {
 }
 interface EmoteMap { [name: string]: string }
 
-// >>> Local input state (not reactive to msgs, avoids lag)
+// Input refs - read directly from DOM, not tracked by Vue reactivity.
+// This prevents any re-render on every keystroke.
+const channelInputRef    = ref<HTMLInputElement | null>(null)
+const userInputRef       = ref<HTMLInputElement | null>(null)
+const termInputRef       = ref<HTMLInputElement | null>(null)
+const dateInputRef       = ref<HTMLInputElement | null>(null)
+
+// These are only updated when a search actually runs (for URL sync and summary bar)
 const channel    = ref('')
 const userFilter = ref('')
 const termFilter = ref('')
 const dateFilter = ref('')
+
+function readInputs() {
+  channel.value    = channelInputRef.value?.value.trim().toLowerCase().replace(/^#/, '') ?? channel.value
+  userFilter.value = userInputRef.value?.value.trim() ?? userFilter.value
+  termFilter.value = termInputRef.value?.value.trim() ?? termFilter.value
+  dateFilter.value = dateInputRef.value?.value ?? dateFilter.value
+}
 
 const msgs        = ref<LogMsg[]>([])
 const loading     = ref(false)
@@ -224,6 +238,7 @@ function detachScrollListeners() {
 
 // >>> Main search
 async function search() {
+  readInputs()
   if (!channel.value.trim()) { error.value = 'Channel is required.'; return }
 
   const hashId = readHashId()
@@ -448,8 +463,8 @@ function esc(s: string) {
       <div class="field-wrap">
         <label class="field-lbl">{{ t('logs.field.channel') }}</label>
         <input
+          ref="channelInputRef"
           :value="channel"
-          @input="channel = ($event.target as HTMLInputElement).value"
           class="field-input"
           placeholder="channelname"
           @keydown.enter="search"
@@ -460,8 +475,8 @@ function esc(s: string) {
       <div class="field-wrap">
         <label class="field-lbl">{{ t('logs.field.user') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
         <input
+          ref="userInputRef"
           :value="userFilter"
-          @input="userFilter = ($event.target as HTMLInputElement).value"
           class="field-input"
           placeholder="username"
           @keydown.enter="search"
@@ -472,8 +487,8 @@ function esc(s: string) {
       <div class="field-wrap">
         <label class="field-lbl">{{ t('logs.field.term') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
         <input
+          ref="termInputRef"
           :value="termFilter"
-          @input="termFilter = ($event.target as HTMLInputElement).value"
           class="field-input"
           placeholder="search term"
           @keydown.enter="search"
@@ -484,8 +499,8 @@ function esc(s: string) {
       <div class="field-wrap">
         <label class="field-lbl">{{ t('logs.field.date') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
         <input
+          ref="dateInputRef"
           :value="dateFilter"
-          @input="dateFilter = ($event.target as HTMLInputElement).value"
           class="field-input date-input"
           type="date"
           @keydown.enter="search"

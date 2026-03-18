@@ -173,7 +173,7 @@ function onEditorInput(el: HTMLDivElement | null, field: 'msg_start' | 'msg_tick
 }
 
 async function saveCountdown() {
-  if (!session.value || !editCountdown.value.name) return
+  if (!session.value || !editCountdown.value.name || !canEdit.value) return
   saving.value = editCountdown.value.name
   try {
     const res = await fetch(`${API}/countdowns/${session.value.channel}/${editCountdown.value.name}`, {
@@ -181,11 +181,14 @@ async function saveCountdown() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
       body: JSON.stringify(editCountdown.value),
     })
-    if (!res.ok) throw new Error(await res.text())
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({ error: res.statusText }))
+      throw new Error(errData.error ?? 'Save failed')
+    }
     showSuccess(t('countdown.save') + '!')
     editOpen.value = false
     load()
-  } catch (e: any) { error.value = 'Could not save countdown.' }
+  } catch (e: any) { error.value = e.message ?? 'Could not save countdown.' }
   finally { saving.value = null }
 }
 
