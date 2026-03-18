@@ -401,7 +401,7 @@ watch(() => session.value?.channel, load)
             </div>
 
             <div class="obs-cache-hint">
-              💡 After changing the style, right-click your Browser Source in OBS → <strong>Properties</strong> → <strong>Refresh cache of current page</strong> to apply visual changes.
+             <strong>⌞‼⌝</strong> After changing the style, right-click your Browser Source in OBS → <strong>Properties</strong> → <strong>Refresh cache of current page</strong> to apply visual changes. 
             </div>
 
             <div v-if="saveError" class="save-error">{{ saveError }}</div>
