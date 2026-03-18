@@ -266,7 +266,7 @@ provide('nextActiveTab', nextActiveTab)
 
     <div class="topbar">
       <div class="topbar-brand" @click="session ? router.push('/dashboard') : router.push('/')" style="cursor:pointer">
-        <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/1x.gif" alt="shy" class="brand-emote" />
+        <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
         <span class="brand-name">ShyBoti</span>
       </div>
 
@@ -327,8 +327,6 @@ provide('nextActiveTab', nextActiveTab)
             </div>
           </div>
           <span v-else class="logged-in-as hide-mobile">#{{ session.channel }}</span>
-          <span class="logged-in-as hide-mobile" style="color:#555">·</span>
-          <span class="logged-in-as hide-mobile">{{ session.login }}</span>
           <button class="auth-btn logout-btn hide-mobile" @click="logout(); router.push('/')">{{ t('nav.logout') }}</button>
         </template>
         <button v-else class="auth-btn login-btn" :class="{ shake: loginShaking }" @click="login">
@@ -386,6 +384,10 @@ provide('nextActiveTab', nextActiveTab)
           @click="nav('roles')">
           {{ t('nav.roles') }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'features', locked: !session }"
+          @click="nav('features')">
+          Features <span v-if="!session" class="lock-icon">🔒</span>
+        </button>
 
         <div class="sidebar-divider"></div>
 
@@ -394,10 +396,6 @@ provide('nextActiveTab', nextActiveTab)
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'tools' }" @click="nav('tools')">
           Tools
-        </button>
-        <button class="sidebar-btn" :class="{ active: activeRoute === 'features', locked: !session }"
-          @click="nav('features')">
-          Features <span v-if="!session" class="lock-icon">🔒</span>
         </button>
 
         <div class="sidebar-spacer"></div>
@@ -436,19 +434,20 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 .page { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
 /*  Topbar  */
-.topbar { height: 52px; flex-shrink: 0; background: #0e0e12; border-bottom: 1px solid #1e1e24; display: flex; align-items: center; padding: 0 16px; gap: 10px; }
+.topbar { height: 52px; flex-shrink: 0; background: #0e0e12; border-bottom: 1px solid #1e1e24; display: flex; align-items: center; padding: 0 16px; gap: 10px; position: relative; }
 .topbar-brand { display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 0; }
-.brand-emote  { width: 28px; height: 28px; flex-shrink: 0; image-rendering: pixelated; }
+.brand-emote  { width: 36px; height: 36px; flex-shrink: 0; image-rendering: pixelated; }
 .brand-name   { font-size: 1rem; font-weight: 700; color: #ffd569; letter-spacing: 0.04em; white-space: nowrap; }
 .topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
 .logged-in-as { font-size: 12px; color: #9d6cff; font-weight: 600; white-space: nowrap; }
 
 /*  Universal Search  */
 .search-wrap {
-  flex: 1; max-width: 420px; position: relative;
+  position: absolute; left: 50%; transform: translateX(-50%);
+  width: min(420px, 40vw);
   display: flex; align-items: center; height: 34px;
   background: #1a1a1e; border: 1px solid #2a2a30;
-  transition: border-color .15s;
+  transition: border-color .15s; z-index: 10;
 }
 .search-wrap:focus-within { border-color: #6f2bff66; }
 .search-icon { position: absolute; left: 9px; width: 14px; height: 14px; color: #555; pointer-events: none; flex-shrink: 0; }
@@ -579,7 +578,7 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
   .show-mobile { display: flex !important; }
   .add-banner { padding: 8px 14px; font-size: 11px; }
   .body { overflow: visible; flex-direction: column; }
-  .search-wrap { max-width: none; flex: 1; }
+  .search-wrap { position: static; transform: none; width: auto; flex: 1; }
   .search-kbd { display: none; }
   .sidebar { position: fixed; top: 52px; right: 0; bottom: 0; width: 240px; z-index: 100; transform: translateX(100%); border-left: 1px solid #2a2a30; box-shadow: -4px 0 24px #00000066; }
   .sidebar.sidebar-open { transform: translateX(0); }

@@ -33,7 +33,7 @@ const { t } = useI18n()
   display: flex; align-items: center; gap: 18px;
   font-size: clamp(40px, 5.5vw, 68px); font-weight: 700; color: #ffd569; line-height: 1;
 }
-.hero-emote { width: clamp(44px, 6vw, 72px); height: clamp(44px, 6vw, 72px); image-rendering: pixelated; }
+.hero-emote { width: clamp(64px, 8vw, 108px); height: clamp(64px, 8vw, 108px); image-rendering: pixelated; }
 .hero-sub { font-size: clamp(12px, 1.3vw, 15px); color: #666; line-height: 1.9; }
 .hero-login {
   margin-top: 8px; height: 44px; padding: 0 32px; border: none;
