@@ -1713,23 +1713,25 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             </div>
           </div>
 
-          <div class="panel-footer">
-            <button v-if="!isBuiltIn" class="btn-delete" :class="{ confirm: deleteConfirm }" :disabled="deleting" @click="deleteCmd">
-              {{ deleting ? t('edit.deleting') : deleteConfirm ? t('edit.confirm_delete') : t('edit.delete') }}
-            </button>
-            <div v-else></div>
-            <div class="footer-right">
-              <button class="btn-cancel" @click="emit('close')">{{ t('edit.cancel') }}</button>
-              <button class="btn-save"
-                :class="{ saved, invalid: !ruleValid && !!form.rule }"
-                :disabled="saving || !ruleValid"
-                :title="ruleWarnings.join(' · ')"
-                @click="save"
-              >{{ saved ? t('edit.saved') : saving ? t('edit.saving') : !ruleValid ? t('edit.fix_rule') : t('edit.save') }}</button>
-            </div>
-          </div>
-
         </div>
+
+        <!-- Footer pinned outside scroll area -->
+        <div class="panel-footer">
+          <button v-if="!isBuiltIn" class="btn-delete" :class="{ confirm: deleteConfirm }" :disabled="deleting" @click="deleteCmd">
+            {{ deleting ? t('edit.deleting') : deleteConfirm ? t('edit.confirm_delete') : t('edit.delete') }}
+          </button>
+          <div v-else></div>
+          <div class="footer-right">
+            <button class="btn-cancel" @click="emit('close')">{{ t('edit.cancel') }}</button>
+            <button class="btn-save"
+              :class="{ saved, invalid: !ruleValid && !!form.rule }"
+              :disabled="saving || !ruleValid"
+              :title="ruleWarnings.join(' · ')"
+              @click="save"
+            >{{ saved ? t('edit.saved') : saving ? t('edit.saving') : !ruleValid ? t('edit.fix_rule') : t('edit.save') }}</button>
+          </div>
+        </div>
+
       </div>
     </div>
   </Teleport>
@@ -1832,7 +1834,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 :deep(.tk-action-arg) { color: #7ec8a0; border-color: #7ec8a033; }
 
 .cond-row { display: flex; gap: 10px; }
-.panel-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 16px; border-top: 1px solid #222; margin-top: 4px; }
+.panel-footer { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-top: 1px solid #222; flex-shrink: 0; background: #1a1a1e; }
 .footer-right { display: flex; gap: 8px; }
 .btn-save { height: 34px; padding: 0 20px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s; }
 .btn-save:hover:not(:disabled) { background: #7f3fff; }

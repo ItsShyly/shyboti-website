@@ -37,9 +37,9 @@ const form = ref({
 const previewValue = ref('…')
 const previewing   = ref(false)
 
-// >>> Live variable references fetched from API
+// >>> Live variable references
 interface VarRef { label: string; expr: string }
-const varRefs     = ref<VarRef[]>([])
+const varRefs      = ref<VarRef[]>([])
 const varRefsLoaded = ref(false)
 
 async function loadVarRefs() {
@@ -166,12 +166,38 @@ const FONT_FAMILIES = [
   { label: 'Courier',    value: '"Courier New", monospace' },
 ]
 
-const STATIC_HINTS = [
-  { label: 'viewers',  example: '$channel.viewers' },
-  { label: 'game',     example: '$channel.game' },
-  { label: 'title',    example: '$channel.title' },
-  { label: 'uptime',   example: '$channel.uptime' },
-  { label: 'text',     example: 'Hello stream!' },
+// >>> Variable reference groups for OBS (subset relevant to OBS widgets)
+const OBS_REF_GROUPS = [
+  { label: 'Counters', items: [
+    { token: '$counter.<em>name</em>.get',       desc: 'Read counter value' },
+    { token: '$counter.<em>name</em>',            desc: 'Increment +1, return value' },
+    { token: '$ucounter.<em>name</em>',           desc: 'Per-user counter' },
+  ]},
+  { label: 'Variables', items: [
+    { token: '$var.<em>name</em>',                desc: 'Read variable' },
+    { token: '$uvar.<em>name</em>',               desc: 'Per-user variable' },
+  ]},
+  { label: 'Channel', items: [
+    { token: '$channel.viewers',                  desc: 'Current viewer count' },
+    { token: '$channel.title',                    desc: 'Stream title' },
+    { token: '$channel.game',                     desc: 'Current game' },
+    { token: '$channel.uptime',                   desc: 'Stream uptime' },
+    { token: '$channel.isLive',                   desc: 'true / false' },
+  ]},
+  { label: 'Text & Math', items: [
+    { token: '$calc(<em>expr</em>)',              desc: 'Math expression' },
+    { token: '$text.upper(<em>text</em>)',        desc: 'Uppercase' },
+    { token: '$text.lower(<em>text</em>)',        desc: 'Lowercase' },
+  ]},
+  { label: 'Time', items: [
+    { token: '$time.now',                         desc: 'Current ISO timestamp' },
+    { token: '$time.unix',                        desc: 'Unix seconds' },
+    { token: '$time.format(<em>ts</em>,<em>fmt</em>)', desc: 'Format timestamp' },
+  ]},
+  { label: 'HTTP', items: [
+    { token: '$http.get(<em>url</em>)',           desc: 'GET request, returns text' },
+    { token: '$http.json(<em>url</em>,<em>path</em>)', desc: 'GET + extract JSON path' },
+  ]},
 ]
 
 onMounted(load)
@@ -227,7 +253,6 @@ watch(() => session.value?.channel, () => { load(); varRefsLoaded.value = false 
       <div v-if="editOpen" class="panel-overlay" @click.self="editOpen = false">
         <div class="panel">
 
-          <!-- Header -->
           <div class="panel-header">
             <div>
               <div class="panel-title">{{ isNew ? 'New widget' : `Edit · ${editOrigName}` }}</div>
@@ -236,133 +261,135 @@ watch(() => session.value?.channel, () => { load(); varRefsLoaded.value = false 
             <button class="panel-close" @click="editOpen = false">✕</button>
           </div>
 
-          <!-- Two-column body - no scroll -->
           <div class="panel-body">
 
-            <!-- LEFT column -->
-            <div class="col-left">
-
-              <!-- Name -->
-              <div class="field-group">
-                <label class="field-label">Name <span class="field-hint">internal label</span></label>
-                <input v-model="form.name" class="field-input" placeholder="kills-counter" :disabled="!isNew" />
-              </div>
-
-              <!-- Content -->
-              <div class="field-group">
-                <label class="field-label">Content <span class="field-hint">script or plain text</span></label>
-                <input v-model="form.content" class="field-input mono" placeholder="$counter.kills.get" />
-
-                <!-- Static hints -->
-                <div class="hints-grid">
-                  <button v-for="h in STATIC_HINTS" :key="h.example" class="hint-btn" @click="form.content = h.example">{{ h.label }}</button>
-                  <!-- Live var refs -->
-                  <button v-for="v in varRefs" :key="v.expr" class="hint-btn hint-var" @click="form.content = v.expr" :title="v.expr">{{ v.label }}</button>
-                </div>
-              </div>
-
-              <!-- Preview -->
-              <div class="preview-section">
-                <div class="preview-bar">
-                  <span class="field-label">Preview</span>
-                  <button class="preview-btn" @click="previewContent" :disabled="previewing || !form.content.trim()">
-                    {{ previewing ? 'Evaluating…' : '▶ Run' }}
-                  </button>
-                </div>
-                <div class="preview-box" :style="{ background: form.style.background || '#111217' }">
-                  <div class="preview-val" :style="previewStyle">{{ previewValue }}</div>
-                </div>
-              </div>
-
-              <!-- Refresh -->
-              <div class="field-group">
-                <label class="field-label">Refresh every</label>
-                <div class="refresh-row">
-                  <button v-for="ms in [1000,2000,5000,10000,30000]" :key="ms"
-                    class="ms-btn" :class="{ active: form.refresh_ms === ms }"
-                    @click="form.refresh_ms = ms"
-                  >{{ ms >= 1000 ? `${ms/1000}s` : `${ms}ms` }}</button>
-                  <input v-model.number="form.refresh_ms" type="number" min="500" class="field-input ms-custom" />
-                </div>
-              </div>
-
+            <!-- Name -->
+            <div class="field-group">
+              <label class="field-label">Name <span class="field-hint">internal label</span></label>
+              <input v-model="form.name" class="field-input" placeholder="kills-counter" :disabled="!isNew" />
             </div>
 
-            <!-- RIGHT column -->
-            <div class="col-right">
+            <!-- Content -->
+            <div class="field-group">
+              <label class="field-label">Content <span class="field-hint">script expression or plain text</span></label>
+              <input v-model="form.content" class="field-input mono" placeholder="$counter.kills.get" />
+            </div>
 
-              <div class="style-section">
-                <div class="style-title">Style</div>
+            <!-- Preview -->
+            <div class="preview-section">
+              <div class="preview-bar">
+                <span class="field-label">Preview</span>
+                <button class="preview-btn" @click="previewContent" :disabled="previewing || !form.content.trim()">
+                  {{ previewing ? 'Evaluating…' : '▶ Run' }}
+                </button>
+              </div>
+              <div class="preview-box" :style="{ background: form.style.background || '#111217' }">
+                <div class="preview-val" :style="previewStyle">{{ previewValue }}</div>
+              </div>
+            </div>
 
-                <div class="style-grid">
-                  <div class="field-group">
-                    <label class="field-label">Size (px)</label>
-                    <input v-model.number="form.style.fontSize" type="number" min="8" max="200" class="field-input" />
-                  </div>
-                  <div class="field-group">
-                    <label class="field-label">Color</label>
-                    <div class="color-row">
-                      <input type="color" v-model="form.style.color" class="color-pick" />
-                      <input v-model="form.style.color" class="field-input" placeholder="#ffffff" />
-                    </div>
-                  </div>
-                  <div class="field-group">
-                    <label class="field-label">Font</label>
-                    <select v-model="form.style.fontFamily" class="field-select">
-                      <option v-for="f in FONT_FAMILIES" :key="f.value" :value="f.value">{{ f.label }}</option>
-                    </select>
-                  </div>
-                  <div class="field-group">
-                    <label class="field-label">Weight</label>
-                    <select v-model="form.style.fontWeight" class="field-select">
-                      <option value="normal">Normal</option>
-                      <option value="bold">Bold</option>
-                      <option value="900">Black</option>
-                    </select>
-                  </div>
-                  <div class="field-group">
-                    <label class="field-label">Align</label>
-                    <select v-model="form.style.textAlign" class="field-select">
-                      <option value="left">Left</option>
-                      <option value="center">Center</option>
-                      <option value="right">Right</option>
-                    </select>
-                  </div>
-                  <div class="field-group">
-                    <label class="field-label">Padding (px)</label>
-                    <input v-model.number="form.style.padding" type="number" min="0" class="field-input" />
-                  </div>
-                </div>
+            <!-- Refresh -->
+            <div class="field-group">
+              <label class="field-label">Refresh every</label>
+              <div class="refresh-row">
+                <button v-for="ms in [1000,2000,5000,10000,30000]" :key="ms"
+                  class="ms-btn" :class="{ active: form.refresh_ms === ms }"
+                  @click="form.refresh_ms = ms"
+                >{{ ms >= 1000 ? `${ms/1000}s` : `${ms}ms` }}</button>
+                <input v-model.number="form.refresh_ms" type="number" min="500" class="field-input ms-custom" />
+              </div>
+            </div>
 
-                <div class="toggle-row">
-                  <label class="toggle-label">
-                    <input type="checkbox" v-model="form.style.stroke" /> Text stroke
-                  </label>
-                  <input v-if="form.style.stroke" type="color" v-model="form.style.strokeColor" class="color-pick" />
-                </div>
-                <div class="toggle-row">
-                  <label class="toggle-label">
-                    <input type="checkbox" v-model="form.style.shadow" /> Drop shadow
-                  </label>
+            <!-- Style -->
+            <div class="style-section">
+              <div class="style-title">Style</div>
+              <div class="style-grid">
+                <div class="field-group">
+                  <label class="field-label">Size (px)</label>
+                  <input v-model.number="form.style.fontSize" type="number" min="8" max="200" class="field-input" />
                 </div>
                 <div class="field-group">
-                  <label class="field-label">Background <span class="field-hint">empty = transparent</span></label>
+                  <label class="field-label">Color</label>
                   <div class="color-row">
-                    <input type="color" v-model="form.style.background" class="color-pick" />
-                    <input v-model="form.style.background" class="field-input" placeholder="transparent" />
-                    <button class="clear-btn" @click="form.style.background = ''">Clear</button>
+                    <input type="color" v-model="form.style.color" class="color-pick" />
+                    <input v-model="form.style.color" class="field-input" placeholder="#ffffff" />
+                  </div>
+                </div>
+                <div class="field-group">
+                  <label class="field-label">Font</label>
+                  <select v-model="form.style.fontFamily" class="field-select">
+                    <option v-for="f in FONT_FAMILIES" :key="f.value" :value="f.value">{{ f.label }}</option>
+                  </select>
+                </div>
+                <div class="field-group">
+                  <label class="field-label">Weight</label>
+                  <select v-model="form.style.fontWeight" class="field-select">
+                    <option value="normal">Normal</option>
+                    <option value="bold">Bold</option>
+                    <option value="900">Black</option>
+                  </select>
+                </div>
+                <div class="field-group">
+                  <label class="field-label">Align</label>
+                  <select v-model="form.style.textAlign" class="field-select">
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                  </select>
+                </div>
+                <div class="field-group">
+                  <label class="field-label">Padding (px)</label>
+                  <input v-model.number="form.style.padding" type="number" min="0" class="field-input" />
+                </div>
+              </div>
+              <div class="toggle-row">
+                <label class="toggle-label"><input type="checkbox" v-model="form.style.stroke" /> Text stroke</label>
+                <input v-if="form.style.stroke" type="color" v-model="form.style.strokeColor" class="color-pick" />
+              </div>
+              <div class="toggle-row">
+                <label class="toggle-label"><input type="checkbox" v-model="form.style.shadow" /> Drop shadow</label>
+              </div>
+              <div class="field-group">
+                <label class="field-label">Background <span class="field-hint">empty = transparent</span></label>
+                <div class="color-row">
+                  <input type="color" v-model="form.style.background" class="color-pick" />
+                  <input v-model="form.style.background" class="field-input" placeholder="transparent" />
+                  <button class="clear-btn" @click="form.style.background = ''">Clear</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="obs-cache-hint">
+              💡 After changing style, right-click Browser Source in OBS → <strong>Properties</strong> → <strong>Refresh cache of current page</strong>
+            </div>
+
+            <!-- Variable Reference -->
+            <details class="ref-panel">
+              <summary class="ref-summary">Variable reference</summary>
+              <div class="ref-content">
+                <!-- Live var refs from channel -->
+                <div v-if="varRefs.length" class="ref-group">
+                  <div class="ref-group-label">Your Counters &amp; Vars</div>
+                  <div v-for="v in varRefs" :key="v.expr" class="ref-row has-example" @click="form.content = v.expr" style="cursor:pointer">
+                    <code class="ref-token">{{ v.label }}</code>
+                    <span class="ref-desc">click to use</span>
+                    <span class="ref-example">{{ v.expr }}</span>
+                  </div>
+                </div>
+                <!-- Static reference -->
+                <div v-for="g in OBS_REF_GROUPS" :key="g.label" class="ref-group">
+                  <div class="ref-group-label">{{ g.label }}</div>
+                  <div v-for="r in g.items" :key="r.token" class="ref-row has-example" @click="form.content = r.token.replace(/<[^>]+>/g, '')" style="cursor:pointer">
+                    <code class="ref-token" v-html="r.token.replace(/<em>/g, '<span class=\'ref-token-name\'>').replace(/<\/em>/g, '</span>')"></code>
+                    <span class="ref-desc">{{ r.desc }}</span>
                   </div>
                 </div>
               </div>
+            </details>
 
-              <div class="obs-cache-hint">
-                💡 After changing style, right-click Browser Source in OBS → <strong>Properties</strong> → <strong>Refresh cache of current page</strong>
-              </div>
-
-            </div>
           </div>
 
-          <!-- Footer -->
+          <!-- Footer pinned outside scroll -->
           <div class="panel-footer">
             <div v-if="saveError" class="save-error">{{ saveError }}</div>
             <div v-else></div>
@@ -416,104 +443,103 @@ watch(() => session.value?.channel, () => { load(); varRefsLoaded.value = false 
 .btn-action.del:hover { background: rgba(241,73,73,.1); }
 .btn-action.del.confirm { background: rgba(241,73,73,.15); border-color: #f14949; }
 
-/* === Panel === */
+/* Panel */
 .panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: flex-start; justify-content: flex-end; z-index: 1000; }
-.panel {
-  width: min(860px, 96vw); height: 100vh;
-  background: #1a1a1e; border-left: 1px solid #2a2a30;
-  display: flex; flex-direction: column; overflow: hidden;
-  animation: slideIn .2s ease;
-}
+.panel         { width: 560px; max-width: 100vw; height: 100vh; background: #1a1a1e; border-left: 1px solid #2a2a30; display: flex; flex-direction: column; overflow: hidden; animation: slideIn .2s ease; }
 @keyframes slideIn { from { transform: translateX(40px); opacity: 0 } to { transform: none; opacity: 1 } }
 
-.panel-header {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  padding: 14px 20px 12px; border-bottom: 1px solid #222; flex-shrink: 0;
-}
-.panel-title { font-size: 15px; font-weight: 700; color: #e0e0e0; }
-.panel-sub   { font-size: 11px; color: #555; margin-top: 2px; }
-.panel-close { width: 28px; height: 28px; border: none; background: transparent; color: #555; font-size: 14px; cursor: pointer; }
+.panel-header  { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #222; flex-shrink: 0; }
+.panel-title   { font-size: 16px; font-weight: 700; color: #e0e0e0; }
+.panel-sub     { font-size: 11px; color: #555; margin-top: 3px; }
+.panel-close   { width: 28px; height: 28px; border: none; background: transparent; color: #555; font-size: 14px; cursor: pointer; }
 .panel-close:hover { color: #e0e0e0; }
 
-/* Two-column body - fills remaining height, no scroll */
-.panel-body {
-  flex: 1; min-height: 0;
-  display: grid; grid-template-columns: 1fr 280px;
-  gap: 0; overflow: hidden;
-}
+.panel-body    { flex: 1; overflow-y: scroll; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: none; }
+.panel-body::-webkit-scrollbar { display: none; }
 
-.col-left {
-  padding: 16px 20px; display: flex; flex-direction: column; gap: 12px;
-  border-right: 1px solid #222; overflow: hidden;
-}
-.col-right {
-  padding: 16px 16px; display: flex; flex-direction: column; gap: 10px;
-  overflow: hidden;
-}
-
-.panel-footer {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 10px 20px; border-top: 1px solid #222; flex-shrink: 0;
-}
-.footer-right { display: flex; gap: 8px; }
-.btn-save   { height: 32px; padding: 0 18px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.panel-footer  { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-top: 1px solid #222; flex-shrink: 0; background: #1a1a1e; }
+.footer-right  { display: flex; gap: 8px; }
+.btn-save      { height: 34px; padding: 0 20px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
 .btn-save:hover:not(:disabled) { background: #7f3fff; }
 .btn-save:disabled { opacity: .4; cursor: not-allowed; }
-.btn-cancel { height: 32px; padding: 0 14px; border: 1px solid #333; background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer; }
+.btn-cancel    { height: 34px; padding: 0 16px; border: 1px solid #333; background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer; }
 .btn-cancel:hover { border-color: #555; color: #e0e0e0; }
-.save-error { font-size: 11px; color: #f14949; }
+.save-error    { font-size: 11px; color: #f14949; }
 
 /* Fields */
-.field-group  { display: flex; flex-direction: column; gap: 4px; }
-.field-label  { font-size: 10px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 5px; }
-.field-hint   { font-size: 10px; color: #444; font-weight: 400; text-transform: none; letter-spacing: 0; }
-.field-input  { background: #111217; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 6px 9px; outline: none; }
+.field-group  { display: flex; flex-direction: column; gap: 5px; }
+.field-label  { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; }
+.field-hint   { font-size: 10px; color: #555; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.field-input  { background: #111217; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 13px; padding: 7px 10px; outline: none; }
 .field-input:focus { border-color: #6f2bff55; }
 .field-input.mono { font-family: 'Consolas','Fira Mono',monospace; }
-.field-select { background: #111217; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 6px 9px; outline: none; appearance: none; cursor: pointer; width: 100%; }
-
-/* Hints */
-.hints-grid { display: flex; flex-wrap: wrap; gap: 4px; }
-.hint-btn { height: 20px; padding: 0 8px; border: 1px solid #2a2a30; background: transparent; color: #666; font-family: inherit; font-size: 10px; cursor: pointer; white-space: nowrap; }
-.hint-btn:hover { border-color: #9d6cff66; color: #9d6cff; background: #9d6cff0c; }
-.hint-var { border-color: #e5c07b33; color: #e5c07b99; }
-.hint-var:hover { border-color: #e5c07b88; color: #e5c07b; background: rgba(229,192,123,.08); }
+.field-select { background: #111217; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 13px; padding: 7px 10px; outline: none; appearance: none; cursor: pointer; width: 100%; }
 
 /* Preview */
-.preview-section { display: flex; flex-direction: column; gap: 5px; }
+.preview-section { display: flex; flex-direction: column; gap: 6px; }
 .preview-bar     { display: flex; align-items: center; justify-content: space-between; }
-.preview-btn     { height: 22px; padding: 0 10px; border: 1px solid #6f2bff44; background: transparent; color: #9d6cff; font-family: inherit; font-size: 10px; cursor: pointer; }
+.preview-btn     { height: 24px; padding: 0 12px; border: 1px solid #6f2bff44; background: transparent; color: #9d6cff; font-family: inherit; font-size: 11px; cursor: pointer; }
 .preview-btn:hover:not(:disabled) { background: #6f2bff18; }
 .preview-btn:disabled { opacity: .4; cursor: not-allowed; }
-.preview-box     { flex: 1; min-height: 44px; padding: 10px; display: flex; align-items: center; border: 1px solid #2a2a30; overflow: hidden; }
+.preview-box     { min-height: 52px; padding: 12px; display: flex; align-items: center; border: 1px solid #2a2a30; }
 .preview-val     { max-width: 100%; word-break: break-word; }
 
 /* Refresh */
-.refresh-row { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.ms-btn { height: 28px; padding: 0 9px; border: 1px solid #2a2a30; background: transparent; color: #666; font-family: inherit; font-size: 11px; cursor: pointer; }
+.refresh-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.ms-btn { height: 30px; padding: 0 10px; border: 1px solid #2a2a30; background: transparent; color: #666; font-family: inherit; font-size: 11px; cursor: pointer; }
 .ms-btn:hover { border-color: #6f2bff44; color: #9d6cff; }
 .ms-btn.active { border-color: #6f2bff; color: #9d6cff; background: #6f2bff18; }
-.ms-custom { width: 60px; flex-shrink: 0; }
+.ms-custom { width: 70px; flex-shrink: 0; }
 
 /* Style section */
-.style-section  { display: flex; flex-direction: column; gap: 8px; flex: 1; }
-.style-title    { font-size: 9px; font-weight: 700; color: #444; text-transform: uppercase; letter-spacing: .06em; }
-.style-grid     { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
-.color-row      { display: flex; align-items: center; gap: 5px; }
-.color-pick     { width: 28px; height: 28px; border: 1px solid #2a2a30; padding: 2px; background: #111217; cursor: pointer; flex-shrink: 0; }
-.color-row .field-input { flex: 1; min-width: 0; }
-.toggle-row     { display: flex; align-items: center; gap: 7px; }
-.toggle-label   { display: flex; align-items: center; gap: 5px; font-size: 11px; color: #888; cursor: pointer; user-select: none; }
-.toggle-label input[type="checkbox"] { width: 13px; height: 13px; accent-color: #9d6cff; cursor: pointer; }
-.clear-btn      { height: 28px; padding: 0 8px; border: 1px solid #2a2a30; background: transparent; color: #555; font-family: inherit; font-size: 10px; cursor: pointer; flex-shrink: 0; }
+.style-section { display: flex; flex-direction: column; gap: 10px; padding: 12px; background: #111217; border: 1px solid #1e1e24; }
+.style-title   { font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .06em; }
+.style-grid    { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.color-row     { display: flex; align-items: center; gap: 6px; }
+.color-pick    { width: 32px; height: 32px; border: 1px solid #2a2a30; padding: 2px; background: #111217; cursor: pointer; flex-shrink: 0; }
+.color-row .field-input { flex: 1; }
+.toggle-row    { display: flex; align-items: center; gap: 8px; }
+.toggle-label  { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #888; cursor: pointer; user-select: none; }
+.toggle-label input[type="checkbox"] { width: 14px; height: 14px; accent-color: #9d6cff; cursor: pointer; }
+.clear-btn     { height: 32px; padding: 0 10px; border: 1px solid #2a2a30; background: transparent; color: #555; font-family: inherit; font-size: 11px; cursor: pointer; flex-shrink: 0; }
 .clear-btn:hover { color: #e0e0e0; border-color: #444; }
 
-.obs-cache-hint { font-size: 10px; color: #555; background: #111217; border: 1px solid #1e1e24; padding: 7px 10px; line-height: 1.6; }
+.obs-cache-hint { font-size: 11px; color: #555; background: #111217; border: 1px solid #1e1e24; padding: 8px 12px; line-height: 1.6; }
 .obs-cache-hint strong { color: #888; font-weight: 600; }
 
-@media (max-width: 860px) {
-  .panel { width: 100vw; }
-  .panel-body { grid-template-columns: 1fr; overflow-y: auto; }
-  .col-left  { border-right: none; border-bottom: 1px solid #222; }
+/* Reference panel - same style as CommandEditPanel */
+.ref-panel   { border: 1px solid #1e1e22; }
+.ref-summary {
+  padding: 6px 10px; font-size: 10px; font-weight: 600; color: #555;
+  text-transform: uppercase; letter-spacing: .05em;
+  cursor: pointer; user-select: none; list-style: none;
 }
+.ref-summary:hover { color: #888; }
+.ref-content { max-height: 320px; overflow-y: scroll; padding: 8px 10px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: none; }
+.ref-content::-webkit-scrollbar { display: none; }
+.ref-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9d6cff; margin-bottom: 3px; }
+.ref-row   { display: flex; align-items: baseline; gap: 8px; padding: 1px 0; position: relative; }
+.ref-token { font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; color: #4ec9b0; background: rgba(78,201,176,.08); padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
+.ref-desc  { font-size: 10px; color: #484848; flex: 1; }
+.ref-example {
+  display: none; position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+  font-family: 'Consolas','Fira Mono',monospace; font-size: 10px;
+  color: #23d18b; background: #0d1a13; border: 1px solid rgba(35,209,139,.3);
+  padding: 2px 7px; white-space: nowrap; pointer-events: none; z-index: 10;
+}
+.ref-row.has-example:hover .ref-example { display: block; }
+.ref-row.has-example:hover .ref-desc { opacity: 0.4; }
+.ref-group { display: flex; flex-direction: column; gap: 0; }
+
+@media (max-width: 680px) {
+  .panel { width: 100vw; }
+  .style-grid { grid-template-columns: 1fr; }
+  .widget-row { flex-wrap: wrap; }
+  .widget-actions { align-items: flex-start; width: 100%; }
+}
+</style>
+
+<style>
+/* ref-token-name must be global to work inside v-html */
+.ref-token-name { color: #7cb8ea; font-style: italic; }
 </style>
