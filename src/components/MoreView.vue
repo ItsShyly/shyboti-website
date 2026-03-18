@@ -210,7 +210,35 @@ async function openChatterino() {
       </button>
     </div>
 
-        <!-- >>> Variables & Counters card (logged-in only) <<< -->
+        <!-- OBS Browser Sources card (logged-in only) -->
+    <div v-if="session" class="service-card" @click="router.push('/obs-widgets')">
+      <div class="card-icon obs-icon">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Monitor -->
+          <rect x="4" y="6" width="40" height="28" rx="4" stroke="currentColor" stroke-width="2.5"/>
+          <!-- Stand -->
+          <path d="M16 34v6M32 34v6M12 40h24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <!-- Live dot -->
+          <circle cx="36" cy="14" r="4" fill="#f14949" opacity="0.9"/>
+          <!-- Counter text lines -->
+          <path d="M10 18h16M10 24h10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity="0.6"/>
+        </svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">OBS Widgets</div>
+        <div class="card-sub">Live browser sources for OBS</div>
+        <div class="card-url">shyboti.de/obs/<span class="url-id obs-id">id</span></div>
+      </div>
+      <button class="your-btn obs-btn" @click.stop="router.push('/obs-widgets')">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1" y="1" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M4 13h6M7 10v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        Manage
+      </button>
+    </div>
+
+    <!-- >>> Variables & Counters card (logged-in only) <<< -->
     <div v-if="session" class="service-card" @click="openVars">
       <div class="card-icon vars-icon">
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -553,6 +581,12 @@ async function openChatterino() {
 .mc-bind-hint {
   font-size: 10px; color: #666; padding: 2px 0 4px;
 }
+
+/* OBS card icon */
+.obs-icon { color: #f14949; }
+.url-id.obs-id { color: #f14949; }
+.obs-btn { border-color: #f1494944; color: #f14949; background: rgba(241,73,73,.06); }
+.obs-btn:hover { background: rgba(241,73,73,.16); border-color: #f1494988; }
 
 /* Variables & Counters card icon */
 .vars-icon { color: #e5c07b; }
