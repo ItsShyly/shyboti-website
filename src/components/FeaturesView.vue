@@ -330,7 +330,7 @@ async function addEntry() {
 .vars-btn:hover { background: rgba(229,192,123,.16); border-color: #e5c07b88; }
 
 .vars-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.vars-modal { background: #141418; border: 1px solid #2a2a30; width: min(720px, 95vw); max-height: 85vh; display: flex; flex-direction: column; }
+.vars-modal { background: #141418; border: 1px solid #2a2a30; width: min(720px, 95vw); height: min(600px, 90vh); display: flex; flex-direction: column; }
 .vars-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid #1e1e24; flex-shrink: 0; }
 .vars-title  { font-size: 14px; font-weight: 700; color: #e0e0e0; }
 .vars-close  { background: none; border: none; color: #555; font-size: 18px; cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; }
