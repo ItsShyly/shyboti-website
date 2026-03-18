@@ -37,8 +37,8 @@ const { t } = useI18n()
 .hero-sub { font-size: clamp(12px, 1.3vw, 15px); color: #666; line-height: 1.9; }
 .hero-login {
   margin-top: 8px; height: 44px; padding: 0 32px; border: none;
-  background: #ffd569; color: #fff; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  background: #ffd569; color: #000000; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
   transition: background 0.15s;
 }
-.hero-login:hover { background: #7f3fff; }
+.hero-login:hover { background: #7f3fff; color: #fff;}
 </style>
