@@ -120,8 +120,13 @@ async function loadDynamic(): Promise<SearchResult[]> {
     if (cmdRes.status === 'fulfilled' && cmdRes.value.ok) {
       const d = await cmdRes.value.json() as { commands: { name: string; description: string }[]; prefix: string }
       for (const c of d.commands) {
-        results.push({ label: `${d.prefix}${c.name}`, category: 'Command', icon: '+', sub: c.description || undefined,
-          action: () => { router.push('/commands'); nextTick(() => { searchOpenEdit.value = { name: c.name, builtIn: true } }) }
+        const cmdName = c.name
+        results.push({ label: `${d.prefix}${cmdName}`, category: 'Command', icon: '+', sub: c.description || undefined,
+          action: () => {
+            router.push('/commands').then(() => {
+              setTimeout(() => { searchOpenEdit.value = { name: cmdName, builtIn: true } }, 50)
+            })
+          }
         })
       }
     }
@@ -148,8 +153,13 @@ async function loadDynamic(): Promise<SearchResult[]> {
     if (ccRes.ok) {
       const d = await ccRes.json() as { commands: { name: string; description?: string; response?: string }[] }
       for (const c of (d.commands ?? [])) {
-        results.push({ label: `+${c.name}`, category: 'Custom Command', icon: '+', sub: c.description || c.response?.slice(0, 50) || undefined,
-          action: () => { router.push('/commands'); nextTick(() => { searchOpenEdit.value = { name: c.name, builtIn: false } }) }
+        const ccName = c.name
+        results.push({ label: `+${ccName}`, category: 'Custom Command', icon: '+', sub: c.description || c.response?.slice(0, 50) || undefined,
+          action: () => {
+            router.push('/commands').then(() => {
+              setTimeout(() => { searchOpenEdit.value = { name: ccName, builtIn: false } }, 50)
+            })
+          }
         })
       }
     }

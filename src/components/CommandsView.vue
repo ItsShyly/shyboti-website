@@ -99,6 +99,7 @@ async function confirmCreate() {
   if (!name) { newCmdError.value = 'Enter a name'; return }
   if (!/^[a-z0-9_]+$/.test(name)) { newCmdError.value = 'Only letters, numbers, _'; return }
   if (customCommands.value.some(c => c.name === name)) { newCmdError.value = 'Already exists'; return }
+  if (commands.value.some(c => c.name === name)) { newCmdError.value = 'Name conflicts with a default command'; return }
   if (!session.value) return
   creatingNew.value = false
   await fetch(`${API}/custom-commands/${session.value.channel}/${name}`, {
@@ -555,6 +556,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
             ref="newCmdInput"
             v-model="newCmdName"
             class="new-cmd-input"
+            :class="{ 'new-cmd-input-conflict': newCmdName && (commands.some(c => c.name === newCmdName.trim().toLowerCase().replace(/^\+/, '')) || customCommands.some(c => c.name === newCmdName.trim().toLowerCase().replace(/^\+/, ''))) }"
             placeholder="commandname"
             maxlength="32"
             @keydown.enter="confirmCreate"
@@ -850,6 +852,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
   font-family: inherit; font-size: 13px; outline: none; width: 160px;
 }
 .new-cmd-input:focus { border-color: #9d6cff; }
+.new-cmd-input-conflict { border-color: #f1494966 !important; background: #1c1215 !important; }
 .cancel-btn {
   height: 32px; width: 32px; border: 1px solid #333; background: transparent;
   color: #666; font-size: 12px; cursor: pointer;
