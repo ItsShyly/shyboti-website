@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
@@ -285,7 +285,39 @@ function fmtDur(s: number) {
 
 const ACTION_COLORS: Record<string, string> = { delete: '#e5c07b', timeout: '#c792ea', ban: '#f14949' }
 
-onMounted(load)
+// >>> Reload button
+const reloading = ref(false)
+async function reload() {
+  reloading.value = true
+  await load()
+  reloading.value = false
+}
+
+// >>> SSE auto-refresh: silently reload when moderation-relevant activity arrives
+let _sseSource: EventSource | null = null
+function startModSSE() {
+  _sseSource?.close()
+  if (!session.value?.token) return
+  fetch(`${API}/activity/sse-ticket`, { method: 'POST', headers: { Authorization: `Bearer ${session.value.token}` } })
+    .then(r => r.ok ? r.json() as Promise<{ ticket: string }> : Promise.reject())
+    .then(({ ticket }) => {
+      const ch = session.value?.channel ?? ''
+      const es = new EventSource(`${API}/activity/stream?ticket=${ticket}&channel=${ch}`)
+      _sseSource = es
+      es.onmessage = (e) => {
+        try {
+          const ev = JSON.parse(e.data) as { type: string }
+          // Reload moderation data if ban/timeout events arrive (nuke fired etc)
+          if (['ban','timeout','unban'].includes(ev.type)) load()
+        } catch {}
+      }
+      es.onerror = () => { es.close(); setTimeout(startModSSE, 10_000) }
+    })
+    .catch(() => {})
+}
+
+onMounted(() => { load(); startModSSE() })
+onUnmounted(() => { _sseSource?.close() })
 </script>
 
 <template>
@@ -303,6 +335,7 @@ onMounted(load)
         class="tab-btn" :class="{ active: activeTab === tab }" @click="activeTab = tab">
         {{ tab === 'blocked' ? t('mod.tab.blocked') : tab === 'spam' ? t('mod.tab.spam') : t('mod.tab.nukes') }}
       </button>
+      <button class="tab-btn reload-tab" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺' }}</button>
     </div>
 
     <div v-if="loading" class="mod-empty">{{ t('mod.loading') }}</div>
@@ -539,6 +572,8 @@ onMounted(load)
 }
 .tab-btn:hover { color: #aaa; }
 .tab-btn.active { color: #9d6cff; border-bottom-color: #6f2bff; }
+.reload-tab { margin-left: auto; font-size: 14px; padding: 4px 14px; }
+.reload-tab:disabled { opacity: .4; cursor: not-allowed; }
 
 .nuke-hint { font-size: 11px; color: #555; padding: 6px 0; }
 .nuke-hint strong { color: #888; font-weight: 600; }

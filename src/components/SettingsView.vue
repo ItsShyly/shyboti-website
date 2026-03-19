@@ -9,32 +9,43 @@ const { t } = useI18n()
 
 const isBroadcaster = ref(false)
 
-// >>> Prefix (broadcaster only)
+// >>> Prefix
 const prefix       = ref('+')
 const prefixSaving = ref(false)
 const prefixSaved  = ref(false)
 const prefixError  = ref('')
 
-// >>> Log opt-out (all users)
-const optedOut   = ref(false)
-const optSaving  = ref(false)
-const optMsg     = ref('')
+// >>> Log opt-out
+const optedOut  = ref(false)
+const optSaving = ref(false)
+const optMsg    = ref('')
 
-// >>> Vanish hide setting (broadcaster only)
-const vanishHide       = ref(false)
-const vanishSaving     = ref(false)
-const vanishMsg        = ref('')
+// >>> Vanish hide
+const vanishHide   = ref(false)
+const vanishSaving = ref(false)
+const vanishMsg    = ref('')
 
-// >>> Remove bot (broadcaster only)
+// >>> 7TV
+interface EmoteSetInfo { setId: string | null; setName: string | null; emoteCount?: number }
+const emoteSet        = ref<EmoteSetInfo>({ setId: null, setName: null })
+const emoteSetLoading = ref(false)
+const emoteSetSaving  = ref(false)
+const emoteSetError   = ref('')
+const emoteSetSuccess = ref('')
+const emoteInput7tv   = ref('')
+const emoteInputId    = ref('')
+
+// >>> Remove bot
 const removeConfirm  = ref(false)
 const removeRemoving = ref(false)
 const removeMsg      = ref('')
 const removeError    = ref('')
 
+// ─── Load ────────────────────────────────────────────────────────────────────
+
 async function load() {
   if (!session.value) return
   isBroadcaster.value = session.value.login === session.value.channel
-
   const headers = { Authorization: `Bearer ${session.value.token}` }
   try {
     const [sRes, oRes] = await Promise.all([
@@ -50,11 +61,28 @@ async function load() {
   } catch {}
 }
 
+async function load7tvSet() {
+  if (!session.value) return
+  emoteSetLoading.value = true
+  try {
+    const res = await fetch(`${API}/settings/7tv/${session.value.channel}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    if (res.ok) emoteSet.value = await res.json()
+  } catch {}
+  emoteSetLoading.value = false
+}
+
+async function loadAll() { await load(); await load7tvSet() }
+onMounted(loadAll)
+watch(() => session.value?.channel, loadAll)
+
+// ─── Actions ─────────────────────────────────────────────────────────────────
+
 async function savePrefix() {
   if (!session.value || !isBroadcaster.value) return
   if (!prefix.value.trim()) { prefixError.value = t('settings.prefix.error.empty'); return }
-  prefixError.value = ''
-  prefixSaving.value = true
+  prefixError.value = ''; prefixSaving.value = true
   try {
     const res = await fetch(`${API}/settings/${session.value.channel}`, {
       method: 'PUT',
@@ -70,8 +98,7 @@ async function savePrefix() {
 
 async function toggleOptOut() {
   if (!session.value) return
-  optSaving.value = true
-  optMsg.value = ''
+  optSaving.value = true; optMsg.value = ''
   try {
     await fetch(`${API}/log-optout`, {
       method: optedOut.value ? 'DELETE' : 'POST',
@@ -84,26 +111,19 @@ async function toggleOptOut() {
   optSaving.value = false
 }
 
-// >>> 7TV Emote Set (broadcaster only)
-interface EmoteSetInfo { setId: string | null; setName: string | null; emoteCount?: number }
-const emoteSet        = ref<EmoteSetInfo>({ setId: null, setName: null })
-const emoteSetLoading = ref(false)
-const emoteSetSaving  = ref(false)
-const emoteSetError   = ref('')
-const emoteSetSuccess = ref('')
-const emoteInput7tv   = ref('') // >>> channel name input
-const emoteInputId    = ref('') // >>> direct set ID input
-
-async function load7tvSet() {
-  if (!session.value) return
-  emoteSetLoading.value = true
+async function saveVanish() {
+  if (!session.value || !isBroadcaster.value) return
+  vanishSaving.value = true; vanishMsg.value = ''
   try {
-    const res = await fetch(`${API}/settings/7tv/${session.value.channel}`, {
-      headers: { Authorization: `Bearer ${session.value.token}` }
+    await fetch(`${API}/settings/${session.value.channel}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ hide_vanish_timeouts: vanishHide.value }),
     })
-    if (res.ok) emoteSet.value = await res.json()
-  } catch {}
-  emoteSetLoading.value = false
+    vanishMsg.value = vanishHide.value ? 'Vanish timeouts hidden from dashboard.' : 'Vanish timeouts will show in dashboard.'
+    setTimeout(() => vanishMsg.value = '', 3000)
+  } catch { vanishMsg.value = 'Failed to save.' }
+  vanishSaving.value = false
 }
 
 async function fetch7tvSet() {
@@ -120,7 +140,7 @@ async function fetch7tvSet() {
     })
     const d = await res.json() as any
     if (!res.ok) throw new Error(d.error ?? 'Failed')
-    emoteSet.value    = { setId: d.setId, setName: d.setName, emoteCount: d.emoteCount }
+    emoteSet.value = { setId: d.setId, setName: d.setName, emoteCount: d.emoteCount }
     emoteInput7tv.value = ''; emoteInputId.value = ''
     emoteSetSuccess.value = `${d.setName ?? d.setId} (${d.emoteCount ?? '?'} ${t('settings.7tv.emotes')})`
     setTimeout(() => emoteSetSuccess.value = '', 4000)
@@ -133,35 +153,16 @@ async function remove7tvSet() {
   emoteSetSaving.value = true; emoteSetError.value = ''; emoteSetSuccess.value = ''
   try {
     await fetch(`${API}/settings/7tv/${session.value.channel}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${session.value.token}` },
+      method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` },
     })
     emoteSet.value = { setId: null, setName: null }
   } catch { emoteSetError.value = t('settings.7tv.error') }
   emoteSetSaving.value = false
 }
 
-async function saveVanish() {
-  if (!session.value || !isBroadcaster.value) return
-  vanishSaving.value = true
-  vanishMsg.value = ''
-  try {
-    await fetch(`${API}/settings/${session.value.channel}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
-      body: JSON.stringify({ hide_vanish_timeouts: vanishHide.value }),
-    })
-    vanishMsg.value = vanishHide.value ? 'Vanish timeouts will be hidden from the dashboard.' : 'Vanish timeouts will now show in the dashboard.'
-    setTimeout(() => vanishMsg.value = '', 3000)
-  } catch { vanishMsg.value = 'Failed to save.' }
-  vanishSaving.value = false
-}
-
-// >>> Remove bot from channel
 function clickRemoveBot() {
   if (!removeConfirm.value) {
     removeConfirm.value = true
-    // Auto-cancel after 8s if user does nothing
     setTimeout(() => { removeConfirm.value = false }, 8000)
     return
   }
@@ -170,23 +171,16 @@ function clickRemoveBot() {
 
 async function doRemoveBot() {
   if (!session.value || !isBroadcaster.value) return
-  removeConfirm.value = false
-  removeRemoving.value = true
-  removeError.value = ''
+  removeConfirm.value = false; removeRemoving.value = true; removeError.value = ''
   try {
     const res = await fetch(`${API}/bot/leave/${session.value.channel}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${session.value.token}` },
+      method: 'POST', headers: { Authorization: `Bearer ${session.value.token}` },
     })
     if (!res.ok) throw new Error()
     removeMsg.value = t('settings.remove.done')
   } catch { removeError.value = t('settings.remove.error') }
   removeRemoving.value = false
 }
-
-async function loadAll() { await load(); await load7tvSet() }
-onMounted(loadAll)
-watch(() => session.value?.channel, loadAll)
 </script>
 
 <template>
@@ -196,269 +190,314 @@ watch(() => session.value?.channel, loadAll)
       <p class="settings-sub">{{ t('settings.sub') }} <span class="chan">#{{ session?.channel }}</span>.</p>
     </div>
 
-    <!-- >>> Command prefix - broadcaster only -->
-    <div class="section" v-if="isBroadcaster">
-      <div class="section-head">
-        <div>
-          <div class="section-title">{{ t('settings.prefix.title') }}</div>
-          <div class="section-sub">{{ t('settings.prefix.sub') }} <code class="code">{{ prefix }}</code>command.</div>
-        </div>
+    <div class="cards-grid">
 
-      </div>
-      <div class="prefix-row">
-        <input v-model="prefix" class="prefix-input" maxlength="3" placeholder="+" @keydown.enter="savePrefix" spellcheck="false" />
-        <div class="prefix-preview">
-          <span class="prefix-example"><span class="pre">{{ prefix || '+' }}</span>ping</span>
-          <span class="prefix-hint">{{ t('settings.prefix.how') }}</span>
-        </div>
-        <button class="save-btn" @click="savePrefix" :disabled="prefixSaving || !prefix">
-          {{ prefixSaved ? t('settings.saved') : prefixSaving ? t('settings.saving') : t('settings.prefix.save') }}
-        </button>
-      </div>
-      <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
-      <div class="section-note">{{ t('settings.prefix.note') }}</div>
-    </div>
-
-    <!-- >>> Log opt-out - all users -->
-    <div class="section">
-      <div class="section-head">
-        <div>
-          <div class="section-title">{{ t('settings.optout.title') }}</div>
-          <div class="section-sub">{{ t('settings.optout.sub') }}</div>
-        </div>
-        <span class="badge" :class="optedOut ? 'out' : 'in'">{{ optedOut ? t('settings.optout.badge.out') : t('settings.optout.badge.in') }}</span>
-      </div>
-      <div class="opt-row">
-        <div class="opt-status">
-          <div class="opt-dot" :class="{ out: optedOut }"></div>
-          <span class="opt-label" :class="{ out: optedOut }">{{ optedOut ? t('settings.optout.hidden') : t('settings.optout.visible') }}</span>
-        </div>
-        <button class="opt-btn" :class="{ out: optedOut }" @click="toggleOptOut" :disabled="optSaving">
-          {{ optSaving ? '…' : optedOut ? t('settings.optout.btn.in') : t('settings.optout.btn.out') }}
-        </button>
-      </div>
-      <div v-if="optMsg" class="opt-msg">{{ optMsg }}</div>
-    </div>
-
-    <!-- >>> 7TV Emote Set - broadcaster only -->
-    <div class="section" v-if="isBroadcaster">
-      <div class="section-head">
-        <div>
-          <div class="section-title">{{ t('settings.7tv.title') }}</div>
-          <div class="section-sub">{{ t('settings.7tv.sub') }}</div>
-        </div>
-
-      </div>
-
-      <div v-if="emoteSetLoading" class="section-loading">Loading…</div>
-      <template v-else>
-        <!-- >>> Current set -->
-        <div v-if="emoteSet.setId" class="emote-set-current">
-          <div class="emote-set-info">
-            <span class="emote-set-name">{{ emoteSet.setName ?? emoteSet.setId }}</span>
-            <span class="emote-set-id">{{ emoteSet.setId }}</span>
-            <span v-if="emoteSet.emoteCount" class="emote-set-count">{{ emoteSet.emoteCount }} {{ t('settings.7tv.emotes') }}</span>
+      <!-- ── Command Prefix ─────────────────────────────────── broadcaster only -->
+      <div class="card" v-if="isBroadcaster">
+        <div class="card-icon">⌨</div>
+        <div class="card-title">{{ t('settings.prefix.title') }}</div>
+        <div class="card-sub">{{ t('settings.prefix.sub') }} <code class="code">{{ prefix }}</code>command.</div>
+        <div class="card-body">
+          <div class="prefix-row">
+            <input v-model="prefix" class="prefix-input" maxlength="3" placeholder="+" @keydown.enter="savePrefix" spellcheck="false" />
+            <span class="prefix-preview"><span class="pre">{{ prefix || '+' }}</span>ping</span>
           </div>
-          <button class="remove-set-btn" @click="remove7tvSet" :disabled="emoteSetSaving">
-            {{ emoteSetSaving ? t('settings.7tv.removing') : t('settings.7tv.remove') }}
+          <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
+          <div class="section-note">{{ t('settings.prefix.note') }}</div>
+        </div>
+        <div class="card-footer">
+          <button class="save-btn" @click="savePrefix" :disabled="prefixSaving || !prefix">
+            {{ prefixSaved ? t('settings.saved') : prefixSaving ? t('settings.saving') : t('settings.prefix.save') }}
           </button>
         </div>
-        <div v-else class="emote-set-none">{{ t('settings.7tv.none') }}</div>
+      </div>
 
-        <!-- >>> Auto-fetch from own channel -->
-        <div class="emote-input-row">
-          <span class="emote-input-label">{{ t('settings.7tv.by_channel') }}</span>
-          <button class="fetch-btn" @click="emoteInput7tv = session?.channel ?? ''; emoteInputId = ''; fetch7tvSet()" :disabled="emoteSetSaving">
-            {{ emoteSetSaving ? t('settings.7tv.fetching') : t('settings.7tv.fetch') }}
+      <!-- ── Log Opt-Out ────────────────────────────────────────────── all users -->
+      <div class="card">
+        <div class="card-icon">👁</div>
+        <div class="card-title">{{ t('settings.optout.title') }}</div>
+        <div class="card-sub">{{ t('settings.optout.sub') }}</div>
+        <div class="card-body">
+          <div class="toggle-row">
+            <div class="status-dot" :class="{ active: !optedOut }"></div>
+            <span class="toggle-label">{{ optedOut ? t('settings.optout.hidden') : t('settings.optout.visible') }}</span>
+            <div class="spacer"></div>
+            <span class="status-badge" :class="optedOut ? 'badge-off' : 'badge-on'">
+              {{ optedOut ? t('settings.optout.badge.out') : t('settings.optout.badge.in') }}
+            </span>
+          </div>
+          <div v-if="optMsg" class="card-msg ok">{{ optMsg }}</div>
+        </div>
+        <div class="card-footer">
+          <button class="toggle-btn" :class="{ 'toggle-btn-on': optedOut }" @click="toggleOptOut" :disabled="optSaving">
+            {{ optSaving ? '…' : optedOut ? t('settings.optout.btn.in') : t('settings.optout.btn.out') }}
           </button>
         </div>
-        <!-- >>> Set by direct ID -->
-        <div class="emote-input-row">
-          <span class="emote-input-label">{{ t('settings.7tv.by_id') }}</span>
-          <input
-            v-model="emoteInputId"
-            class="field-input-sm"
-            :placeholder="t('settings.7tv.by_id.ph')"
-            @keydown.enter="emoteInput7tv = ''; fetch7tvSet()"
-            :disabled="emoteSetSaving"
-          />
-          <button class="fetch-btn" @click="emoteInput7tv = ''; fetch7tvSet()" :disabled="emoteSetSaving || !emoteInputId.trim()">
-            {{ emoteSetSaving ? t('settings.7tv.fetching') : t('settings.7tv.fetch') }}
+      </div>
+
+      <!-- ── Hide Vanish Timeouts ───────────────────────────── broadcaster only -->
+      <div class="card" v-if="isBroadcaster">
+        <div class="card-icon">💨</div>
+        <div class="card-title">Hide Vanish Timeouts</div>
+        <div class="card-sub">Hides short timeouts from the dashboard when the user's last message was a vanish command.</div>
+        <div class="card-body">
+          <div class="toggle-row">
+            <div class="status-dot" :class="{ active: vanishHide }"></div>
+            <span class="toggle-label">{{ vanishHide ? 'Vanish timeouts hidden' : 'All timeouts shown' }}</span>
+            <div class="spacer"></div>
+            <span class="status-badge" :class="vanishHide ? 'badge-on' : 'badge-off'">
+              {{ vanishHide ? 'ON' : 'OFF' }}
+            </span>
+          </div>
+          <div class="section-note">
+            Works with: <code class="code">!v</code> <code class="code">!vanish</code>
+            <code class="code">+v</code> <code class="code">+vanish</code>
+          </div>
+          <div v-if="vanishMsg" class="card-msg ok">{{ vanishMsg }}</div>
+        </div>
+        <div class="card-footer">
+          <button class="toggle-btn" :class="{ 'toggle-btn-on': vanishHide }"
+            @click="vanishHide = !vanishHide; saveVanish()" :disabled="vanishSaving">
+            {{ vanishSaving ? '…' : vanishHide ? 'Disable' : 'Enable' }}
           </button>
         </div>
-
-        <div v-if="emoteSetError"   class="set-msg err">{{ emoteSetError }}</div>
-        <div v-if="emoteSetSuccess" class="set-msg ok">✓ {{ emoteSetSuccess }}</div>
-      </template>
-    </div>
-
-    <!-- >>> Vanish timeout hiding - broadcaster only -->
-    <div class="section" v-if="isBroadcaster">
-      <div class="section-head">
-        <div>
-          <div class="section-title">Hide Vanish Timeouts</div>
-          <div class="section-sub">When enabled, timeouts caused by vanish commands (!v, !vanish, +v, +vanish, etc.) won't appear in the moderation dashboard. The bot checks if the user's last message was a vanish command before the timeout.</div>
-        </div>
-        <span class="badge" :class="vanishHide ? 'out' : 'in'">{{ vanishHide ? 'ON' : 'OFF' }}</span>
-      </div>
-      <div class="opt-row">
-        <div class="opt-status">
-          <div class="opt-dot" :class="{ out: !vanishHide }"></div>
-          <span class="opt-label">{{ vanishHide ? 'Vanish timeouts are hidden from dashboard' : 'All timeouts shown in dashboard' }}</span>
-        </div>
-        <button class="opt-btn" :class="{ out: vanishHide }" @click="vanishHide = !vanishHide; saveVanish()" :disabled="vanishSaving">
-          {{ vanishSaving ? '…' : vanishHide ? 'Disable' : 'Enable' }}
-        </button>
-      </div>
-      <div v-if="vanishMsg" class="opt-msg">{{ vanishMsg }}</div>
-      <div class="section-note">Common vanish commands: <code class="code">!vanish</code> <code class="code">!v</code> <code class="code">+vanish</code> <code class="code">+v</code></div>
-    </div>
-
-    <!-- >>> Remove Bot - broadcaster only -->
-    <div class="section danger-section" v-if="isBroadcaster">
-      <div class="section-head">
-        <div>
-          <div class="section-title">{{ t('settings.remove.title') }}</div>
-          <div class="section-sub">{{ t('settings.remove.sub') }}</div>
-        </div>
-
       </div>
 
-      <div v-if="removeMsg" class="opt-msg">{{ removeMsg }}</div>
-      <div v-else-if="removeError" class="field-error">{{ removeError }}</div>
+      <!-- ── 7TV Emote Set ──────────────────────────────────── broadcaster only -->
+      <div class="card card-wide" v-if="isBroadcaster">
+        <div class="card-icon">✦</div>
+        <div class="card-title">{{ t('settings.7tv.title') }}</div>
+        <div class="card-sub">{{ t('settings.7tv.sub') }}</div>
+        <div class="card-body">
+          <div v-if="emoteSetLoading" class="card-loading">Loading…</div>
+          <template v-else>
+            <div v-if="emoteSet.setId" class="emote-current">
+              <span class="emote-name">{{ emoteSet.setName ?? emoteSet.setId }}</span>
+              <span class="emote-id">{{ emoteSet.setId }}</span>
+              <span v-if="emoteSet.emoteCount" class="emote-count">{{ emoteSet.emoteCount }} {{ t('settings.7tv.emotes') }}</span>
+              <button class="danger-sm" @click="remove7tvSet" :disabled="emoteSetSaving">
+                {{ emoteSetSaving ? t('settings.7tv.removing') : t('settings.7tv.remove') }}
+              </button>
+            </div>
+            <div v-else class="emote-none">{{ t('settings.7tv.none') }}</div>
 
-      <!-- Normal state - show remove button -->
-      <div v-if="!removeConfirm && !removeMsg" class="remove-row">
-        <button class="remove-btn" @click="clickRemoveBot" :disabled="removeRemoving">
-          {{ removeRemoving ? t('settings.remove.removing') : t('settings.remove.btn') }}
-        </button>
+            <div class="emote-row">
+              <span class="emote-lbl">{{ t('settings.7tv.by_channel') }}</span>
+              <button class="fetch-btn" :disabled="emoteSetSaving"
+                @click="emoteInput7tv = session?.channel ?? ''; emoteInputId = ''; fetch7tvSet()">
+                {{ emoteSetSaving ? t('settings.7tv.fetching') : t('settings.7tv.fetch') }}
+              </button>
+            </div>
+            <div class="emote-row">
+              <span class="emote-lbl">{{ t('settings.7tv.by_id') }}</span>
+              <input v-model="emoteInputId" class="field-sm"
+                :placeholder="t('settings.7tv.by_id.ph')"
+                @keydown.enter="emoteInput7tv = ''; fetch7tvSet()"
+                :disabled="emoteSetSaving" />
+              <button class="fetch-btn" :disabled="emoteSetSaving || !emoteInputId.trim()"
+                @click="emoteInput7tv = ''; fetch7tvSet()">
+                {{ emoteSetSaving ? t('settings.7tv.fetching') : t('settings.7tv.fetch') }}
+              </button>
+            </div>
+            <div v-if="emoteSetError"   class="card-msg err">{{ emoteSetError }}</div>
+            <div v-if="emoteSetSuccess" class="card-msg ok">✓ {{ emoteSetSuccess }}</div>
+          </template>
+        </div>
       </div>
 
-      <!-- Confirm dialog - shown after first click -->
-      <div v-if="removeConfirm" class="confirm-box">
-        <div class="confirm-text">
-          {{ t('settings.remove.confirm') }}<strong>#{{ session?.channel }}</strong>?
-          {{ t('settings.remove.confirm2') }}
+      <!-- ── Remove Bot ─────────────────────────────────────── broadcaster only -->
+      <div class="card card-danger" v-if="isBroadcaster">
+        <div class="card-icon danger-icon">⚠</div>
+        <div class="card-title">{{ t('settings.remove.title') }}</div>
+        <div class="card-sub">{{ t('settings.remove.sub') }}</div>
+        <div class="card-body">
+          <div v-if="removeMsg" class="card-msg ok">{{ removeMsg }}</div>
+          <div v-if="removeError" class="card-msg err">{{ removeError }}</div>
+          <div v-if="removeConfirm" class="confirm-box">
+            <div class="confirm-text">
+              {{ t('settings.remove.confirm') }}<strong>#{{ session?.channel }}</strong>?
+              {{ t('settings.remove.confirm2') }}
+            </div>
+            <div class="confirm-actions">
+              <button class="confirm-no"  @click="removeConfirm = false">{{ t('settings.remove.no') }}</button>
+              <button class="confirm-yes" @click="doRemoveBot">{{ t('settings.remove.yes') }}</button>
+            </div>
+          </div>
         </div>
-        <div class="confirm-actions">
-          <button class="confirm-no"  @click="removeConfirm = false">{{ t('settings.remove.no') }}</button>
-          <button class="confirm-yes" @click="doRemoveBot">{{ t('settings.remove.yes') }}</button>
+        <div class="card-footer" v-if="!removeMsg">
+          <button class="remove-btn" @click="clickRemoveBot" :disabled="removeRemoving">
+            {{ removeRemoving ? t('settings.remove.removing') : t('settings.remove.btn') }}
+          </button>
         </div>
       </div>
+
     </div>
   </div>
 </template>
 
 <style scoped>
-.settings { display: flex; flex-direction: column; gap: 20px; }
+.settings { display: flex; flex-direction: column; gap: 24px; }
 
 .settings-header { padding-bottom: 16px; border-bottom: 1px solid #222; }
 .settings-title  { font-size: 18px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
 .settings-sub    { font-size: 12px; color: #666; }
 .chan            { color: #9d6cff; }
 
-.section { background: #1a1a1e; border: 1px solid #2a2a30; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
-.danger-section { border-color: #f1494933; background: #1c1215; }
+/* ── Card grid ─────────────────────────────────────────────────────────────── */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
 
-.section-head  { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
-.section-title { font-size: 14px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
-.section-sub   { font-size: 12px; color: #666; max-width: 520px; line-height: 1.5; }
-.code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; font-size: 12px; background: rgba(111,43,255,.1); padding: 1px 5px; }
+.card {
+  background: #141418;
+  border: 1px solid #1e1e24;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  transition: border-color .15s;
+}
+.card:hover { border-color: #2a2a36; }
+.card-wide   { grid-column: span 2; }
+.card-danger { border-color: #f1494922; background: #1a1014; }
+.card-danger:hover { border-color: #f1494944; }
 
-.badge { font-size: 9px; font-weight: 700; padding: 3px 8px; letter-spacing: .05em; white-space: nowrap; flex-shrink: 0; }
-.badge.bc  { background: #f1494922; color: #f14949; border: 1px solid #f1494944; }
-.badge.in  { background: #23d18b15; color: #23d18b; border: 1px solid #23d18b44; }
-.badge.out { background: #55555515; color: #888;    border: 1px solid #55555544; }
+.card-icon {
+  font-size: 18px;
+  padding: 16px 16px 4px;
+  color: #9d6cff;
+  line-height: 1;
+}
+.danger-icon { color: #f14949; }
 
-/* Prefix section */
-.prefix-row { display: flex; align-items: center; gap: 14px; }
-.prefix-input {
-  width: 60px; background: #0d0d10; border: 1px solid #2a2a30;
+.card-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e0e0e0;
+  padding: 0 16px 4px;
+}
+
+.card-sub {
+  font-size: 11px;
+  color: #555;
+  padding: 0 16px 12px;
+  line-height: 1.5;
+  border-bottom: 1px solid #1e1e24;
+}
+
+.card-body {
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+}
+
+.card-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #1e1e24;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ── Shared elements ───────────────────────────────────────────────────────── */
+.code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; font-size: 11px; background: rgba(111,43,255,.1); padding: 1px 5px; }
+
+.toggle-row   { display: flex; align-items: center; gap: 8px; }
+.status-dot   { width: 7px; height: 7px; border-radius: 50%; background: #333; flex-shrink: 0; transition: background .3s; }
+.status-dot.active { background: #23d18b; }
+.toggle-label { font-size: 12px; color: #888; }
+.spacer       { flex: 1; }
+.status-badge { font-size: 9px; font-weight: 700; padding: 2px 7px; letter-spacing: .05em; }
+.badge-on     { color: #23d18b; background: rgba(35,209,139,.1); border: 1px solid rgba(35,209,139,.3); }
+.badge-off    { color: #555;    background: rgba(85,85,85,.1);   border: 1px solid rgba(85,85,85,.3); }
+
+.section-note { font-size: 11px; color: #555; background: rgba(229,192,123,.05); border-left: 2px solid #e5c07b33; padding: 5px 8px; line-height: 1.5; }
+
+.card-loading { font-size: 12px; color: #555; }
+.card-msg     { font-size: 11px; padding: 5px 10px; line-height: 1.4; }
+.card-msg.ok  { color: #23d18b; background: rgba(35,209,139,.07); border-left: 2px solid #23d18b; }
+.card-msg.err { color: #f14949; background: rgba(241,73,73,.07);  border-left: 2px solid #f14949; }
+
+.field-error  { font-size: 11px; color: #f14949; }
+
+/* ── Prefix card ───────────────────────────────────────────────────────────── */
+.prefix-row    { display: flex; align-items: center; gap: 12px; }
+.prefix-input  {
+  width: 52px; background: #0d0d10; border: 1px solid #2a2a30;
   color: #e0e0e0; font-family: 'Consolas','Fira Mono',monospace;
-  font-size: 20px; font-weight: 700; padding: 8px 12px;
+  font-size: 22px; font-weight: 700; padding: 6px 10px;
   outline: none; text-align: center;
 }
 .prefix-input:focus { border-color: #6f2bff88; }
-.prefix-preview { display: flex; flex-direction: column; gap: 2px; }
-.prefix-example { font-family: 'Consolas','Fira Mono',monospace; font-size: 14px; color: #aaa; }
-.prefix-example .pre { color: #9d6cff; font-weight: 700; }
-.prefix-hint { font-size: 10px; color: #444; }
+.prefix-preview { font-family: 'Consolas','Fira Mono',monospace; font-size: 14px; color: #888; }
+.prefix-preview .pre { color: #9d6cff; font-weight: 700; }
+
+/* ── Buttons ───────────────────────────────────────────────────────────────── */
 .save-btn {
-  height: 36px; padding: 0 18px; border: none; background: #6f2bff;
-  color: #fff; font-family: inherit; font-size: 12px; font-weight: 600;
-  cursor: pointer; transition: background .15s; margin-left: auto;
+  height: 32px; padding: 0 18px; border: none; background: #6f2bff;
+  color: #fff; font-family: inherit; font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: background .15s;
 }
 .save-btn:hover:not(:disabled) { background: #7f3fff; }
 .save-btn:disabled { opacity: .4; cursor: not-allowed; }
-.field-error { font-size: 11px; color: #f14949; }
-.section-note { font-size: 11px; color: #555; background: rgba(229,192,123,.06); border-left: 2px solid #e5c07b44; padding: 6px 10px; }
 
-/* Opt-out section */
-.opt-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.opt-status { display: flex; align-items: center; gap: 10px; }
-.opt-dot { width: 8px; height: 8px; border-radius: 50%; background: #23d18b; flex-shrink: 0; transition: background .3s; }
-.opt-dot.out { background: #555; }
-.opt-label { font-size: 12px; color: #888; }
-.opt-label.out { color: #555; }
-.opt-btn {
-  height: 34px; padding: 0 16px; border: 1px solid #2a2a30;
-  background: transparent; color: #888; font-family: inherit; font-size: 11px;
-  cursor: pointer; white-space: nowrap; transition: all .15s; flex-shrink: 0;
+.toggle-btn {
+  height: 32px; padding: 0 16px;
+  border: 1px solid #2a2a30; background: transparent;
+  color: #888; font-family: inherit; font-size: 11px;
+  cursor: pointer; transition: all .15s;
 }
-.opt-btn:hover:not(:disabled) { border-color: #f14949; color: #f14949; }
-.opt-btn.out { border-color: #23d18b44; color: #23d18b; background: rgba(35,209,139,.06); }
-.opt-btn.out:hover:not(:disabled) { background: rgba(35,209,139,.15); }
-.opt-btn:disabled { opacity: .4; cursor: not-allowed; }
-.opt-msg { font-size: 11px; color: #23d18b; }
+.toggle-btn:hover:not(:disabled) { border-color: #9d6cff55; color: #9d6cff; }
+.toggle-btn.toggle-btn-on { border-color: #23d18b44; color: #23d18b; background: rgba(35,209,139,.06); }
+.toggle-btn.toggle-btn-on:hover:not(:disabled) { background: rgba(35,209,139,.14); }
+.toggle-btn:disabled { opacity: .4; cursor: not-allowed; }
 
-/* 7TV card */
-.section-loading { font-size: 12px; color: #555; padding: 8px 0; }
-.emote-set-current { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #111217; border: 1px solid #2a2a30; padding: 10px 14px; margin-bottom: 12px; }
-.emote-set-info    { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
-.emote-set-name    { font-size: 13px; font-weight: 700; color: #e0e0e0; }
-.emote-set-id      { font-size: 10px; color: #555; font-family: monospace; }
-.emote-set-count   { font-size: 11px; color: #9d6cff; background: rgba(111,43,255,.1); padding: 1px 7px; }
-.emote-set-none    { font-size: 12px; color: #555; padding: 6px 0 10px; }
-.remove-set-btn    { height: 28px; padding: 0 12px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 11px; cursor: pointer; flex-shrink: 0; }
-.remove-set-btn:hover:not(:disabled) { background: rgba(241,73,73,.1); }
-.remove-set-btn:disabled { opacity: .4; cursor: not-allowed; }
-.emote-input-row   { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
-.emote-input-label { font-size: 11px; color: #666; white-space: nowrap; min-width: 120px; }
-.field-input-sm    { height: 32px; background: #111217; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 0 10px; outline: none; flex: 1; min-width: 140px; }
-.field-input-sm:focus { border-color: #6f2bff55; }
-.field-input-sm:disabled { opacity: .4; }
-.fetch-btn         { height: 32px; padding: 0 14px; border: 1px solid #6f2bff55; background: transparent; color: #9d6cff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; flex-shrink: 0; white-space: nowrap; }
-.fetch-btn:hover:not(:disabled) { background: rgba(111,43,255,.12); }
-.fetch-btn:disabled { opacity: .4; cursor: not-allowed; }
-.set-msg    { font-size: 11px; margin-top: 6px; padding: 5px 10px; }
-.set-msg.ok  { color: #23d18b; background: rgba(35,209,139,.08); border-left: 2px solid #23d18b; }
-.set-msg.err { color: #f14949; background: rgba(241,73,73,.08); border-left: 2px solid #f14949; }
-
-/* Remove bot section */
-.remove-row { display: flex; }
 .remove-btn {
-  height: 36px; padding: 0 18px; border: 1px solid #f1494966;
-  background: transparent; color: #f14949; font-family: inherit; font-size: 12px; font-weight: 600;
+  height: 32px; padding: 0 18px;
+  border: 1px solid #f1494966; background: transparent;
+  color: #f14949; font-family: inherit; font-size: 11px; font-weight: 600;
   cursor: pointer; transition: background .15s, border-color .15s;
 }
-.remove-btn:hover:not(:disabled) { background: rgba(241,73,73,.12); border-color: #f14949; }
+.remove-btn:hover:not(:disabled) { background: rgba(241,73,73,.1); border-color: #f14949; }
 .remove-btn:disabled { opacity: .4; cursor: not-allowed; }
 
-.confirm-box {
-  background: rgba(241,73,73,.06); border: 1px solid #f1494944;
-  padding: 14px 16px; display: flex; flex-direction: column; gap: 12px;
-}
-.confirm-text { font-size: 12px; color: #ccc; line-height: 1.6; }
+/* ── 7TV card ──────────────────────────────────────────────────────────────── */
+.emote-current { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; background: #0d0d10; border: 1px solid #1e1e24; padding: 8px 12px; }
+.emote-name    { font-size: 12px; font-weight: 700; color: #e0e0e0; }
+.emote-id      { font-size: 10px; color: #555; font-family: monospace; }
+.emote-count   { font-size: 11px; color: #9d6cff; background: rgba(111,43,255,.1); padding: 1px 6px; }
+.emote-none    { font-size: 12px; color: #555; }
+.emote-row     { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.emote-lbl     { font-size: 11px; color: #666; min-width: 120px; white-space: nowrap; }
+.field-sm      { height: 30px; flex: 1; min-width: 100px; background: #0d0d10; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 11px; padding: 0 8px; outline: none; }
+.field-sm:focus { border-color: #6f2bff55; }
+.field-sm:disabled { opacity: .4; }
+.fetch-btn     { height: 30px; padding: 0 12px; border: 1px solid #6f2bff44; background: transparent; color: #9d6cff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.fetch-btn:hover:not(:disabled) { background: rgba(111,43,255,.1); }
+.fetch-btn:disabled { opacity: .4; cursor: not-allowed; }
+.danger-sm     { height: 26px; padding: 0 10px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 10px; cursor: pointer; margin-left: auto; }
+.danger-sm:hover:not(:disabled) { background: rgba(241,73,73,.1); }
+.danger-sm:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── Confirm dialog ────────────────────────────────────────────────────────── */
+.confirm-box     { background: rgba(241,73,73,.05); border: 1px solid #f1494933; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.confirm-text    { font-size: 12px; color: #ccc; line-height: 1.6; }
 .confirm-text strong { color: #9d6cff; }
-.confirm-actions { display: flex; gap: 10px; }
-.confirm-no {
-  height: 34px; padding: 0 16px; border: 1px solid #2a2a30;
-  background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer;
-}
-.confirm-no:hover { border-color: #555; color: #e0e0e0; }
-.confirm-yes {
-  height: 34px; padding: 0 16px; border: none;
-  background: #f14949; color: #fff; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
-}
+.confirm-actions { display: flex; gap: 8px; }
+.confirm-no  { height: 30px; padding: 0 14px; border: 1px solid #2a2a30; background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer; }
+.confirm-no:hover  { border-color: #555; color: #e0e0e0; }
+.confirm-yes { height: 30px; padding: 0 14px; border: none; background: #f14949; color: #fff; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .confirm-yes:hover { background: #ff5a5a; }
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width: 860px) {
+  .card-wide { grid-column: span 1; }
+}
+@media (max-width: 520px) {
+  .cards-grid { grid-template-columns: 1fr; }
+  .card-wide  { grid-column: span 1; }
+}
 </style>

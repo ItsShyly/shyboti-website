@@ -636,7 +636,9 @@ function esc(s: string) {
           <div>{{ t('logs.col.time') }}</div><div>{{ t('logs.col.user') }}</div><div>{{ t('logs.col.msg') }}</div>
         </div>
         <div class="logs-tbody" ref="bodyRef">
-          <div class="top-loader" :class="{ visible: loadingMore }">
+          <!-- >>> loadingMore indicator: v-show keeps the DOM node alive so it never
+               re-renders the parent search-bar or causes input fields to lose focus -->
+          <div class="top-loader" v-show="loadingMore">
             <span class="spinner">⟳</span> {{ t('logs.load_older') }}
           </div>
           <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
@@ -727,9 +729,8 @@ function esc(s: string) {
 .logs-tbody::-webkit-scrollbar { width: 3px; }
 .logs-tbody::-webkit-scrollbar-thumb { background: #333; }
 
-.top-loader  { text-align: center; font-size: 11px; color: #555; padding: 8px; display: none; }
-.top-loader.visible { display: block; }
-.top-loader.no-more { display: block; color: #333; }
+.top-loader  { text-align: center; font-size: 11px; color: #555; padding: 8px; }
+.top-loader.no-more { color: #333; }
 .spinner     { display: inline-block; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

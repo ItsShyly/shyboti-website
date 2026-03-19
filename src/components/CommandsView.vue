@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick, inject, type Ref } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, inject, type Ref } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
@@ -454,8 +454,40 @@ async function runSync() {
 
 const { availableChannels } = useAuth()
 
-onMounted(() => { fetchCommands(); fetchCustomCommands(); fetchSync(); fetchExtras() })
-watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands(); fetchSync(); fetchExtras() })
+// >>> Reload button + SSE-based auto-refresh when commands change in another tab/session
+const reloading = ref(false)
+async function reloadAll() {
+  reloading.value = true
+  await Promise.all([fetchCommands(), fetchCustomCommands(), fetchSync(), fetchExtras()])
+  reloading.value = false
+}
+
+// >>> Auto-refresh via activity SSE: if a cmd_added/cmd_changed/cmd_removed event arrives,
+// re-fetch quietly so collaborators see each other's changes without manual reload.
+let _sseSource: EventSource | null = null
+function startCommandSSE() {
+  _sseSource?.close()
+  if (!session.value?.token) return
+  fetch(`${API}/activity/sse-ticket`, { method: 'POST', headers: { Authorization: `Bearer ${session.value.token}` } })
+    .then(r => r.ok ? r.json() as Promise<{ ticket: string }> : Promise.reject())
+    .then(({ ticket }) => {
+      const ch = session.value?.channel ?? ''
+      const es = new EventSource(`${API}/activity/stream?ticket=${ticket}&channel=${ch}`)
+      _sseSource = es
+      es.onmessage = (e) => {
+        try {
+          const ev = JSON.parse(e.data) as { type: string }
+          if (ev.type?.startsWith('cmd_')) { fetchCommands(); fetchCustomCommands() }
+        } catch {}
+      }
+      es.onerror = () => { es.close(); setTimeout(startCommandSSE, 10_000) }
+    })
+    .catch(() => {})
+}
+
+onMounted(() => { fetchCommands(); fetchCustomCommands(); fetchSync(); fetchExtras(); startCommandSSE() })
+watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands(); fetchSync(); fetchExtras(); startCommandSSE() })
+onUnmounted(() => { _sseSource?.close() })
 </script>
 
 <template>
@@ -464,6 +496,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
       <button class="cmd-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">{{ t('cmd.title_default') }}</button>
       <button class="cmd-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">{{ t('cmd.title_custom') }}</button>
       <button class="cmd-tab" :class="{ active: activeTab === 'Extras' }" @click="activeTab = 'Extras'">{{ t('cmd.title_extras') }}</button>
+      <button class="cmd-tab reload-tab" @click="reloadAll" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺' }}</button>
     </div>
 
 
@@ -718,6 +751,8 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .cmd-tab { padding: 8px 20px; border: none; background: transparent; color: #555; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s; }
 .cmd-tab:hover { color: #aaa; }
 .cmd-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
+.reload-tab { margin-left: auto; font-size: 14px; padding: 4px 14px; }
+.reload-tab:disabled { opacity: .4; cursor: not-allowed; }
 
 
 

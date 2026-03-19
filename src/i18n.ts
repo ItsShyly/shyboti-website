@@ -34,9 +34,8 @@ const translations: Record<Locale, Record<string, string>> = {
     'nav.login_short': 'Login',
     'nav.add_channel': '+ Add to your channel',
 
-    'banner.welcome': 'Welcome! Add ShyBoti to your channel to get started.',
+    'banner.welcome': 'Welcome! Add ShyBoti to your channel to get started. (don\'t forget to add shyboti as a mod "/mod shyboti"!)',
     'banner.add':     '+ Add ShyBoti',
-
     'footer.copy':    '© 2026 shyboti.de',
     'footer.privacy': 'Privacy',
 
@@ -695,7 +694,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'nav.login_short': 'Anmelden',
     'nav.add_channel': '+ Zu deinem Channel hinzufügen',
 
-    'banner.welcome': 'Willkommen! Füge ShyBoti zu deinem Channel hinzu um loszulegen.',
+    'banner.welcome': 'Willkommen! Füge ShyBoti zu deinem Channel hinzu um loszulegen. (Nicht vergessen ShyBoti mit "/mod shyboti" als Moderator hinzuzufügen!)',
     'banner.add':     '+ ShyBoti hinzufügen',
 
     'footer.copy':    '© 2026 shyboti.de',
