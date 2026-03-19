@@ -115,6 +115,7 @@ const activeTab = ref<'Default' | 'Custom' | 'Extras'>('Default')
 
 // >>> Extras / Feature flags
 const mentionEnabled = ref(false)
+const has7tvSet      = ref(false)
 const extrasLoading  = ref(false)
 const extrasSaving   = ref(false)
 const extrasSaved    = ref(false)
@@ -127,8 +128,9 @@ async function fetchExtras() {
       headers: { Authorization: `Bearer ${session.value.token}` }
     })
     if (!res.ok) return
-    const data = await res.json() as { mention_enabled: boolean }
+    const data = await res.json() as { mention_enabled: boolean; has_7tv_set: boolean }
     mentionEnabled.value = data.mention_enabled
+    has7tvSet.value      = data.has_7tv_set ?? false
   } catch {} finally { extrasLoading.value = false }
 }
 
@@ -660,11 +662,14 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
             <div class="extras-info">
               <div class="extras-label">{{ t('cmd.extras.mention_label') }}</div>
               <div class="extras-desc">{{ t('cmd.extras.mention_desc') }}</div>
+              <div v-if="!has7tvSet" class="extras-gate-note">
+                {{ t('cmd.extras.mention_needs_7tv') }}
+              </div>
             </div>
             <div
               class="extras-toggle"
-              :class="{ on: mentionEnabled, disabled: !isBroadcaster }"
-              @click="isBroadcaster && (mentionEnabled = !mentionEnabled, saveExtras())"
+              :class="{ on: mentionEnabled && has7tvSet, disabled: !isBroadcaster || !has7tvSet }"
+              @click="isBroadcaster && has7tvSet && (mentionEnabled = !mentionEnabled, saveExtras())"
             >
               <div class="extras-toggle-knob"></div>
             </div>
@@ -899,6 +904,7 @@ watch(() => session.value?.channel, () => { fetchCommands(); fetchCustomCommands
 .btn-cancel:hover { border-color: #555; color: #e0e0e0; }
 
 /*  Extras tab  */
+.extras-gate-note { font-size: 11px; color: #e5c07b; margin-top: 5px; max-width: 300px; line-height: 1.5; }
 .extras-section       { background: #222226; border: 1px solid #2a2a30; padding: 20px; margin-top: 12px; }
 .extras-section-title { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #9d6cff; margin-bottom: 12px; }
 .extras-row   { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 0; border-top: 1px solid #2a2a30; }

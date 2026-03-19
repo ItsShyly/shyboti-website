@@ -75,6 +75,63 @@ async function toggleOptOut() {
   optSaving.value = false
 }
 
+// >>> 7TV Emote Set (broadcaster only)
+interface EmoteSetInfo { setId: string | null; setName: string | null; emoteCount?: number }
+const emoteSet        = ref<EmoteSetInfo>({ setId: null, setName: null })
+const emoteSetLoading = ref(false)
+const emoteSetSaving  = ref(false)
+const emoteSetError   = ref('')
+const emoteSetSuccess = ref('')
+const emoteInput7tv   = ref('') // >>> channel name input
+const emoteInputId    = ref('') // >>> direct set ID input
+
+async function load7tvSet() {
+  if (!session.value) return
+  emoteSetLoading.value = true
+  try {
+    const res = await fetch(`${API}/settings/7tv/${session.value.channel}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    if (res.ok) emoteSet.value = await res.json()
+  } catch {}
+  emoteSetLoading.value = false
+}
+
+async function fetch7tvSet() {
+  if (!session.value || !isBroadcaster.value) return
+  const channelName = emoteInput7tv.value.trim().replace(/^#/, '')
+  const setId       = emoteInputId.value.trim()
+  if (!channelName && !setId) return
+  emoteSetSaving.value = true; emoteSetError.value = ''; emoteSetSuccess.value = ''
+  try {
+    const res = await fetch(`${API}/settings/7tv/${session.value.channel}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify(channelName ? { channelName } : { setId }),
+    })
+    const d = await res.json() as any
+    if (!res.ok) throw new Error(d.error ?? 'Failed')
+    emoteSet.value    = { setId: d.setId, setName: d.setName, emoteCount: d.emoteCount }
+    emoteInput7tv.value = ''; emoteInputId.value = ''
+    emoteSetSuccess.value = `${d.setName ?? d.setId} (${d.emoteCount ?? '?'} ${t('settings.7tv.emotes')})`
+    setTimeout(() => emoteSetSuccess.value = '', 4000)
+  } catch (e: any) { emoteSetError.value = e.message ?? t('settings.7tv.error') }
+  emoteSetSaving.value = false
+}
+
+async function remove7tvSet() {
+  if (!session.value || !isBroadcaster.value) return
+  emoteSetSaving.value = true; emoteSetError.value = ''; emoteSetSuccess.value = ''
+  try {
+    await fetch(`${API}/settings/7tv/${session.value.channel}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    })
+    emoteSet.value = { setId: null, setName: null }
+  } catch { emoteSetError.value = t('settings.7tv.error') }
+  emoteSetSaving.value = false
+}
+
 // >>> Remove bot from channel
 function clickRemoveBot() {
   if (!removeConfirm.value) {
@@ -102,8 +159,9 @@ async function doRemoveBot() {
   removeRemoving.value = false
 }
 
-onMounted(load)
-watch(() => session.value?.channel, load)
+async function loadAll() { await load(); await load7tvSet() }
+onMounted(loadAll)
+watch(() => session.value?.channel, loadAll)
 </script>
 
 <template>
@@ -155,6 +213,65 @@ watch(() => session.value?.channel, load)
         </button>
       </div>
       <div v-if="optMsg" class="opt-msg">{{ optMsg }}</div>
+    </div>
+
+    <!-- >>> 7TV Emote Set - broadcaster only -->
+    <div class="section" v-if="isBroadcaster">
+      <div class="section-head">
+        <div>
+          <div class="section-title">{{ t('settings.7tv.title') }}</div>
+          <div class="section-sub">{{ t('settings.7tv.sub') }}</div>
+        </div>
+        <span class="badge bc">{{ t('settings.7tv.badge') }}</span>
+      </div>
+
+      <div v-if="emoteSetLoading" class="section-loading">Loading…</div>
+      <template v-else>
+        <!-- >>> Current set -->
+        <div v-if="emoteSet.setId" class="emote-set-current">
+          <div class="emote-set-info">
+            <span class="emote-set-name">{{ emoteSet.setName ?? emoteSet.setId }}</span>
+            <span class="emote-set-id">{{ emoteSet.setId }}</span>
+            <span v-if="emoteSet.emoteCount" class="emote-set-count">{{ emoteSet.emoteCount }} {{ t('settings.7tv.emotes') }}</span>
+          </div>
+          <button class="remove-set-btn" @click="remove7tvSet" :disabled="emoteSetSaving">
+            {{ emoteSetSaving ? t('settings.7tv.removing') : t('settings.7tv.remove') }}
+          </button>
+        </div>
+        <div v-else class="emote-set-none">{{ t('settings.7tv.none') }}</div>
+
+        <!-- >>> Set by channel name -->
+        <div class="emote-input-row">
+          <span class="emote-input-label">{{ t('settings.7tv.by_channel') }}</span>
+          <input
+            v-model="emoteInput7tv"
+            class="field-input-sm"
+            :placeholder="t('settings.7tv.by_channel.ph')"
+            @keydown.enter="emoteInputId = ''; fetch7tvSet()"
+            :disabled="emoteSetSaving"
+          />
+          <button class="fetch-btn" @click="emoteInputId = ''; fetch7tvSet()" :disabled="emoteSetSaving || !emoteInput7tv.trim()">
+            {{ emoteSetSaving ? t('settings.7tv.fetching') : t('settings.7tv.fetch') }}
+          </button>
+        </div>
+        <!-- >>> Set by direct ID -->
+        <div class="emote-input-row">
+          <span class="emote-input-label">{{ t('settings.7tv.by_id') }}</span>
+          <input
+            v-model="emoteInputId"
+            class="field-input-sm"
+            :placeholder="t('settings.7tv.by_id.ph')"
+            @keydown.enter="emoteInput7tv = ''; fetch7tvSet()"
+            :disabled="emoteSetSaving"
+          />
+          <button class="fetch-btn" @click="emoteInput7tv = ''; fetch7tvSet()" :disabled="emoteSetSaving || !emoteInputId.trim()">
+            {{ emoteSetSaving ? t('settings.7tv.fetching') : t('settings.7tv.fetch') }}
+          </button>
+        </div>
+
+        <div v-if="emoteSetError"   class="set-msg err">{{ emoteSetError }}</div>
+        <div v-if="emoteSetSuccess" class="set-msg ok">✓ {{ emoteSetSuccess }}</div>
+      </template>
     </div>
 
     <!-- >>> Remove Bot - broadcaster only -->
@@ -253,6 +370,29 @@ watch(() => session.value?.channel, load)
 .opt-btn.out:hover:not(:disabled) { background: rgba(35,209,139,.15); }
 .opt-btn:disabled { opacity: .4; cursor: not-allowed; }
 .opt-msg { font-size: 11px; color: #23d18b; }
+
+/* 7TV card */
+.section-loading { font-size: 12px; color: #555; padding: 8px 0; }
+.emote-set-current { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #111217; border: 1px solid #2a2a30; padding: 10px 14px; margin-bottom: 12px; }
+.emote-set-info    { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.emote-set-name    { font-size: 13px; font-weight: 700; color: #e0e0e0; }
+.emote-set-id      { font-size: 10px; color: #555; font-family: monospace; }
+.emote-set-count   { font-size: 11px; color: #9d6cff; background: rgba(111,43,255,.1); padding: 1px 7px; }
+.emote-set-none    { font-size: 12px; color: #555; padding: 6px 0 10px; }
+.remove-set-btn    { height: 28px; padding: 0 12px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 11px; cursor: pointer; flex-shrink: 0; }
+.remove-set-btn:hover:not(:disabled) { background: rgba(241,73,73,.1); }
+.remove-set-btn:disabled { opacity: .4; cursor: not-allowed; }
+.emote-input-row   { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.emote-input-label { font-size: 11px; color: #666; white-space: nowrap; min-width: 120px; }
+.field-input-sm    { height: 32px; background: #111217; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 0 10px; outline: none; flex: 1; min-width: 140px; }
+.field-input-sm:focus { border-color: #6f2bff55; }
+.field-input-sm:disabled { opacity: .4; }
+.fetch-btn         { height: 32px; padding: 0 14px; border: 1px solid #6f2bff55; background: transparent; color: #9d6cff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; flex-shrink: 0; white-space: nowrap; }
+.fetch-btn:hover:not(:disabled) { background: rgba(111,43,255,.12); }
+.fetch-btn:disabled { opacity: .4; cursor: not-allowed; }
+.set-msg    { font-size: 11px; margin-top: 6px; padding: 5px 10px; }
+.set-msg.ok  { color: #23d18b; background: rgba(35,209,139,.08); border-left: 2px solid #23d18b; }
+.set-msg.err { color: #f14949; background: rgba(241,73,73,.08); border-left: 2px solid #f14949; }
 
 /* Remove bot section */
 .remove-row { display: flex; }
