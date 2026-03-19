@@ -370,7 +370,12 @@ function shareMsg(m: LogMsg) {
 onMounted(async () => {
   if (isMobile()) document.body.classList.add('logs-open')
   readUrlState()
-  if (!channel.value && session.value?.channel) channel.value = session.value.channel
+  if (!channel.value && session.value?.channel) {
+    channel.value = session.value.channel
+    // Also update the DOM input directly since it uses :value not v-model
+    await nextTick()
+    if (channelInputRef.value) channelInputRef.value.value = channel.value
+  }
   if (channel.value) await search()
 })
 onUnmounted(() => {

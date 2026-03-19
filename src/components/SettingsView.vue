@@ -20,6 +20,11 @@ const optedOut   = ref(false)
 const optSaving  = ref(false)
 const optMsg     = ref('')
 
+// >>> Vanish hide setting (broadcaster only)
+const vanishHide       = ref(false)
+const vanishSaving     = ref(false)
+const vanishMsg        = ref('')
+
 // >>> Remove bot (broadcaster only)
 const removeConfirm  = ref(false)
 const removeRemoving = ref(false)
