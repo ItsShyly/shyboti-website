@@ -178,7 +178,7 @@ watch(() => session.value?.channel, loadAll)
           <div class="section-title">{{ t('settings.prefix.title') }}</div>
           <div class="section-sub">{{ t('settings.prefix.sub') }} <code class="code">{{ prefix }}</code>command.</div>
         </div>
-        <span class="badge bc">{{ t('settings.prefix.badge') }}</span>
+
       </div>
       <div class="prefix-row">
         <input v-model="prefix" class="prefix-input" maxlength="3" placeholder="+" @keydown.enter="savePrefix" spellcheck="false" />
@@ -222,7 +222,7 @@ watch(() => session.value?.channel, loadAll)
           <div class="section-title">{{ t('settings.7tv.title') }}</div>
           <div class="section-sub">{{ t('settings.7tv.sub') }}</div>
         </div>
-        <span class="badge bc">{{ t('settings.7tv.badge') }}</span>
+
       </div>
 
       <div v-if="emoteSetLoading" class="section-loading">Loading…</div>
@@ -240,17 +240,10 @@ watch(() => session.value?.channel, loadAll)
         </div>
         <div v-else class="emote-set-none">{{ t('settings.7tv.none') }}</div>
 
-        <!-- >>> Set by channel name -->
+        <!-- >>> Auto-fetch from own channel -->
         <div class="emote-input-row">
           <span class="emote-input-label">{{ t('settings.7tv.by_channel') }}</span>
-          <input
-            v-model="emoteInput7tv"
-            class="field-input-sm"
-            :placeholder="t('settings.7tv.by_channel.ph')"
-            @keydown.enter="emoteInputId = ''; fetch7tvSet()"
-            :disabled="emoteSetSaving"
-          />
-          <button class="fetch-btn" @click="emoteInputId = ''; fetch7tvSet()" :disabled="emoteSetSaving || !emoteInput7tv.trim()">
+          <button class="fetch-btn" @click="emoteInput7tv = session?.channel ?? ''; emoteInputId = ''; fetch7tvSet()" :disabled="emoteSetSaving">
             {{ emoteSetSaving ? t('settings.7tv.fetching') : t('settings.7tv.fetch') }}
           </button>
         </div>
@@ -281,7 +274,7 @@ watch(() => session.value?.channel, loadAll)
           <div class="section-title">{{ t('settings.remove.title') }}</div>
           <div class="section-sub">{{ t('settings.remove.sub') }}</div>
         </div>
-        <span class="badge bc">{{ t('settings.remove.badge') }}</span>
+
       </div>
 
       <div v-if="removeMsg" class="opt-msg">{{ removeMsg }}</div>
