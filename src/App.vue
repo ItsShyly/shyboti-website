@@ -326,6 +326,11 @@ provide('searchOpenEdit', searchOpenEdit)
 
       <div class="topbar-right">
         <span v-if="toast" class="toast">{{ toast }}</span>
+        <div class="lang-switcher">
+          <button class="lang-opt" :class="{ active: locale === 'en' }" @click="setLocale('en')">EN</button>
+          <span class="lang-sep">|</span>
+          <button class="lang-opt" :class="{ active: locale === 'de' }" @click="setLocale('de')">DE</button>
+        </div>
         <template v-if="session">
           <div class="channel-switcher" v-if="availableChannels.length > 1">
             <button class="channel-btn" @click="showChannelMenu = !showChannelMenu">
@@ -344,11 +349,6 @@ provide('searchOpenEdit', searchOpenEdit)
           <span class="hide-mobile">{{ t('nav.login') }}</span>
           <span class="show-mobile">{{ t('nav.login_short') }}</span>
         </button>
-        <div class="lang-switcher">
-          <button class="lang-opt" :class="{ active: locale === 'en' }" @click="setLocale('en')">EN</button>
-          <span class="lang-sep">|</span>
-          <button class="lang-opt" :class="{ active: locale === 'de' }" @click="setLocale('de')">DE</button>
-        </div>
         <button class="hamburger show-mobile" @click="sidebarOpen = !sidebarOpen" :class="{ open: sidebarOpen }">
           <span></span><span></span><span></span>
         </button>
