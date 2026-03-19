@@ -33,7 +33,16 @@ function readInputs() {
   dateFilter.value = dateInputRef.value?.value ?? dateFilter.value
 }
 
-const msgs        = ref<LogMsg[]>([])
+interface AutomodMsg {
+  id: string; text: string; username: string; displayName: string
+  channel: string; timestamp: string
+  _automod: true; _category: string; _status: string
+}
+
+const msgs         = ref<LogMsg[]>([])
+const automodMsgs  = ref<AutomodMsg[]>([])
+const showAutomod  = ref(false)   // toggled by user; only shown to broadcaster
+const isBroadcaster = ref(false)  // true when viewing own channel
 const loading     = ref(false)
 const loadingMore = ref(false)
 const noMore      = ref(false)
@@ -44,6 +53,7 @@ const bodyRef     = ref<HTMLDivElement | null>(null)
 const highlightId = ref<string | null>(null)
 const copyToast     = ref(false)
 const searchExpanded = ref(true)
+const direction   = ref<'newest' | 'oldest'>('newest')  // sort direction
 
 let cursorDate:  Date | null = null
 let cursorMonth: { y: number; m: number } | null = null
@@ -236,6 +246,45 @@ function detachScrollListeners() {
   windowScrollAttached   = false
 }
 
+// >>> Fetch automod messages for current day (broadcaster-only)
+async function fetchAutomod(ch: string, date?: string) {
+  automodMsgs.value = []
+  isBroadcaster.value = session.value?.login === ch
+  if (!isBroadcaster.value || !session.value) return
+  try {
+    const d = date ? new Date(date) : new Date()
+    const y  = d.getFullYear()
+    const mo = String(d.getMonth() + 1).padStart(2, '0')
+    const dy = String(d.getDate()).padStart(2, '0')
+    const res = await fetch(`${API}/logs/automod/${ch}?year=${y}&month=${mo}&day=${dy}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    if (res.ok) {
+      const data = await res.json() as { messages: AutomodMsg[] }
+      automodMsgs.value = data.messages ?? []
+    }
+  } catch {}
+}
+
+// >>> Fetch the oldest available log date for a channel (for oldest-first mode)
+async function fetchOldestDate(ch: string): Promise<Date> {
+  try {
+    const res = await fetch(`${API}/logs/available/${ch}`, {
+      headers: { Authorization: `Bearer ${session.value!.token}` }
+    })
+    if (res.ok) {
+      const data = await res.json() as { months: { year: number; month: number }[] }
+      const months = data.months ?? []
+      if (months.length) {
+        const oldest = months[months.length - 1]! // sorted newest-first, so last = oldest
+        return new Date(Date.UTC(oldest.year, oldest.month - 1, 1))
+      }
+    }
+  } catch {}
+  // fallback: 2 years ago
+  const d = new Date(); d.setFullYear(d.getFullYear() - 2); return d
+}
+
 // >>> Main search
 async function search() {
   readInputs()
@@ -253,6 +302,7 @@ async function search() {
   cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   fetchEmotes(ch)
+  fetchAutomod(ch, dateFilter.value || undefined)
   const today   = new Date()
   const isUser  = !!userFilter.value.trim()
 
@@ -265,6 +315,39 @@ async function search() {
     } catch {}
     loading.value = false; noMore.value = true
     if (hashId) await scrollToMsg(hashId, true); else scrollToBottom()
+    return
+  }
+
+  // >>> Oldest-first: find the oldest available date and load from there going forward
+  if (direction.value === 'oldest') {
+    const startDate = await fetchOldestDate(ch)
+    const nextDay = (d: Date) => { const n = new Date(d); n.setDate(n.getDate() + 1); return n }
+    const nextMonth = (ym: { y: number; m: number }) =>
+      ym.m === 12 ? { y: ym.y + 1, m: 1 } : { y: ym.y, m: ym.m + 1 }
+
+    if (isUser) {
+      let cur = { y: startDate.getFullYear(), m: startDate.getMonth() + 1 }
+      try { msgs.value = await fetchMonth(ch, cur.y, cur.m, abortCtrl.signal) } catch {}
+      // Walk forward until we find messages
+      while (!msgs.value.length && !abortCtrl.signal.aborted) {
+        cur = nextMonth(cur)
+        if (new Date(cur.y, cur.m - 1, 1) > today) break
+        try { msgs.value = await fetchMonth(ch, cur.y, cur.m, abortCtrl.signal) } catch {}
+      }
+      // cursorMonth now points to the NEXT month (for loading newer)
+      cursorMonth = nextMonth(cur)
+    } else {
+      let d = new Date(startDate)
+      try { msgs.value = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal) } catch {}
+      while (!msgs.value.length && d <= today && !abortCtrl.signal.aborted) {
+        d = nextDay(d)
+        try { msgs.value = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal) } catch {}
+      }
+      cursorDate = nextDay(d)
+    }
+    loading.value = false
+    // Oldest-first: scroll to top (earliest messages)
+    nextTick(() => { if (bodyRef.value) bodyRef.value.scrollTop = 0 })
     return
   }
 
@@ -402,20 +485,25 @@ function fmtDayLabel(ts: string) {
 }
 
 type DisplayItem =
-  | { kind: 'day';  label: string }
-  | { kind: 'msg';  msg: LogMsg }
+  | { kind: 'day';     label: string }
+  | { kind: 'msg';     msg: LogMsg }
+  | { kind: 'automod'; msg: AutomodMsg }
 
-// >>> displayItems only recomputes when msgs changes, NOT when filter inputs change
 const displayItems = computed<DisplayItem[]>(() => {
+  // Merge regular msgs + automod msgs (if enabled), sort by timestamp
+  type AnyMsg = (LogMsg | AutomodMsg) & { _automod?: boolean }
+  let all: AnyMsg[] = [...msgs.value]
+  if (showAutomod.value && isBroadcaster.value) {
+    all = [...all, ...automodMsgs.value as any[]]
+    all.sort((a, b) => a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0)
+  }
   const items: DisplayItem[] = []
   let lastDay = ''
-  for (const m of msgs.value) {
+  for (const m of all) {
     const day = fmtDayLabel(m.timestamp)
-    if (day !== lastDay) {
-      items.push({ kind: 'day', label: day })
-      lastDay = day
-    }
-    items.push({ kind: 'msg', msg: m })
+    if (day !== lastDay) { items.push({ kind: 'day', label: day }); lastDay = day }
+    if ((m as any)._automod) items.push({ kind: 'automod', msg: m as AutomodMsg })
+    else                     items.push({ kind: 'msg',     msg: m as LogMsg })
   }
   return items
 })
@@ -511,8 +599,22 @@ function esc(s: string) {
           @keydown.enter="search"
         />
       </div>
+      <div class="field-wrap">
+        <label class="field-lbl">Direction</label>
+        <div class="dir-toggle">
+          <button class="dir-btn" :class="{ active: direction === 'newest' }" @click="direction = 'newest'">↓ Newest</button>
+          <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="direction = 'oldest'">↑ Oldest</button>
+        </div>
+      </div>
       <button class="search-btn" @click="search" :disabled="loading">
         {{ loading ? '…' : t('logs.search') }}
+      </button>
+    </div>
+
+    <!-- Automod toggle - only for broadcaster viewing own channel after a search -->
+    <div v-if="searched && isBroadcaster && automodMsgs.length > 0" class="automod-bar">
+      <button class="automod-toggle" :class="{ active: showAutomod }" @click="showAutomod = !showAutomod">
+        ⚠ AutoMod ({{ automodMsgs.length }}) {{ showAutomod ? '- click to hide' : '- click to show' }}
       </button>
     </div>
 
@@ -542,6 +644,22 @@ function esc(s: string) {
           <template v-for="item in displayItems" :key="item.kind === 'day' ? 'day-' + item.label : item.msg.id">
             <!-- Day separator -->
             <div v-if="item.kind === 'day'" class="log-day-sep">{{ item.label }}</div>
+
+            <!-- AutoMod row -->
+            <div
+              v-else-if="item.kind === 'automod'"
+              class="log-row log-row-automod"
+            >
+              <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
+              <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
+              <div class="log-user log-automod-badge">⚠ AutoMod</div>
+              <div class="log-msg">
+                <span class="automod-user">{{ item.msg.username }}</span>:
+                <span class="automod-text">{{ item.msg.text }}</span>
+                <span class="automod-category">[{{ item.msg._category }}]</span>
+                <span class="automod-status" :class="item.msg._status">{{ item.msg._status }}</span>
+              </div>
+            </div>
 
             <!-- Message row -->
             <div
@@ -645,6 +763,41 @@ function esc(s: string) {
 .log-share svg { width: 13px; height: 13px; }
 
 :deep(.chat-emote) { height: 28px; vertical-align: middle; display: inline-block; margin: 0 1px; }
+
+/* Direction toggle */
+.dir-toggle { display: flex; gap: 0; }
+.dir-btn {
+  height: 34px; padding: 0 12px; border: 1px solid #2a2a30; background: #0d0d10;
+  color: #555; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+  transition: color .15s, background .15s;
+}
+.dir-btn:first-child { border-right: none; }
+.dir-btn:hover { color: #aaa; }
+.dir-btn.active { background: #1a1a24; color: #9d6cff; border-color: #6f2bff55; }
+
+/* AutoMod bar */
+.automod-bar { flex-shrink: 0; }
+.automod-toggle {
+  height: 28px; padding: 0 14px; border: 1px solid #e5c07b44;
+  background: rgba(229,192,123,.06); color: #e5c07b;
+  font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+  transition: background .15s;
+}
+.automod-toggle:hover { background: rgba(229,192,123,.14); }
+.automod-toggle.active { background: rgba(229,192,123,.18); border-color: #e5c07b88; }
+
+/* AutoMod log rows */
+.log-row-automod { background: rgba(229,192,123,.05); border-left: 2px solid #e5c07b44; }
+.log-row-automod:hover { background: rgba(229,192,123,.09); }
+.log-automod-badge { color: #e5c07b !important; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.log-automod-badge::after { display: none; }
+.automod-user { color: #e5c07b; font-weight: 600; }
+.automod-text { color: #888; font-style: italic; }
+.automod-category { font-size: 10px; color: #555; margin-left: 6px; }
+.automod-status { font-size: 10px; font-weight: 700; margin-left: 4px; padding: 1px 5px; }
+.automod-status.held     { color: #e5c07b; background: rgba(229,192,123,.15); }
+.automod-status.approved { color: #23d18b; background: rgba(35,209,139,.1); }
+.automod-status.denied   { color: #f14949; background: rgba(241,73,73,.1); }
 
 .search-summary { display: none; }
 

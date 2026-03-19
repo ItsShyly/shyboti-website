@@ -311,7 +311,7 @@ watch(() => session.value?.channel, loadAll)
         </button>
       </div>
       <div v-if="vanishMsg" class="opt-msg">{{ vanishMsg }}</div>
-      <div class="section-note">Common vanish commands: <code class="code">!vanish</code> <code class="code">!v</code> <code class="code">+vanish</code> <code class="code">+v</code> - used by bots like FossilBot to let users delete their own messages.</div>
+      <div class="section-note">Common vanish commands: <code class="code">!vanish</code> <code class="code">!v</code> <code class="code">+vanish</code> <code class="code">+v</code></div>
     </div>
 
     <!-- >>> Remove Bot - broadcaster only -->
