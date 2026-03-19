@@ -60,6 +60,10 @@ function spamLabel(f: SpamFilter): { name: string; detail: string } {
       : `≥ ${tStr}`
     return { name, detail }
   }
+  if (f.type === 'flood') {
+    const secs = m > 0 ? mStr : '10'
+    return { name, detail: `≥ ${tStr} ${t('mod.spam.flood_in')} ${secs}s` }
+  }
   return { name, detail: `≥ ${tStr}` }
 }
 
@@ -312,15 +316,25 @@ onMounted(load)
         <select v-model="newSpamType" class="field-select flex1">
           <option v-for="s in SPAM_TYPES" :key="s.value" :value="s.value">{{ s.label }}</option>
         </select>
-        <!-- >>> caps / repeat: sentence-style input "min x letters AND x% caps" -->
+        <!-- >>> caps / repeat: "min x letters AND x% caps" -->
         <template v-if="newSpamType === 'caps' || newSpamType === 'repeat'">
           <div class="threshold-sentence">
             <span class="ts-lbl">min.</span>
             <input v-model.number="newSpamMinLetters" type="number" min="0" max="999" class="field-input dur-input" placeholder="0" />
-            <span class="ts-lbl">{{ t('mod.spam.min_letters_hint') }} {{ t('mod.spam.and') }}</span>
-            <span class="ts-lbl">≥</span>
+            <span class="ts-lbl">{{ t('mod.spam.min_letters_hint') }} {{ t('mod.spam.and') }} ≥</span>
             <input v-model.number="newSpamThreshold" type="number" min="1" max="9999" class="field-input dur-input" />
             <span class="ts-lbl">{{ SPAM_TYPES.find(s => s.value === newSpamType)?.hint }}</span>
+          </div>
+        </template>
+        <!-- >>> flood: "≥ x messages in x seconds" -->
+        <template v-else-if="newSpamType === 'flood'">
+          <div class="threshold-sentence">
+            <span class="ts-lbl">≥</span>
+            <input v-model.number="newSpamThreshold" type="number" min="1" max="9999" class="field-input dur-input" />
+            <span class="ts-lbl">{{ t('mod.spam.flood_msgs') }}</span>
+            <span class="ts-lbl">{{ t('mod.spam.flood_in') }}</span>
+            <input v-model.number="newSpamMinLetters" type="number" min="1" max="3600" class="field-input dur-input" placeholder="10" />
+            <span class="ts-lbl">{{ t('mod.spam.flood_secs') }}</span>
           </div>
         </template>
         <!-- >>> other types: simple threshold -->
