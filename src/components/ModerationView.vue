@@ -12,7 +12,8 @@ const canManage = computed(() => channelRole.value?.permissions.moderation_manag
 
 // >>> Types
 interface BlockedTerm   { id: number; term: string; action: string; duration: number; is_regex: number }
-interface SpamFilter    { id: number; type: string; threshold: number; min_letters: number; action: string; duration: number }
+interface SpamFilter    { id: number; type: string; threshold: number; min_letters: number; options: string; action: string; duration: number }
+interface SpamOptions   { emote_target?: 'emoji' | '7tv' | 'twitch' | 'all'; ignore_7tv?: boolean }
 interface NukeConfig    { id: number; trigger: string; duration: number; label: string; lookback: number; stay_active: number; match_exact: number; is_regex: number; expires_at: number | null }
 
 // >>> Tab
@@ -35,35 +36,53 @@ const SPAM_TYPES = computed(() => [
   { value: 'repeat',  label: t('mod.spam.repeat'), hint: t('mod.spam.repeat_hint') },
   { value: 'flood',   label: t('mod.spam.flood'),  hint: t('mod.spam.flood_hint') },
 ])
-const newSpamType       = ref('caps')
-const newSpamThreshold  = ref(70)
-const newSpamMinLetters = ref(0)
-const newSpamAction     = ref<'delete' | 'timeout' | 'ban'>('delete')
-const newSpamDur        = ref(300)
+const newSpamType        = ref('caps')
+const newSpamThreshold   = ref(70)
+const newSpamMinLetters  = ref(0)
+const newSpamEmoteTarget = ref<'emoji' | '7tv' | 'twitch' | 'all'>('emoji')
+const newSpamIgnore7tv   = ref(false)
+const newSpamAction      = ref<'delete' | 'timeout' | 'ban'>('delete')
+const newSpamDur         = ref(300)
 
-// >>> min_letters applies to caps + repeat; returns { name, detail } for styled display
+// >>> Parse options JSON safely
+function parseOpts(f: SpamFilter): SpamOptions {
+  try { return f.options ? JSON.parse(f.options) : {} } catch { return {} }
+}
+
+// >>> Build readable label for each filter in the list
 function spamLabel(f: SpamFilter): { name: string; detail: string } {
   const name = SPAM_TYPES.value.find(s => s.value === f.type)?.label ?? f.type
+  const opts = parseOpts(f)
   const m    = f.min_letters ?? 0
   const tStr = String(f.threshold)
   const mStr = String(m)
   const and  = t('mod.spam.and')
+
   if (f.type === 'caps') {
-    const detail = m > 0
-      ? `min. ${mStr} ${t('mod.spam.min_letters_hint')} ${and} ≥ ${tStr}% Caps`
-      : `≥ ${tStr}% Caps`
-    return { name, detail }
+    const minPart    = m > 0 ? `min. ${mStr} ${t('mod.spam.min_letters_hint')} ${and} ` : ''
+    const ignorePart = opts.ignore_7tv ? ` · ${t('mod.spam.ignore_7tv')}` : ''
+    return { name, detail: `${minPart}≥ ${tStr}% Caps${ignorePart}` }
   }
+
+  if (f.type === 'emoji') {
+    const target     = opts.emote_target ?? 'emoji'
+    const targetName = t(`mod.spam.target.${target}`)
+    const minPart    = m > 0 ? `min. ${mStr} ${t('mod.spam.min_letters_hint')} ${and} ` : ''
+    return { name, detail: `${minPart}≥ ${tStr} ${targetName}` }
+  }
+
   if (f.type === 'repeat') {
     const detail = m > 0
       ? `min. ${mStr} ${t('mod.spam.min_letters_hint')} ${and} ≥ ${tStr}`
       : `≥ ${tStr}`
     return { name, detail }
   }
+
   if (f.type === 'flood') {
     const secs = m > 0 ? mStr : '10'
     return { name, detail: `≥ ${tStr} ${t('mod.spam.flood_in')} ${secs}s` }
   }
+
   return { name, detail: `≥ ${tStr}` }
 }
 
@@ -143,7 +162,17 @@ async function addSpamFilter() {
     const res = await fetch(`${API}/moderation/${session.value.channel}/spam-filters`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${session.value.token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: newSpamType.value, threshold: newSpamThreshold.value, min_letters: newSpamMinLetters.value, action: newSpamAction.value, duration: newSpamDur.value })
+      body: JSON.stringify({
+        type:        newSpamType.value,
+        threshold:   newSpamThreshold.value,
+        min_letters: newSpamMinLetters.value,
+        options:     JSON.stringify({
+          ...(newSpamType.value === 'emoji'  ? { emote_target: newSpamEmoteTarget.value } : {}),
+          ...(newSpamType.value === 'caps'   ? { ignore_7tv: newSpamIgnore7tv.value }    : {}),
+        }),
+        action:   newSpamAction.value,
+        duration: newSpamDur.value,
+      })
     })
     if (!res.ok) throw new Error()
     const data = await res.json()
@@ -316,8 +345,28 @@ onMounted(load)
         <select v-model="newSpamType" class="field-select flex1">
           <option v-for="s in SPAM_TYPES" :key="s.value" :value="s.value">{{ s.label }}</option>
         </select>
-        <!-- >>> caps / repeat: "min x letters AND x% caps" -->
-        <template v-if="newSpamType === 'caps' || newSpamType === 'repeat'">
+        <!-- >>> emoji: emote target selector -->
+        <template v-if="newSpamType === 'emoji'">
+          <div class="threshold-wrap">
+            <span class="threshold-lbl">{{ t('mod.spam.emote_target') }}</span>
+            <select v-model="newSpamEmoteTarget" class="field-select">
+              <option value="emoji">{{ t('mod.spam.target.emoji') }}</option>
+              <option value="7tv">{{ t('mod.spam.target.7tv') }}</option>
+              <option value="twitch">{{ t('mod.spam.target.twitch') }}</option>
+              <option value="all">{{ t('mod.spam.target.all') }}</option>
+            </select>
+          </div>
+        </template>
+        <!-- >>> caps: ignore 7tv emotes checkbox -->
+        <template v-if="newSpamType === 'caps'">
+          <label class="toggle-label" style="gap:6px;cursor:pointer">
+            <input type="checkbox" v-model="newSpamIgnore7tv" class="toggle-cb" />
+            <span class="toggle-track" :class="{ on: newSpamIgnore7tv }"><span class="toggle-thumb"></span></span>
+            <span class="toggle-text">{{ t('mod.spam.ignore_7tv') }}</span>
+          </label>
+        </template>
+        <!-- >>> caps / repeat / emoji: "min x letters AND x threshold" -->
+        <template v-if="newSpamType === 'caps' || newSpamType === 'repeat' || newSpamType === 'emoji'">
           <div class="threshold-sentence">
             <span class="ts-lbl">min.</span>
             <input v-model.number="newSpamMinLetters" type="number" min="0" max="999" class="field-input dur-input" placeholder="0" />
