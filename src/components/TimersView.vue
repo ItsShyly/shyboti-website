@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, inject, nextTick, type Ref } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
@@ -7,6 +7,16 @@ import { highlightScript } from '../composables/scriptHighlight'
 
 const { session, availableChannels, channelRole } = useAuth()
 const { t } = useI18n()
+
+// >>> Open edit panel from global search
+const searchOpenTimer = inject<Ref<string | null>>('searchOpenTimer', ref(null))
+watch(searchOpenTimer, (name) => {
+  if (!name) return
+  searchOpenTimer.value = null
+  const timer = timers.value.find(ti => ti.name === name)
+  if (timer) { nextTick(() => openEdit(timer)) }
+  else { load().then(() => { const t2 = timers.value.find(ti => ti.name === name); if (t2) openEdit(t2) }) }
+})
 
 const canToggle = computed(() => channelRole.value?.permissions.automations_toggle ?? false)
 const canEdit   = computed(() => channelRole.value?.permissions.automations_edit   ?? false)

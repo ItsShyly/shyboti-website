@@ -1,14 +1,24 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
 
 const { session } = useAuth()
 const { t } = useI18n()
+const route = useRoute()
 
 // >>> View mode <<<
 const view = ref<'write' | 'list'>('write')
+
+// >>> If navigated with ?list=1, switch to list and load
+onMounted(() => {
+  if (route.query.list === '1') { view.value = 'list'; loadList() }
+})
+watch(() => route.query.list, (v) => {
+  if (v === '1') { view.value = 'list'; loadList() }
+})
 
 // >>> Write state <<<
 const noteText   = ref('')

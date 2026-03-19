@@ -50,10 +50,23 @@ interface SearchResult {
   icon?: string
 }
 
-const searchQuery   = ref('')
-const searchOpen    = ref(false)
-const searchInput   = ref<HTMLInputElement | null>(null)
-const searchResults = ref<SearchResult[]>([])
+const searchQuery        = ref('')
+const searchOpen         = ref(false)
+const searchInputDesktop = ref<HTMLInputElement | null>(null)
+const searchInputMobile  = ref<HTMLInputElement | null>(null)
+const searchResults      = ref<SearchResult[]>([])
+
+// >>> Focus whichever search bar is currently visible
+function focusSearch() {
+  const desktop = searchInputDesktop.value
+  const mobile  = searchInputMobile.value
+  // Desktop is hidden on mobile via CSS - check offsetParent to detect visibility
+  if (desktop && desktop.offsetParent !== null) {
+    desktop.focus(); desktop.select()
+  } else if (mobile) {
+    mobile.focus(); mobile.select()
+  }
+}
 const searchIndex   = ref(0)
 let   searchDebounce: ReturnType<typeof setTimeout> | null = null
 
@@ -115,13 +128,19 @@ async function loadDynamic(): Promise<SearchResult[]> {
     if (timerRes.status === 'fulfilled' && timerRes.value.ok) {
       const d = await timerRes.value.json() as { timers: { name: string; response: string }[] }
       for (const ti of d.timers) {
-        results.push({ label: ti.name, category: 'Timer', icon: '⏱', sub: ti.response.slice(0, 50) || undefined, action: () => router.push('/automations?tab=timers') })
+        const name = ti.name
+        results.push({ label: name, category: 'Timer', icon: '⏱', sub: ti.response.slice(0, 50) || undefined,
+          action: () => { router.push('/automations?tab=timers'); nextTick(() => { searchOpenTimer.value = name }) }
+        })
       }
     }
     if (trigRes.status === 'fulfilled' && trigRes.value.ok) {
       const d = await trigRes.value.json() as { triggers: { name: string; match_pattern: string }[] }
       for (const tr of d.triggers) {
-        results.push({ label: tr.name, category: 'Trigger', icon: '⚡', sub: tr.match_pattern || undefined, action: () => router.push('/automations?tab=triggers') })
+        const name = tr.name
+        results.push({ label: name, category: 'Trigger', icon: '⚡', sub: tr.match_pattern || undefined,
+          action: () => { router.push('/automations?tab=triggers'); nextTick(() => { searchOpenTrigger.value = name }) }
+        })
       }
     }
     // >>> Also fetch custom commands
@@ -176,19 +195,20 @@ function onSearchInput() {
 
 function onSearchKeydown(e: KeyboardEvent) {
   if (!searchOpen.value || !searchResults.value.length) {
-    if (e.key === 'Escape') { searchQuery.value = ''; searchOpen.value = false; searchInput.value?.blur() }
+    if (e.key === 'Escape') { searchQuery.value = ''; searchOpen.value = false; searchInputDesktop.value?.blur(); searchInputMobile.value?.blur() }
     return
   }
   if (e.key === 'ArrowDown')  { e.preventDefault(); searchIndex.value = Math.min(searchIndex.value + 1, searchResults.value.length - 1) }
   if (e.key === 'ArrowUp')    { e.preventDefault(); searchIndex.value = Math.max(searchIndex.value - 1, 0) }
   if (e.key === 'Enter')      { e.preventDefault(); selectResult(searchResults.value[searchIndex.value]!) }
-  if (e.key === 'Escape')     { searchQuery.value = ''; searchOpen.value = false; searchInput.value?.blur() }
+  if (e.key === 'Escape')     { searchQuery.value = ''; searchOpen.value = false; searchInputDesktop.value?.blur(); searchInputMobile.value?.blur() }
 }
 
 function selectResult(r: SearchResult) {
   searchQuery.value = ''
   searchOpen.value  = false
-  searchInput.value?.blur()
+  searchInputDesktop.value?.blur()
+  searchInputMobile.value?.blur()
   searchResults.value = []
   r.action()
 }
@@ -196,16 +216,15 @@ function selectResult(r: SearchResult) {
 function onSearchFocus() { searchOpen.value = true; if (searchQuery.value) runSearch(searchQuery.value) }
 function onSearchBlur()  { setTimeout(() => { searchOpen.value = false }, 150) }
 
-// >>> Ctrl+F to focus search
+// >>> Ctrl+F to focus search bar
 function onGlobalKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-    // Only intercept if we're not already in a text input or textarea
+    // Don't intercept if already typing in an input/textarea/contenteditable
     const tag = (document.activeElement as HTMLElement)?.tagName
     const isEditable = (document.activeElement as HTMLElement)?.isContentEditable
-    if (tag === 'TEXTAREA' || isEditable) return
+    if (tag === 'TEXTAREA' || tag === 'INPUT' || isEditable) return
     e.preventDefault()
-    searchInput.value?.focus()
-    searchInput.value?.select()
+    focusSearch()
   }
 }
 
@@ -270,6 +289,12 @@ provide('nextActiveTab', nextActiveTab)
 // >>> searchOpenEdit: when set to { name, builtIn }, CommandsView opens that edit panel directly
 const searchOpenEdit = ref<{ name: string; builtIn: boolean } | null>(null)
 provide('searchOpenEdit', searchOpenEdit)
+
+// >>> searchOpenTimer / searchOpenTrigger: set to a name string to open that item's edit panel
+const searchOpenTimer   = ref<string | null>(null)
+const searchOpenTrigger = ref<string | null>(null)
+provide('searchOpenTimer',   searchOpenTimer)
+provide('searchOpenTrigger', searchOpenTrigger)
 </script>
 
 <template>
@@ -288,7 +313,7 @@ provide('searchOpenEdit', searchOpenEdit)
           <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
         <input
-          ref="searchInput"
+          ref="searchInputDesktop"
           v-model="searchQuery"
           class="search-input"
           placeholder="Search… (Ctrl+F)"
@@ -381,7 +406,7 @@ provide('searchOpenEdit', searchOpenEdit)
             <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
           <input
-            ref="searchInput"
+            ref="searchInputMobile"
             v-model="searchQuery"
             class="search-input"
             placeholder="Search…"

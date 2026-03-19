@@ -172,8 +172,11 @@ function onEditorInput(el: HTMLDivElement | null, field: 'msg_start' | 'msg_tick
   applyHL(el)
 }
 
+const isBroadcaster = computed(() => channelRole.value?.role === 'broadcaster')
+
 async function saveCountdown() {
-  if (!session.value || !editCountdown.value.name || !canEdit.value) return
+  if (!session.value || !editCountdown.value.name) return
+  if (!canEdit.value && !isBroadcaster.value) return
   saving.value = editCountdown.value.name
   try {
     const res = await fetch(`${API}/countdowns/${session.value.channel}/${editCountdown.value.name}`, {
@@ -230,7 +233,7 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
         <div class="view-title">{{ t('countdown.title') }}</div>
         <div class="view-sub">{{ t('countdown.sub') }} #{{ session?.channel }}</div>
       </div>
-      <button class="btn-new" @click="canEdit && openNew()" :disabled="!canEdit" :class="{ 'btn-new-disabled': !canEdit }">
+      <button class="btn-new" @click="(canEdit || isBroadcaster) && openNew()" :disabled="!canEdit && !isBroadcaster" :class="{ 'btn-new-disabled': !canEdit && !isBroadcaster }">
         {{ t('countdown.new') }}
       </button>
     </div>
