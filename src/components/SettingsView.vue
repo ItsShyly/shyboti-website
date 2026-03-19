@@ -41,7 +41,11 @@ async function load() {
       fetch(`${API}/settings/${session.value.channel}`, { headers }),
       fetch(`${API}/log-optout`, { headers }),
     ])
-    if (sRes.ok) { const d = await sRes.json(); prefix.value = d.settings?.prefix ?? '+' }
+    if (sRes.ok) {
+      const d = await sRes.json()
+      prefix.value     = d.prefix               ?? d.settings?.prefix ?? '+'
+      vanishHide.value = d.hide_vanish_timeouts  ?? false
+    }
     if (oRes.ok) { const d = await oRes.json(); optedOut.value = d.opted_out ?? false }
   } catch {}
 }
@@ -135,6 +139,22 @@ async function remove7tvSet() {
     emoteSet.value = { setId: null, setName: null }
   } catch { emoteSetError.value = t('settings.7tv.error') }
   emoteSetSaving.value = false
+}
+
+async function saveVanish() {
+  if (!session.value || !isBroadcaster.value) return
+  vanishSaving.value = true
+  vanishMsg.value = ''
+  try {
+    await fetch(`${API}/settings/${session.value.channel}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ hide_vanish_timeouts: vanishHide.value }),
+    })
+    vanishMsg.value = vanishHide.value ? 'Vanish timeouts will be hidden from the dashboard.' : 'Vanish timeouts will now show in the dashboard.'
+    setTimeout(() => vanishMsg.value = '', 3000)
+  } catch { vanishMsg.value = 'Failed to save.' }
+  vanishSaving.value = false
 }
 
 // >>> Remove bot from channel
@@ -270,6 +290,28 @@ watch(() => session.value?.channel, loadAll)
         <div v-if="emoteSetError"   class="set-msg err">{{ emoteSetError }}</div>
         <div v-if="emoteSetSuccess" class="set-msg ok">✓ {{ emoteSetSuccess }}</div>
       </template>
+    </div>
+
+    <!-- >>> Vanish timeout hiding - broadcaster only -->
+    <div class="section" v-if="isBroadcaster">
+      <div class="section-head">
+        <div>
+          <div class="section-title">Hide Vanish Timeouts</div>
+          <div class="section-sub">When enabled, timeouts caused by vanish commands (!v, !vanish, +v, +vanish, etc.) won't appear in the moderation dashboard. The bot checks if the user's last message was a vanish command before the timeout.</div>
+        </div>
+        <span class="badge" :class="vanishHide ? 'out' : 'in'">{{ vanishHide ? 'ON' : 'OFF' }}</span>
+      </div>
+      <div class="opt-row">
+        <div class="opt-status">
+          <div class="opt-dot" :class="{ out: !vanishHide }"></div>
+          <span class="opt-label">{{ vanishHide ? 'Vanish timeouts are hidden from dashboard' : 'All timeouts shown in dashboard' }}</span>
+        </div>
+        <button class="opt-btn" :class="{ out: vanishHide }" @click="vanishHide = !vanishHide; saveVanish()" :disabled="vanishSaving">
+          {{ vanishSaving ? '…' : vanishHide ? 'Disable' : 'Enable' }}
+        </button>
+      </div>
+      <div v-if="vanishMsg" class="opt-msg">{{ vanishMsg }}</div>
+      <div class="section-note">Common vanish commands: <code class="code">!vanish</code> <code class="code">!v</code> <code class="code">+vanish</code> <code class="code">+v</code> - used by bots like FossilBot to let users delete their own messages.</div>
     </div>
 
     <!-- >>> Remove Bot - broadcaster only -->
