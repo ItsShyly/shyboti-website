@@ -362,7 +362,7 @@ async function doRemoveBot() {
 /* Every card is header / body / footer  three zones, same padding, perfectly
    aligned across the grid because all cards share the same CSS structure.      */
 .card {
-  background: #141418;
+  background: #1a1a1e;
   border: 1px solid #1e1e24;
   display: flex;
   flex-direction: column;
