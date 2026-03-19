@@ -312,16 +312,25 @@ onMounted(load)
         <select v-model="newSpamType" class="field-select flex1">
           <option v-for="s in SPAM_TYPES" :key="s.value" :value="s.value">{{ s.label }}</option>
         </select>
-        <div class="threshold-wrap">
-          <span class="threshold-lbl">≥</span>
-          <input v-model.number="newSpamThreshold" type="number" min="1" max="9999" class="field-input dur-input" />
-          <span class="threshold-hint">{{ SPAM_TYPES.find(s => s.value === newSpamType)?.hint }}</span>
-        </div>
-        <div v-if="newSpamType === 'caps' || newSpamType === 'repeat'" class="threshold-wrap">
-          <span class="threshold-lbl" style="white-space:nowrap">{{ t('mod.spam.min_letters') }}</span>
-          <input v-model.number="newSpamMinLetters" type="number" min="0" max="999" class="field-input dur-input" :placeholder="'0'" />
-          <span class="threshold-hint">{{ t('mod.spam.min_letters_hint') }}</span>
-        </div>
+        <!-- >>> caps / repeat: sentence-style input "min x letters AND x% caps" -->
+        <template v-if="newSpamType === 'caps' || newSpamType === 'repeat'">
+          <div class="threshold-sentence">
+            <span class="ts-lbl">min.</span>
+            <input v-model.number="newSpamMinLetters" type="number" min="0" max="999" class="field-input dur-input" placeholder="0" />
+            <span class="ts-lbl">{{ t('mod.spam.min_letters_hint') }} {{ t('mod.spam.and') }}</span>
+            <span class="ts-lbl">≥</span>
+            <input v-model.number="newSpamThreshold" type="number" min="1" max="9999" class="field-input dur-input" />
+            <span class="ts-lbl">{{ SPAM_TYPES.find(s => s.value === newSpamType)?.hint }}</span>
+          </div>
+        </template>
+        <!-- >>> other types: simple threshold -->
+        <template v-else>
+          <div class="threshold-wrap">
+            <span class="threshold-lbl">≥</span>
+            <input v-model.number="newSpamThreshold" type="number" min="1" max="9999" class="field-input dur-input" />
+            <span class="threshold-hint">{{ SPAM_TYPES.find(s => s.value === newSpamType)?.hint }}</span>
+          </div>
+        </template>
         <select v-model="newSpamAction" class="field-select">
           <option value="delete">{{ t('mod.action.delete') }}</option>
           <option value="timeout">{{ t('mod.action.timeout') }}</option>
@@ -491,9 +500,11 @@ onMounted(load)
 }
 .flex1    { flex: 1; }
 .dur-input { width: 70px; }
-.threshold-wrap { display: flex; align-items: center; gap: 6px; }
-.threshold-lbl  { font-size: 12px; color: #666; }
-.threshold-hint { font-size: 10px; color: #444; white-space: nowrap; }
+.threshold-wrap     { display: flex; align-items: center; gap: 6px; }
+.threshold-lbl      { font-size: 12px; color: #666; }
+.threshold-hint     { font-size: 10px; color: #444; white-space: nowrap; }
+.threshold-sentence { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+.ts-lbl             { font-size: 12px; color: #666; white-space: nowrap; }
 .spam-label  { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
 .spam-name   { font-size: 12px; font-weight: 700; color: #c792ea; white-space: nowrap; }
 .spam-detail { font-size: 12px; color: #888; }
