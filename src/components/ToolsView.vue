@@ -60,7 +60,7 @@ async function openChatterino() {
         <div class="card-url">i.shyboti.de/<span class="url-id">id</span></div>
       </div>
       <div class="card-btns">
-        <button class="your-btn" @click.stop="router.push('/images?gallery=1')">
+        <button v-if="session" class="your-btn" @click.stop="router.push('/images?gallery=1')">
           <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="1" y="1" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.4"/>
             <rect x="8" y="1" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.4"/>
@@ -95,7 +95,7 @@ async function openChatterino() {
         <div class="card-sub">{{ t('more.notes.sub') }}</div>
         <div class="card-url">n.shyboti.de/<span class="url-id notes-url-id">id</span></div>
       </div>
-      <button class="your-btn notes-btn" @click.stop="router.push('/notes?list=1')">
+      <button v-if="session" class="your-btn notes-btn" @click.stop="router.push('/notes?list=1')">
         <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M1 3.5h12M1 7h12M1 10.5h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
         </svg>
