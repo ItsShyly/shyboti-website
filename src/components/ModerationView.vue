@@ -41,6 +41,28 @@ const newSpamMinLetters = ref(0)
 const newSpamAction     = ref<'delete' | 'timeout' | 'ban'>('delete')
 const newSpamDur        = ref(300)
 
+// >>> min_letters applies to caps + repeat; returns { name, detail } for styled display
+function spamLabel(f: SpamFilter): { name: string; detail: string } {
+  const name = SPAM_TYPES.value.find(s => s.value === f.type)?.label ?? f.type
+  const m    = f.min_letters ?? 0
+  const tStr = String(f.threshold)
+  const mStr = String(m)
+  const and  = t('mod.spam.and')
+  if (f.type === 'caps') {
+    const detail = m > 0
+      ? `min. ${mStr} ${t('mod.spam.min_letters_hint')} ${and} ≥ ${tStr}% Caps`
+      : `≥ ${tStr}% Caps`
+    return { name, detail }
+  }
+  if (f.type === 'repeat') {
+    const detail = m > 0
+      ? `min. ${mStr} ${t('mod.spam.min_letters_hint')} ${and} ≥ ${tStr}`
+      : `≥ ${tStr}`
+    return { name, detail }
+  }
+  return { name, detail: `≥ ${tStr}` }
+}
+
 // >>> Nukes
 const nukes           = ref<NukeConfig[]>([])
 const newNuke         = ref('')
@@ -295,10 +317,10 @@ onMounted(load)
           <input v-model.number="newSpamThreshold" type="number" min="1" max="9999" class="field-input dur-input" />
           <span class="threshold-hint">{{ SPAM_TYPES.find(s => s.value === newSpamType)?.hint }}</span>
         </div>
-        <div v-if="newSpamType === 'caps'" class="threshold-wrap">
-          <span class="threshold-lbl" style="white-space:nowrap">min.</span>
-          <input v-model.number="newSpamMinLetters" type="number" min="0" max="999" class="field-input dur-input" />
-          <span class="threshold-hint">Letters</span>
+        <div v-if="newSpamType === 'caps' || newSpamType === 'repeat'" class="threshold-wrap">
+          <span class="threshold-lbl" style="white-space:nowrap">{{ t('mod.spam.min_letters') }}</span>
+          <input v-model.number="newSpamMinLetters" type="number" min="0" max="999" class="field-input dur-input" :placeholder="'0'" />
+          <span class="threshold-hint">{{ t('mod.spam.min_letters_hint') }}</span>
         </div>
         <select v-model="newSpamAction" class="field-select">
           <option value="delete">{{ t('mod.action.delete') }}</option>
@@ -311,16 +333,9 @@ onMounted(load)
       <div v-if="!spamFilters.length" class="mod-empty">{{ t('mod.empty.spam') }}</div>
       <div v-else class="item-list">
         <div v-for="f in spamFilters" :key="f.id" class="item-row">
-          <span class="item-term" style="flex:1">
-            <template v-if="f.type === 'caps'">
-              Caps-Spam<template v-if="f.min_letters > 0"> min. {{ f.min_letters }} Letters</template> AND ≥ {{ f.threshold }}% Caps
-            </template>
-            <template v-if="f.type === 'repeat'">
-              Repeated chars<template v-if="f.min_letters > 0"> min. {{ f.min_letters }} Letters</template> AND ≥ {{ f.threshold }}% Repeated chars
-            </template>
-            <template v-else>
-              {{ SPAM_TYPES.find(s => s.value === f.type)?.label ?? f.type }} ≥ {{ f.threshold }}
-            </template>
+          <span class="spam-label" style="flex:1">
+            <span class="spam-name">{{ spamLabel(f).name }}</span>
+            <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
           </span>
           <span class="item-action" :style="{ color: ACTION_COLORS[f.action] }">{{ f.action === 'delete' ? t('mod.action.delete') : f.action === 'timeout' ? t('mod.action.timeout') : t('mod.action.ban') }}</span>
           <span v-if="f.action !== 'delete'" class="item-dur">{{ fmtDur(f.duration) }}</span>
@@ -479,6 +494,9 @@ onMounted(load)
 .threshold-wrap { display: flex; align-items: center; gap: 6px; }
 .threshold-lbl  { font-size: 12px; color: #666; }
 .threshold-hint { font-size: 10px; color: #444; white-space: nowrap; }
+.spam-label  { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.spam-name   { font-size: 12px; font-weight: 700; color: #c792ea; white-space: nowrap; }
+.spam-detail { font-size: 12px; color: #888; }
 .add-btn {
   height: 34px; padding: 0 16px; background: #6f2bff; border: none;
   color: #fff; font-family: inherit; font-size: 12px; font-weight: 700;
