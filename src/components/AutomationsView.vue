@@ -18,6 +18,7 @@ function parseTab(v: unknown): Tab {
 }
 
 const activeTab = ref<Tab>(parseTab(route.query.tab))
+const reloadKey = ref(0)
 
 watch(activeTab, tab => {
   router.replace({ path: '/automations', query: { tab } })
@@ -33,11 +34,12 @@ watch(() => route.query.tab, tab => {
       <button class="auto-tab" :class="{ active: activeTab === 'timers' }"     @click="activeTab = 'timers'">{{ t('auto.timers') }}</button>
       <button class="auto-tab" :class="{ active: activeTab === 'triggers' }"   @click="activeTab = 'triggers'">{{ t('auto.triggers') }}</button>
       <button class="auto-tab" :class="{ active: activeTab === 'countdowns' }" @click="activeTab = 'countdowns'">{{ t('auto.countdowns') }}</button>
+      <button class="auto-tab reload-tab" @click="reloadKey++" title="Reload">↺</button>
     </div>
     <div class="auto-body">
-      <TimersView    v-if="activeTab === 'timers'" />
-      <TriggersView  v-else-if="activeTab === 'triggers'" />
-      <CountdownView v-else />
+      <TimersView    v-if="activeTab === 'timers'"     :key="'timers-' + reloadKey" />
+      <TriggersView  v-else-if="activeTab === 'triggers'" :key="'triggers-' + reloadKey" />
+      <CountdownView v-else                              :key="'countdowns-' + reloadKey" />
     </div>
   </div>
 </template>
@@ -53,5 +55,6 @@ watch(() => route.query.tab, tab => {
 }
 .auto-tab:hover { color: #aaa; }
 .auto-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
+.reload-tab { margin-left: auto; font-size: 14px; padding: 4px 14px; }
 .auto-body { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 </style>
