@@ -103,10 +103,10 @@ async function load() {
     const res = await fetch(`${API}/countdowns/${session.value.channel}`, {
       headers: { Authorization: `Bearer ${session.value.token}` }
     })
-    if (!res.ok) throw new Error()
-    const data = await res.json() as { countdowns: Countdown[] }
-    countdowns.value = data.countdowns
-  } catch (e: any) { error.value = 'Could not load countdowns.' }
+    const data = await res.json().catch(() => null)
+    if (!res.ok) throw new Error(data?.error ?? `Load failed (${res.status})`)
+    countdowns.value = (data as { countdowns: Countdown[] })?.countdowns ?? []
+  } catch (e: any) { error.value = e.message ?? 'Could not load countdowns.' }
   loading.value = false
 }
 
@@ -178,19 +178,32 @@ async function saveCountdown() {
   if (!session.value || !editCountdown.value.name) return
   if (!canEdit.value && !isBroadcaster.value) return
   saving.value = editCountdown.value.name
+  error.value = ''
   try {
-    const res = await fetch(`${API}/countdowns/${session.value.channel}/${editCountdown.value.name}`, {
+    // >>> Build the body explicitly - exclude 'id' and non-DB fields
+    const body = {
+      duration_sec:   editCountdown.value.duration_sec   ?? 60,
+      msg_start:      editCountdown.value.msg_start      ?? '',
+      msg_tick:       editCountdown.value.msg_tick       ?? '',
+      tick_every_sec: editCountdown.value.tick_every_sec ?? 10,
+      msg_end:        editCountdown.value.msg_end        ?? '',
+      enabled_when:   editCountdown.value.enabled_when   ?? 'always',
+      condition:      editCountdown.value.condition      ?? '',
+      is_active:      editCountdown.value.is_active      ?? 1,
+    }
+    const name = editCountdown.value.name.trim()
+    const res = await fetch(`${API}/countdowns/${session.value.channel}/${encodeURIComponent(name)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
-      body: JSON.stringify(editCountdown.value),
+      body: JSON.stringify(body),
     })
     if (!res.ok) {
-      const errData = await res.json().catch(() => ({ error: res.statusText }))
-      throw new Error(errData.error ?? 'Save failed')
+      const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+      throw new Error(errData.error ?? `Save failed (${res.status})`)
     }
     showSuccess(t('countdown.save') + '!')
     editOpen.value = false
-    load()
+    await load()
   } catch (e: any) { error.value = e.message ?? 'Could not save countdown.' }
   finally { saving.value = null }
 }
@@ -199,7 +212,7 @@ async function deleteCountdown(name: string) {
   if (!session.value) return
   saving.value = name
   try {
-    await fetch(`${API}/countdowns/${session.value.channel}/${name}`, {
+    await fetch(`${API}/countdowns/${session.value.channel}/${encodeURIComponent(name)}`, {
       method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
     })
     countdowns.value = countdowns.value.filter(c => c.name !== name)
@@ -211,7 +224,7 @@ async function deleteCountdown(name: string) {
 async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset') {
   if (!session.value) return
   try {
-    const res = await fetch(`${API}/countdowns/${session.value.channel}/${name}/${action}`, {
+    const res = await fetch(`${API}/countdowns/${session.value.channel}/${encodeURIComponent(name)}/${action}`, {
       method: 'POST', headers: { Authorization: `Bearer ${session.value.token}` }
     })
     if (res.ok) {

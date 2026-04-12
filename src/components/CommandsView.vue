@@ -21,6 +21,7 @@ interface Command {
   modOnly: boolean
   broadcasterOnly: boolean
   description: string
+  argVariants: { usage: string; desc: string }[]
 }
 
 interface CustomCommand {
@@ -37,6 +38,7 @@ interface CustomCommand {
   modOnly: boolean
   broadcasterOnly: boolean
   description: string
+  arg_descs: { usage: string; desc: string }[]
 }
 
 const commands       = ref<Command[]>([])
@@ -151,6 +153,48 @@ async function saveExtras() {
 }
 
 const isBroadcaster = computed(() => channelRole.value?.role === 'broadcaster')
+
+// >>> Expanded row tracking — one set for default, one for custom
+const expandedDefault = ref<Set<string>>(new Set())
+const expandedCustom  = ref<Set<string>>(new Set())
+
+function toggleExpandDefault(name: string) {
+  const s = new Set(expandedDefault.value)
+  s.has(name) ? s.delete(name) : s.add(name)
+  expandedDefault.value = s
+}
+function toggleExpandCustom(name: string) {
+  const s = new Set(expandedCustom.value)
+  s.has(name) ? s.delete(name) : s.add(name)
+  expandedCustom.value = s
+}
+
+// >>> Auto-detect whether a custom command uses arguments by scanning its response/rule
+function customHasArgs(cmd: CustomCommand): boolean {
+  if (cmd.arg_descs?.length) return true
+  const src = (cmd.response || '') + ' ' + (cmd.rule || '')
+  return /\$args|\$\d\b|\{args\}|\$args\./i.test(src)
+}
+
+// >>> Get arg variants for a custom command:
+// If the user has saved explicit arg_descs, use those; otherwise auto-generate a placeholder.
+function getCustomArgVariants(cmd: CustomCommand): { usage: string; desc: string }[] {
+  if (cmd.arg_descs?.length) return cmd.arg_descs
+  // Auto-detect: parse $args.1, $1, $2 etc. from response to generate placeholder usages
+  const src = (cmd.response || '') + ' ' + (cmd.rule || '')
+  const argNums = new Set<number>()
+  for (const m of src.matchAll(/\$args\.(\d+)|\$(\d+)\b/g)) {
+    const n = parseInt(m[1] ?? m[2] ?? '')
+    if (!isNaN(n)) argNums.add(n)
+  }
+  if (argNums.size > 0) {
+    const max = Math.max(...argNums)
+    const placeholder = Array.from({ length: max }, (_, i) => `<arg${i + 1}>`).join(' ')
+    return [{ usage: placeholder, desc: '' }]
+  }
+  if (/\{args\}|\$args\b/i.test(src)) return [{ usage: '<args>', desc: '' }]
+  return []
+}
 
 // >>> Sort state for custom commands
 const sortField = ref<'name' | 'cooldown' | 'isActive'>('name')
@@ -506,6 +550,7 @@ onUnmounted(() => { _sseSource?.close() })
 
     <template v-else>
       <div class="table-header">
+        <div></div>
         <div>{{ t('cmd.header.onoff') }}</div>
         <div>{{ t('cmd.header.name') }}</div>
         <div>{{ t('cmd.header.desc') }}</div>
@@ -516,54 +561,79 @@ onUnmounted(() => { _sseSource?.close() })
       </div>
 
       <div class="rows">
-        <div v-for="cmd in filtered()" :key="cmd.name" class="table-row" :class="{ saving: saving === cmd.name }">
-          <div><div class="square" :class="[cmd.isActive ? 'on' : 'off', { disabled: !canToggle }]" @click="toggle(cmd, 'isActive')"></div></div>
+        <template v-for="cmd in filtered()" :key="cmd.name">
+          <div class="table-row" :class="{ saving: saving === cmd.name, expanded: expandedDefault.has(cmd.name) }">
+            <!-- Chevron: only visible if command has arg variants -->
+            <div class="row-chevron-cell">
+              <button
+                v-if="cmd.argVariants?.length"
+                class="row-chevron"
+                :class="{ open: expandedDefault.has(cmd.name) }"
+                @click.stop="toggleExpandDefault(cmd.name)"
+                title="Show argument variants"
+              >▾</button>
+            </div>
 
-          <div class="cmd-name">
-            <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
-            {{ prefix }}{{ cmd.name }}
-          </div>
+            <div><div class="square" :class="[cmd.isActive ? 'on' : 'off', { disabled: !canToggle }]" @click="toggle(cmd, 'isActive')"></div></div>
 
-          <div class="cmd-desc">{{ cmdDesc(cmd) }}</div>
+            <div class="cmd-name">
+              <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
+              {{ prefix }}{{ cmd.name }}
+            </div>
 
-          <div>
-            <button class="access-btn" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly, disabled: !canToggle }" @click="cycleRestriction(cmd)">{{ restrictionLabel(cmd) }}</button>
-          </div>
+            <div class="cmd-desc">{{ cmdDesc(cmd) }}</div>
 
-          <div>
-            <div class="cd-input-wrap" :class="{ disabled: !canEdit }">
-              <input
-                type="number" min="0" class="cd-input"
-                :disabled="!canEdit"
-                :value="cmd.cooldown"
-                @change="onCooldownInput(cmd, 'cooldown', ($event.target as HTMLInputElement).value)"
-              />
-              <span class="cd-unit">s</span>
+            <div>
+              <button class="access-btn" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly, disabled: !canToggle }" @click="cycleRestriction(cmd)">{{ restrictionLabel(cmd) }}</button>
+            </div>
+
+            <div>
+              <div class="cd-input-wrap" :class="{ disabled: !canEdit }">
+                <input
+                  type="number" min="0" class="cd-input"
+                  :disabled="!canEdit"
+                  :value="cmd.cooldown"
+                  @change="onCooldownInput(cmd, 'cooldown', ($event.target as HTMLInputElement).value)"
+                />
+                <span class="cd-unit">s</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="cd-input-wrap user" :class="{ disabled: !canEdit }">
+                <input
+                  type="number" min="0" class="cd-input"
+                  :disabled="!canEdit"
+                  :value="cmd.userCooldown"
+                  @change="onCooldownInput(cmd, 'userCooldown', ($event.target as HTMLInputElement).value)"
+                />
+                <span class="cd-unit">s</span>
+              </div>
+            </div>
+
+            <div>
+              <button
+                class="edit-btn"
+                :class="{ blocked: BLOCKED.includes(cmd.name) || !canEdit }"
+                @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)"
+              >
+                {{ BLOCKED.includes(cmd.name) ? t('cmd.blocked') : !canEdit ? t('cmd.no_access') : t('cmd.edit') }}
+              </button>
             </div>
           </div>
 
-          <div>
-            <div class="cd-input-wrap user" :class="{ disabled: !canEdit }">
-              <input
-                type="number" min="0" class="cd-input"
-                :disabled="!canEdit"
-                :value="cmd.userCooldown"
-                @change="onCooldownInput(cmd, 'userCooldown', ($event.target as HTMLInputElement).value)"
-              />
-              <span class="cd-unit">s</span>
+          <!-- Arg variant rows -->
+          <template v-if="expandedDefault.has(cmd.name) && cmd.argVariants?.length">
+            <div v-for="(v, vi) in cmd.argVariants" :key="vi" class="arg-variant-row">
+              <div class="arg-variant-indent"></div>
+              <div class="arg-variant-usage">
+                <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span>
+                <span class="arg-args">{{ v.usage }}</span>
+              </div>
+              <div class="arg-variant-desc">{{ v.desc || '' }}</div>
             </div>
-          </div>
-
-          <div>
-            <button
-              class="edit-btn"
-              :class="{ blocked: BLOCKED.includes(cmd.name) || !canEdit }"
-              @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)"
-            >
-              {{ BLOCKED.includes(cmd.name) ? t('cmd.blocked') : !canEdit ? t('cmd.no_access') : t('cmd.edit') }}
-            </button>
-          </div>
-        </div>
+          </template>
+        </template>
       </div>
     </template>
     </template><!-- /Default tab -->
@@ -636,52 +706,76 @@ onUnmounted(() => { _sseSource?.close() })
       </div>
 
       <div v-else class="rows">
-        <div v-for="cmd in filteredCustom()" :key="cmd.name" class="table-row custom-row">
-          <div><div class="square" :class="cmd.isActive ? 'on' : 'off'"
-            @click="cmd.isActive = !cmd.isActive; updateCustomActive(cmd)"></div></div>
-
-          <div class="cmd-name-col">
-            <div class="cmd-name">
-              <span class="cmd-cat-dot" style="background:#9d6cff"></span>
-              {{ prefix }}{{ cmd.name }}
-              <span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
+        <template v-for="cmd in filteredCustom()" :key="cmd.name">
+          <div class="table-row custom-row" :class="{ expanded: expandedCustom.has(cmd.name) }">
+            <!-- chevron -->
+            <div class="row-chevron-cell">
+              <button
+                v-if="customHasArgs(cmd)"
+                class="row-chevron"
+                :class="{ open: expandedCustom.has(cmd.name) }"
+                @click.stop="toggleExpandCustom(cmd.name)"
+                title="Show argument variants"
+              >▾</button>
             </div>
-            <div v-if="cmd.description" class="cmd-desc-inline">{{ cmd.description }}</div>
-          </div>
 
-          <div>
-            <button class="access-btn" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly, disabled: !canToggle }" @click="cycleRestriction(cmd)">{{ restrictionLabel(cmd) }}</button>
-          </div>
+            <div class="cmd-name-col">
+              <div class="cmd-name">
+                <span class="cmd-cat-dot" style="background:#9d6cff"></span>
+                {{ prefix }}{{ cmd.name }}
+                <span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
+              </div>
+              <div v-if="cmd.description" class="cmd-desc-inline">{{ cmd.description }}</div>
+            </div>
 
-          <div>
-            <div class="cd-input-wrap" :class="{ disabled: !canEdit }">
-              <input type="number" min="0" class="cd-input"
-                :disabled="!canEdit" :value="cmd.cooldown"
-                @change="onCustomCooldownInput(cmd, 'cooldown', ($event.target as HTMLInputElement).value)" />
-              <span class="cd-unit">s</span>
+            <div>
+              <button class="access-btn" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly, disabled: !canToggle }" @click="cycleRestriction(cmd)">{{ restrictionLabel(cmd) }}</button>
+            </div>
+
+            <div>
+              <div class="cd-input-wrap" :class="{ disabled: !canEdit }">
+                <input type="number" min="0" class="cd-input"
+                  :disabled="!canEdit" :value="cmd.cooldown"
+                  @change="onCustomCooldownInput(cmd, 'cooldown', ($event.target as HTMLInputElement).value)" />
+                <span class="cd-unit">s</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="cd-input-wrap user" :class="{ disabled: !canEdit }">
+                <input type="number" min="0" class="cd-input"
+                  :disabled="!canEdit" :value="cmd.userCooldown"
+                  @change="onCustomCooldownInput(cmd, 'userCooldown', ($event.target as HTMLInputElement).value)" />
+                <span class="cd-unit">s</span>
+              </div>
+            </div>
+
+            <div class="custom-actions">
+              <div class="toggle-inline" :class="cmd.isActive ? 'on' : 'off'"
+                @click="cmd.isActive = !cmd.isActive; updateCustomActive(cmd)"></div>
+              <button class="edit-btn" :class="{ blocked: !canEdit }" @click="canEdit && openEdit(cmd.name, false)">{{ canEdit ? t('cmd.edit') : t('cmd.view') }}</button>
+              <button class="share-btn" @click="openShare(cmd.name)" title="Copy to another channel">↪</button>
+              <button v-if="canDelete"
+                class="del-btn"
+                :class="{ confirm: deleteConfirmName === cmd.name, deleting: deletingName === cmd.name }"
+                @click="deleteCustom(cmd.name)"
+                :title="deleteConfirmName === cmd.name ? 'Click again to confirm' : 'Delete'"
+              >{{ deletingName === cmd.name ? '…' : deleteConfirmName === cmd.name ? t('cmd.delete_sure') : t('cmd.delete') }}</button>
             </div>
           </div>
 
-          <div>
-            <div class="cd-input-wrap user" :class="{ disabled: !canEdit }">
-              <input type="number" min="0" class="cd-input"
-                :disabled="!canEdit" :value="cmd.userCooldown"
-                @change="onCustomCooldownInput(cmd, 'userCooldown', ($event.target as HTMLInputElement).value)" />
-              <span class="cd-unit">s</span>
+          <!-- Arg variant rows for custom -->
+          <template v-if="expandedCustom.has(cmd.name)">
+            <div v-for="(v, vi) in getCustomArgVariants(cmd)" :key="vi" class="arg-variant-row">
+              <div class="arg-variant-indent"></div>
+              <div class="arg-variant-usage">
+                <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span>
+                <span class="arg-args">{{ v.usage }}</span>
+              </div>
+              <div class="arg-variant-desc">{{ v.desc || '' }}</div>
             </div>
-          </div>
-
-          <div class="custom-actions">
-            <button class="edit-btn" :class="{ blocked: !canEdit }" @click="canEdit && openEdit(cmd.name, false)">{{ canEdit ? t('cmd.edit') : t('cmd.view') }}</button>
-            <button class="share-btn" @click="openShare(cmd.name)" title="Copy to another channel">↪</button>
-            <button v-if="canDelete"
-              class="del-btn"
-              :class="{ confirm: deleteConfirmName === cmd.name, deleting: deletingName === cmd.name }"
-              @click="deleteCustom(cmd.name)"
-              :title="deleteConfirmName === cmd.name ? 'Click again to confirm' : 'Delete'"
-            >{{ deletingName === cmd.name ? '…' : deleteConfirmName === cmd.name ? t('cmd.delete_sure') : t('cmd.delete') }}</button>
-          </div>
-        </div>
+          </template>
+        </template>
       </div>
     </template><!-- /Custom tab -->
 
@@ -720,6 +814,7 @@ onUnmounted(() => { _sseSource?.close() })
     :channel="session?.channel ?? ''"
     :open="editOpen"
     :isBuiltIn="editIsBuiltIn"
+    :prefix="prefix"
     @close="editOpen = false"
     @saved="onEditSaved"
   />
@@ -759,11 +854,11 @@ onUnmounted(() => { _sseSource?.close() })
 .state-msg { color: #555; padding: 40px; text-align: center; font-size: 14px; }
 
 .table-header,
-.table-row { display: grid; grid-template-columns: 70px 140px 1fr 110px 90px 90px 110px; align-items: center; }
+.table-row { display: grid; grid-template-columns: 28px 50px 140px 1fr 110px 90px 90px 110px; align-items: center; }
 
 /* Custom commands use wider last column for 3 action buttons */
 .custom-table-header,
-.custom-row { grid-template-columns: 70px 1fr 110px 90px 90px 160px; }
+.custom-row { grid-template-columns: 28px 1fr 110px 90px 90px 180px; }
 
 .sort-col { cursor: pointer; user-select: none; }
 .sort-col:hover { color: #aaa; }
@@ -775,14 +870,57 @@ onUnmounted(() => { _sseSource?.close() })
   border-bottom: 1px solid #2a2a2a;
 }
 
-.rows { display: flex; flex-direction: column; gap: 3px; margin-top: 4px; }
+.rows { display: flex; flex-direction: column; gap: 0; margin-top: 4px; }
 
 .table-row {
-  height: 60px; padding: 0 16px;
+  min-height: 60px; padding: 0 16px 0 8px;
   background: #2c2c2e; border-top: 1px solid #222; transition: background 0.1s, opacity 0.2s;
 }
 .table-row:hover { background: #313135; }
 .table-row.saving { opacity: 0.6; pointer-events: none; }
+.table-row.expanded { border-bottom: none; }
+
+/* Chevron cell */
+.row-chevron-cell { display: flex; align-items: center; justify-content: center; }
+.row-chevron {
+  width: 20px; height: 20px; border: none; background: transparent;
+  color: #555; font-size: 14px; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; padding: 0; line-height: 1; transition: color .15s, transform .2s;
+  transform-origin: center;
+}
+.row-chevron:hover { color: #9d6cff; }
+.row-chevron.open { transform: rotate(-180deg); color: #9d6cff; }
+
+/* Arg variant rows */
+.arg-variant-row {
+  display: grid; grid-template-columns: 28px 1fr 1fr;
+  padding: 6px 16px 6px 8px;
+  background: #222226; border-top: 1px solid #1e1e22;
+  align-items: center; gap: 8px;
+  animation: slideDown .15s ease;
+}
+.arg-variant-row:last-of-type { border-bottom: 1px solid #222; margin-bottom: 2px; }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: none } }
+.arg-variant-indent { width: 20px; }
+.arg-variant-usage {
+  display: flex; align-items: center; gap: 5px;
+  font-family: 'Consolas','Fira Mono',monospace; font-size: 12px;
+}
+.arg-prefix { color: #9d6cff; font-weight: 700; }
+.arg-args   { color: #e5c07b; }
+.arg-variant-desc {
+  font-size: 11px; color: #555; font-style: italic;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Inline toggle for custom row (replaces the square; same visual) */
+.toggle-inline {
+  width: 24px; height: 24px; border: 2px solid #161616; cursor: pointer;
+  transition: background 0.15s; flex-shrink: 0;
+}
+.toggle-inline.on  { background: #6b35d4; }
+.toggle-inline.off { background: #111217; }
+.toggle-inline:hover { opacity: 0.8; }
 
 .square {
   width: 24px; height: 24px; border: 2px solid #161616; cursor: pointer; transition: background 0.15s;

@@ -13,8 +13,9 @@ export interface CustomCommand {
   regex1: string; regex2: string; text1: string; text2: string
   isActive: boolean | number; cooldown: number; userCooldown: number
   description: string
+  arg_descs: { usage: string; desc: string }[]
 }
-interface Props { cmdName: string; channel: string; open: boolean; isBuiltIn?: boolean }
+interface Props { cmdName: string; channel: string; open: boolean; isBuiltIn?: boolean; prefix?: string }
 
 const props = defineProps<Props>()
 const emit  = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
@@ -31,7 +32,7 @@ const ruleTarget    = ref<'output' | 'input'>('output')
 const form = ref<CustomCommand>({
   name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
   regex1: '', regex2: '', text1: '', text2: '', isActive: true, cooldown: 0, userCooldown: 0,
-  description: '',
+  description: '', arg_descs: [],
 })
 
 const OPERATORS = ['[has]','[hasnot]','[=]','[starts]','[ends]']
@@ -85,10 +86,10 @@ async function load() {
         const data = await res.json() as { commands: CustomCommand[] }
         const ex = data.commands.find(c => c.name === props.cmdName)
         form.value = ex
-          ? { ...ex, isActive: !!ex.isActive, description: ex.description ?? '' }
+          ? { ...ex, isActive: !!ex.isActive, description: ex.description ?? '', arg_descs: ex.arg_descs ?? [] }
           : { name: props.cmdName, response: '', rule: '', alias: '', enabled_when: 'always',
               required_game: '', regex1: '', regex2: '', text1: '', text2: '',
-              isActive: true, cooldown: 0, userCooldown: 0, description: '' }
+              isActive: true, cooldown: 0, userCooldown: 0, description: '', arg_descs: [] }
         userParams.value = userParams.value.map(p => ({ ...p, value: ex ? ((ex as any)[p.key] ?? '') : '' }))
       }
     }
@@ -131,6 +132,40 @@ async function load() {
 
 watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; ruleOpen.value = false } })
 onMounted(() => { if (props.open) load() })
+
+// >>> When response changes, auto-detect arg count and grow arg_descs to match
+// so the user can fill in descriptions for each arg variant
+watch(() => form.value.response, (src) => {
+  if (props.isBuiltIn) return
+  const argNums = new Set<number>()
+  for (const m of (src || '').matchAll(/\$args\.(\d+)|\$(\d+)\b/g)) {
+    const n = parseInt((m[1] ?? m[2]) || '')
+    if (!isNaN(n) && n > 0) argNums.add(n)
+  }
+  const hasGenericArgs = /\{args\}|\$args\b/i.test(src || '')
+  const needed = argNums.size > 0 ? Math.max(...argNums) : (hasGenericArgs ? 1 : 0)
+  // Grow or shrink arg_descs to match detected arg count
+  const current = form.value.arg_descs ?? []
+  if (needed > current.length) {
+    for (let i = current.length; i < needed; i++) {
+      const argLabel = argNums.size > 0 ? `<arg${i + 1}>` : '<args>'
+      current.push({ usage: argLabel, desc: '' })
+    }
+    form.value.arg_descs = [...current]
+  } else if (needed === 0 && current.length > 0 && current.every(v => !v.desc)) {
+    // Auto-clear only if user hasn't added any descriptions
+    form.value.arg_descs = []
+  }
+}, { immediate: false })
+
+function addArgVariant() {
+  form.value.arg_descs = [...(form.value.arg_descs ?? []), { usage: '', desc: '' }]
+}
+function removeArgVariant(i: number) {
+  const d = [...(form.value.arg_descs ?? [])]
+  d.splice(i, 1)
+  form.value.arg_descs = d
+}
 
 let _applyingHighlight = false
 watch(() => form.value.rule, newRule => {
@@ -1683,6 +1718,35 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
             />
           </div>
 
+          <!-- Arg variants editor (custom commands only) -->
+          <div v-if="!isBuiltIn" class="field-group">
+            <div class="arg-descs-header">
+              <label class="field-label">Argument Variants
+                <span class="field-hint">Shown as sub-rows in the command list when ▾ is clicked</span>
+              </label>
+              <button class="arg-add-btn" @click="addArgVariant" type="button">+ Add variant</button>
+            </div>
+            <div v-if="!form.arg_descs?.length" class="arg-descs-empty">
+              {{ /\$args|\$\d\b|\{args\}/.test(form.response) ? 'Auto-detected from response — save to confirm, or add custom variants below.' : 'No argument variants. Will be auto-detected from $args, $1, $2… in the response.' }}
+            </div>
+            <div class="arg-descs-list">
+              <div v-for="(v, i) in form.arg_descs" :key="i" class="arg-desc-row">
+                <span class="arg-desc-prefix">{{ prefix || '+' }}{{ form.name }}</span>
+                <input
+                  v-model="form.arg_descs[i].usage"
+                  class="field-input arg-usage-input"
+                  placeholder="&lt;arg1&gt; [arg2]"
+                />
+                <input
+                  v-model="form.arg_descs[i].desc"
+                  class="field-input arg-desc-input"
+                  placeholder="What this variant does…"
+                />
+                <button class="arg-remove-btn" @click="removeArgVariant(i)" type="button">✕</button>
+              </div>
+            </div>
+          </div>
+
           <div class="cond-row">
             <div class="field-group sm">
               <label class="field-label">{{ t('edit.active_when') }}</label>
@@ -1848,6 +1912,32 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
 .btn-delete:disabled { opacity: .4; cursor: not-allowed; }
 .btn-delete.confirm { border-color: #f14949aa; background: #f1494922; font-weight: 700; }
 .desc-readonly { font-size: 12px; color: #555; background: #0d0d10; border: 1px solid #1e1e22; padding: 7px 10px; font-style: italic; }
+
+/* Arg variants editor */
+.arg-descs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.arg-add-btn {
+  height: 24px; padding: 0 10px; border: 1px solid #6f2bff55;
+  background: transparent; color: #9d6cff; font-family: inherit; font-size: 11px;
+  cursor: pointer; transition: background .15s;
+}
+.arg-add-btn:hover { background: #6f2bff22; }
+.arg-descs-empty { font-size: 11px; color: #444; font-style: italic; padding: 6px 0; }
+.arg-descs-list { display: flex; flex-direction: column; gap: 5px; }
+.arg-desc-row {
+  display: flex; align-items: center; gap: 6px;
+}
+.arg-desc-prefix {
+  font-family: 'Consolas','Fira Mono',monospace; font-size: 12px;
+  color: #9d6cff; font-weight: 700; flex-shrink: 0; white-space: nowrap;
+}
+.arg-usage-input { width: 160px; flex-shrink: 0; font-family: 'Consolas','Fira Mono',monospace !important; color: #e5c07b !important; }
+.arg-desc-input  { flex: 1; min-width: 0; }
+.arg-remove-btn {
+  width: 24px; height: 24px; flex-shrink: 0; border: 1px solid #f1494933;
+  background: transparent; color: #f14949; font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.arg-remove-btn:hover { background: #f1494911; }
 
 /*  Rule section collapsible  */
 .rule-section { border: 1px solid #222; background: #141418; }
