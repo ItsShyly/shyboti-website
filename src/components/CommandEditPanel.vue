@@ -1150,11 +1150,28 @@ function removeArgVariant(i: number) {
 /* Global syntax highlight styles */
 .sh-kw {
   color: #569cd6;
-  background: rgba(86, 156, 214, 0.08);
-  border-radius: 3px;
-  padding: 1px 2px;
-  margin: 0 1px;
+  background: rgba(86, 156, 214, 0.12);
+  border-radius: 4px;
+  padding: 0 3px;
   font-weight: 500;
+}
+.sh-cond {
+  background: rgba(128, 128, 128, 0.06);
+  border-radius: 3px;
+  padding: 0 2px;
+  display: inline-block;
+}
+.sh-body {
+  background: rgba(100, 255, 100, 0.04);
+  border-radius: 2px;
+  display: inline-block;
+  width: 100%;  /* fills the line */
+}
+.sh-error-block {
+  border-left: 2px solid #f14949;
+  background: rgba(241, 73, 73, 0.05);
+  padding: 0 2px;
+  display: inline-block;
 }
 
 .sh-kw:contains('$end') {
