@@ -116,22 +116,70 @@ async function load() {
   updatePreview()
 }
 
-// >>> ARG VARIANT SYSTEM
-//
-// A "variant" is one complete call signature - everything after the command name.
-// Each $if(...) $end block with potentially multiple && clauses is ONE variant row.
-// Plain $N references (not inside any $if) are "free" positional slots shown as <word>.
-// $args / $query is a generic all-args slot.
-//
-// Display examples:
-//   response: "hello $1"                             -> chip: "<word>"
-//   response: "$if($1 = test) $end"                  -> chip: "test"
-//   response: "$if($1 = test && $2 = $ch.name) $end" -> chip: "test <$ch.name>"
-//   response: "$if($1=a) $end $if($1=b) $end"        -> two chips: "a" and "b"
-//
-// Editing a chip updates the $if condition (or removes it for <word> chips).
-// "+ Arg" appends a new bare $N slot.
+// --- Validation ---
+interface ValidationError {
+  blockIndex: number
+  type: 'cond_missing' | 'cond_invalid' | 'body_missing'
+  message: string
+}
 
+const validationErrors = ref<ValidationError[]>([])
+
+function validateScript(src: string): ValidationError[] {
+  const errors: ValidationError[] = []
+  let idx = 0
+  let pos = 0
+  while (pos < src.length) {
+    const ifStart = src.indexOf('$if(', pos)
+    if (ifStart === -1) break
+    const parenStart = src.indexOf('(', ifStart + 3)
+    if (parenStart === -1) { pos = ifStart + 3; continue }
+    let depth = 0, condEnd = -1
+    for (let k = parenStart; k < src.length; k++) {
+      if (src[k] === '(') depth++
+      else if (src[k] === ')') { depth--; if (depth === 0) { condEnd = k; break } }
+    }
+    if (condEnd === -1) { pos = ifStart + 3; continue }
+    const condSrc = src.slice(parenStart + 1, condEnd).trim()
+    const afterCond = src.slice(condEnd + 1)
+    const braceMatch = afterCond.match(/^\s*\{/)
+    if (braceMatch) {
+      const braceStart = condEnd + 1 + afterCond.indexOf('{')
+      let bdepth = 0, bodyEnd = -1
+      for (let k = braceStart; k < src.length; k++) {
+        if (src[k] === '{') bdepth++
+        else if (src[k] === '}') { bdepth--; if (bdepth === 0) { bodyEnd = k; break } }
+      }
+      if (bodyEnd !== -1) {
+        const body = src.slice(braceStart + 1, bodyEnd).trim()
+        if (condSrc === '') errors.push({ blockIndex: idx, type: 'cond_missing', message: 'Expression missing' })
+        else if (!/\$/.test(condSrc)) errors.push({ blockIndex: idx, type: 'cond_invalid', message: `${condSrc} is not a valid expression` })
+        if (body === '') errors.push({ blockIndex: idx, type: 'body_missing', message: 'Body missing' })
+        pos = bodyEnd + 1
+        idx++
+        continue
+      }
+    }
+    // Fallback for legacy/unclosed
+    pos = condEnd + 1
+    idx++
+  }
+  return errors
+}
+
+const validationMessage = computed(() => {
+  const errs = validationErrors.value
+  if (errs.length === 0) return ''
+  return errs.map(e => e.message).join(' · ')
+})
+
+// --- Line numbers ---
+const lineCount = ref(1)
+function updateLineNumbers(text: string) {
+  lineCount.value = (text.match(/\n/g) || []).length + 1
+}
+
+// --- ARG VARIANT SYSTEM ---
 function scanArgNums(src: string): { positional: Set<number>; hasGeneric: boolean } {
   const positional = new Set<number>()
   for (const m of src.matchAll(/\$(?:args\.)?(\d+)\b/g)) {
@@ -168,21 +216,18 @@ interface VariantEntry {
   bodyHasArgs: Set<number>          // $N references found inside the $if body
 }
 
-// Extract all $if(...) $end blocks as VariantEntry[], plus set of bare $N references
+// Extract all $if(...) ... $end blocks as VariantEntry[], plus set of bare $N references
 function extractVariants(src: string): { variants: VariantEntry[]; bareArgs: Set<number> } {
   const variants: VariantEntry[] = []
   const usedInIf = new Set<number>()
   const bareArgs = new Set<number>()
 
-  // Find all $if(...) ... $end blocks
   let pos = 0
   while (pos < src.length) {
     const ifStart = src.indexOf('$if(', pos)
     if (ifStart === -1) break
 
-    // Find matching closing parenthesis for condition
-    let depth = 0
-    let condEnd = -1
+    let depth = 0, condEnd = -1
     for (let i = ifStart + 4; i < src.length; i++) {
       const ch = src[i]
       if (ch === '(') depth++
@@ -194,14 +239,31 @@ function extractVariants(src: string): { variants: VariantEntry[]; bareArgs: Set
     if (condEnd === -1) { pos = ifStart + 4; continue }
 
     const condStr = src.slice(ifStart + 4, condEnd).trim()
+    const afterCond = src.slice(condEnd + 1)
+    const braceRel  = afterCond.match(/^\s*\{/)
+    let endIdx: number
+    let bodyStart: number
+    let bodyEnd: number
 
-    // Find corresponding $end
-    const endIdx = src.indexOf('$end', condEnd + 1)
-    if (endIdx === -1) { pos = condEnd + 1; continue }
+    if (braceRel) {
+      const braceStart = condEnd + 1 + afterCond.indexOf('{')
+      let bdepth = 0, bEnd = -1
+      for (let k = braceStart; k < src.length; k++) {
+        if (src[k] === '{') bdepth++
+        else if (src[k] === '}') { bdepth--; if (bdepth === 0) { bEnd = k; break } }
+      }
+      if (bEnd === -1) { pos = condEnd + 1; continue }
+      bodyStart = braceStart + 1
+      bodyEnd   = bEnd
+      endIdx    = bEnd
+    } else {
+      const legacyEnd = src.indexOf('$end', condEnd + 1)
+      if (legacyEnd === -1) { pos = condEnd + 1; continue }
+      bodyStart = condEnd + 1
+      bodyEnd   = legacyEnd
+      endIdx    = legacyEnd + 3
+    }
 
-    const blockBody = src.slice(condEnd + 1, endIdx)
-
-    // Parse condition clauses
     const clauses = condStr.split(/\s*&&?\s*/)
     const constraints = new Map<number, string>()
     for (const clause of clauses) {
@@ -212,24 +274,24 @@ function extractVariants(src: string): { variants: VariantEntry[]; bareArgs: Set
       }
     }
 
-    // Find $N references in the block body
+    const blockBody = src.slice(bodyStart, bodyEnd)
     const bodyArgs = new Set<number>()
     for (const m of blockBody.matchAll(/\$(?:args\.)?(\d+)\b/g)) {
       const n = parseInt(m[1] || '')
       if (!isNaN(n) && n > 0) bodyArgs.add(n)
     }
 
-    // Determine max argument number
     let maxArg = 0
     for (const n of constraints.keys()) maxArg = Math.max(maxArg, n)
     for (const n of bodyArgs) maxArg = Math.max(maxArg, n)
 
     variants.push({ constraints, condStr, maxArg, bodyHasArgs: bodyArgs })
-    pos = endIdx + 4
+    pos = endIdx + 1
   }
 
-  // Find bare $N outside any $if block (using a copy without $if...$end)
-  const withoutIfs = src.replace(/\$if\([^)]+\)[\s\S]*?\$end/g, '')
+  const withoutIfs = src
+    .replace(/\$if\([^)]*\)\s*\{[^}]*\}/g, '')
+    .replace(/\$if\([^)]+\)[\s\S]*?\$end/g, '')
   for (const m of withoutIfs.matchAll(/\$(?:args\.)?(\d+)\b/g)) {
     const n = parseInt(m[1] || '')
     if (!isNaN(n) && n > 0 && !usedInIf.has(n)) bareArgs.add(n)
@@ -238,9 +300,6 @@ function extractVariants(src: string): { variants: VariantEntry[]; bareArgs: Set
   return { variants, bareArgs }
 }
 
-// Build arg_descs from response.
-// Each $if block -> one chip showing full signature (e.g. "test <$ch.name>").
-// Each bare $N   -> one chip showing "<word>" (it's just a positional slot, not a variant).
 function buildArgDescs(
   src: string,
   existing: { usage: string; desc: string }[]
@@ -255,7 +314,6 @@ function buildArgDescs(
   const { variants, bareArgs } = extractVariants(src)
   const result: { usage: string; desc: string }[] = []
 
-  // One chip per $if block: build space-separated signature ordered by argNum
   for (const v of variants) {
     if (v.constraints.size === 0 && v.bodyHasArgs.size === 0) continue
     const maxArg = v.maxArg
@@ -273,7 +331,6 @@ function buildArgDescs(
     result.push({ usage, desc: prev?.desc ?? '' })
   }
 
-  // One chip per bare $N: show as "<word>"
   for (const n of [...bareArgs].sort((a, b) => a - b)) {
     const usage = '<word>'
     const prev = existing.find(e => e.usage === usage || e.usage === `${n}` || e.usage === `<arg${n}>`)
@@ -285,7 +342,6 @@ function buildArgDescs(
   return result
 }
 
-// Remove all $if blocks for argNum - handles both $if($N = val) and bare $if($N)
 function removeAllIfBlocksForArg(src: string, argNum: number): string {
   let result = src
   let safety = 0
@@ -293,19 +349,27 @@ function removeAllIfBlocksForArg(src: string, argNum: number): string {
     const ifPat = new RegExp(`\\$if\\(\\s*\\$(?:args\\.)?${argNum}\\s*(?:=[^)]*)?\\)`)
     const m = ifPat.exec(result)
     if (!m) break
-    const start  = m.index
-    const after  = result.slice(start + m[0].length)
-    const endIdx = after.indexOf('$end')
-    if (endIdx === -1) {
-      result = result.slice(0, start) + result.slice(start + m[0].length)
+    const start = m.index
+    const afterCond = result.slice(start + m[0].length)
+    const braceM = afterCond.match(/^\s*\{/)
+    if (braceM) {
+      const braceStart = start + m[0].length + afterCond.indexOf('{')
+      let bdepth = 0, bEnd = -1
+      for (let k = braceStart; k < result.length; k++) {
+        if (result[k] === '{') bdepth++
+        else if (result[k] === '}') { bdepth--; if (bdepth === 0) { bEnd = k; break } }
+      }
+      if (bEnd === -1) { result = result.slice(0, start) + result.slice(start + m[0].length); continue }
+      result = result.slice(0, start) + result.slice(bEnd + 1)
     } else {
-      result = result.slice(0, start) + result.slice(start + m[0].length + endIdx + 4)
+      const endIdx = afterCond.indexOf('$end')
+      if (endIdx === -1) { result = result.slice(0, start) + result.slice(start + m[0].length) }
+      else { result = result.slice(0, start) + result.slice(start + m[0].length + endIdx + 4) }
     }
   }
   return result.replace(/  +/g, ' ').trim()
 }
 
-// Extract the body inside the first $if block that involves argNum
 function extractIfBlockBody(src: string, argNum: number): string {
   const ifPat = new RegExp(`\\$if\\(\\s*\\$(?:args\\.)?${argNum}\\s*(?:=[^)]*)?\\)`)
   const m = ifPat.exec(src)
@@ -321,20 +385,6 @@ function removeArgFromResponse(src: string, argNum: number): string {
   return r.replace(/  +/g, ' ').trim()
 }
 
-// Parse a chip usage string (full call signature) into a single $if condition string.
-// Usage is space-separated; position N corresponds to arg $N.
-// Tokens:
-//   "test"        -> $N = test       (literal constraint)
-//   "<$ch.name>"  -> $N = $ch.name   (variable constraint)
-//   "<word>"      -> no constraint   (free slot, skip)
-// Multiple constrained positions are joined with &&.
-// Returns null if no positions are constrained (free/bare arg).
-//
-// Examples:
-//   "test"             -> "$1 = test"
-//   "test <$ch.name>"  -> "$1 = test && $2 = $ch.name"
-//   "<word>"           -> null
-//   "<word> test"      -> "$2 = test"
 function parseChipToCondition(usage: string): string | null {
   const trimmed = usage.trim()
   if (!trimmed) return null
@@ -344,10 +394,10 @@ function parseChipToCondition(usage: string): string | null {
 
   rawTokens.forEach((tok, i) => {
     const argN = i + 1
-    if (tok === '<word>' || tok === '') return  // free slot
+    if (tok === '<word>' || tok === '') return
     const varMatch = tok.match(/^<(\$[^>]+)>$/)
     if (varMatch) { clauses.push(`$${argN} = ${varMatch[1]}`); return }
-    if (/^\$?(?:args\.)?[1-9]\d*$/.test(tok)) return  // bare $N = free
+    if (/^\$?(?:args\.)?[1-9]\d*$/.test(tok)) return
     clauses.push(`$${argN} = ${tok}`)
   })
 
@@ -355,8 +405,6 @@ function parseChipToCondition(usage: string): string | null {
   return clauses.join(' && ')
 }
 
-// Replace a specific $if(condStr) ... $end block's condition with newCond,
-// or remove the whole block (replacing with bodyText) if newCond is null.
 function replaceIfBlock(src: string, oldCondStr: string, bodyText: string, newCond: string | null): string {
   const escaped = oldCondStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const pat = new RegExp(`\\$if\\(\\s*${escaped}\\s*\\)([\\s\\S]*?)\\$end`)
@@ -384,11 +432,6 @@ function syncResponseFromChip(chipIdx: number, newUsage: string) {
     } else {
       src = replaceIfBlock(src, v.condStr, '', newCond)
     }
-  } else {
-    const newCond = parseChipToCondition(newUsage.trim())
-    if (newCond !== null) {
-      src = src.trimEnd() + ` $if(${newCond}) $end`
-    }
   }
 
   form.value.response = src
@@ -403,6 +446,8 @@ onMounted(() => { if (props.open) load() })
 watch(() => form.value.response, (src) => {
   if (props.isBuiltIn) return
   form.value.arg_descs = buildArgDescs(src, form.value.arg_descs ?? [])
+  validationErrors.value = validateScript(src)
+  updateLineNumbers(src)
 }, { immediate: false })
 
 async function save() {
@@ -449,7 +494,7 @@ const ghostMatches    = ref<string[]>([])
 const ghostMatchIdx   = ref(0)
 
 const COMPLETIONS = [
-  '$if()', '$else', '$end', '$foreach()', '$repeat()', '$define',
+  '$if(){ }', '$else', '$foreach()', '$repeat()', '$define',
   '$counter.', '$ucounter.', '$var.', '$uvar.', '$list.',
   '$user', '$user.name', '$user.display', '$user.mention', '$user.followage', '$user.created',
   '$user.is(mod)', '$user.is(sub)', '$user.is(vip)', '$user.is(broadcaster)',
@@ -730,13 +775,19 @@ function acceptCurrentGhost() {
   const full    = partial + ghostSuggestion.value
   let insert = full
   let cursorOffset = before.length - partial.length + full.length
-  if (full === '$if()') {
-    insert = '$if()\n  \n$end'; cursorOffset = before.length - partial.length + 4
+
+  // Special handling for $if -> $if(  ){ }
+  if (full.startsWith('$if(')) {
+    insert = '$if(  ){ }'
+    cursorOffset = before.length - partial.length + 5 // cursor between parentheses
   } else if (full === '$foreach()') {
-    insert = '$foreach( in )\n  \n$end'; cursorOffset = before.length - partial.length + 9
+    insert = '$foreach( in )\n  \n$end'
+    cursorOffset = before.length - partial.length + 9
   } else if (full === '$repeat()') {
-    insert = '$repeat()\n  \n$end'; cursorOffset = before.length - partial.length + 8
+    insert = '$repeat()\n  \n$end'
+    cursorOffset = before.length - partial.length + 8
   }
+
   const newText = before.slice(0, before.length - partial.length) + insert + after
   form.value.response = newText
   el.innerText = newText
@@ -846,18 +897,30 @@ function removeArgVariant(i: number) {
               <span class="builtin-prefix-hint">{{ t('edit.builtin_locked') }}</span>
             </div>
 
-            <div class="normal-editor-container">
-              <div
-                ref="normalEditorRef"
-                class="normal-editor"
-                contenteditable="true"
-                spellcheck="false"
-                :data-placeholder="isBuiltIn ? '$text.upper($command.output)' : 'Hello $user.mention! $if($args) You said: $args $end'"
-                @input="onNormalInput"
-                @keydown="onNormalKeydown"
-                @blur="removeGhostSpan"
-              ></div>
-              <div v-if="ghostSuggestion" class="ghost-overlay" aria-hidden="true"></div>
+            <div class="editor-wrapper">
+              <!-- Line numbers gutter -->
+              <div class="line-numbers" :style="{ '--line-count': lineCount }">
+                <span v-for="n in lineCount" :key="n">{{ n }}</span>
+              </div>
+
+              <div class="normal-editor-container">
+                <div
+                  ref="normalEditorRef"
+                  class="normal-editor"
+                  contenteditable="true"
+                  spellcheck="false"
+                  :data-placeholder="isBuiltIn ? '$text.upper($command.output)' : 'Hello $user.mention! $if($args){ You said: $args }'"
+                  @input="onNormalInput"
+                  @keydown="onNormalKeydown"
+                  @blur="removeGhostSpan"
+                ></div>
+                <div v-if="ghostSuggestion" class="ghost-overlay" aria-hidden="true"></div>
+
+                <!-- Validation error badge -->
+                <div v-if="validationMessage" class="validation-badge">
+                  {{ validationMessage }}
+                </div>
+              </div>
             </div>
 
             <div class="normal-hint">{{ t('edit.tab_complete') }} &nbsp;·&nbsp; <code>$</code></div>

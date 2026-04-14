@@ -18,7 +18,7 @@ const REF_GROUPS = [
     { token: '$countdown.name.remaining', desc: 'Seconds remaining' },
     { token: '$countdown.name.total',     desc: 'Total duration in seconds' },
     { token: '$countdown.name.elapsed',   desc: 'Seconds elapsed' },
-    { token: '$countdown.name.percent',   desc: 'Percent complete (0–100)' },
+    { token: '$countdown.name.percent',   desc: 'Percent complete (0-100)' },
   ]},
   { label: 'Channel', items: [
     { token: '$channel.name',    desc: 'Channel login name' },
