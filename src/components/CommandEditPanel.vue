@@ -130,42 +130,128 @@ async function load() {
   if (rel) rel.innerHTML = highlightResponse(form.value.response)
 }
 
+// >>> ARG VARIANT SYSTEM
+//
+// Patterns recognised:
+//   $N / $args.N                    plain positional
+//   $if($N = value) ... $end        constrained -> usage label <value>
+//   $if($N = a) + $if($N = b)       multiple -> <a|b>
+//   $args / $query / {args}         generic all-args slot
+//   <$N> typed in chip              free arg (no $if constraint)
+
+function scanArgNums(src: string): { positional: Set<number>; hasGeneric: boolean } {
+  const positional = new Set<number>()
+  for (const m of src.matchAll(/\$(?:args\.)?(\d+)\b/g)) {
+    const n = parseInt(m[1] || '')
+    if (!isNaN(n) && n > 0) positional.add(n)
+  }
+  const hasGeneric = /\$(?:args|query)\b|\{args\}/i.test(src) && positional.size === 0
+  return { positional, hasGeneric }
+}
+
+// Extract literal values from $if($N = value) conditions grouped by argNum
+function extractIfConditions(src: string): Map<number, string[]> {
+  const map = new Map<number, string[]>()
+  for (const m of src.matchAll(/\$if\s*\(\s*\$(?:args\.)?(\d+)\s*=\s*([^)$\s][^)]*?)\s*\)/g)) {
+    const n = parseInt(m[1] ?? '0')
+    const v = (m[2] ?? '').trim()
+    if (!n || !v) continue
+    if (!map.has(n)) map.set(n, [])
+    const arr = map.get(n)!; if (!arr.includes(v)) arr.push(v)
+  }
+  for (const m of src.matchAll(/\$if\s*\(\s*([^)$\s][^)]*?)\s*=\s*\$(?:args\.)?(\d+)\s*\)/g)) {
+    const v = (m[1] ?? '').trim()
+    const n = parseInt(m[2] ?? '0')
+    if (!n || !v) continue
+    if (!map.has(n)) map.set(n, [])
+    const arr = map.get(n)!; if (!arr.includes(v)) arr.push(v)
+  }
+  return map
+}
+
+// Build arg_descs from response.
+// Label from $if: $if($1 = test) -> <test>, multiple -> <a|b>, bare $N -> <$N>
+function buildArgDescs(
+  src: string,
+  existing: { usage: string; desc: string }[]
+): { usage: string; desc: string }[] {
+  const { positional, hasGeneric } = scanArgNums(src)
+  if (positional.size === 0 && !hasGeneric) return []
+  if (hasGeneric) {
+    const prev = existing.find(e => e.usage === '<args>' || e.usage === '<$args>')
+    return [{ usage: '<args>', desc: prev?.desc ?? '' }]
+  }
+  const ifConds = extractIfConditions(src)
+  const sorted  = [...positional].sort((a, b) => a - b)
+  return sorted.map(n => {
+    const vals  = ifConds.get(n) ?? []
+    const usage = vals.length > 0 ? `<${vals.join('|')}>` : `<$${n}>`
+    const prev  = existing.find(e => e.usage === usage || e.usage === `<arg${n}>` || e.usage === `<$${n}>`)
+    return { usage, desc: prev?.desc ?? '' }
+  })
+}
+
+// Remove all $if($N = ...) ... $end blocks for a given argNum
+function removeIfBlockForArg(src: string, argNum: number): string {
+  let result = src
+  let safety = 0
+  while (safety++ < 20) {
+    const ifPat = new RegExp(`\\$if\\(\\s*\\$(?:args\\.)?${argNum}\\s*=[^)]+\\)`)
+    const m = ifPat.exec(result)
+    if (!m) break
+    const start  = m.index
+    const after  = result.slice(start + m[0].length)
+    const endIdx = after.indexOf('$end')
+    if (endIdx === -1) {
+      result = result.slice(0, start) + result.slice(start + m[0].length)
+    } else {
+      result = result.slice(0, start) + result.slice(start + m[0].length + endIdx + 4)
+    }
+  }
+  return result.replace(/  +/g, ' ').trim()
+}
+
+function removeArgFromResponse(src: string, argNum: number): string {
+  let r = removeIfBlockForArg(src, argNum)
+  r = r.replace(new RegExp(`\\$(?:args\\.)?${argNum}\\b`, 'g'), '')
+  return r.replace(/  +/g, ' ').trim()
+}
+
+// Called when user edits a usage chip -- syncs response to match
+function syncResponseFromChip(chipIdx: number, newUsage: string) {
+  const { positional } = scanArgNums(form.value.response || '')
+  const sorted = [...positional].sort((a, b) => a - b)
+  const argNum = sorted[chipIdx]
+  if (!argNum) return
+  let src = form.value.response || ''
+  const trimmed = newUsage.trim()
+  if (!trimmed) {
+    src = removeArgFromResponse(src, argNum)
+  } else if (/^<\$[1-9]\d*>$/.test(trimmed)) {
+    src = removeIfBlockForArg(src, argNum)
+    if (!new RegExp(`\\$(?:args\\.)?${argNum}\\b`).test(src))
+      src = src.trimEnd() + ` $${argNum}`
+  } else if (/^<.+>$/.test(trimmed)) {
+    const values = trimmed.slice(1, -1).split('|').map(v => v.trim()).filter(Boolean)
+    src = removeIfBlockForArg(src, argNum)
+    src = src.replace(new RegExp(`\\$(?:args\\.)?${argNum}\\b`, 'g'), '').replace(/  +/g, ' ').trim()
+    for (const val of values)
+      src = src.trimEnd() + ` $if($${argNum} = ${val}) ${val} $end`
+  }
+  form.value.response = src
+  const nel = normalEditorRef.value
+  if (nel) { nel.innerText = src; applyNormalHighlight(nel, src) }
+  updatePreview()
+}
+
 watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; ruleOpen.value = false } })
 onMounted(() => { if (props.open) load() })
 
-// >>> When response changes, auto-detect arg count and grow arg_descs to match
-// so the user can fill in descriptions for each arg variant
+// Fully re-derive arg_descs whenever response changes
 watch(() => form.value.response, (src) => {
   if (props.isBuiltIn) return
-  const argNums = new Set<number>()
-  for (const m of (src || '').matchAll(/\$args\.(\d+)|\$(\d+)\b/g)) {
-    const n = parseInt((m[1] ?? m[2]) || '')
-    if (!isNaN(n) && n > 0) argNums.add(n)
-  }
-  const hasGenericArgs = /\{args\}|\$args\b/i.test(src || '')
-  const needed = argNums.size > 0 ? Math.max(...argNums) : (hasGenericArgs ? 1 : 0)
-  // Grow or shrink arg_descs to match detected arg count
-  const current = form.value.arg_descs ?? []
-  if (needed > current.length) {
-    for (let i = current.length; i < needed; i++) {
-      const argLabel = argNums.size > 0 ? `<arg${i + 1}>` : '<args>'
-      current.push({ usage: argLabel, desc: '' })
-    }
-    form.value.arg_descs = [...current]
-  } else if (needed === 0 && current.length > 0 && current.every(v => !v.desc)) {
-    // Auto-clear only if user hasn't added any descriptions
-    form.value.arg_descs = []
-  }
+  form.value.arg_descs = buildArgDescs(src, form.value.arg_descs ?? [])
 }, { immediate: false })
-
-function addArgVariant() {
-  form.value.arg_descs = [...(form.value.arg_descs ?? []), { usage: '', desc: '' }]
-}
-function removeArgVariant(i: number) {
-  const d = [...(form.value.arg_descs ?? [])]
-  d.splice(i, 1)
-  form.value.arg_descs = d
-}
 
 let _applyingHighlight = false
 watch(() => form.value.rule, newRule => {
@@ -1722,27 +1808,27 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
           <div v-if="!isBuiltIn" class="field-group">
             <div class="arg-descs-header">
               <label class="field-label">Argument Variants
-                <span class="field-hint">Shown as sub-rows in the command list when ▾ is clicked</span>
+                <span class="field-hint">Auto-detected from response — edit chips to update the response</span>
               </label>
-              <button class="arg-add-btn" @click="addArgVariant" type="button">+ Add variant</button>
             </div>
             <div v-if="!form.arg_descs?.length" class="arg-descs-empty">
-              {{ /\$args|\$\d\b|\{args\}/.test(form.response) ? 'Auto-detected from response — save to confirm, or add custom variants below.' : 'No argument variants. Will be auto-detected from $args, $1, $2… in the response.' }}
+              No variants detected. Use <code class="hint-code">$if($1 = value)</code>, <code class="hint-code">$1</code>, <code class="hint-code">$args</code> in the response.
             </div>
             <div class="arg-descs-list">
               <div v-for="(v, i) in form.arg_descs" :key="i" class="arg-desc-row">
                 <span class="arg-desc-prefix">{{ prefix || '+' }}{{ form.name }}</span>
                 <input
-                  v-model="form.arg_descs[i].usage"
+                  :value="form.arg_descs[i]?.usage ?? ''"
                   class="field-input arg-usage-input"
-                  placeholder="&lt;arg1&gt; [arg2]"
+                  placeholder="<value>"
+                  @change="(e) => { const val = (e.target as HTMLInputElement).value; if (form.arg_descs[i]) { form.arg_descs[i].usage = val; syncResponseFromChip(i, val) } }"
                 />
                 <input
-                  v-model="form.arg_descs[i].desc"
+                  :value="form.arg_descs[i]?.desc ?? ''"
                   class="field-input arg-desc-input"
                   placeholder="What this variant does…"
+                  @change="(e) => { if (form.arg_descs[i]) form.arg_descs[i].desc = (e.target as HTMLInputElement).value }"
                 />
-                <button class="arg-remove-btn" @click="removeArgVariant(i)" type="button">✕</button>
               </div>
             </div>
           </div>
