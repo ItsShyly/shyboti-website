@@ -152,17 +152,19 @@ function scanArgNums(src: string): { positional: Set<number>; hasGeneric: boolea
 // Extract literal values from $if($N = value) conditions grouped by argNum
 function extractIfConditions(src: string): Map<number, string[]> {
   const map = new Map<number, string[]>()
-  for (const m of src.matchAll(/\$if\s*\(\s*\$(?:args\.)?(\d+)\s*=\s*([^)$\s][^)]*?)\s*\)/g)) {
+  // $if($1 = value) or $if($1 = $variable.name)
+  for (const m of src.matchAll(/\$if\s*\(\s*\$(?:args\.)?(\d+)\s*=\s*([^)\s][^)]*?)\s*\)/g)) {
     const n = parseInt(m[1] ?? '0')
     const v = (m[2] ?? '').trim()
-    if (!n || !v || v.startsWith('$')) continue   // skip variable comparisons like $user.name
+    if (!n || !v) continue
     if (!map.has(n)) map.set(n, [])
     const arr = map.get(n)!; if (!arr.includes(v)) arr.push(v)
   }
-  for (const m of src.matchAll(/\$if\s*\(\s*([^)$\s][^)]*?)\s*=\s*\$(?:args\.)?(\d+)\s*\)/g)) {
+  // $if(value = $1) or $if($variable.name = $1)
+  for (const m of src.matchAll(/\$if\s*\(\s*([^)\s][^)]*?)\s*=\s*\$(?:args\.)?(\d+)\s*\)/g)) {
     const v = (m[1] ?? '').trim()
     const n = parseInt(m[2] ?? '0')
-    if (!n || !v || v.startsWith('$')) continue   // skip variable comparisons like $user.name
+    if (!n || !v) continue
     if (!map.has(n)) map.set(n, [])
     const arr = map.get(n)!; if (!arr.includes(v)) arr.push(v)
   }
@@ -185,7 +187,16 @@ function buildArgDescs(
   const sorted  = [...positional].sort((a, b) => a - b)
   return sorted.map(n => {
     const vals  = ifConds.get(n) ?? []
-    const usage = vals.length > 0 ? `<${vals.join('|')}>` : `<$${n}>`
+    // For a single variable comparison like $channel.name, show <$channel.name>
+    // For literal values show <val1|val2>, for bare positional show <$N>
+    let usage: string
+    if (vals.length === 0) {
+      usage = `<$${n}>`
+    } else if (vals.length === 1 && vals[0]!.startsWith('$')) {
+      usage = `<${vals[0]}>`
+    } else {
+      usage = `<${vals.join('|')}>`
+    }
     const prev  = existing.find(e => e.usage === usage || e.usage === `<arg${n}>` || e.usage === `<$${n}>`)
     return { usage, desc: prev?.desc ?? '' }
   })
@@ -1739,9 +1750,26 @@ function addArgVariant() {
 }
 
 function removeArgVariant(i: number) {
-  const d = [...(form.value.arg_descs ?? [])]
-  d.splice(i, 1)
-  form.value.arg_descs = d
+  const descs = form.value.arg_descs ?? []
+  // Find which argNum this chip corresponds to
+  const { positional } = scanArgNums(form.value.response || '')
+  const sorted = [...positional].sort((a, b) => a - b)
+  const argNum = sorted[i]
+  // Remove the arg from the response
+  if (argNum) {
+    const cleaned = removeArgFromResponse(form.value.response || '', argNum)
+    form.value.response = cleaned
+    const nel = normalEditorRef.value
+    if (nel) { nel.innerText = cleaned; applyNormalHighlight(nel, cleaned) }
+    updatePreview()
+    // Re-derive arg_descs from the cleaned response (watch will fire, but be explicit)
+    form.value.arg_descs = buildArgDescs(cleaned, descs.filter((_, idx) => idx !== i))
+  } else {
+    // Fallback: just remove the chip
+    const d = [...descs]
+    d.splice(i, 1)
+    form.value.arg_descs = d
+  }
 }
 </script>
 

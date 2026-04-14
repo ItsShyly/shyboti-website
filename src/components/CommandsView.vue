@@ -628,7 +628,7 @@ onUnmounted(() => { _sseSource?.close() })
               <div class="arg-variant-indent"></div>
               <div class="arg-variant-usage">
                 <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span>
-                <span class="arg-args">{{ v.usage }}</span>
+                <span class="arg-args">{{ v.usage.replace(/^<(\$[^>]+)>$/, '[$1]') }}</span>
               </div>
               <div class="arg-variant-desc">{{ v.desc || '' }}</div>
             </div>
