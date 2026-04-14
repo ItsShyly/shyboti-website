@@ -1,3 +1,4 @@
+
 <script setup lang="ts">
 import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { API } from '../api'
@@ -150,29 +151,58 @@ function scanArgNums(src: string): { positional: Set<number>; hasGeneric: boolea
 }
 
 // Extract literal values from $if($N = value) conditions grouped by argNum
-function extractIfConditions(src: string): Map<number, string[]> {
-  const map = new Map<number, string[]>()
-  // $if($1 = value) or $if($1 = $variable.name)
-  for (const m of src.matchAll(/\$if\s*\(\s*\$(?:args\.)?(\d+)\s*=\s*([^)\s][^)]*?)\s*\)/g)) {
+// Parse a single condition clause like "$1 = test" or "$channel.name = $2"
+function parseCondClause(clause: string): { argNum: number; value: string } | null {
+  clause = clause.trim()
+  let m = clause.match(/^\$(?:args\.)?(\d+)\s*=\s*(.+)$/)
+  if (m) {
     const n = parseInt(m[1] ?? '0')
     const v = (m[2] ?? '').trim()
-    if (!n || !v) continue
-    if (!map.has(n)) map.set(n, [])
-    const arr = map.get(n)!; if (!arr.includes(v)) arr.push(v)
+    return n && v ? { argNum: n, value: v } : null
   }
-  // $if(value = $1) or $if($variable.name = $1)
-  for (const m of src.matchAll(/\$if\s*\(\s*([^)\s][^)]*?)\s*=\s*\$(?:args\.)?(\d+)\s*\)/g)) {
+  m = clause.match(/^(.+?)\s*=\s*\$(?:args\.)?(\d+)\s*$/)
+  if (m) {
     const v = (m[1] ?? '').trim()
     const n = parseInt(m[2] ?? '0')
-    if (!n || !v) continue
-    if (!map.has(n)) map.set(n, [])
-    const arr = map.get(n)!; if (!arr.includes(v)) arr.push(v)
+    return n && v ? { argNum: n, value: v } : null
+  }
+  return null
+}
+
+function extractIfConditions(src: string): Map<number, string[]> {
+  const map = new Map<number, string[]>()
+  for (const m of src.matchAll(/\$if\s*\(([^)]+)\)/g)) {
+    const condStr = m[1] ?? ''
+    const clauses = condStr.split(/\s*&&?\s*/)
+    for (const clause of clauses) {
+      const parsed = parseCondClause(clause)
+      if (!parsed) continue
+      const { argNum, value } = parsed
+      if (!map.has(argNum)) map.set(argNum, [])
+      const arr = map.get(argNum)!
+      if (!arr.includes(value)) arr.push(value)
+    }
   }
   return map
 }
 
+// Detect $if($N) existence-check blocks (no = condition)
+function extractIfExistence(src: string): Set<number> {
+  const set = new Set<number>()
+  for (const m of src.matchAll(/\$if\s*\(\s*\$(?:args\.)?(\d+)\s*\)/g)) {
+    const n = parseInt(m[1] ?? '0')
+    if (n) set.add(n)
+  }
+  return set
+}
+
 // Build arg_descs from response.
-// Label from $if: $if($1 = test) -> <test>, multiple -> <a|b>, bare $N -> <$N>
+// Display format rules:
+//   bare $N / existence $if($N)   -> "$N"
+//   $if($1 = literal)             -> "literal"       (no brackets, it's just text)
+//   $if($1 = $var.name)           -> "<$var.name>"   (brackets because it's a variable)
+//   multiple literals             -> "a|b"
+//   mixed                         -> "a|<$var>"
 function buildArgDescs(
   src: string,
   existing: { usage: string; desc: string }[]
@@ -183,21 +213,24 @@ function buildArgDescs(
     const prev = existing.find(e => e.usage === '<args>' || e.usage === '<$args>')
     return [{ usage: '<args>', desc: prev?.desc ?? '' }]
   }
-  const ifConds = extractIfConditions(src)
-  const sorted  = [...positional].sort((a, b) => a - b)
+  const ifConds    = extractIfConditions(src)
+  const ifExist    = extractIfExistence(src)
+  const sorted     = [...positional].sort((a, b) => a - b)
   return sorted.map(n => {
-    const vals  = ifConds.get(n) ?? []
-    // For a single variable comparison like $channel.name, show <$channel.name>
-    // For literal values show <val1|val2>, for bare positional show <$N>
+    const vals = ifConds.get(n) ?? []
     let usage: string
     if (vals.length === 0) {
-      usage = `<$${n}>`
-    } else if (vals.length === 1 && vals[0]!.startsWith('$')) {
-      usage = `<${vals[0]}>`
+      // bare $N or existence check - show as "$N"
+      usage = `$${n}`
     } else {
-      usage = `<${vals.join('|')}>`
+      // Format each value: variables get <>, literals are plain
+      const parts = vals.map(v => v.startsWith('$') ? `<${v}>` : v)
+      usage = parts.join('|')
     }
-    const prev  = existing.find(e => e.usage === usage || e.usage === `<arg${n}>` || e.usage === `<$${n}>`)
+    const prev = existing.find(e =>
+      e.usage === usage ||
+      e.usage === `$${n}` || e.usage === `<$${n}>` || e.usage === `<arg${n}>`
+    )
     return { usage, desc: prev?.desc ?? '' }
   })
 }
@@ -245,6 +278,75 @@ function removeArgFromResponse(src: string, argNum: number): string {
 //                                     keep the existing block body as plain text, keep bare $N
 //   "<value>" / "<a|b>"          ->  constrained: reuse existing block body inside new $if($N = value)
 //                                     falls back to value name if no existing body
+// Parse a chip usage string into one or more $if blocks to emit.
+// Returns an array of condition strings (what goes inside $if(...)).
+// Examples:
+//   "test"              -> ["$N = test"]
+//   "<$channel.name>"  -> ["$N = $channel.name"]
+//   "test|ok"           -> ["$N = test", "$N = ok"]   (separate blocks)
+//   "test <$ch.name>"  -> ["$N = test", "$N = $ch.name"]
+//   "a & $2 = b"        -> ["$N = a & $2 = b"]        (one compound block)
+//   ""  /  "$N"         -> null (free/bare arg)
+function parseChipToConditions(usage: string, argNum: number): string[] | null {
+  const trimmed = usage.trim()
+  if (!trimmed) return null
+
+  // Bare arg reference: "$N", "N", "$args.N" -> free
+  if (/^\$?(?:args\.)?[1-9]\d*$/.test(trimmed)) return null
+
+  // Explicit compound with & / && - keep as one block, just substitute $N for bare numbers
+  if (/&&?/.test(trimmed)) {
+    // User typed e.g. "test & $2 = test2" or "$1 = test && $2 = test2"
+    // Normalize: if the first part before & has no $N reference, prepend $N =
+    const parts = trimmed.split(/\s*&&?\s*/)
+    const normalized = parts.map((p, i) => {
+      p = p.trim()
+      // If the clause already has a $N = form, keep it
+      if (/\$(?:args\.)?\d+\s*=/.test(p) || /=\s*\$(?:args\.)?\d+/.test(p)) return p
+      // Otherwise it's a bare value for the current argNum (only on first clause)
+      if (i === 0) return `$${argNum} = ${p}`
+      return p
+    })
+    return [normalized.join(' & ')]
+  }
+
+  // Split on | for multiple single-arg variants
+  // But first, split on spaces to detect "literal <$var>" or "word1 word2" patterns
+  // A token is either: <...> (variable), or a plain word (literal value)
+  const tokens: string[] = []
+  const tokenRe = /<(\$[^>]+)>|([^|\s<>]+)/g
+  let tm: RegExpExecArray | null
+  while ((tm = tokenRe.exec(trimmed)) !== null) {
+    if (tm[1]) tokens.push(tm[1])       // variable inside <>
+    else if (tm[2]) tokens.push(tm[2])  // plain literal
+  }
+
+  // If separated by |, each token is its own $if block
+  if (trimmed.includes('|')) {
+    const parts = trimmed.split('|').map(p => p.trim()).filter(Boolean)
+    return parts.map(p => {
+      // Strip <> wrapping from variables
+      const inner = /^<(\$[^>]+)>$/.test(p) ? p.slice(1, -1) : p
+      // If it's a bare positional like $3, make it an existence check
+      if (/^\$(?:args\.)?[1-9]\d*$/.test(inner)) return inner  // will become $if($3)
+      return `$${argNum} = ${inner}`
+    })
+  }
+
+  // Multiple space-separated tokens: "test <$ch.name>" -> two separate $if blocks
+  if (tokens.length > 1) {
+    return tokens.map(tok => {
+      if (/^\$(?:args\.)?[1-9]\d*$/.test(tok)) return tok  // existence: $if($3)
+      return `$${argNum} = ${tok}`
+    })
+  }
+
+  // Single token
+  const single = tokens[0] ?? trimmed
+  if (/^\$(?:args\.)?[1-9]\d*$/.test(single)) return null  // bare $N -> free
+  return [`$${argNum} = ${single}`]
+}
+
 function syncResponseFromChip(chipIdx: number, newUsage: string) {
   const { positional } = scanArgNums(form.value.response || '')
   const sorted = [...positional].sort((a, b) => a - b)
@@ -252,28 +354,25 @@ function syncResponseFromChip(chipIdx: number, newUsage: string) {
   if (!argNum) return
 
   let src = form.value.response || ''
-  const trimmed = newUsage.trim()
+  const body = extractIfBlockBody(src, argNum)
 
-  // Strip outer <> if present to get the inner value
-  const inner  = /^<(.+)>$/.test(trimmed) ? trimmed.slice(1, -1).trim() : trimmed
-  // Free arg: empty, "3", "$3", "$N" all mean "just use $N with no condition"
-  const isFree = !inner || /^\$?[1-9]\d*$/.test(inner)
+  const conditions = parseChipToConditions(newUsage.trim(), argNum)
 
-  if (isFree) {
-    // Preserve the existing block body as plain text, remove the $if wrapper
-    const body = extractIfBlockBody(src, argNum)
-    src = removeAllIfBlocksForArg(src, argNum)
-    src = src.replace(new RegExp(`\\$(?:args\\.)?${argNum}\\b`, 'g'), '').replace(/  +/g, ' ').trim()
+  // Remove all existing $if blocks and bare $N for this arg
+  src = removeAllIfBlocksForArg(src, argNum)
+  src = src.replace(new RegExp(`\\$(?:args\.)?${argNum}\\b`, 'g'), '').replace(/  +/g, ' ').trim()
+
+  if (!conditions) {
+    // Free/bare arg: just $N
     src = src.trimEnd() + ` $${argNum}` + (body ? ` ${body}` : '')
   } else {
-    // Constrained: one $if block per |-separated value
-    const values = inner.split('|').map(v => v.trim()).filter(Boolean)
-    const body   = extractIfBlockBody(src, argNum)  // reuse existing block content
-    src = removeAllIfBlocksForArg(src, argNum)
-    src = src.replace(new RegExp(`\\$(?:args\\.)?${argNum}\\b`, 'g'), '').replace(/  +/g, ' ').trim()
-    for (const val of values) {
-      const blockBody = body || val  // fallback to value name if no existing body
-      src = src.trimEnd() + ` $if($${argNum} = ${val}) $end`
+    for (const cond of conditions) {
+      // Pure positional existence check e.g. "$3"
+      if (/^\$(?:args\.)?[1-9]\d*$/.test(cond)) {
+        src = src.trimEnd() + ` $if(${cond}) $end`
+      } else {
+        src = src.trimEnd() + ` $if(${cond}) $end`
+      }
     }
   }
 
