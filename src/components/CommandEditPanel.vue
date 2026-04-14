@@ -1738,6 +1738,11 @@ function addArgVariant() {
   updatePreview()
 }
 
+function removeArgVariant(i: number) {
+  const d = [...(form.value.arg_descs ?? [])]
+  d.splice(i, 1)
+  form.value.arg_descs = d
+}
 </script>
 
 <template>
@@ -1849,8 +1854,9 @@ function addArgVariant() {
               <label class="field-label">Argument Variants
                 <span class="field-hint">Auto-detected from response - edit chips to update the response</span>
               </label>
+              <button class="arg-add-btn" @click="addArgVariant" type="button">+ Arg</button>
+
             </div>
-            <button class="arg-add-btn" @click="addArgVariant" type="button">+ Arg</button>
             <div v-if="!form.arg_descs?.length" class="arg-descs-empty">
               No variants detected. Use <code class="hint-code">$if($1 = value)</code>, <code class="hint-code">$1</code>, <code class="hint-code">$args</code> in the response.
             </div>
@@ -1869,6 +1875,7 @@ function addArgVariant() {
                   placeholder="What this variant does…"
                   @change="(e) => { if (form.arg_descs[i]) form.arg_descs[i].desc = (e.target as HTMLInputElement).value }"
                 />
+                <button class="arg-remove-btn" @click="removeArgVariant(i)" type="button">✕</button>
               </div>
             </div>
           </div>
