@@ -191,12 +191,12 @@ function buildArgDescs(
   })
 }
 
-// Remove all $if($N = ...) ... $end blocks for a given argNum
-function removeIfBlockForArg(src: string, argNum: number): string {
+// Remove all $if blocks for argNum - handles both $if($N = val) and bare $if($N)
+function removeAllIfBlocksForArg(src: string, argNum: number): string {
   let result = src
   let safety = 0
   while (safety++ < 20) {
-    const ifPat = new RegExp(`\\$if\\(\\s*\\$(?:args\\.)?${argNum}\\s*=[^)]+\\)`)
+    const ifPat = new RegExp(`\\$if\\(\\s*\\$(?:args\\.)?${argNum}\\s*(?:=[^)]*)?\\)`)
     const m = ifPat.exec(result)
     if (!m) break
     const start  = m.index
@@ -211,33 +211,61 @@ function removeIfBlockForArg(src: string, argNum: number): string {
   return result.replace(/  +/g, ' ').trim()
 }
 
+// Extract the body inside the first $if($N ...) ... $end block for argNum
+function extractIfBlockBody(src: string, argNum: number): string {
+  const ifPat = new RegExp(`\\$if\\(\\s*\\$(?:args\\.)?${argNum}\\s*(?:=[^)]*)?\\)`)
+  const m = ifPat.exec(src)
+  if (!m) return ''
+  const after  = src.slice(m.index + m[0].length)
+  const endIdx = after.indexOf('$end')
+  return endIdx === -1 ? '' : after.slice(0, endIdx).trim()
+}
+
 function removeArgFromResponse(src: string, argNum: number): string {
-  let r = removeIfBlockForArg(src, argNum)
+  let r = removeAllIfBlocksForArg(src, argNum)
   r = r.replace(new RegExp(`\\$(?:args\\.)?${argNum}\\b`, 'g'), '')
   return r.replace(/  +/g, ' ').trim()
 }
 
-// Called when user edits a usage chip -- syncs response to match
+// Called when user edits a usage chip -- syncs response to match.
+//
+// Rules:
+//   empty / "3" / "$3" / "<$3>"  ->  free arg: strip $if condition wrapper,
+//                                     keep the existing block body as plain text, keep bare $N
+//   "<value>" / "<a|b>"          ->  constrained: reuse existing block body inside new $if($N = value)
+//                                     falls back to value name if no existing body
 function syncResponseFromChip(chipIdx: number, newUsage: string) {
   const { positional } = scanArgNums(form.value.response || '')
   const sorted = [...positional].sort((a, b) => a - b)
   const argNum = sorted[chipIdx]
   if (!argNum) return
+
   let src = form.value.response || ''
   const trimmed = newUsage.trim()
-  if (!trimmed) {
-    src = removeArgFromResponse(src, argNum)
-  } else if (/^<\$[1-9]\d*>$/.test(trimmed)) {
-    src = removeIfBlockForArg(src, argNum)
-    if (!new RegExp(`\\$(?:args\\.)?${argNum}\\b`).test(src))
-      src = src.trimEnd() + ` $${argNum}`
-  } else if (/^<.+>$/.test(trimmed)) {
-    const values = trimmed.slice(1, -1).split('|').map(v => v.trim()).filter(Boolean)
-    src = removeIfBlockForArg(src, argNum)
+
+  // Strip outer <> if present to get the inner value
+  const inner  = /^<(.+)>$/.test(trimmed) ? trimmed.slice(1, -1).trim() : trimmed
+  // Free arg: empty, "3", "$3", "$N" all mean "just use $N with no condition"
+  const isFree = !inner || /^\$?[1-9]\d*$/.test(inner)
+
+  if (isFree) {
+    // Preserve the existing block body as plain text, remove the $if wrapper
+    const body = extractIfBlockBody(src, argNum)
+    src = removeAllIfBlocksForArg(src, argNum)
     src = src.replace(new RegExp(`\\$(?:args\\.)?${argNum}\\b`, 'g'), '').replace(/  +/g, ' ').trim()
-    for (const val of values)
-      src = src.trimEnd() + ` $if($${argNum} = ${val}) ${val} $end`
+    src = src.trimEnd() + ` $${argNum}` + (body ? ` ${body}` : '')
+  } else {
+    // Constrained: one $if block per |-separated value
+    const values = inner.split('|').map(v => v.trim()).filter(Boolean)
+    const body   = extractIfBlockBody(src, argNum)  // reuse existing block content
+    src = removeAllIfBlocksForArg(src, argNum)
+    src = src.replace(new RegExp(`\\$(?:args\\.)?${argNum}\\b`, 'g'), '').replace(/  +/g, ' ').trim()
+    for (const val of values) {
+      const blockBody = body || val  // fallback to value name if no existing body
+      src = src.trimEnd() + ` $if($${argNum} = ${val}) ${blockBody} $end`
+    }
   }
+
   form.value.response = src
   const nel = normalEditorRef.value
   if (nel) { nel.innerText = src; applyNormalHighlight(nel, src) }
@@ -1808,7 +1836,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
           <div v-if="!isBuiltIn" class="field-group">
             <div class="arg-descs-header">
               <label class="field-label">Argument Variants
-                <span class="field-hint">Auto-detected from response — edit chips to update the response</span>
+                <span class="field-hint">Auto-detected from response - edit chips to update the response</span>
               </label>
             </div>
             <div v-if="!form.arg_descs?.length" class="arg-descs-empty">

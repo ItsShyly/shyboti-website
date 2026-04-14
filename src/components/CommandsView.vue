@@ -154,7 +154,7 @@ async function saveExtras() {
 
 const isBroadcaster = computed(() => channelRole.value?.role === 'broadcaster')
 
-// >>> Expanded row tracking — one set for default, one for custom
+// >>> Expanded row tracking - one set for default, one for custom
 const expandedDefault = ref<Set<string>>(new Set())
 const expandedCustom  = ref<Set<string>>(new Set())
 
