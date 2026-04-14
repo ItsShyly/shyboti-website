@@ -7,7 +7,6 @@
 const KEYWORDS  = ['$if', '$else', '$end', '$foreach', '$repeat', '$define']
 
 // >>> Families where the user chooses a name - e.g. $var.wins, $counter.deaths, $list.quotes
-// >>> These get sh-custom coloring (teal/cyan) to distinguish from fixed builtins
 const CUSTOM_FAMILIES = ['$counter.', '$ucounter.', '$var.', '$uvar.', '$list.']
 
 // >>> Known fixed builtin prefixes (no user-defined name segment)
@@ -27,131 +26,44 @@ function esc(s: string): string {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
 }
 
-/**
- * Recursively wrap $if(...) ... $end blocks with visual containers.
- * Uses a stack to correctly handle nested blocks.
- */
-function wrapIfBlocks(code: string): string {
-  const stack: number[] = []       // positions of '$if' starts
-  const blocks: Array<{ start: number; condEnd: number; end: number }> = []
-  let i = 0
-
-  while (i < code.length) {
-    if (code.startsWith('$if(', i)) {
-      stack.push(i)
-      i += 4
-    } else if (code.startsWith('$end', i) && stack.length > 0) {
-      const start = stack.pop()!
-      // Find the closing parenthesis of the condition
-      let depth = 0
-      let condEnd = -1
-      for (let j = start + 4; j < i; j++) {
-        const ch = code[j]
-        if (ch === '(') depth++
-        else if (ch === ')') {
-          if (depth === 0) { condEnd = j; break }
-          depth--
-        }
-      }
-      if (condEnd !== -1) {
-        blocks.push({ start, condEnd, end: i + 4 })
-      }
-      i += 4
-    } else {
-      i++
-    }
-  }
-
-  if (blocks.length === 0) return code
-
-  // Sort blocks by start position descending (innermost first)
-  blocks.sort((a, b) => b.start - a.start)
-
-  let result = code
-  for (const b of blocks) {
-    const before   = result.slice(0, b.start)
-    const cond     = result.slice(b.start + 4, b.condEnd)
-    const body     = result.slice(b.condEnd + 1, b.end - 4)  // between ) and $end
-    const after    = result.slice(b.end)
-
-    const wrappedCond = wrapIfBlocks(cond) // process nested conditions
-    const wrappedBody = wrapIfBlocks(body) // process nested bodies
-
-    const wrapped = `<span class="if-block-container">` +
-                    `<span class="if-token" contenteditable="false">$if</span>` +
-                    `<span class="if-token" contenteditable="false">(</span>` +
-                    wrappedCond +
-                    `<span class="if-token" contenteditable="false">)</span>` +
-                    wrappedBody +
-                    `<span class="if-token" contenteditable="false">$end</span>` +
-                    `</span>`
-
-    result = before + wrapped + after
-  }
-
-  return result
-}
-
 export function highlightScript(src: string): string {
-  // First, wrap all if-blocks with visual containers
-  let out = wrapIfBlocks(src)
+  let out = '', i = 0
 
-  // Then apply standard token highlighting
-  let i = 0
-  const result: string[] = []
-
-  while (i < out.length) {
-    // Skip already wrapped spans (they contain HTML)
-    if (out.startsWith('<span', i)) {
-      let j = i
-      while (j < out.length && out[j] !== '>') j++
-      j++
-      let depth = 1
-      while (j < out.length && depth > 0) {
-        if (out.startsWith('<span', j)) depth++
-        else if (out.startsWith('</span>', j)) depth--
-        j++
-      }
-      result.push(out.slice(i, j))
-      i = j
-      continue
-    }
-
-    const ch = out[i]!
-
+  while (i < src.length) {
     // >>> Quoted string
-    if (ch === '"' || ch === "'") {
-      const q = ch; let j = i + 1
-      while (j < out.length && out[j] !== q) { if (out[j] === '\\') j++; j++ }
+    if (src[i] === '"' || src[i] === "'") {
+      const q = src[i]!; let j = i + 1
+      while (j < src.length && src[j] !== q) { if (src[j] === '\\') j++; j++ }
       j++
-      result.push(`<span class="sh-string">${esc(out.slice(i, j))}</span>`)
+      out += `<span class="sh-string">${esc(src.slice(i, j))}</span>`
       i = j; continue
     }
 
     // >>> Number
-    if (/\d/.test(ch)) {
+    if (/\d/.test(src[i]!)) {
       let j = i
-      while (j < out.length && /[\d.]/.test(out[j]!)) j++
-      result.push(`<span class="sh-number">${esc(out.slice(i, j))}</span>`)
+      while (j < src.length && /[\d.]/.test(src[j]!)) j++
+      out += `<span class="sh-number">${esc(src.slice(i, j))}</span>`
       i = j; continue
     }
 
-    // >>> $-token (but not inside already wrapped if-token)
-    if (ch === '$') {
+    // >>> $-token
+    if (src[i] === '$') {
       let j = i + 1
-      while (j < out.length && /[\w.]/.test(out[j]!)) j++
-      if (out[j] === '(') {
+      while (j < src.length && /[\w.]/.test(src[j]!)) j++
+      if (src[j] === '(') {
         let depth = 0
-        while (j < out.length) {
-          if (out[j] === '(') depth++
-          else if (out[j] === ')') { depth--; j++; if (depth === 0) break; continue }
+        while (j < src.length) {
+          if (src[j] === '(') depth++
+          else if (src[j] === ')') { depth--; j++; if (depth === 0) break; continue }
           j++
         }
       }
-      const tok = out.slice(i, j)
+      const tok = src.slice(i, j)
 
       let cls: string
       if (KEYWORDS.some(k => tok.startsWith(k))) {
+        // Control flow keyword - blue, with subtle background
         cls = 'sh-kw'
       } else if (CUSTOM_FAMILIES.some(f => tok.startsWith(f))) {
         const family = CUSTOM_FAMILIES.find(f => tok.startsWith(f))!
@@ -159,11 +71,10 @@ export function highlightScript(src: string): string {
         const dotIdx   = rest.indexOf('.')
         const userName = dotIdx === -1 ? rest : rest.slice(0, dotIdx)
         const subProp  = dotIdx === -1 ? '' : rest.slice(dotIdx)
-        result.push(
-          `<span class="sh-builtin">${esc(family)}</span>` +
-          `<span class="sh-custom">${esc(userName)}</span>` +
-          (subProp ? `<span class="sh-builtin">${esc(subProp)}</span>` : '')
-        )
+        const familyHtml  = `<span class="sh-builtin">${esc(family)}</span>`
+        const userHtml    = `<span class="sh-custom">${esc(userName)}</span>`
+        const subHtml     = subProp ? `<span class="sh-builtin">${esc(subProp)}</span>` : ''
+        out += familyHtml + userHtml + subHtml
         i = j; continue
       } else if (BUILTIN_PREFIXES.some(b => tok === b || tok.startsWith(b + '.') || tok.startsWith(b + '('))) {
         cls = 'sh-builtin'
@@ -172,43 +83,30 @@ export function highlightScript(src: string): string {
       } else {
         cls = 'sh-error'
       }
-      result.push(`<span class="${cls}">${esc(tok)}</span>`)
+      out += `<span class="${cls}">${esc(tok)}</span>`
       i = j; continue
     }
 
     // >>> Operators
-    if ('=!<>'.includes(ch)) {
-      const two = out.slice(i, i + 2)
-      if (['==','!=','<=','>='].includes(two)) {
-        result.push(`<span class="sh-op">${esc(two)}</span>`); i += 2; continue
-      }
-      if ('<>'.includes(ch)) {
-        result.push(`<span class="sh-op">${esc(ch)}</span>`); i++; continue
-      }
+    if ('=!<>'.includes(src[i]!)) {
+      const two = src.slice(i, i + 2)
+      if (['==','!=','<=','>='].includes(two)) { out += `<span class="sh-op">${esc(two)}</span>`; i += 2; continue }
+      if ('<>'.includes(src[i]!)) { out += `<span class="sh-op">${esc(src[i]!)}</span>`; i++; continue }
     }
 
     // >>> Keyword operators: and, or, not
-    const wordOp = out.slice(i).match(/^(and|or|not)\b/)
-    if (wordOp) {
-      result.push(`<span class="sh-op">${wordOp[1]}</span>`)
-      i += wordOp[1]!.length; continue
-    }
+    const wordOp = src.slice(i).match(/^(and|or|not)\b/)
+    if (wordOp) { out += `<span class="sh-op">${wordOp[1]}</span>`; i += wordOp[1]!.length; continue }
 
     // >>> Parens / punctuation
-    if ('(),'.includes(ch)) {
-      result.push(`<span class="sh-paren">${esc(ch)}</span>`); i++; continue
-    }
-    if (ch === '.') {
-      result.push(`<span class="sh-paren">.</span>`); i++; continue
-    }
+    if ('(),'.includes(src[i]!)) { out += `<span class="sh-paren">${esc(src[i]!)}</span>`; i++; continue }
+    if (src[i] === '.') { out += `<span class="sh-paren">.</span>`; i++; continue }
 
     // >>> Newline
-    if (ch === '\n') {
-      result.push('\n'); i++; continue
-    }
+    if (src[i] === '\n') { out += '\n'; i++; continue }
 
-    result.push(esc(ch)); i++
+    out += esc(src[i]!); i++
   }
 
-  return result.join('')
+  return out
 }
