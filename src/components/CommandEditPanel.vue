@@ -155,14 +155,14 @@ function extractIfConditions(src: string): Map<number, string[]> {
   for (const m of src.matchAll(/\$if\s*\(\s*\$(?:args\.)?(\d+)\s*=\s*([^)$\s][^)]*?)\s*\)/g)) {
     const n = parseInt(m[1] ?? '0')
     const v = (m[2] ?? '').trim()
-    if (!n || !v) continue
+    if (!n || !v || v.startsWith('$')) continue   // skip variable comparisons like $user.name
     if (!map.has(n)) map.set(n, [])
     const arr = map.get(n)!; if (!arr.includes(v)) arr.push(v)
   }
   for (const m of src.matchAll(/\$if\s*\(\s*([^)$\s][^)]*?)\s*=\s*\$(?:args\.)?(\d+)\s*\)/g)) {
     const v = (m[1] ?? '').trim()
     const n = parseInt(m[2] ?? '0')
-    if (!n || !v) continue
+    if (!n || !v || v.startsWith('$')) continue   // skip variable comparisons like $user.name
     if (!map.has(n)) map.set(n, [])
     const arr = map.get(n)!; if (!arr.includes(v)) arr.push(v)
   }
@@ -262,7 +262,7 @@ function syncResponseFromChip(chipIdx: number, newUsage: string) {
     src = src.replace(new RegExp(`\\$(?:args\\.)?${argNum}\\b`, 'g'), '').replace(/  +/g, ' ').trim()
     for (const val of values) {
       const blockBody = body || val  // fallback to value name if no existing body
-      src = src.trimEnd() + ` $if($${argNum} = ${val}) ${blockBody} $end`
+      src = src.trimEnd() + ` $if($${argNum} = ${val}) $end`
     }
   }
 
@@ -1727,6 +1727,17 @@ function onClickOutside(e: MouseEvent) {
 }
 onMounted(()   => document.addEventListener('mousedown', onClickOutside))
 onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
+
+function addArgVariant() {
+  const { positional } = scanArgNums(form.value.response || '')
+  const next = positional.size > 0 ? Math.max(...positional) + 1 : 1
+  const snippet = ' $' + next
+  form.value.response = (form.value.response || '').trimEnd() + snippet
+  const nel = normalEditorRef.value
+  if (nel) { nel.innerText = form.value.response; applyNormalHighlight(nel, form.value.response) }
+  updatePreview()
+}
+
 </script>
 
 <template>
@@ -1839,6 +1850,7 @@ onUnmounted(() => document.removeEventListener('mousedown', onClickOutside))
                 <span class="field-hint">Auto-detected from response - edit chips to update the response</span>
               </label>
             </div>
+            <button class="arg-add-btn" @click="addArgVariant" type="button">+ Arg</button>
             <div v-if="!form.arg_descs?.length" class="arg-descs-empty">
               No variants detected. Use <code class="hint-code">$if($1 = value)</code>, <code class="hint-code">$1</code>, <code class="hint-code">$args</code> in the response.
             </div>
