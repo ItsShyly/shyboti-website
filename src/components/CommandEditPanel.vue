@@ -1,4 +1,3 @@
-
 <script setup lang="ts">
 import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { API } from '../api'
@@ -133,12 +132,19 @@ async function load() {
 
 // >>> ARG VARIANT SYSTEM
 //
-// Patterns recognised:
-//   $N / $args.N                    plain positional
-//   $if($N = value) ... $end        constrained -> usage label <value>
-//   $if($N = a) + $if($N = b)       multiple -> <a|b>
-//   $args / $query / {args}         generic all-args slot
-//   <$N> typed in chip              free arg (no $if constraint)
+// A "variant" is one complete call signature - everything after the command name.
+// Each $if(...) $end block with potentially multiple && clauses is ONE variant row.
+// Plain $N references (not inside any $if) are "free" positional slots shown as <word>.
+// $args / $query is a generic all-args slot.
+//
+// Display examples:
+//   response: "hello $1"                             -> chip: "<word>"
+//   response: "$if($1 = test) $end"                  -> chip: "test"
+//   response: "$if($1 = test && $2 = $ch.name) $end" -> chip: "test <$ch.name>"
+//   response: "$if($1=a) $end $if($1=b) $end"        -> two chips: "a" and "b"
+//
+// Editing a chip updates the $if condition (or removes it for <word> chips).
+// "+ Arg" appends a new bare $N slot.
 
 function scanArgNums(src: string): { positional: Set<number>; hasGeneric: boolean } {
   const positional = new Set<number>()
@@ -150,7 +156,6 @@ function scanArgNums(src: string): { positional: Set<number>; hasGeneric: boolea
   return { positional, hasGeneric }
 }
 
-// Extract literal values from $if($N = value) conditions grouped by argNum
 // Parse a single condition clause like "$1 = test" or "$channel.name = $2"
 function parseCondClause(clause: string): { argNum: number; value: string } | null {
   clause = clause.trim()
@@ -169,40 +174,44 @@ function parseCondClause(clause: string): { argNum: number; value: string } | nu
   return null
 }
 
-function extractIfConditions(src: string): Map<number, string[]> {
-  const map = new Map<number, string[]>()
+// A parsed variant: one $if block (possibly with && compound conditions)
+interface VariantEntry {
+  constraints: Map<number, string>  // argNum -> value (e.g. 1->"test", 2->"$channel.name")
+  condStr: string                   // raw condition string inside $if(...) for reconstruction
+}
+
+// Extract all $if(...) blocks as VariantEntry[], plus set of bare $N references
+function extractVariants(src: string): { variants: VariantEntry[]; bareArgs: Set<number> } {
+  const variants: VariantEntry[] = []
+  const usedInIf = new Set<number>()
+
   for (const m of src.matchAll(/\$if\s*\(([^)]+)\)/g)) {
     const condStr = m[1] ?? ''
     const clauses = condStr.split(/\s*&&?\s*/)
+    const constraints = new Map<number, string>()
     for (const clause of clauses) {
       const parsed = parseCondClause(clause)
       if (!parsed) continue
-      const { argNum, value } = parsed
-      if (!map.has(argNum)) map.set(argNum, [])
-      const arr = map.get(argNum)!
-      if (!arr.includes(value)) arr.push(value)
+      constraints.set(parsed.argNum, parsed.value)
+      usedInIf.add(parsed.argNum)
     }
+    variants.push({ constraints, condStr })
   }
-  return map
-}
 
-// Detect $if($N) existence-check blocks (no = condition)
-function extractIfExistence(src: string): Set<number> {
-  const set = new Set<number>()
-  for (const m of src.matchAll(/\$if\s*\(\s*\$(?:args\.)?(\d+)\s*\)/g)) {
-    const n = parseInt(m[1] ?? '0')
-    if (n) set.add(n)
+  // Bare $N = positional args NOT inside any $if condition
+  const bareArgs = new Set<number>()
+  const withoutIfs = src.replace(/\$if\s*\([^)]+\)/g, '')
+  for (const m of withoutIfs.matchAll(/\$(?:args\.)?(\d+)\b/g)) {
+    const n = parseInt(m[1] || '')
+    if (!isNaN(n) && n > 0 && !usedInIf.has(n)) bareArgs.add(n)
   }
-  return set
+
+  return { variants, bareArgs }
 }
 
 // Build arg_descs from response.
-// Display format rules:
-//   bare $N / existence $if($N)   -> "$N"
-//   $if($1 = literal)             -> "literal"       (no brackets, it's just text)
-//   $if($1 = $var.name)           -> "<$var.name>"   (brackets because it's a variable)
-//   multiple literals             -> "a|b"
-//   mixed                         -> "a|<$var>"
+// Each $if block -> one chip showing full signature (e.g. "test <$ch.name>").
+// Each bare $N   -> one chip showing "<word>" (it's just a positional slot, not a variant).
 function buildArgDescs(
   src: string,
   existing: { usage: string; desc: string }[]
@@ -213,26 +222,38 @@ function buildArgDescs(
     const prev = existing.find(e => e.usage === '<args>' || e.usage === '<$args>')
     return [{ usage: '<args>', desc: prev?.desc ?? '' }]
   }
-  const ifConds    = extractIfConditions(src)
-  const ifExist    = extractIfExistence(src)
-  const sorted     = [...positional].sort((a, b) => a - b)
-  return sorted.map(n => {
-    const vals = ifConds.get(n) ?? []
-    let usage: string
-    if (vals.length === 0) {
-      // bare $N or existence check - show as "$N"
-      usage = `$${n}`
-    } else {
-      // Format each value: variables get <>, literals are plain
-      const parts = vals.map(v => v.startsWith('$') ? `<${v}>` : v)
-      usage = parts.join('|')
+
+  const { variants, bareArgs } = extractVariants(src)
+  const result: { usage: string; desc: string }[] = []
+
+  // One chip per $if block: build space-separated signature ordered by argNum
+  for (const v of variants) {
+    if (v.constraints.size === 0) continue
+    const maxArg = Math.max(...v.constraints.keys())
+    const parts: string[] = []
+    for (let n = 1; n <= maxArg; n++) {
+      const val = v.constraints.get(n)
+      if (val !== undefined) {
+        parts.push(val.startsWith('$') ? `<${val}>` : val)
+      } else {
+        parts.push('<word>')
+      }
     }
-    const prev = existing.find(e =>
-      e.usage === usage ||
-      e.usage === `$${n}` || e.usage === `<$${n}>` || e.usage === `<arg${n}>`
-    )
-    return { usage, desc: prev?.desc ?? '' }
-  })
+    const usage = parts.join(' ')
+    const prev = existing.find(e => e.usage === usage)
+    result.push({ usage, desc: prev?.desc ?? '' })
+  }
+
+  // One chip per bare $N: show as "<word>"
+  for (const n of [...bareArgs].sort((a, b) => a - b)) {
+    const usage = '<word>'
+    const prev = existing.find(e => e.usage === usage || e.usage === `${n}` || e.usage === `<arg${n}>`)
+    if (!result.some(r => r.usage === usage)) {
+      result.push({ usage, desc: prev?.desc ?? '' })
+    }
+  }
+
+  return result
 }
 
 // Remove all $if blocks for argNum - handles both $if($N = val) and bare $if($N)
@@ -255,7 +276,7 @@ function removeAllIfBlocksForArg(src: string, argNum: number): string {
   return result.replace(/  +/g, ' ').trim()
 }
 
-// Extract the body inside the first $if($N ...) ... $end block for argNum
+// Extract the body inside the first $if block that involves argNum
 function extractIfBlockBody(src: string, argNum: number): string {
   const ifPat = new RegExp(`\\$if\\(\\s*\\$(?:args\\.)?${argNum}\\s*(?:=[^)]*)?\\)`)
   const m = ifPat.exec(src)
@@ -271,108 +292,75 @@ function removeArgFromResponse(src: string, argNum: number): string {
   return r.replace(/  +/g, ' ').trim()
 }
 
-// Called when user edits a usage chip -- syncs response to match.
+// Parse a chip usage string (full call signature) into a single $if condition string.
+// Usage is space-separated; position N corresponds to arg $N.
+// Tokens:
+//   "test"        -> $N = test       (literal constraint)
+//   "<$ch.name>"  -> $N = $ch.name   (variable constraint)
+//   "<word>"      -> no constraint   (free slot, skip)
+// Multiple constrained positions are joined with &&.
+// Returns null if no positions are constrained (free/bare arg).
 //
-// Rules:
-//   empty / "3" / "$3" / "<$3>"  ->  free arg: strip $if condition wrapper,
-//                                     keep the existing block body as plain text, keep bare $N
-//   "<value>" / "<a|b>"          ->  constrained: reuse existing block body inside new $if($N = value)
-//                                     falls back to value name if no existing body
-// Parse a chip usage string into one or more $if blocks to emit.
-// Returns an array of condition strings (what goes inside $if(...)).
 // Examples:
-//   "test"              -> ["$N = test"]
-//   "<$channel.name>"  -> ["$N = $channel.name"]
-//   "test|ok"           -> ["$N = test", "$N = ok"]   (separate blocks)
-//   "test <$ch.name>"  -> ["$N = test", "$N = $ch.name"]
-//   "a & $2 = b"        -> ["$N = a & $2 = b"]        (one compound block)
-//   ""  /  "$N"         -> null (free/bare arg)
-function parseChipToConditions(usage: string, argNum: number): string[] | null {
+//   "test"             -> "$1 = test"
+//   "test <$ch.name>"  -> "$1 = test && $2 = $ch.name"
+//   "<word>"           -> null
+//   "<word> test"      -> "$2 = test"
+function parseChipToCondition(usage: string): string | null {
   const trimmed = usage.trim()
   if (!trimmed) return null
 
-  // Bare arg reference: "$N", "N", "$args.N" -> free
-  if (/^\$?(?:args\.)?[1-9]\d*$/.test(trimmed)) return null
+  const rawTokens = trimmed.split(/\s+/)
+  const clauses: string[] = []
 
-  // Explicit compound with & / && - keep as one block, just substitute $N for bare numbers
-  if (/&&?/.test(trimmed)) {
-    // User typed e.g. "test & $2 = test2" or "$1 = test && $2 = test2"
-    // Normalize: if the first part before & has no $N reference, prepend $N =
-    const parts = trimmed.split(/\s*&&?\s*/)
-    const normalized = parts.map((p, i) => {
-      p = p.trim()
-      // If the clause already has a $N = form, keep it
-      if (/\$(?:args\.)?\d+\s*=/.test(p) || /=\s*\$(?:args\.)?\d+/.test(p)) return p
-      // Otherwise it's a bare value for the current argNum (only on first clause)
-      if (i === 0) return `$${argNum} = ${p}`
-      return p
-    })
-    return [normalized.join(' & ')]
+  rawTokens.forEach((tok, i) => {
+    const argN = i + 1
+    if (tok === '<word>' || tok === '') return  // free slot
+    const varMatch = tok.match(/^<(\$[^>]+)>$/)
+    if (varMatch) { clauses.push(`$${argN} = ${varMatch[1]}`); return }
+    if (/^\$?(?:args\.)?[1-9]\d*$/.test(tok)) return  // bare $N = free
+    clauses.push(`$${argN} = ${tok}`)
+  })
+
+  if (clauses.length === 0) return null
+  return clauses.join(' && ')
+}
+
+// Replace a specific $if(condStr) ... $end block's condition with newCond,
+// or remove the whole block (replacing with bodyText) if newCond is null.
+function replaceIfBlock(src: string, oldCondStr: string, bodyText: string, newCond: string | null): string {
+  const escaped = oldCondStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pat = new RegExp(`\\$if\\(\\s*${escaped}\\s*\\)([\\s\\S]*?)\\$end`)
+  const m = pat.exec(src)
+  if (!m) return src
+  if (newCond !== null) {
+    return src.slice(0, m.index) + `$if(${newCond})${m[1]}$end` + src.slice(m.index + m[0].length)
   }
-
-  // Split on | for multiple single-arg variants
-  // But first, split on spaces to detect "literal <$var>" or "word1 word2" patterns
-  // A token is either: <...> (variable), or a plain word (literal value)
-  const tokens: string[] = []
-  const tokenRe = /<(\$[^>]+)>|([^|\s<>]+)/g
-  let tm: RegExpExecArray | null
-  while ((tm = tokenRe.exec(trimmed)) !== null) {
-    if (tm[1]) tokens.push(tm[1])       // variable inside <>
-    else if (tm[2]) tokens.push(tm[2])  // plain literal
-  }
-
-  // If separated by |, each token is its own $if block
-  if (trimmed.includes('|')) {
-    const parts = trimmed.split('|').map(p => p.trim()).filter(Boolean)
-    return parts.map(p => {
-      // Strip <> wrapping from variables
-      const inner = /^<(\$[^>]+)>$/.test(p) ? p.slice(1, -1) : p
-      // If it's a bare positional like $3, make it an existence check
-      if (/^\$(?:args\.)?[1-9]\d*$/.test(inner)) return inner  // will become $if($3)
-      return `$${argNum} = ${inner}`
-    })
-  }
-
-  // Multiple space-separated tokens: "test <$ch.name>" -> two separate $if blocks
-  if (tokens.length > 1) {
-    return tokens.map(tok => {
-      if (/^\$(?:args\.)?[1-9]\d*$/.test(tok)) return tok  // existence: $if($3)
-      return `$${argNum} = ${tok}`
-    })
-  }
-
-  // Single token
-  const single = tokens[0] ?? trimmed
-  if (/^\$(?:args\.)?[1-9]\d*$/.test(single)) return null  // bare $N -> free
-  return [`$${argNum} = ${single}`]
+  return (src.slice(0, m.index) + ' ' + bodyText + ' ' + src.slice(m.index + m[0].length)).replace(/  +/g, ' ').trim()
 }
 
 function syncResponseFromChip(chipIdx: number, newUsage: string) {
-  const { positional } = scanArgNums(form.value.response || '')
-  const sorted = [...positional].sort((a, b) => a - b)
-  const argNum = sorted[chipIdx]
-  if (!argNum) return
-
+  const { variants, bareArgs } = extractVariants(form.value.response || '')
   let src = form.value.response || ''
-  const body = extractIfBlockBody(src, argNum)
 
-  const conditions = parseChipToConditions(newUsage.trim(), argNum)
+  const isVariant = chipIdx < variants.length
 
-  // Remove all existing $if blocks and bare $N for this arg
-  src = removeAllIfBlocksForArg(src, argNum)
-  src = src.replace(new RegExp(`\\$(?:args\.)?${argNum}\\b`, 'g'), '').replace(/  +/g, ' ').trim()
-
-  if (!conditions) {
-    // Free/bare arg: just $N
-    src = src.trimEnd() + ` $${argNum}` + (body ? ` ${body}` : '')
+  if (isVariant) {
+    const v = variants[chipIdx]!
+    const newCond = parseChipToCondition(newUsage.trim())
+    if (newCond === null) {
+      // Cleared to <word>: remove $if block, keep body text inline
+      const firstArgNum = v.constraints.keys().next().value ?? 1
+      const body = extractIfBlockBody(src, firstArgNum)
+      src = replaceIfBlock(src, v.condStr, body, null)
+    } else {
+      src = replaceIfBlock(src, v.condStr, '', newCond)
+    }
   } else {
-    for (const cond of conditions) {
-      // Pure positional existence check e.g. "$3"
-      if (/^\$(?:args\.)?[1-9]\d*$/.test(cond)) {
-        src = src.trimEnd() + ` $if(${cond}) $end`
-      } else {
-        src = src.trimEnd() + ` $if(${cond}) $end`
-      }
+    // Bare arg chip: if user typed a real constraint, convert to $if block
+    const newCond = parseChipToCondition(newUsage.trim())
+    if (newCond !== null) {
+      src = src.trimEnd() + ` $if(${newCond}) $end`
     }
   }
 
@@ -471,22 +459,14 @@ function tokenClass(tok: string): string {
 }
 function allTokens() { return [...WRAPPERS, ...OPERATORS, ...ACTIONS, ...VALUES, ...PARAMS.value] }
 
-// Inline SVG puzzle piece 
-// All pieces: tab-left (sticks OUT left), configurable right side
-// rightFlat: wrapper open/close pieces - they terminate, nothing slots into them
-// rightNotch (IN): value, operator, action, param - something can slot in from right
-// rightFlat overrides the right-side shape to flat (used for <do and >) wrapper tokens)
 function puzzleSVG(label: string, kind: PieceKind, rightFlat = false, leftTabOverride?: boolean, displayLabel?: string): string {
   const H = 32, R = 4, TW = 8, TH = 8, TR = 2.5, PX = 12, CW = 6.6
   const sizeLabel = (displayLabel !== undefined && displayLabel.length > label.length) ? displayLabel : label
   const bw = Math.max(52, Math.ceil(sizeLabel.length * CW) + PX * 2)
 
-  // Grammar: wrapper=flat-L|notch-R, all others=tab-L|notch-R
-  // leftTab/rightFlat can be overridden per-call for structural tokens like <do and >)
   const leftTab    = leftTabOverride ?? (kind !== 'wrapper')
   const rightNotch = rightFlat ? false : true
 
-  // Body at x=0..bw; tab (if any) protrudes LEFT into -TH..0
   const x0 = 0, y0 = 0, x1 = bw, y1 = H
   const midY = H / 2
   const vbX  = leftTab ? -TH : 0
@@ -520,11 +500,8 @@ function puzzleSVG(label: string, kind: PieceKind, rightFlat = false, leftTabOve
     + `</svg>`
 }
 
-// >>> Wrap a puzzle SVG as an atomic inline token
-// >>> data-tok is used by getPlainText to recover the raw token string
 function puzzleSpan(tok: string, kind: PieceKind, rightFlat = false, leftTabOverride?: boolean, displayLabel?: string): string {
   const svg = puzzleSVG(tok, kind, rightFlat, leftTabOverride, displayLabel)
-  // >>> draggable="true" enables reordering; data-tok-drag marks it as a draggable piece
   return `<span class="pz-tok" data-tok="${tok}" contenteditable="false" draggable="true" data-tok-drag="1" style="display:inline-block;vertical-align:middle;margin:0 2px;cursor:grab">${svg}</span>`
 }
 
@@ -548,7 +525,6 @@ function highlight(src: string): string {
   function renderPH(ph: string): string {
     const cls   = PH_CLASS[ph] ?? ''
     const label = PH_LABEL[ph] ?? '?'
-    // >>> Render placeholder as a puzzle piece of appropriate kind
     const kindMap: Record<string, PieceKind> = {
       [PH.value]: 'value', [PH.param]: 'param', [PH.op]: 'operator',
       [PH.action]: 'action', [PH.arg]: 'param',
@@ -579,11 +555,8 @@ function highlight(src: string): string {
         else if (cj === ')') { if (depth === 0) break; depth-- }
         inner += cj; j++
       }
-      // >>> highlight(inner) processes <do...> and leaves do-block intentionally unclosed.
-      // >>> We inject >)  into that open do-block, then close do-block, then close if-block.
       const innerHtml = highlight(inner)
       out += `<span class="if-block">${puzzleSpan('$if(', 'wrapper', true)}${innerHtml}${puzzleSpan('>)', 'wrapper', true, true, '')}</span></span>`
-      // >>> The extra </span> closes the do-block that highlight(inner) left open
       i = j + 1; continue
     }
 
@@ -600,39 +573,31 @@ function highlight(src: string): string {
     }
 
     if (src.startsWith('<do', i)) {
-      // >>> find closing > (not consumed by $if - $if's parser stops at ')' not '>')
       let j = i + 3
       while (j < src.length && src.charAt(j) !== '>') j++
       const inner = src.slice(i + 3, j)
-      // >>> <do has notch-right (things slot into it); no standalone '>' piece needed here -
-      // >>> the closing '>' is part of the >)  piece rendered by the $if wrapper
-      // >>> <do shows 'then do'; leave do-block UNCLOSED so $if handler can inject >)  inside it
       out += `<span class="do-block">${puzzleSpan('<do', 'wrapper', false, true, 'then do')}${highlight(inner.trim())}`
-      // intentionally no </span> here - $if handler closes it after appending >) piece
       i = j + 1; continue
     }
 
-    // >>> Action: [name...] with known name, OR [PH...] skeleton with placeholder action
     const actionMatch = src.slice(i).match(/^\[(replace|remove|delete|prepend|append|send|stop)/)
     const actionPhMatch = src.charAt(i) === '[' && (PH_SET.has(src.charAt(i + 1)) || src.charAt(i + 1) === ']')
     if (actionMatch || actionPhMatch) {
       if (actionPhMatch) {
-        // >>> Skeleton [▪action▪arg] - collect everything between [ and matching ]
-        i++ // <<<< skip '['
+        i++
         const phArgs: string[] = []
         while (i < src.length && src.charAt(i) !== ']') {
           if (PH_SET.has(src.charAt(i))) { phArgs.push(src.charAt(i)); i++ }
-          else i++ // <<< skip unexpected chars
+          else i++
         }
-        if (src.charAt(i) === ']') i++ // skip ']'
-        // >>> render as action-block: first PH is the action slot, rest are arg slots
+        if (src.charAt(i) === ']') i++
         const actionSlot = phArgs[0] ? renderPH(phArgs[0]) : ''
         const argSlots   = phArgs.slice(1).map(renderPH).join('')
         out += `<span class="action-block" style="display:inline-flex;align-items:center">${actionSlot}${argSlots}</span>`
         continue
       }
       const name = actionMatch![1] ?? ''
-      let j = i + 1 + name.length  // <<< skip '[' + name letters
+      let j = i + 1 + name.length
       let args: string[] = []
       let foundClose = false
       while (j < src.length) {
@@ -660,7 +625,6 @@ function highlight(src: string): string {
       i = j; continue
     }
 
-    // >>> scan a plain chunk (no special tokens), then pass to colourTokens
     let chunk = ''
     while (i < src.length) {
       if (PH_SET.has(src.charAt(i))) break
@@ -674,14 +638,12 @@ function highlight(src: string): string {
   return out
 }
 
-// >>> colourSegment no longer needed separately - highlight() handles everything
 function colourSegment(src: string): string { return highlight(src) }
 
 function escHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
-// >>> colourTokens: operates on RAW (un-escaped) source text now, returns HTML with puzzle spans
 function colourTokens(raw: string): string {
   const paramKeys = userParams.value.map(p => p.key).join('|')
   const paramPat  = paramKeys ? `|\\{(?:${paramKeys})\\}` : ''
@@ -696,7 +658,6 @@ function colourTokens(raw: string): string {
   return raw.replace(pat, tok => {
     const k = tokenKind(tok)
     if (k) return puzzleSpan(tok, k)
-    // >>> structural punctuation: keep plain but styled
     if (tok === '<do' || tok === '<do>' || tok === '>') return `<span class="tk-wrapper" style="vertical-align:middle">${escHtml(tok)}</span>`
     return escHtml(tok)
   })
@@ -819,20 +780,19 @@ let   _normalHighlighting = false
 let   _ghostEl: HTMLElement | null = null
 
 // >>> Ghost autocomplete - shown inline after cursor
-const ghostSuggestion = ref('')  // <<< the suffix to complete (e.g. 'f(' when you typed '$i')
-const ghostFull       = ref('')  // <<< the full match that would be inserted
-const ghostMatches    = ref<string[]>([])  // <<< all matches for cycling
-const ghostMatchIdx   = ref(0)             // <<< current cycle position
+const ghostSuggestion = ref('')
+const ghostFull       = ref('')
+const ghostMatches    = ref<string[]>([])
+const ghostMatchIdx   = ref(0)
 
 // >>> Autocomplete dropdown for Normal Mode
 const nmAcVisible  = ref(false)
 const nmAcItems    = ref<{ token: string; group: string; desc: string }[]>([])
 const nmAcIndex    = ref(0)
 const nmAcPos      = ref({ top: 0, left: 0 })
-const nmAcPartial  = ref('')  // <<< current partial text, e.g. '$co'
+const nmAcPartial  = ref('')
 const nmAcRef      = ref<HTMLDivElement | null>(null)
 
-//  >>>  All completable tokens for Normal Mode
 const COMPLETIONS = [
   '$if()', '$else', '$end', '$foreach()', '$repeat()', '$define',
   '$counter.', '$ucounter.', '$var.', '$uvar.', '$list.',
@@ -861,7 +821,6 @@ const COMPLETIONS = [
   '$index', '$last_error',
 ]
 
-//  >>>  Variable reference data
 const REF_GROUPS = [
   { label: 'Control Flow', items: [
     { token: '$if(condition)', desc: 'Conditional block', example: '$if($user.is(mod))' },
@@ -969,12 +928,7 @@ const REF_GROUPS = [
   ]},
 ]
 
-//  Render a reference token with user-supplied name segments in a distinct colour.
-// Two cases:
-//   1. Name after a dotted prefix: $counter.name, $var.name, $list.name etc.
-//   2. Argument placeholders inside (): url, user, min, max, seconds, fmt, etc.
 function renderRefToken(token: string): string {
-  // Step 1: highlight the user-chosen name after known dotted prefixes
   let result = token
   const namePrefixes = ['$counter.', '$ucounter.', '$var.', '$uvar.', '$list.']
   for (const prefix of namePrefixes) {
@@ -987,13 +941,9 @@ function renderRefToken(token: string): string {
       break
     }
   }
-  // Step 2: highlight word-args inside () - these are always placeholder names
-  // e.g. $http.get(url), $mod.timeout(user,seconds), $random.int(min,max)
-  // Match the paren section and wrap each comma-separated word in a span.
   result = result.replace(/\(([^)]+)\)/g, (_, inner: string) => {
     const colored = inner.split(',').map(part => {
       const trimmed = part.trim()
-      // Only color pure word tokens (no $ or special chars) - these are param names
       if (/^[a-zA-Z_]\w*$/.test(trimmed)) {
         return `<span class="ref-token-name">${trimmed}</span>`
       }
@@ -1004,9 +954,7 @@ function renderRefToken(token: string): string {
   return result
 }
 
-// COMPLETIONS_META: flat list with group+desc for dropdown display
 const COMPLETIONS_META: { token: string; group: string; desc: string }[] = [
-  // Control Flow
   { token: '$if()',       group: 'Control Flow', desc: 'Conditional block' },
   { token: '$else',       group: 'Control Flow', desc: 'Else branch' },
   { token: '$end',        group: 'Control Flow', desc: 'End block' },
@@ -1014,15 +962,11 @@ const COMPLETIONS_META: { token: string; group: string; desc: string }[] = [
   { token: '$repeat()',   group: 'Control Flow', desc: 'Repeat n times' },
   { token: '$define',     group: 'Control Flow', desc: 'Define a macro' },
   { token: '$index',      group: 'Control Flow', desc: 'Current loop index' },
-  // Counters
   { token: '$counter.',   group: 'Counters', desc: 'Increment +1, return value' },
   { token: '$ucounter.',  group: 'Counters', desc: 'Per-user counter' },
-  // Variables
   { token: '$var.',       group: 'Variables', desc: 'Read/write variable' },
   { token: '$uvar.',      group: 'Variables', desc: 'Per-user variable' },
-  // Lists
   { token: '$list.',      group: 'Lists', desc: 'Random item from list' },
-  // User
   { token: '$user',           group: 'User', desc: 'Sending user (login name)' },
   { token: '$user.name',      group: 'User', desc: 'Login name' },
   { token: '$user.display',   group: 'User', desc: 'Display name' },
@@ -1034,33 +978,27 @@ const COMPLETIONS_META: { token: string; group: string; desc: string }[] = [
   { token: '$user.is(broadcaster)', group: 'User', desc: 'true/false' },
   { token: '$target.name',    group: 'User', desc: 'First arg as user' },
   { token: '$target.mention', group: 'User', desc: '@target' },
-  // Message
   { token: '$message.text',   group: 'Message', desc: 'Full message text' },
   { token: '$message.id',     group: 'Message', desc: 'Message ID' },
   { token: '$message.length', group: 'Message', desc: 'Character count' },
-  // Arguments
   { token: '$args',       group: 'Arguments', desc: 'All arguments' },
   { token: '$args.count', group: 'Arguments', desc: 'Number of args' },
   { token: '$1',          group: 'Arguments', desc: 'First arg' },
   { token: '$2',          group: 'Arguments', desc: 'Second arg' },
   { token: '$3',          group: 'Arguments', desc: 'Third arg' },
   { token: '$query',      group: 'Arguments', desc: 'Alias for $args' },
-  // Channel
   { token: '$channel.name',    group: 'Channel', desc: 'Channel login' },
   { token: '$channel.title',   group: 'Channel', desc: 'Stream title' },
   { token: '$channel.game',    group: 'Channel', desc: 'Current game' },
   { token: '$channel.viewers', group: 'Channel', desc: 'Viewer count' },
   { token: '$channel.isLive',  group: 'Channel', desc: 'true/false' },
   { token: '$channel.uptime',  group: 'Channel', desc: 'Stream uptime' },
-  // Command
   { token: '$command.output', group: 'Command', desc: 'Built-in command output' },
   { token: '$command.uses',   group: 'Command', desc: 'Times used' },
   { token: '$command.name',   group: 'Command', desc: 'Command name' },
-  // Random
   { token: '$random.int(,)',    group: 'Random', desc: 'Random integer' },
   { token: '$random.pick(,)',   group: 'Random', desc: 'Random from list' },
   { token: '$random.chance()',  group: 'Random', desc: 'true with pct% chance' },
-  // Text
   { token: '$text.upper()',    group: 'Text', desc: 'Uppercase' },
   { token: '$text.lower()',    group: 'Text', desc: 'Lowercase' },
   { token: '$text.replace(,,)', group: 'Text', desc: 'Replace substring' },
@@ -1068,21 +1006,17 @@ const COMPLETIONS_META: { token: string; group: string; desc: string }[] = [
   { token: '$text.len()',       group: 'Text', desc: 'String length' },
   { token: '$text.trim()',      group: 'Text', desc: 'Trim whitespace' },
   { token: '$calc()',           group: 'Text', desc: 'Math expression' },
-  // Time
   { token: '$time.now',        group: 'Time', desc: 'Current ISO timestamp' },
   { token: '$time.unix',       group: 'Time', desc: 'Unix timestamp (seconds)' },
   { token: '$time.ago()',      group: 'Time', desc: 'Human time since ts' },
   { token: '$time.format(,)',  group: 'Time', desc: 'Format timestamp' },
-  // HTTP
   { token: '$http.get()',      group: 'HTTP', desc: 'GET request' },
   { token: '$http.post(,)',    group: 'HTTP', desc: 'POST request' },
   { token: '$http.json(,)',    group: 'HTTP', desc: 'GET + extract JSON path' },
-  // Twitch
   { token: '$twitch.uptime',   group: 'Twitch', desc: 'Stream uptime' },
   { token: '$twitch.game',     group: 'Twitch', desc: 'Current game' },
   { token: '$twitch.title',    group: 'Twitch', desc: 'Stream title' },
   { token: '$twitch.followers()', group: 'Twitch', desc: 'Follower count' },
-  // Moderation
   { token: '$mod.timeout(,)',  group: 'Moderation', desc: 'Timeout user' },
   { token: '$mod.ban()',       group: 'Moderation', desc: 'Ban user' },
   { token: '$mod.delete()',    group: 'Moderation', desc: 'Delete message' },
@@ -1108,8 +1042,6 @@ const GROUP_COLORS: Record<string, { bg: string; text: string }> = {
 
 function updatePreview() {
   try {
-    // >>> Don't resetMockState here - real values were seeded at load time.
-    // >>> Resetting would wipe real counter values every keystroke.
     previewOutput.value = mockEval(form.value.response, mockCtx.value)
   } catch { previewOutput.value = '[preview error]' }
 }
@@ -1118,15 +1050,12 @@ watch(() => form.value.response, () => updatePreview(), { flush: 'post' })
 
 watch(mockCtx, () => updatePreview(), { deep: true })
 
-//  Normal editor input handler 
-
 const BUILTIN_PREFIX = '$command.output'
 
 function onNormalInput() {
   const el = normalEditorRef.value; if (!el) return
-  removeGhostSpan()  // remove ghost before reading text so it doesn't pollute innerText
+  removeGhostSpan()
   let text = el.innerText.replace(/\n$/, '')
-  // Guard: built-in commands must always start with the locked prefix
   if (props.isBuiltIn && !text.startsWith(BUILTIN_PREFIX)) {
     text = BUILTIN_PREFIX + (text.startsWith('$command.outpu') ? text.slice(text.indexOf(BUILTIN_PREFIX.slice(-1)) + 1) : '\n' + text)
     el.innerText = text
@@ -1150,7 +1079,6 @@ function getTextOffset(el: HTMLElement): number {
   const sel = window.getSelection(); if (!sel?.rangeCount) return 0
   const range = sel.getRangeAt(0)
   const pre = range.cloneRange(); pre.selectNodeContents(el); pre.setEnd(range.startContainer, range.startOffset)
-  // Subtract any ghost-inline text that got included (ghost spans are before cursor in DOM order sometimes)
   let ghost = 0
   el.querySelectorAll('.ghost-inline').forEach(g => {
     if (pre.intersectsNode(g)) ghost += (g.textContent?.length ?? 0)
@@ -1197,7 +1125,6 @@ function insertGhostSpan(suffix: string) {
   span.style.cssText = 'color:#3a3a50;pointer-events:none;user-select:none;font-family:inherit;font-size:inherit;'
   span.textContent = suffix
   range.insertNode(span)
-  // Move caret back to before the ghost span
   const r = document.createRange()
   r.setStartBefore(span)
   r.collapse(true)
@@ -1214,7 +1141,6 @@ function updateGhost(el: HTMLElement, text: string) {
   const partial = m[1]!
   const matches = COMPLETIONS.filter(c => c.startsWith(partial) && c !== partial)
   if (!matches.length) { ghostSuggestion.value = ''; removeGhostSpan(); ghostMatches.value = []; ghostMatchIdx.value = 0; _lastGhostPartial = ''; return }
-  // Reset cycle index when partial changes
   if (partial !== _lastGhostPartial) { ghostMatchIdx.value = 0; _lastGhostPartial = partial }
   ghostMatches.value = matches
   if (ghostMatchIdx.value >= matches.length) ghostMatchIdx.value = 0
@@ -1225,11 +1151,10 @@ function updateGhost(el: HTMLElement, text: string) {
   nextTick(() => insertGhostSpan(suffix))
 }
 
-// Accept the current ghost suggestion - shared by Tab and ArrowRight
 function acceptCurrentGhost() {
   const el = normalEditorRef.value; if (!el) return
   const offset  = getTextOffset(el)
-  const text    = form.value.response  // use model (clean), not innerText (which includes ghost span)
+  const text    = form.value.response
   const before  = text.slice(0, offset)
   const after   = text.slice(offset)
   const m       = before.match(/(\$[\w.]*)$/)
@@ -1253,7 +1178,6 @@ function acceptCurrentGhost() {
 }
 
 function onNormalKeydown(e: KeyboardEvent) {
-  // Guard prefix for built-in commands
   if (props.isBuiltIn) {
     const el = normalEditorRef.value; if (!el) return
     const offset = getTextOffset(el)
@@ -1262,18 +1186,15 @@ function onNormalKeydown(e: KeyboardEvent) {
       e.preventDefault(); return
     }
   }
-  // ArrowRight: accept ghost suggestion if one is active
   if (e.key === 'ArrowRight' && ghostSuggestion.value) {
     e.preventDefault()
     acceptCurrentGhost()
     return
   }
-  // Tab key handling
   if (e.key === 'Tab') {
     e.preventDefault()
     const el = normalEditorRef.value; if (!el) return
     if (ghostMatches.value.length > 1 && e.shiftKey === false && ghostSuggestion.value) {
-      // Cycle to next match on repeated Tab
       ghostMatchIdx.value = (ghostMatchIdx.value + 1) % ghostMatches.value.length
       const partial = form.value.response.slice(0, getTextOffset(el)).match(/(\$[\w.]*)$/)?.[1] ?? ''
       const next = ghostMatches.value[ghostMatchIdx.value]!
@@ -1285,7 +1206,6 @@ function onNormalKeydown(e: KeyboardEvent) {
     if (ghostSuggestion.value) {
       acceptCurrentGhost()
     } else {
-      // No suggestion - insert 2 spaces (stay in editor like a code editor)
       removeGhostSpan()
       const offset = getTextOffset(el)
       const text   = el.innerText.replace(/\n$/, '')
@@ -1297,7 +1217,6 @@ function onNormalKeydown(e: KeyboardEvent) {
     }
     return
   }
-  // Enter: default behaviour (line break)
 }
 
 const editorRef  = ref<HTMLDivElement | null>(null)
@@ -1308,8 +1227,8 @@ const acPos      = ref({ top: 0, left: 0 })
 const acVisible  = ref(false)
 const acTrigger  = ref('')
 const acActivePh = ref<string | null>(null)
-const acSwapTok  = ref<string | null>(null)  // token being swapped via left-click
-let   draggedTok = ''                        // token being dragged from inside the editor
+const acSwapTok  = ref<string | null>(null)
+let   draggedTok = ''
 
 function insertAtCaret(text: string) {
   const el = editorRef.value; if (!el) return
@@ -1359,7 +1278,6 @@ function onEditorKeydown(e: KeyboardEvent) {
 function onEditorClick(e: MouseEvent) {
   const target = e.target as HTMLElement
 
-  // Left-click on a real puzzle piece (pz-tok) → open swap picker
   const tokSpan = (target.classList.contains('pz-tok') ? target
     : target.closest?.('.pz-tok') as HTMLElement | null)
   if (tokSpan && tokSpan.dataset.tok) {
@@ -1367,7 +1285,6 @@ function onEditorClick(e: MouseEvent) {
     const tok   = tokSpan.dataset.tok
     const kind  = tokenKind(tok)
     if (!kind) return
-    // Build candidate list for this kind
     const candidates: Record<PieceKind, string[]> = {
       wrapper:  WRAPPERS,
       operator: OPERATORS,
@@ -1402,7 +1319,6 @@ function onEditorClick(e: MouseEvent) {
   acPos.value = { top: rect.bottom - er.top + 4, left: rect.left - er.left }
 }
 
-// Right-click on a pz-tok → delete it (replace with placeholder if inside action/if context)
 function onEditorContextMenu(e: MouseEvent) {
   const target = e.target as HTMLElement
   const tokSpan = (target.classList.contains('pz-tok') ? target
@@ -1411,14 +1327,12 @@ function onEditorContextMenu(e: MouseEvent) {
   e.preventDefault()
   const tok = tokSpan.dataset.tok
 
-  // Structural wrapper pieces that cannot be deleted independently
   if (tok === '<do' || tok === '>)') return
 
   const plain = getPlainText(editorRef.value!)
   const idx   = plain.indexOf(tok)
   if (idx === -1) return
 
-  // For wrapper opening tokens, delete the entire $if(...) / $else{...} block
   let deleteStart = idx
   let deleteEnd   = idx + tok.length
   if (tok === '$if(') {
@@ -1442,33 +1356,23 @@ function onEditorContextMenu(e: MouseEvent) {
     applyHighlight(); nextTick(() => restoreCaret(editorRef.value!, deleteStart)); return
   }
 
-  // Action piece: find the whole [action{args}] in plain text and replace with fresh skeleton
-  // so orphaned arg placeholders don't linger
   if (ACTIONS.includes(tok)) {
-    // The action token in plain text is e.g. "[remove]" stored as data-tok
-    // Around it in the rule string is [...args...] - find the enclosing action block
-    const actionStart = plain.lastIndexOf('[', idx)  // opening '[' before the action name
+    const actionStart = plain.lastIndexOf('[', idx)
     let actionEnd = idx + tok.length
-    // skip past any following arg tokens (PH or real) until ']'
-    // Actually in the plain-text repr, the skeleton is stored as PH chars with no brackets
-    // The action block in plain is: PH.action + PH.arg... or [name]{arg}...
-    // Since tok = "[remove]" etc., we need to consume args after it
     while (actionEnd < plain.length) {
       const c = plain[actionEnd]!
-      if (PH_ALL.includes(c)) { actionEnd++; continue }  // placeholder arg
-      if (c === '{') { // real arg token like {text1}
+      if (PH_ALL.includes(c)) { actionEnd++; continue }
+      if (c === '{') {
         while (actionEnd < plain.length && plain[actionEnd] !== '}') actionEnd++
         actionEnd++; continue
       }
       break
     }
-    // Replace the action + its args with just the action placeholder skeleton
-    const replacement = PH.action + PH.arg  // one action slot + one arg slot
+    const replacement = PH.action + PH.arg
     form.value.rule = plain.slice(0, idx) + replacement + plain.slice(actionEnd)
     applyHighlight(); nextTick(() => restoreCaret(editorRef.value!, idx + replacement.length)); return
   }
 
-  // Arg/value/operator/param piece: replace with appropriate placeholder
   const kind = tokenKind(tok)
   const kindToPh: Record<PieceKind, string> = {
     value:    PH.value,
@@ -1508,7 +1412,6 @@ function insertAcItem() {
   acVisible.value = false
   const el = editorRef.value; if (!el) return
 
-  // Swap an existing token for another of the same kind
   if (acSwapTok.value) {
     const oldTok = acSwapTok.value; acSwapTok.value = null
     const plain  = getPlainText(el)
@@ -1529,8 +1432,6 @@ function insertAcItem() {
     const idx   = plain.indexOf(ph); if (idx === -1) return
     if (ph === PH.action && ACTIONS.includes(item)) {
       const skel = actionSkeleton(item)
-      // [ and ] are eaten by highlight()/getPlainText - plain has just ▪action▪arg▪arg...
-      // Replace from ▪action through all consecutive ▪arg PHs with the new skeleton.
       let sliceEnd = idx + 1
       while (plain.charAt(sliceEnd) === PH.arg) sliceEnd++
       form.value.rule = plain.slice(0, idx) + skel + plain.slice(sliceEnd)
@@ -1559,7 +1460,6 @@ function onDragStart(e: DragEvent, tok: string) {
   e.dataTransfer?.setData('text/plain', tok)
 }
 
-// Drag start from a piece already inside the editor
 function onEditorDragStart(e: DragEvent) {
   const target = e.target as HTMLElement
   const tokSpan = (target.classList.contains('pz-tok') ? target
@@ -1567,8 +1467,7 @@ function onEditorDragStart(e: DragEvent) {
   if (!tokSpan || !tokSpan.dataset.tok) { e.preventDefault(); return }
   draggedTok = tokSpan.dataset.tok
   e.dataTransfer?.setData('text/plain', draggedTok)
-  e.dataTransfer?.setData('text/x-editor-drag', '1') // marks as internal move
-  // Remove the piece from its current position after a tick (so it renders as a ghost)
+  e.dataTransfer?.setData('text/x-editor-drag', '1')
   nextTick(() => {
     if (!draggedTok) return
     const plain = getPlainText(editorRef.value!)
@@ -1607,7 +1506,6 @@ function onEditorDrop(e: DragEvent) {
     if (!phFound) return
     if (ph === PH.action && ACTIONS.includes(tok)) {
       const skel = actionSkeleton(tok)
-      // [ and ] are eaten by highlight()/getPlainText - replace from pos through all arg PHs
       let sliceEnd = pos + 1
       while (plain.charAt(sliceEnd) === PH.arg) sliceEnd++
       form.value.rule = plain.slice(0, pos) + skel + plain.slice(sliceEnd)
@@ -1639,7 +1537,6 @@ function onEditorDragover(e: DragEvent) {
   getPhSpanAt(e)?.classList.add('drag-over')
 }
 
-//  Response field highlighting 
 const responseRef = ref<HTMLDivElement | null>(null)
 let _applyingResponseHighlight = false
 
@@ -1850,21 +1747,17 @@ function addArgVariant() {
 
 function removeArgVariant(i: number) {
   const descs = form.value.arg_descs ?? []
-  // Find which argNum this chip corresponds to
   const { positional } = scanArgNums(form.value.response || '')
   const sorted = [...positional].sort((a, b) => a - b)
   const argNum = sorted[i]
-  // Remove the arg from the response
   if (argNum) {
     const cleaned = removeArgFromResponse(form.value.response || '', argNum)
     form.value.response = cleaned
     const nel = normalEditorRef.value
     if (nel) { nel.innerText = cleaned; applyNormalHighlight(nel, cleaned) }
     updatePreview()
-    // Re-derive arg_descs from the cleaned response (watch will fire, but be explicit)
     form.value.arg_descs = buildArgDescs(cleaned, descs.filter((_, idx) => idx !== i))
   } else {
-    // Fallback: just remove the chip
     const d = [...descs]
     d.splice(i, 1)
     form.value.arg_descs = d
@@ -1912,7 +1805,6 @@ function removeArgVariant(i: number) {
                 @keydown="onNormalKeydown"
                 @blur="removeGhostSpan"
               ></div>
-              <!-- Inline ghost: rendered as a zero-width overlay after cursor via CSS trick -->
               <div v-if="ghostSuggestion" class="ghost-overlay" aria-hidden="true"></div>
             </div>
 
@@ -1982,7 +1874,6 @@ function removeArgVariant(i: number) {
                 <span class="field-hint">Auto-detected from response - edit chips to update the response</span>
               </label>
               <button class="arg-add-btn" @click="addArgVariant" type="button">+ Arg</button>
-
             </div>
             <div v-if="!form.arg_descs?.length" class="arg-descs-empty">
               No variants detected. Use <code class="hint-code">$if($1 = value)</code>, <code class="hint-code">$1</code>, <code class="hint-code">$args</code> in the response.
@@ -2267,7 +2158,7 @@ function removeArgVariant(i: number) {
 }
 .normal-editor:focus { border-color: #6f2bff55; }
 .normal-editor:empty::before { content: attr(data-placeholder); color: #2a2a35; pointer-events: none; white-space: pre; }
-.ghost-overlay { display: none; } /* ghost is rendered via ::after on the editor */
+.ghost-overlay { display: none; }
 .normal-hint { font-size: 10px; color: #383838; }
 .normal-hint code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; }
 
@@ -2344,8 +2235,8 @@ function removeArgVariant(i: number) {
 .sh-number  { color: #b5cea8; }
 .sh-paren   { color: #888; }
 .sh-comment { color: #3c4a3c; font-style: italic; }
-.sh-custom  { color: #4fc1e9; } /* user-defined name in $var.name, $counter.name etc. */
-.sh-unknown { color: #d1c023; } 
+.sh-custom  { color: #4fc1e9; }
+.sh-unknown { color: #d1c023; }
 .sh-error   { color: #f14949; text-decoration: underline wavy #f1494966; }
 .pz-ph { opacity: 0.35; transition: opacity .15s; }
 .pz-ph:hover { opacity: 0.7; }
