@@ -178,29 +178,73 @@ function parseCondClause(clause: string): { argNum: number; value: string } | nu
 interface VariantEntry {
   constraints: Map<number, string>  // argNum -> value (e.g. 1->"test", 2->"$channel.name")
   condStr: string                   // raw condition string inside $if(...) for reconstruction
+  maxArg: number                    // highest argument number mentioned in condition or block body
+  bodyHasArgs: Set<number>          // $N references found inside the $if body
 }
 
-// Extract all $if(...) blocks as VariantEntry[], plus set of bare $N references
+// Extract all $if(...) $end blocks as VariantEntry[], plus set of bare $N references
 function extractVariants(src: string): { variants: VariantEntry[]; bareArgs: Set<number> } {
   const variants: VariantEntry[] = []
   const usedInIf = new Set<number>()
+  const bareArgs = new Set<number>()
 
-  for (const m of src.matchAll(/\$if\s*\(([^)]+)\)/g)) {
-    const condStr = m[1] ?? ''
+  // Find all $if(...) ... $end blocks
+  let pos = 0
+  while (pos < src.length) {
+    const ifStart = src.indexOf('$if(', pos)
+    if (ifStart === -1) break
+
+    // Find matching closing parenthesis for condition
+    let depth = 0
+    let condEnd = -1
+    for (let i = ifStart + 4; i < src.length; i++) {
+      const ch = src[i]
+      if (ch === '(') depth++
+      else if (ch === ')') {
+        if (depth === 0) { condEnd = i; break }
+        depth--
+      }
+    }
+    if (condEnd === -1) { pos = ifStart + 4; continue }
+
+    const condStr = src.slice(ifStart + 4, condEnd).trim()
+
+    // Find corresponding $end
+    const endIdx = src.indexOf('$end', condEnd + 1)
+    if (endIdx === -1) { pos = condEnd + 1; continue }
+
+    const blockBody = src.slice(condEnd + 1, endIdx)
+
+    // Parse condition clauses
     const clauses = condStr.split(/\s*&&?\s*/)
     const constraints = new Map<number, string>()
     for (const clause of clauses) {
       const parsed = parseCondClause(clause)
-      if (!parsed) continue
-      constraints.set(parsed.argNum, parsed.value)
-      usedInIf.add(parsed.argNum)
+      if (parsed) {
+        constraints.set(parsed.argNum, parsed.value)
+        usedInIf.add(parsed.argNum)
+      }
     }
-    variants.push({ constraints, condStr })
+
+    // Find $N references in the block body
+    const bodyArgs = new Set<number>()
+    for (const m of blockBody.matchAll(/\$(?:args\.)?(\d+)\b/g)) {
+      const n = parseInt(m[1] || '')
+      if (!isNaN(n) && n > 0) bodyArgs.add(n)
+    }
+
+    // Determine max argument number
+    let maxArg = 0
+    for (const n of constraints.keys()) maxArg = Math.max(maxArg, n)
+    for (const n of bodyArgs) maxArg = Math.max(maxArg, n)
+
+    variants.push({ constraints, condStr, maxArg, bodyHasArgs: bodyArgs })
+
+    pos = endIdx + 4
   }
 
-  // Bare $N = positional args NOT inside any $if condition
-  const bareArgs = new Set<number>()
-  const withoutIfs = src.replace(/\$if\s*\([^)]+\)/g, '')
+  // Find bare $N outside any $if block (using a copy without $if...$end)
+  const withoutIfs = src.replace(/\$if\([^)]+\)[\s\S]*?\$end/g, '')
   for (const m of withoutIfs.matchAll(/\$(?:args\.)?(\d+)\b/g)) {
     const n = parseInt(m[1] || '')
     if (!isNaN(n) && n > 0 && !usedInIf.has(n)) bareArgs.add(n)
@@ -228,8 +272,8 @@ function buildArgDescs(
 
   // One chip per $if block: build space-separated signature ordered by argNum
   for (const v of variants) {
-    if (v.constraints.size === 0) continue
-    const maxArg = Math.max(...v.constraints.keys())
+    if (v.constraints.size === 0 && v.bodyHasArgs.size === 0) continue
+    const maxArg = v.maxArg
     const parts: string[] = []
     for (let n = 1; n <= maxArg; n++) {
       const val = v.constraints.get(n)
