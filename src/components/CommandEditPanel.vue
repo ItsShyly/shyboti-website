@@ -676,6 +676,7 @@ function onNormalInput() {
   form.value.response = text
   applyNormalHighlight(el, text)
   updateGhost(el, text)
+  syncLineNumbers(el)
 }
 
 function applyNormalHighlight(el: HTMLElement, text: string) {
@@ -716,6 +717,57 @@ function restoreTextOffset(el: HTMLElement, offset: number) {
   }
   walk(el)
   if (!placed) { const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(r) }
+}
+
+// ── Line numbers ──────────────────────────────────────────────────────────────
+const lineNumbersRef = ref<HTMLDivElement | null>(null)
+
+function syncLineNumbers(el: HTMLElement) {
+  const lnEl = lineNumbersRef.value; if (!lnEl) return
+  // count lines in the raw text
+  const text   = form.value.response || ''
+  const count  = (text.match(/\n/g) || []).length + 1
+  lineCount.value = count
+  // sync scroll position
+  lnEl.scrollTop = el.scrollTop
+}
+
+// Keep line numbers scroll in sync when editor scrolls
+function onEditorScroll(e: Event) {
+  const lnEl = lineNumbersRef.value; if (!lnEl) return
+  lnEl.scrollTop = (e.target as HTMLElement).scrollTop
+}
+
+// Clear ghost when cursor moves without typing (click, arrow keys, etc.)
+function onEditorClick() {
+  const el = normalEditorRef.value; if (!el) return
+  const offset = getTextOffset(el)
+  const text   = form.value.response || ''
+  const before = text.slice(0, offset)
+  if (!before.match(/(\$[\w.]*)$/)) {
+    ghostSuggestion.value = ''
+    removeGhostSpan()
+    ghostMatches.value = []
+    ghostMatchIdx.value = 0
+    _lastGhostPartial = ''
+  }
+}
+
+function onEditorKeyupClearGhost(e: KeyboardEvent) {
+  // On any non-autocomplete navigation key, re-check if ghost is still valid
+  const navKeys = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End']
+  if (!navKeys.includes(e.key)) return
+  const el = normalEditorRef.value; if (!el) return
+  const offset = getTextOffset(el)
+  const text   = form.value.response || ''
+  const before = text.slice(0, offset)
+  if (!before.match(/(\$[\w.]*)$/)) {
+    ghostSuggestion.value = ''
+    removeGhostSpan()
+    ghostMatches.value = []
+    ghostMatchIdx.value = 0
+    _lastGhostPartial = ''
+  }
 }
 
 let _lastGhostPartial = ''
@@ -898,11 +950,11 @@ function removeArgVariant(i: number) {
             </div>
 
             <div class="editor-wrapper">
-              <!-- Line numbers gutter -->
-              <div class="line-numbers" :style="{ '--line-count': lineCount }">
-                <span v-for="n in lineCount" :key="n">{{ n }}</span>
+              <!-- Line numbers gutter (scrolls in sync with editor) -->
+              <div class="line-numbers" ref="lineNumbersRef">
+                <div v-for="n in lineCount" :key="n" class="line-number">{{ n }}</div>
               </div>
-
+              <!-- Editor + validation badge -->
               <div class="normal-editor-container">
                 <div
                   ref="normalEditorRef"
@@ -912,13 +964,17 @@ function removeArgVariant(i: number) {
                   :data-placeholder="isBuiltIn ? '$text.upper($command.output)' : 'Hello $user.mention! $if($args){ You said: $args }'"
                   @input="onNormalInput"
                   @keydown="onNormalKeydown"
+                  @keyup="onEditorKeyupClearGhost"
+                  @click="onEditorClick"
+                  @scroll="onEditorScroll"
                   @blur="removeGhostSpan"
                 ></div>
-                <div v-if="ghostSuggestion" class="ghost-overlay" aria-hidden="true"></div>
-
                 <!-- Validation error badge -->
                 <div v-if="validationMessage" class="validation-badge">
-                  {{ validationMessage }}
+                  <span v-for="(err, idx) in validationErrors" :key="idx" class="validation-pill"
+                    :class="err.type">
+                    {{ err.message }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1143,17 +1199,93 @@ function removeArgVariant(i: number) {
 .builtin-prefix-hint { font-size: 10px; color: #383838; }
 
 /*  Normal Mode editor  */
-.normal-editor-container { position: relative; }
-.normal-editor {
-  min-height: 120px; max-height: 320px; overflow-y: auto;
-  background: #0d0d10; border: 1px solid #2a2a30;
-  padding: 12px 14px; font-family: 'Consolas','Fira Mono',monospace;
-  font-size: 13px; line-height: 1.7; color: #c0c0c0;
-  outline: none; white-space: pre-wrap; word-break: break-word;
-  tab-size: 2;
+/* editor-wrapper: line numbers + editor side by side, sharing one border */
+.editor-wrapper {
+  display: flex;
+  align-items: stretch;
+  border: 1px solid #2a2a30;
+  background: #0d0d10;
+  min-height: 120px;
+  resize: vertical;
+  overflow: hidden;
+  transition: border-color .15s;
 }
-.normal-editor:focus { border-color: #6f2bff55; }
-.normal-editor:empty::before { content: attr(data-placeholder); color: #2a2a35; pointer-events: none; white-space: pre; }
+.editor-wrapper:focus-within { border-color: #6f2bff55; }
+
+/* Line numbers gutter */
+.line-numbers {
+  display: flex;
+  flex-direction: column;
+  min-width: 36px;
+  padding: 12px 6px 12px 8px;
+  background: #0a0a0d;
+  border-right: 1px solid #1a1a22;
+  overflow: hidden;          /* hides scroll bar, synced manually */
+  flex-shrink: 0;
+  user-select: none;
+  pointer-events: none;
+}
+.line-number {
+  font-family: 'Consolas','Fira Mono',monospace;
+  font-size: 13px;
+  line-height: 1.7;          /* must match .normal-editor line-height */
+  color: #3a3a50;
+  text-align: right;
+  white-space: pre;
+}
+
+/* Editor area inside wrapper */
+.normal-editor-container {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.normal-editor {
+  flex: 1;
+  min-height: 120px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  font-family: 'Consolas','Fira Mono',monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #c0c0c0;
+  outline: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+  tab-size: 2;
+  background: transparent;
+  border: none;              /* border is on .editor-wrapper */
+}
+.normal-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #2a2a35;
+  pointer-events: none;
+  white-space: pre;
+}
+
+/* Validation badge — sits below the editor, inside editor-container */
+.validation-badge {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 8px;
+  border-top: 1px solid #1a1a22;
+  background: #0a0a0d;
+}
+.validation-pill {
+  font-family: 'Consolas','Fira Mono',monospace;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.validation-pill.cond_missing  { color: #7ec8e3; background: rgba(126,200,227,.12); border: 1px solid rgba(126,200,227,.3); }
+.validation-pill.cond_invalid  { color: #f9a84d; background: rgba(249,168,77,.10);  border: 1px solid rgba(249,168,77,.3);  }
+.validation-pill.body_missing  { color: #4ec9b0; background: rgba(78,201,176,.10);  border: 1px solid rgba(78,201,176,.3);  }
+
 .ghost-overlay { display: none; }
 .normal-hint { font-size: 10px; color: #383838; }
 .normal-hint code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; }
@@ -1210,85 +1342,39 @@ function removeArgVariant(i: number) {
 </style>
 
 <style>
-/* Global syntax highlight styles */
-.sh-kw {
-  color: #569cd6;
-  background: rgba(86, 156, 214, 0.12);
-  border-radius: 4px;
-  padding: 0 3px;
-  font-weight: 500;
-}
-.sh-cond {
-  background: rgba(128, 128, 128, 0.06);
-  border-radius: 3px;
-  padding: 0 2px;
-  display: inline-block;
-}
-.sh-body {
-  background: rgba(100, 255, 100, 0.04);
-  border-radius: 2px;
-  display: inline-block;
-  width: 100%;  /* fills the line */
-}
-.sh-error-block {
-  border-left: 2px solid #f14949;
-  background: rgba(241, 73, 73, 0.05);
-  padding: 0 2px;
-  display: inline-block;
-}
+/* ── $if coloring ─────────────────────────────────────────────────────────── */
 
-.sh-kw:contains('$end') {
-  opacity: 0.9;
-}
+/* $if keyword — just color, no background */
+.sh-if-kw { font-weight: 600; }
 
-.sh-builtin  { color: #9d6cff; }
-.sh-locked   { color: #9d6cff; border-bottom: 1px solid rgba(111,43,255,.4); cursor: not-allowed; }
+/* condition ( ... ) — subtle dashed underline shows it's a fillable slot */
+.sh-if-cond { border-bottom: 1px dashed currentColor; }
+.sh-if-cond-empty   { background: rgba(126,200,227,.10); border-radius: 2px; outline: 1px dashed rgba(126,200,227,.4); }
+.sh-if-cond-invalid { background: rgba(249,168,77,.08);  border-radius: 2px; outline: 1px dashed rgba(249,168,77,.4);  }
+
+/* body { ... } — very faint tint to indicate it's a container */
+.sh-if-body { }
+.sh-if-body-empty { background: rgba(78,201,176,.06); border-radius: 2px; outline: 1px dashed rgba(78,201,176,.3); }
+
+/* parens/braces that belong to $if — inherit keyword color, bold */
+.sh-if-paren { font-weight: 600; }
+
+/* ── Standard token colors ────────────────────────────────────────────────── */
+.sh-kw      { color: #569cd6; font-weight: 600; }   /* other keywords (no background) */
+.sh-end     { font-size: 0.82em; opacity: 0.4; vertical-align: middle; }
+.sh-builtin { color: #9d6cff; }
+.sh-locked  { color: #9d6cff; border-bottom: 1px solid rgba(111,43,255,.4); cursor: not-allowed; }
 .sh-op      { color: #c792ea; }
 .sh-string  { color: #ce9178; }
 .sh-number  { color: #b5cea8; }
-.sh-paren   { color: #888; }
-.sh-comment { color: #3c4a3c; font-style: italic; }
 .sh-custom  { color: #4fc1e9; }
 .sh-unknown { color: #d1c023; }
 .sh-error   { color: #f14949; text-decoration: underline wavy #f1494966; }
 
-/* Ghost autocomplete */
+/* Ghost autocomplete suffix */
 .ghost-inline {
   color: #3a3a50;
   pointer-events: none;
   user-select: none;
-}
-
-/* if-block container */
-.if-block-container {
-  display: inline-block;
-  background: rgba(86, 156, 214, 0.06);
-  border-left: 3px solid rgba(86, 156, 214, 0.5);
-  border-radius: 0 6px 6px 0;
-  padding: 2px 6px 2px 4px;
-  margin: 2px 0;
-}
-.if-block-container .if-block-container {
-  background: rgba(86, 156, 214, 0.03);
-  border-left-color: rgba(86, 156, 214, 0.3);
-}
-.if-block-container .if-block-container .if-block-container {
-  background: rgba(86, 156, 214, 0.02);
-  border-left-color: rgba(86, 156, 214, 0.2);
-}
-
-/* Locked if tokens */
-.if-token {
-  display: inline-block;
-  font-family: 'Consolas', 'Fira Mono', monospace;
-  font-weight: 600;
-  color: #569cd6;
-  background: rgba(86, 156, 214, 0.15);
-  border-radius: 4px;
-  padding: 0 4px;
-  margin: 0 2px;
-  user-select: none;
-  cursor: default;
-  pointer-events: none;
 }
 </style>
