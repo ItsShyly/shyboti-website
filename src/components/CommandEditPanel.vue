@@ -1348,7 +1348,7 @@ function removeArgVariant(i: number) {
 .sh-if-kw { font-weight: 600; }
 
 /* condition ( ... ) — subtle dashed underline shows it's a fillable slot */
-.sh-if-cond { border-bottom: 1px dashed currentColor; }
+.sh-if-cond { }
 .sh-if-cond-empty   { background: rgba(126,200,227,.10); border-radius: 2px; outline: 1px dashed rgba(126,200,227,.4); }
 .sh-if-cond-invalid { background: rgba(249,168,77,.08);  border-radius: 2px; outline: 1px dashed rgba(249,168,77,.4);  }
 
