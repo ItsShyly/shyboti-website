@@ -530,10 +530,183 @@ function renderMsg(text: string): string {
 function esc(s: string) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
+
+// >>> 7TV paint cache: username -> paint data (null = no paint, undefined = not fetched)
+const paintCache = new Map<string, { id: string; name: string; imageUrl: string | null; shadows: any[]; stops: any[] } | null>()
+
+async function fetchPaint(username: string): Promise<{ id: string; name: string; imageUrl: string | null; shadows: any[]; stops: any[] } | null> {
+  if (paintCache.has(username)) return paintCache.get(username) ?? null
+  try {
+    // Step 1: get 7TV user by Twitch login to find paint_id
+    const gqlUser = await fetch('https://7tv.io/v3/gql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: 'query($login: String!) { usersByConnection(platform: TWITCH, id: $login) { id style { paint_id } } }',
+        variables: { login: username }
+      })
+    })
+    const userData = await gqlUser.json() as any
+    const paintId = userData?.data?.usersByConnection?.[0]?.style?.paint_id
+    if (!paintId) { paintCache.set(username, null); return null }
+
+    // Step 2: fetch the paint definition
+    const gqlPaint = await fetch('https://7tv.io/v3/gql', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: 'query($id: ObjectID!) { paint(id: $id) { id name data { layers { type } } function stops { at color } shadows { x_offset y_offset radius color } image_url } }',
+        variables: { id: paintId }
+      })
+    })
+    const paintData = await gqlPaint.json() as any
+    const p = paintData?.data?.paint
+    if (!p) { paintCache.set(username, null); return null }
+    const result = {
+      id:       p.id,
+      name:     p.name,
+      imageUrl: p.image_url ?? null,
+      shadows:  p.shadows ?? [],
+      stops:    p.stops ?? [],
+    }
+    paintCache.set(username, result)
+    return result
+  } catch {
+    paintCache.set(username, null)
+    return null
+  }
+}
+
+// Prefetch paints for visible usernames (fire-and-forget, triggers reactivity via paintStyles)
+const paintStyles = ref<Map<string, Record<string, string>>>(new Map())
+
+function intToRgba(c: number): string {
+  const r = (c >>> 24) & 0xff
+  const g = (c >>> 16) & 0xff
+  const b = (c >>> 8)  & 0xff
+  const a = (c & 0xff) / 255
+  return `rgba(${r},${g},${b},${a.toFixed(3)})`
+}
+
+function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[] }): Record<string, string> {
+  const styles: Record<string, string> = {}
+  if (paint.stops?.length >= 2) {
+    const stops = paint.stops.map(s => `${intToRgba(s.color)} ${Math.round(s.at * 100)}%`).join(', ')
+    styles['background'] = `linear-gradient(90deg, ${stops})`
+    styles['background-clip'] = 'text'
+    styles['-webkit-background-clip'] = 'text'
+    styles['color'] = 'transparent'
+    styles['-webkit-text-fill-color'] = 'transparent'
+  } else if (paint.imageUrl) {
+    styles['background'] = `url(${paint.imageUrl}) center/cover`
+    styles['background-clip'] = 'text'
+    styles['-webkit-background-clip'] = 'text'
+    styles['color'] = 'transparent'
+    styles['-webkit-text-fill-color'] = 'transparent'
+  }
+  if (paint.shadows?.length) {
+    styles['filter'] = paint.shadows
+      .map(s => `drop-shadow(${s.x_offset ?? 0}px ${s.y_offset ?? 0}px ${s.radius ?? 0}px ${intToRgba(s.color)})`)
+      .join(' ')
+  }
+  return styles
+}
+
+async function ensurePaint(username: string) {
+  if (paintStyles.value.has(username)) return
+  const paint = await fetchPaint(username.toLowerCase())
+  if (paint) {
+    const newMap = new Map(paintStyles.value)
+    newMap.set(username, buildPaintStyle(paint))
+    paintStyles.value = newMap
+  }
+}
+
+// Watch msgs and prefetch paints for all visible usernames
+watch(msgs, (list) => {
+  const seen = new Set<string>()
+  for (const m of list) {
+    const u = m.username?.toLowerCase()
+    if (u && !seen.has(u) && !paintCache.has(u)) {
+      seen.add(u)
+      ensurePaint(u)
+    }
+  }
+}, { flush: 'post' })
+
+// >>> User popup (same as DashboardView)
+interface TwitchUser {
+  login: string; displayName: string; avatar: string
+  createdAt: string
+  ownFollowers: number | null
+  followedAt:  string | null
+  subbedSince: string | null
+  subTier:     string | null
+  nameHistory: { name: string; lastSeen: string }[]
+  paint: { id: string; name: string; imageUrl: string | null; shadows: any[]; stops: any[] } | null
+}
+const popup        = ref<{ username: string; channel: string; x: number; y: number } | null>(null)
+const popupUser    = ref<TwitchUser | null>(null)
+const popupLoading = ref(false)
+
+function openUserPopup(username: string, ch: string, evt: MouseEvent) {
+  evt.stopPropagation()
+  popup.value     = { username, channel: ch, x: evt.clientX, y: evt.clientY }
+  popupUser.value = null
+  popupLoading.value = true
+  fetch(`${API}/twitch/user/${encodeURIComponent(username.toLowerCase())}?channel=${encodeURIComponent(ch)}`, {
+    headers: session.value ? { Authorization: `Bearer ${session.value.token}` } : {}
+  })
+    .then(r => r.ok ? r.json() as Promise<TwitchUser> : Promise.reject())
+    .then(u => { popupUser.value = u })
+    .catch(() => {})
+    .finally(() => { popupLoading.value = false })
+}
+
+function closePopup() { popup.value = null; popupUser.value = null }
+
+function openUsercardPopout(username: string, ch: string) {
+  window.open(`https://www.twitch.tv/popout/${ch}/viewercard/${username}`, '_blank', 'width=340,height=560')
+}
+
+function goToLogsForUser(username: string, ch: string) {
+  channel.value    = ch
+  userFilter.value = username
+  if (channelInputRef.value) channelInputRef.value.value = ch
+  if (userInputRef.value)    userInputRef.value.value    = username
+  closePopup()
+  search()
+}
+
+function fmtFollowers(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/.0$/, '') + 'M'
+  if (n >= 1_000)     return (n / 1_000).toFixed(1).replace(/.0$/, '') + 'K'
+  return String(n)
+}
+function fmtJoined(iso: string): string {
+  return new Date(iso).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
+}
+function fmtDuration(iso: string): string {
+  const ms     = Date.now() - new Date(iso).getTime()
+  const days   = Math.floor(ms / 86_400_000)
+  const months = Math.floor(days / 30.44)
+  const years  = Math.floor(months / 12)
+  const remMo  = months % 12
+  if (years > 0 && remMo > 0) return `${years}y ${remMo}mo`
+  if (years > 0)              return `${years}y`
+  if (months > 0)             return `${months}mo`
+  return `${days}d`
+}
+function subTierLabel(tier: string): string {
+  return tier === '3000' ? 'Tier 3' : tier === '2000' ? 'Tier 2' : 'Tier 1'
+}
+function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[] }): Record<string, string> {
+  return buildPaintStyle(paint)
+}
 </script>
 
 <template>
-  <div class="logs-view">
+  <div class="logs-view" @click="closePopup">
     <div class="logs-header">
       <div class="logs-title">{{ t('logs.title') }}</div>
       <div class="logs-sub">{{ t('logs.sub') }}</div>
@@ -674,7 +847,12 @@ function esc(s: string) {
             >
               <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
               <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
-              <div class="log-user" :style="{ color: userColor(item.msg) }">{{ item.msg.displayName || item.msg.username }}</div>
+              <div
+                class="log-user"
+                :style="paintStyles.get(item.msg.username) ?? { color: userColor(item.msg) }"
+                :class="{ 'log-user-clickable': true }"
+                @click.stop="openUserPopup(item.msg.username, channel || item.msg.channel?.replace('#',''), $event)"
+              >{{ item.msg.displayName || item.msg.username }}</div>
               <div class="log-msg" v-html="renderMsg(item.msg.text)"></div>
               <div class="log-share" @click="shareMsg(item.msg)" title="Copy link">
                 <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -685,6 +863,69 @@ function esc(s: string) {
             </div>
           </template>
         </div>
+      </div>
+    </div>
+    <!-- User popup -->
+    <div v-if="popup" class="user-popup" :style="{ top: popup.y + 'px', left: popup.x + 'px' }" @click.stop>
+      <div class="popup-header">
+        <div class="popup-avatar-wrap">
+          <img v-if="popupUser?.avatar" :src="popupUser.avatar" class="popup-avatar" />
+          <div v-else class="popup-avatar-placeholder">{{ popup.username[0]?.toUpperCase() }}</div>
+        </div>
+        <div class="popup-title-block">
+          <div class="popup-name">{{ popupUser?.displayName ?? popup.username }}</div>
+          <div class="popup-sub">in #{{ popup.channel }}</div>
+        </div>
+        <button class="popup-close" @click="closePopup">✕</button>
+      </div>
+      <div class="popup-body">
+        <div v-if="popupLoading" class="popup-loading">Loading…</div>
+        <template v-else-if="popupUser">
+          <div class="popup-stats">
+            <div class="popup-stat">
+              <span class="stat-val">{{ fmtJoined(popupUser.createdAt) }}</span>
+              <span class="stat-lbl">account created</span>
+            </div>
+            <div v-if="popupUser.ownFollowers !== null" class="popup-stat">
+              <span class="stat-val">{{ fmtFollowers(popupUser.ownFollowers!) }}</span>
+              <span class="stat-lbl">followers</span>
+            </div>
+          </div>
+          <div class="popup-relations">
+            <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">
+              <span class="rel-icon">♥</span>
+              <span class="rel-label">
+                <template v-if="popupUser.followedAt">Following for {{ fmtDuration(popupUser.followedAt) }}</template>
+                <template v-else>Not following</template>
+              </span>
+            </div>
+            <div class="popup-rel" :class="popupUser.subbedSince ? 'rel-yes' : 'rel-no'">
+              <span class="rel-icon">★</span>
+              <span class="rel-label">
+                <template v-if="popupUser.subbedSince">{{ subTierLabel(popupUser.subTier ?? '1000') }} · {{ fmtDuration(popupUser.subbedSince) }}</template>
+                <template v-else>Not subscribed</template>
+              </span>
+            </div>
+          </div>
+          <div v-if="popupUser.paint" class="popup-paint">
+            <div class="popup-paint-label">7TV Paint</div>
+            <div class="popup-paint-display">
+              <span class="popup-paint-name" :style="paintNameStyle(popupUser.paint)">{{ popupUser.paint.name }}</span>
+            </div>
+          </div>
+          <div v-if="popupUser.nameHistory?.length" class="popup-names">
+            <div class="popup-names-label">Previous names</div>
+            <div v-for="n in popupUser.nameHistory" :key="n.name" class="popup-name-row">
+              <span class="name-val">{{ n.name }}</span>
+              <span v-if="n.lastSeen" class="name-when">{{ fmtDuration(n.lastSeen) }} ago</span>
+            </div>
+          </div>
+        </template>
+        <div v-else class="popup-loading" style="color:#555">Could not load profile.</div>
+      </div>
+      <div class="popup-actions">
+        <button class="popup-btn" @click="goToLogsForUser(popup.username, popup.channel)">Logs</button>
+        <button class="popup-btn" @click="openUsercardPopout(popup.username, popup.channel)">↗ Twitch</button>
       </div>
     </div>
   </div>
@@ -764,7 +1005,53 @@ function esc(s: string) {
 .log-share:hover { color: #9d6cff; }
 .log-share svg { width: 13px; height: 13px; }
 
+.log-user-clickable { cursor: pointer; }
+.log-user-clickable:hover { opacity: 0.8; text-decoration: underline dotted; }
+
 :deep(.chat-emote) { height: 28px; vertical-align: middle; display: inline-block; margin: 0 1px; }
+
+/* User popup - identical to DashboardView */
+.user-popup {
+  position: fixed; z-index: 200;
+  background: #1b1b1f; border: 1px solid #2a2a30;
+  width: 300px; box-shadow: 0 8px 32px #00000088;
+  transform: translate(-50%, 12px); overflow: hidden;
+}
+.popup-header { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px; border-bottom: 1px solid #1e1e22; }
+.popup-avatar-wrap { flex-shrink: 0; }
+.popup-avatar { width: 40px; height: 40px; border-radius: 50%; display: block; border: 2px solid #2a2a30; }
+.popup-avatar-placeholder { width: 40px; height: 40px; border-radius: 50%; background: #2a1a55; border: 2px solid #6f2bff44; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: #9d6cff; }
+.popup-title-block { flex: 1; min-width: 0; }
+.popup-name  { font-size: 13px; font-weight: 700; color: #e0e0e0; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.popup-sub   { font-size: 11px; color: #555; }
+.popup-close { background: none; border: none; color: #444; font-size: 13px; cursor: pointer; padding: 0 2px; line-height: 1; flex-shrink: 0; }
+.popup-close:hover { color: #aaa; }
+.popup-body  { padding: 12px 14px; min-height: 72px; display: flex; flex-direction: column; gap: 10px; }
+.popup-loading { font-size: 12px; color: #555; text-align: center; padding: 16px 0; }
+.popup-stats { display: flex; gap: 20px; }
+.popup-stat  { display: flex; flex-direction: column; gap: 2px; }
+.stat-val    { font-size: 13px; font-weight: 700; color: #e0e0e0; }
+.stat-lbl    { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .05em; }
+.popup-relations { display: flex; flex-direction: column; gap: 4px; }
+.popup-rel   { display: flex; align-items: center; gap: 7px; padding: 5px 8px; font-size: 12px; }
+.popup-rel.rel-yes { background: #1a2a1a; color: #23d18b; }
+.popup-rel.rel-no  { background: #1e1e22; color: #444; }
+.rel-icon { font-size: 11px; flex-shrink: 0; }
+.rel-label { flex: 1; }
+.popup-names { display: flex; flex-direction: column; gap: 3px; }
+.popup-names-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.popup-name-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; border-bottom: 1px solid #1e1e22; }
+.popup-name-row:last-child { border-bottom: none; }
+.name-val { font-size: 12px; color: #aaa; }
+.name-when { font-size: 10px; color: #444; }
+.popup-paint { display: flex; flex-direction: column; gap: 4px; }
+.popup-paint-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .05em; }
+.popup-paint-display { padding: 6px 8px; background: #111217; border: 1px solid #1e1e22; }
+.popup-paint-name { font-size: 14px; font-weight: 700; font-family: inherit; }
+.popup-actions { display: flex; gap: 1px; border-top: 1px solid #1e1e22; }
+.popup-btn { flex: 1; height: 32px; border: none; border-right: 1px solid #1e1e22; background: #141418; color: #888; font-family: inherit; font-size: 11px; cursor: pointer; transition: background .15s, color .15s; }
+.popup-btn:last-child { border-right: none; }
+.popup-btn:hover { background: #1e1e24; color: #9d6cff; }
 
 /* Direction toggle */
 .dir-toggle { display: flex; gap: 0; }
