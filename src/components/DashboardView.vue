@@ -37,10 +37,11 @@ interface TwitchUser {
   login: string; displayName: string; avatar: string
   createdAt: string
   ownFollowers: number | null
-  followedAt:  string | null   // ISO - if they follow the channel
-  subbedSince: string | null   // ISO - if they're subbed
-  subTier:     string | null   // '1000' | '2000' | '3000'
+  followedAt:  string | null
+  subbedSince: string | null
+  subTier:     string | null
   nameHistory: { name: string; lastSeen: string }[]
+  paint: { id: string; name: string; imageUrl: string | null; shadows: any[]; stops: any[] } | null
 }
 const popup         = ref<{ entry: ActivityEntry; x: number; y: number } | null>(null)
 const popupUser     = ref<TwitchUser | null>(null)
@@ -217,14 +218,16 @@ function goToAutomations(e: ActivityEntry) {
   router.push({ path: '/automations', query: { tab } })
 }
 
-// >>>Open user popup + fetch Twitch profile
-function openUserPopup(e: ActivityEntry, evt: MouseEvent) {
-  if (!['ban','timeout','unban'].includes(e.type)) return
+// >>> Open user popup — works for any entry with a target username
+function openUserPopup(username: string, channel: string, evt: MouseEvent) {
   evt.stopPropagation()
-  popup.value = { entry: e, x: evt.clientX, y: evt.clientY }
+  const fakeEntry = { channel } as ActivityEntry
+  popup.value = { entry: { ...fakeEntry, target: username } as ActivityEntry, x: evt.clientX, y: evt.clientY }
   popupUser.value = null
   popupLoading.value = true
-  fetch(`${API}/twitch/user/${encodeURIComponent(e.target.toLowerCase())}?channel=${encodeURIComponent(e.channel)}`)
+  fetch(`${API}/twitch/user/${encodeURIComponent(username.toLowerCase())}?channel=${encodeURIComponent(channel)}`, {
+    headers: session.value ? { Authorization: `Bearer ${session.value.token}` } : {}
+  })
     .then(r => r.ok ? r.json() as Promise<TwitchUser> : Promise.reject())
     .then(u => { popupUser.value = u })
     .catch(() => {})
@@ -262,6 +265,39 @@ function fmtDuration(iso: string): string {
 
 function subTierLabel(tier: string): string {
   return tier === '3000' ? 'Tier 3' : tier === '2000' ? 'Tier 2' : 'Tier 1'
+}
+
+// >>> Build CSS style for a 7TV paint name display
+function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[] }): Record<string, string> {
+  const styles: Record<string, string> = {}
+  // Convert 7TV int32 color to rgba
+  function intToRgba(c: number): string {
+    const r = (c >>> 24) & 0xff
+    const g = (c >>> 16) & 0xff
+    const b = (c >>> 8)  & 0xff
+    const a = (c & 0xff) / 255
+    return `rgba(${r},${g},${b},${a.toFixed(3)})`
+  }
+  if (paint.stops?.length >= 2) {
+    const stops = paint.stops.map(s => `${intToRgba(s.color)} ${Math.round(s.at * 100)}%`).join(', ')
+    styles['background'] = `linear-gradient(90deg, ${stops})`
+    styles['background-clip'] = 'text'
+    styles['-webkit-background-clip'] = 'text'
+    styles['color'] = 'transparent'
+    styles['-webkit-text-fill-color'] = 'transparent'
+  } else if (paint.imageUrl) {
+    styles['background'] = `url(${paint.imageUrl}) center/cover`
+    styles['background-clip'] = 'text'
+    styles['-webkit-background-clip'] = 'text'
+    styles['color'] = 'transparent'
+    styles['-webkit-text-fill-color'] = 'transparent'
+  }
+  if (paint.shadows?.length) {
+    styles['filter'] = paint.shadows
+      .map(s => `drop-shadow(${s.x_offset ?? 0}px ${s.y_offset ?? 0}px ${s.radius ?? 0}px ${intToRgba(s.color)})`)
+      .join(' ')
+  }
+  return styles
 }
 
 // >>> Format detail nicely
@@ -336,11 +372,11 @@ function fmtActor(actor: string) {
             <div class="feed-body">
               <span class="feed-type" :style="{ color: TYPE_META[e.type]?.color }">{{ TYPE_META[e.type]?.label }}</span>
 
-              <!-- Target: clickable for mod actions to open popup -->
+              <!-- Target: clickable to open user popup -->
               <span
                 class="feed-target"
-                :class="{ 'mod-target': ['ban','timeout','unban'].includes(e.type) }"
-                @click.stop="openUserPopup(e, $event)"
+                :class="{ 'mod-target': !!e.target }"
+                @click.stop="e.target && openUserPopup(e.target, e.channel, $event)"
               >{{ e.target }}</span>
 
               <!-- by actor (only if not 'mod' for cmd events) -->
@@ -425,6 +461,17 @@ function fmtActor(actor: string) {
                 </template>
                 <template v-else>Not subscribed</template>
               </span>
+            </div>
+          </div>
+
+          <!-- Paint cosmetic -->
+          <div v-if="popupUser?.paint" class="popup-paint">
+            <div class="popup-paint-label">7TV Paint</div>
+            <div class="popup-paint-display">
+              <span
+                class="popup-paint-name"
+                :style="paintNameStyle(popupUser.paint)"
+              >{{ popupUser.paint.name }}</span>
             </div>
           </div>
 
@@ -601,6 +648,12 @@ function fmtActor(actor: string) {
 .popup-name-row:last-child { border-bottom: none; }
 .name-val  { font-size: 12px; color: #aaa; }
 .name-when { font-size: 10px; color: #444; }
+
+/* 7TV Paint */
+.popup-paint { display: flex; flex-direction: column; gap: 4px; }
+.popup-paint-label { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .05em; }
+.popup-paint-display { padding: 6px 8px; background: #111217; border: 1px solid #1e1e22; }
+.popup-paint-name { font-size: 14px; font-weight: 700; font-family: inherit; }
 .popup-actions {
   display: flex; gap: 1px;
   border-top: 1px solid #1e1e22;

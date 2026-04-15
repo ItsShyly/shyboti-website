@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
 
 const { session } = useAuth()
 const { t } = useI18n()
+const router = useRouter()
 
 interface LogMsg {
   id: string; text: string; username: string; displayName: string
@@ -451,7 +453,6 @@ function shareMsg(m: LogMsg) {
 }
 
 onMounted(async () => {
-  if (isMobile()) document.body.classList.add('logs-open')
   readUrlState()
   if (!channel.value && session.value?.channel) {
     channel.value = session.value.channel
