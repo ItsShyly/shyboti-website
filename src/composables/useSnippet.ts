@@ -40,61 +40,6 @@ function computeSnippetPixelRatio(selW: number, selH: number): number {
   return Number(ratio.toFixed(2))
 }
 
-function addSnippetCalibrationMarker(containerEl: HTMLElement, markerY: number): () => void {
-  const marker = document.createElement('div')
-  marker.setAttribute('data-snippet-calibration', '1')
-  marker.style.position = 'absolute'
-  marker.style.left = '2px'
-  marker.style.top = `${Math.max(0, Math.round(markerY))}px`
-  marker.style.width = '5px'
-  marker.style.height = '5px'
-  marker.style.background = 'rgb(255, 0, 255)'
-  marker.style.pointerEvents = 'none'
-  marker.style.zIndex = '2147483647'
-
-  const originalPosition = containerEl.style.position
-  const computedPos = getComputedStyle(containerEl).position
-  if (computedPos === 'static') {
-    containerEl.style.position = 'relative'
-  }
-
-  containerEl.appendChild(marker)
-
-  return () => {
-    marker.remove()
-    if (computedPos === 'static') {
-      containerEl.style.position = originalPosition
-    }
-  }
-}
-
-function detectSnippetCalibrationMarkerY(canvas: HTMLCanvasElement): number | null {
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return null
-  const { width, height } = canvas
-  const data = ctx.getImageData(0, 0, width, height).data
-
-  let bestY = -1
-  let bestHits = 0
-  for (let y = 0; y < height; y++) {
-    let hits = 0
-    for (let x = 0; x < Math.min(width, 32); x++) {
-      const i = (y * width + x) * 4
-      const r = data[i] ?? 0
-      const g = data[i + 1] ?? 0
-      const b = data[i + 2] ?? 0
-      if (r > 240 && g < 30 && b > 240) hits++
-    }
-    if (hits > bestHits) {
-      bestHits = hits
-      bestY = y
-    }
-  }
-
-  if (bestHits < 2 || bestY < 0) return null
-  return bestY
-}
-
 function nearestRowAtLocalY(containerEl: HTMLElement, localY: number): { id: string | null; localTop: number } | null {
   const panel = containerEl.getBoundingClientRect()
   const rows = Array.from(containerEl.querySelectorAll('.log-row-outer')) as HTMLElement[]
@@ -289,8 +234,6 @@ export function useSnippet() {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
       let cropCanvas: HTMLCanvasElement
-      const calibrationMarkerLocalY = Math.max(0, selInCapture.y - 8)
-      const removeCalibrationMarker = addSnippetCalibrationMarker(captureRoot, calibrationMarkerLocalY)
       try {
         const fullCanvas = await toCanvas(captureRoot, {
           pixelRatio: scale,
@@ -314,32 +257,14 @@ export function useSnippet() {
         const widthLooksLikeViewport = widthViewportDelta <= widthContentDelta
         const heightLooksLikeViewport = heightViewportDelta <= heightContentDelta
 
-        // Base mapping from container space. Nested scroll compensation proved
-        // to overcorrect (jumping far out of bounds), so we keep source Y in
-        // the same local coordinate space as selection.
+        // selInCapture is content-space. If html-to-image rendered viewport-space,
+        // convert to viewport coordinates by subtracting captureRoot scroll offsets.
         const sourceX = widthLooksLikeViewport ? (selInCapture.x - captureRoot.scrollLeft) : selInCapture.x
-        let sourceY = selInCapture.y
+        let sourceY = heightLooksLikeViewport ? (selInCapture.y - captureRoot.scrollTop) : selInCapture.y
 
         // Safety: if Y is outside the rendered viewport bounds, reset to local selection Y.
         if (sourceY < 0 || sourceY > captureRoot.clientHeight) {
-          sourceY = selInCapture.y
-        }
-
-        const markerYRendered = detectSnippetCalibrationMarkerY(fullCanvas)
-        if (markerYRendered !== null) {
-          const markerYExpected = Math.round(calibrationMarkerLocalY * scale)
-          const markerDeltaScaled = markerYRendered - markerYExpected
-          sourceY += markerDeltaScaled / Math.max(0.01, scale)
-          if (SNIPPET_DEBUG) {
-            console.log('[Snippet] Marker calibration', {
-              markerYRendered,
-              markerYExpected,
-              markerDeltaScaled,
-              markerDeltaUnscaled: markerDeltaScaled / Math.max(0.01, scale),
-            })
-          }
-        } else if (SNIPPET_DEBUG) {
-          console.log('[Snippet] Marker calibration', { markerYRendered: null })
+          sourceY = Math.max(0, Math.min(captureRoot.clientHeight - selInCapture.h, heightLooksLikeViewport ? (selInCapture.y - captureRoot.scrollTop) : selInCapture.y))
         }
 
         const srcX = Math.max(0, Math.round(sourceX * scale))
@@ -393,7 +318,6 @@ export function useSnippet() {
         if (!ctx) throw new Error('Could not create canvas context')
         ctx.drawImage(fullCanvas, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH)
       } finally {
-        removeCalibrationMarker()
         document.body.classList.remove('snippet-capturing')
       }
 
