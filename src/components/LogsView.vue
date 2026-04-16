@@ -1328,7 +1328,11 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                   :class="{ 'log-user-clickable': true }"
                   @click.stop="openUserPopup(item.msg.username, channel || item.msg.channel?.replace('#',''), $event)"
                 >{{ item.msg.displayName || item.msg.username }}</div>
-                <div class="log-msg-wrap" :class="{ 'has-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'is-system-mod': isModerationSystemMessage(item.msg) }">
+                <div
+                  class="log-msg-wrap"
+                  :class="{ 'has-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'is-system-mod': isModerationSystemMessage(item.msg) }"
+                  :data-mobile-user="isModerationSystemMessage(item.msg) ? '' : (item.msg.displayName || item.msg.username)"
+                >
                   <div
                     v-if="item.msg.tags?.['reply-parent-msg-body']"
                     class="reply-context"
@@ -1779,8 +1783,15 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .log-event-label { display: none; }
   .log-time       { display: none; }
   .log-time-short { display: block; flex-shrink: 0; color: #555; font-size: 11px; white-space: nowrap; }
-  .log-user  { flex-shrink: 0; font-size: 12px; padding-right: 0; white-space: nowrap; }
-  .log-msg   { flex: 1; font-size: 12px; min-width: 0; word-break: break-word; }
+  .log-badges { display: none; }
+  .log-user  { display: none; }
+  .log-msg-wrap { flex: 1; min-width: 0; }
+  .log-msg-wrap:not(.is-system-mod)::before {
+    content: attr(data-mobile-user) ': ';
+    color: #cfcfcf;
+    font-weight: 600;
+  }
+  .log-msg { display: inline; font-size: 12px; min-width: 0; word-break: break-word; }
   .log-share { flex-shrink: 0; opacity: 0.5 !important; }
 }
 </style>
