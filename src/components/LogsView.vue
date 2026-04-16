@@ -85,6 +85,8 @@ const VIRTUAL_OVERSCAN = 80
 const VIRTUAL_ROW_ESTIMATE = 30
 const virtualStart = ref(0)
 const virtualEnd = ref(0)
+const loadingOverlayLogoUrl = 'https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif'
+const domSettling = ref(false)
 
 const isMobile = () => window.matchMedia('(max-width: 680px)').matches
 
@@ -680,6 +682,7 @@ const bottomSpacerHeight = computed(() => {
   if (!useVirtual.value) return 0
   return Math.max(0, (displayItems.value.length - virtualEnd.value) * VIRTUAL_ROW_ESTIMATE)
 })
+const showFloatingFetch = computed(() => loading.value || loadingMore.value || domSettling.value)
 
 function userColor(m: LogMsg): string {
   const tc = m.tags?.['color']
@@ -782,7 +785,17 @@ function buildMarkerChips(m: LogMsg): BadgeChip[] {
   const msgId = (tags['msg-id'] ?? '').toLowerCase()
   if (msgId === 'announcement') out.push({ key: 'announcement', label: 'Announcement', kind: 'marker' })
   if (msgId === 'sub' || msgId === 'resub') out.push({ key: msgId, label: 'Subscription', kind: 'marker' })
+  if (msgId === 'subgift') out.push({ key: msgId, label: 'Gift Subscription', kind: 'marker' })
+  if (msgId === 'submysterygift') out.push({ key: msgId, label: 'Community Gift', kind: 'marker' })
   return out
+}
+
+function isHighlightedEvent(m: LogMsg): boolean {
+  const tags = m.tags ?? {}
+  if (tags['first-msg'] === '1') return true
+  const msgId = String(tags['msg-id'] ?? '').toLowerCase()
+  if (msgId === 'sub' || msgId === 'resub' || msgId === 'subgift' || msgId === 'submysterygift' || msgId === 'announcement') return true
+  return false
 }
 
 function esc(s: string) {
@@ -910,8 +923,11 @@ watch(msgs, (list) => {
 }, { flush: 'post' })
 
 watch(displayItems, async () => {
+  domSettling.value = true
   await nextTick()
   recalcVirtualWindow()
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+  domSettling.value = false
 }, { flush: 'post' })
 
 // >>> User popup
@@ -1175,7 +1191,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :id="`log-${item.msg.id}`"
               v-memo="[item.msg.id, highlightId === item.msg.id]"
               class="log-row-outer"
-              :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'] }"
+              :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'log-row-event': isHighlightedEvent(item.msg) }"
             >
               <div class="log-row">
                 <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
@@ -1308,6 +1324,11 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
         <button class="popup-btn" @click="openUsercardPopout(popup.username, popup.channel)">↗ Twitch</button>
       </div>
     </div>
+
+    <div v-if="showFloatingFetch" class="logs-fetch-floating" aria-live="polite" aria-busy="true">
+      <img class="logs-fetch-logo" :src="loadingOverlayLogoUrl" alt="ShyBoti loading" loading="eager" decoding="async" />
+      <span class="logs-fetch-text">logs getting fetched...</span>
+    </div>
   </div>
 </template>
 
@@ -1387,6 +1408,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 }
 .log-row-outer:hover { background: #1a1a1e; }
 .log-row-outer.highlighted { animation: hl-fade 3s ease forwards; }
+.log-row-outer.log-row-event {
+  background: linear-gradient(90deg, rgba(200, 50, 200, 0.16), rgba(200, 50, 200, 0.02) 45%, transparent 80%);
+  border-left: 2px solid #c832c8;
+}
+.log-row-outer.log-row-event:hover {
+  background: linear-gradient(90deg, rgba(200, 50, 200, 0.24), rgba(200, 50, 200, 0.08) 50%, rgba(26, 26, 30, 0.9) 100%);
+}
 @keyframes hl-fade {
   0%   { background: rgba(111,43,255,.25); }
   100% { background: transparent; }
@@ -1490,6 +1518,39 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .popup-btn { flex: 1; height: 32px; border: none; border-right: 1px solid #1e1e22; background: #141418; color: #888; font-family: inherit; font-size: 11px; cursor: pointer; transition: background .15s, color .15s; }
 .popup-btn:last-child { border-right: none; }
 .popup-btn:hover { background: #1e1e24; color: #9d6cff; }
+
+.logs-fetch-floating {
+  position: fixed;
+  right: 18px;
+  bottom: 16px;
+  z-index: 320;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 12px;
+  background: rgba(17, 18, 24, 0.95);
+  border: 1px solid #c832c855;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  pointer-events: none;
+}
+.logs-fetch-logo {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  animation: logs-fetch-spin 1s linear infinite;
+  transform-origin: center center;
+}
+.logs-fetch-text {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  color: #f2d3ff;
+  text-transform: lowercase;
+}
+@keyframes logs-fetch-spin {
+  to { transform: rotate(360deg); }
+}
 
 /* Direction toggle */
 .dir-toggle { display: flex; gap: 0; }
