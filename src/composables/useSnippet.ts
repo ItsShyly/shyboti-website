@@ -144,37 +144,30 @@ export function useSnippet() {
 
       let cropCanvas: HTMLCanvasElement
       try {
-        // Render ONLY the selected region by cloning the current viewport
-        // and clipping via an offscreen wrapper. This avoids expensive
-        // full-canvas renders and fixes crop coordinate drift.
+        // Fast path: render the selected region directly by shifting
+        // the cloned container inside html-to-image.
         const viewX = sel.x - containerEl.scrollLeft
         const viewY = sel.y - containerEl.scrollTop
+        const targetW = Math.max(1, Math.round(sel.w))
+        const targetH = Math.max(1, Math.round(sel.h))
 
-        const wrapper = document.createElement('div')
-        wrapper.style.position = 'fixed'
-        wrapper.style.left = '-100000px'
-        wrapper.style.top = '0'
-        wrapper.style.width = `${Math.max(1, Math.round(sel.w))}px`
-        wrapper.style.height = `${Math.max(1, Math.round(sel.h))}px`
-        wrapper.style.overflow = 'hidden'
-        wrapper.style.pointerEvents = 'none'
-        wrapper.style.background = '#0d0d10'
-        wrapper.style.zIndex = '-1'
+        cropCanvas = await toCanvas(containerEl, {
+          pixelRatio: scale,
+          cacheBust: false,
+          backgroundColor: '#0d0d10',
+          width: targetW,
+          height: targetH,
+          style: {
+            background: '#0d0d10',
+            transform: `translate(${-viewX}px, ${-viewY}px)`,
+            transformOrigin: 'top left',
+          },
+        })
 
-        const clone = containerEl.cloneNode(true) as HTMLElement
-        clone.style.margin = '0'
-        clone.style.width = `${containerEl.clientWidth}px`
-        clone.style.height = `${containerEl.clientHeight}px`
-        clone.style.transform = `translate(${-viewX}px, ${-viewY}px)`
-        clone.style.transformOrigin = 'top left'
-        clone.style.background = '#0d0d10'
-        clone.scrollTop = containerEl.scrollTop
-        clone.scrollLeft = containerEl.scrollLeft
-
-        wrapper.appendChild(clone)
-        document.body.appendChild(wrapper)
-        try {
-          cropCanvas = await toCanvas(wrapper, {
+        // Safety fallback: if the direct transform capture is invalid,
+        // render full container and crop by coordinates.
+        if (!cropCanvas.width || !cropCanvas.height) {
+          const fullCanvas = await toCanvas(containerEl, {
             pixelRatio: scale,
             cacheBust: false,
             backgroundColor: '#0d0d10',
@@ -182,8 +175,22 @@ export function useSnippet() {
               background: '#0d0d10',
             },
           })
-        } finally {
-          wrapper.remove()
+          const srcX = Math.max(0, Math.round((sel.x - containerEl.scrollLeft) * scale))
+          const srcY = Math.max(0, Math.round((sel.y - containerEl.scrollTop) * scale))
+          const reqW = Math.max(1, Math.round(sel.w * scale))
+          const reqH = Math.max(1, Math.round(sel.h * scale))
+          const srcW = Math.max(1, Math.min(reqW, fullCanvas.width - srcX))
+          const srcH = Math.max(1, Math.min(reqH, fullCanvas.height - srcY))
+          if (srcX >= fullCanvas.width || srcY >= fullCanvas.height) {
+            throw new Error('Selection is outside rendered canvas bounds')
+          }
+          const fallbackCanvas = document.createElement('canvas')
+          fallbackCanvas.width = srcW
+          fallbackCanvas.height = srcH
+          const ctx = fallbackCanvas.getContext('2d')
+          if (!ctx) throw new Error('Could not create canvas context')
+          ctx.drawImage(fullCanvas, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH)
+          cropCanvas = fallbackCanvas
         }
       } finally {
         document.body.classList.remove('snippet-capturing')
