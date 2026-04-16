@@ -18,7 +18,7 @@ let   suppressContextMenuUntil = 0
 
 // rAF throttle flag – one pending frame max
 let rafPending = false
-const SNIPPET_CAPTURE_DELAY_MS = 450
+const SNIPPET_CAPTURE_DELAY_MS = 400
 
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
   const start = Date.now()
