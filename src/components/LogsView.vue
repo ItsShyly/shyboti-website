@@ -21,6 +21,11 @@ interface BadgeChip {
   imageUrl?: string
   title?: string
 }
+interface EventMeta {
+  label: string
+  icon: string
+  tone: 'first' | 'sub' | 'announce'
+}
 interface TwitchBadgeAsset { imageUrl: string; title: string }
 interface SevenTvBadgeAsset { imageUrl: string; title: string }
   
@@ -778,24 +783,34 @@ function buildBadgeChips(m: LogMsg): BadgeChip[] {
   return out
 }
 
-function buildMarkerChips(m: LogMsg): BadgeChip[] {
-  const out: BadgeChip[] = []
+function getEventMeta(m: LogMsg): EventMeta | null {
   const tags = m.tags ?? {}
-  if (tags['first-msg'] === '1') out.push({ key: 'first-msg', label: 'First Message', kind: 'marker' })
-  const msgId = (tags['msg-id'] ?? '').toLowerCase()
-  if (msgId === 'announcement') out.push({ key: 'announcement', label: 'Announcement', kind: 'marker' })
-  if (msgId === 'sub' || msgId === 'resub') out.push({ key: msgId, label: 'Subscription', kind: 'marker' })
-  if (msgId === 'subgift') out.push({ key: msgId, label: 'Gift Subscription', kind: 'marker' })
-  if (msgId === 'submysterygift') out.push({ key: msgId, label: 'Community Gift', kind: 'marker' })
-  return out
+  if (tags['first-msg'] === '1') {
+    return { label: 'First Message', icon: '✦', tone: 'first' }
+  }
+  const msgId = String(tags['msg-id'] ?? '').toLowerCase()
+  if (msgId === 'sub' || msgId === 'resub') {
+    return { label: 'Subscribed', icon: '★', tone: 'sub' }
+  }
+  if (msgId === 'subgift') {
+    return { label: 'Gift Subscription', icon: '★', tone: 'sub' }
+  }
+  if (msgId === 'submysterygift') {
+    return { label: 'Community Gift', icon: '★', tone: 'sub' }
+  }
+  if (msgId === 'announcement') {
+    return { label: 'Announcement', icon: '📣', tone: 'announce' }
+  }
+  return null
 }
 
 function isHighlightedEvent(m: LogMsg): boolean {
-  const tags = m.tags ?? {}
-  if (tags['first-msg'] === '1') return true
-  const msgId = String(tags['msg-id'] ?? '').toLowerCase()
-  if (msgId === 'sub' || msgId === 'resub' || msgId === 'subgift' || msgId === 'submysterygift' || msgId === 'announcement') return true
-  return false
+  return getEventMeta(m) !== null
+}
+
+function eventToneClass(m: LogMsg): string {
+  const meta = getEventMeta(m)
+  return meta ? `tone-${meta.tone}` : ''
 }
 
 function esc(s: string) {
@@ -1194,8 +1209,14 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'log-row-event': isHighlightedEvent(item.msg) }"
             >
               <div class="log-row">
-                <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
-                <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
+                <div class="log-time-col">
+                  <div v-if="getEventMeta(item.msg)" class="log-event-label" :class="eventToneClass(item.msg)">
+                    <span class="log-event-icon">{{ getEventMeta(item.msg)!.icon }}</span>
+                    <span>{{ getEventMeta(item.msg)!.label }}</span>
+                  </div>
+                  <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
+                  <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
+                </div>
                 <div v-if="buildBadgeChips(item.msg).length" class="log-badges">
                   <template
                     v-for="b in buildBadgeChips(item.msg)"
@@ -1229,13 +1250,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                     <span class="reply-icon">⮣</span>
                     <span class="reply-parent-user">@{{ item.msg.tags['reply-parent-display-name'] || item.msg.tags['reply-parent-user-login'] || '?' }}:</span>
                     <span class="reply-parent-body">{{ item.msg.tags['reply-parent-msg-body'] }}</span>
-                  </div>
-                  <div v-if="buildMarkerChips(item.msg).length" class="log-markers">
-                    <span
-                      v-for="m in buildMarkerChips(item.msg)"
-                      :key="`${item.msg.id}-marker-${m.key}`"
-                      class="badge-chip badge-marker"
-                    >{{ m.label }}</span>
                   </div>
                   <div class="log-msg" v-html="renderMsgForMessage(item.msg)"></div>
                 </div>
@@ -1426,25 +1440,35 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   font-size: 12px;
 }
 
-.log-time       { color: #444; font-size: 11px; flex-shrink: 0; margin-right: 10px; }
+.log-time-col { display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0; margin-right: 10px; min-width: 120px; }
+.log-event-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  height: 15px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.log-event-icon { font-size: 10px; line-height: 1; }
+.log-event-label.tone-first { background: rgba(200, 50, 200, 0.16); border-color: rgba(200, 50, 200, 0.55); color: #f4c2f4; }
+.log-event-label.tone-sub { background: rgba(255, 208, 69, 0.14); border-color: rgba(255, 208, 69, 0.45); color: #ffdd7d; }
+.log-event-label.tone-announce { background: rgba(93, 171, 255, 0.12); border-color: rgba(93, 171, 255, 0.45); color: #a8d3ff; }
+.log-time       { color: #444; font-size: 11px; flex-shrink: 0; }
 .log-time-short { display: none; }
 .log-day-sep    { display: none; }
 .log-badges { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; flex-shrink: 0; }
 .badge-img { display: block; width: 18px; height: 18px; }
 .badge-fallback { font-size: 10px; color: #888; }
-.badge-chip {
-  display: inline-flex; align-items: center;
-  height: 15px; padding: 0 5px;
-  font-size: 9px; font-weight: 700; letter-spacing: .01em;
-  border-radius: 3px; border: 1px solid transparent;
-  line-height: 1;
-}
-.badge-marker { background: #3a2d16; border-color: #5f4a22; color: #f2ce7d; }
 .log-user { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
 .log-user::after { content: ':'; color: #555; margin-right: 5px; }
 .log-msg-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .log-msg-wrap.has-reply { padding-top: 16px; }
-.log-markers { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 0 0 2px; }
 .log-msg  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
 
 /* Reply thread indicator */
@@ -1648,6 +1672,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     padding: 3px 12px;
     grid-template-columns: unset !important;
   }
+  .log-time-col { min-width: auto; margin-right: 0; }
+  .log-event-label { display: none; }
   .log-time       { display: none; }
   .log-time-short { display: block; flex-shrink: 0; color: #555; font-size: 11px; white-space: nowrap; }
   .log-user  { flex-shrink: 0; font-size: 12px; padding-right: 0; white-space: nowrap; }
