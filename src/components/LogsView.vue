@@ -452,7 +452,13 @@ function shareMsg(m: LogMsg) {
   setTimeout(() => copyToast.value = false, 2000)
 }
 
+// >>> Global mousemove/mouseup to handle drag leaving the tbody
+function onWindowMouseMove(e: MouseEvent) { onTbodyMouseMove(e) }
+function onWindowMouseUp(e: MouseEvent)   { onTbodyMouseUp(e) }
+
 onMounted(async () => {
+  window.addEventListener('mousemove', onWindowMouseMove)
+  window.addEventListener('mouseup',   onWindowMouseUp)
   readUrlState()
   if (!channel.value && session.value?.channel) {
     channel.value = session.value.channel
@@ -463,6 +469,8 @@ onMounted(async () => {
   if (channel.value) await search()
 })
 onUnmounted(() => {
+  window.removeEventListener('mousemove', onWindowMouseMove)
+  window.removeEventListener('mouseup',   onWindowMouseUp)
   document.body.classList.remove('logs-open')
   abortCtrl.abort()
   detachScrollListeners()
@@ -599,6 +607,102 @@ watch(msgs, (list) => {
     }
   }
 }, { flush: 'post' })
+
+// >>> Screenshot drag-select on logs-tbody
+const screenshotDrag    = ref(false)
+const screenshotRect    = ref<{ x: number; y: number; w: number; h: number } | null>(null)
+const screenshotAnchor  = ref<{ x: number; y: number } | null>(null)
+const screenshotToast   = ref<{ url: string } | null>(null)
+let   screenshotTimer: ReturnType<typeof setTimeout> | null = null
+
+function onTbodyMouseDown(e: MouseEvent) {
+  // Only left-click, not on interactive elements
+  if (e.button !== 0) return
+  const target = e.target as HTMLElement
+  if (target.closest('a, button, .log-share, .log-user-clickable')) return
+  const tbody = bodyRef.value; if (!tbody) return
+  const rect  = tbody.getBoundingClientRect()
+  const x = e.clientX - rect.left + tbody.scrollLeft
+  const y = e.clientY - rect.top  + tbody.scrollTop
+  screenshotAnchor.value = { x, y }
+  screenshotRect.value   = { x, y, w: 0, h: 0 }
+  screenshotDrag.value   = true
+  e.preventDefault()
+}
+
+function onTbodyMouseMove(e: MouseEvent) {
+  if (!screenshotDrag.value || !screenshotAnchor.value) return
+  const tbody = bodyRef.value; if (!tbody) return
+  const rect  = tbody.getBoundingClientRect()
+  const cx = e.clientX - rect.left + tbody.scrollLeft
+  const cy = e.clientY - rect.top  + tbody.scrollTop
+  const ax = screenshotAnchor.value.x
+  const ay = screenshotAnchor.value.y
+  screenshotRect.value = {
+    x: Math.min(ax, cx), y: Math.min(ay, cy),
+    w: Math.abs(cx - ax), h: Math.abs(cy - ay)
+  }
+}
+
+async function onTbodyMouseUp(e: MouseEvent) {
+  if (!screenshotDrag.value) return
+  screenshotDrag.value = false
+  const sel = screenshotRect.value
+  screenshotRect.value = null
+  screenshotAnchor.value = null
+  if (!sel || sel.w < 10 || sel.h < 10) return
+
+  const tbody = bodyRef.value; if (!tbody) return
+  const rect  = tbody.getBoundingClientRect()
+
+  // Use html2canvas-style approach: draw visible area using dom-to-image via canvas
+  // We use the Selection rect relative to the tbody bounding box, accounting for scroll
+  const scaleX = window.devicePixelRatio || 1
+  const scaleY = window.devicePixelRatio || 1
+
+  // Clamp to visible area (viewport-relative)
+  const vpX = sel.x - tbody.scrollLeft
+  const vpY = sel.y - tbody.scrollTop
+
+  // We capture using html2canvas via dynamic import (already in node_modules via vite)
+  // Fallback: use canvas + foreignObject via window approach
+  try {
+    // @ts-ignore
+    const html2canvas = (await import('html2canvas')).default
+    const canvas = await html2canvas(tbody, {
+      x: sel.x,
+      y: sel.y,
+      width:  sel.w,
+      height: sel.h,
+      scrollX: -rect.left,
+      scrollY: -rect.top,
+      useCORS: true,
+      allowTaint: true,
+      logging: false,
+      scale: scaleX,
+      backgroundColor: '#0d0d10'
+    })
+    canvas.toBlob(async (blob: Blob | null) => {
+      if (!blob) return
+      const fd = new FormData()
+      fd.append('file', new File([blob], 'logs-screenshot.png', { type: 'image/png' }))
+      const headers: Record<string, string> = {}
+      if (session.value) headers['Authorization'] = `Bearer ${session.value.token}`
+      try {
+        const res = await fetch(`${API}/images/upload`, { method: 'POST', headers, body: fd })
+        if (!res.ok) return
+        const data = await res.json() as { id: string }
+        const url = `https://i.shyboti.de/${data.id}`
+        await navigator.clipboard.writeText(url).catch(() => {})
+        if (screenshotTimer) clearTimeout(screenshotTimer)
+        screenshotToast.value = { url }
+        screenshotTimer = setTimeout(() => { screenshotToast.value = null }, 3000)
+      } catch {}
+    }, 'image/png')
+  } catch (err) {
+    console.error('Screenshot failed:', err)
+  }
+}
 
 // >>> User popup (same as DashboardView)
 interface TwitchUser {
@@ -776,13 +880,30 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
         <div class="logs-thead">
           <div>{{ t('logs.col.time') }}</div><div>{{ t('logs.col.user') }}</div><div>{{ t('logs.col.msg') }}</div>
         </div>
-        <div class="logs-tbody" ref="bodyRef">
+        <div
+          class="logs-tbody"
+          ref="bodyRef"
+          :class="{ 'tbody-selecting': screenshotDrag }"
+          @mousedown="onTbodyMouseDown"
+        >
           <!-- >>> loadingMore indicator: v-show keeps the DOM node alive so it never
                re-renders the parent search-bar or causes input fields to lose focus -->
           <div class="top-loader" v-show="loadingMore">
             <span class="spinner">⟳</span> {{ t('logs.load_older') }}
           </div>
           <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
+
+          <!-- Screenshot selection overlay -->
+          <div
+            v-if="screenshotRect && screenshotDrag"
+            class="screenshot-selection"
+            :style="{
+              left:   screenshotRect.x + 'px',
+              top:    screenshotRect.y + 'px',
+              width:  screenshotRect.w + 'px',
+              height: screenshotRect.h + 'px'
+            }"
+          />
 
           <template v-for="item in displayItems" :key="item.kind === 'day' ? 'day-' + item.label : item.msg.id">
             <!-- Day separator -->
@@ -832,6 +953,18 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
         </div>
       </div>
     </div>
+    <!-- Screenshot toast (bottom-right) -->
+    <Teleport to="body">
+      <transition name="screenshot-toast-fade">
+        <div v-if="screenshotToast" class="screenshot-toast">
+          <div class="screenshot-toast-label">Copied to clipboard</div>
+          <a :href="screenshotToast.url" target="_blank" rel="noopener" class="screenshot-toast-img-link">
+            <img :src="screenshotToast.url" class="screenshot-toast-img" alt="screenshot" />
+          </a>
+        </div>
+      </transition>
+    </Teleport>
+
     <!-- User popup -->
     <div v-if="popup" class="user-popup" :style="{ top: popup.y + 'px', left: popup.x + 'px' }" @click.stop>
       <div class="popup-header">
@@ -939,9 +1072,56 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   padding: 7px 14px; background: #0d0d10; border: 1px solid #1e1e24;
   font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0;
 }
-.logs-tbody   { overflow-y: auto; flex: 1; }
+.logs-tbody   { overflow-y: auto; flex: 1; position: relative; }
 .logs-tbody::-webkit-scrollbar { width: 3px; }
 .logs-tbody::-webkit-scrollbar-thumb { background: #333; }
+.tbody-selecting { cursor: crosshair !important; user-select: none !important; }
+
+.screenshot-selection {
+  position: absolute;
+  border: 1.5px solid #9d6cff;
+  background: rgba(111, 43, 255, 0.12);
+  pointer-events: none;
+  z-index: 50;
+}
+
+.screenshot-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9999;
+  background: #1b1b1f;
+  border: 1px solid #6f2bff88;
+  box-shadow: 0 4px 24px #00000099;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  min-width: 120px;
+  max-width: 260px;
+}
+.screenshot-toast-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #9d6cff;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  text-align: center;
+}
+.screenshot-toast-img-link { display: block; }
+.screenshot-toast-img {
+  max-width: 240px;
+  max-height: 160px;
+  display: block;
+  object-fit: contain;
+  border: 1px solid #2a2a30;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.screenshot-toast-img:hover { opacity: .85; }
+.screenshot-toast-fade-enter-active, .screenshot-toast-fade-leave-active { transition: opacity .25s, transform .25s; }
+.screenshot-toast-fade-enter-from, .screenshot-toast-fade-leave-to { opacity: 0; transform: translateY(12px); }
 
 .top-loader  { text-align: center; font-size: 11px; color: #555; padding: 8px; }
 .top-loader.no-more { color: #333; }
