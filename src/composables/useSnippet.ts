@@ -153,12 +153,31 @@ export function useSnippet() {
           },
         })
 
-        const srcX = Math.max(0, Math.round((sel.x - containerEl.scrollLeft) * scale))
-        const srcY = Math.max(0, Math.round((sel.y - containerEl.scrollTop) * scale))
+        const clientWScaled = Math.max(1, Math.round(containerEl.clientWidth * scale))
+        const clientHScaled = Math.max(1, Math.round(containerEl.clientHeight * scale))
+        const scrollWScaled = Math.max(1, Math.round(containerEl.scrollWidth * scale))
+        const scrollHScaled = Math.max(1, Math.round(containerEl.scrollHeight * scale))
+
+        const widthLooksLikeViewport = Math.abs(fullCanvas.width - clientWScaled) <= Math.abs(fullCanvas.width - scrollWScaled)
+        const heightLooksLikeViewport = Math.abs(fullCanvas.height - clientHScaled) <= Math.abs(fullCanvas.height - scrollHScaled)
+
+        const srcX = Math.max(0, Math.round((widthLooksLikeViewport ? (sel.x - containerEl.scrollLeft) : sel.x) * scale))
+        const srcY = Math.max(0, Math.round((heightLooksLikeViewport ? (sel.y - containerEl.scrollTop) : sel.y) * scale))
         const reqW = Math.max(1, Math.round(sel.w * scale))
         const reqH = Math.max(1, Math.round(sel.h * scale))
         const srcW = Math.max(1, Math.min(reqW, fullCanvas.width - srcX))
         const srcH = Math.max(1, Math.min(reqH, fullCanvas.height - srcY))
+
+        if (SNIPPET_DEBUG) {
+          console.log('[Snippet] Crop mode', {
+            widthLooksLikeViewport,
+            heightLooksLikeViewport,
+            canvas: { w: fullCanvas.width, h: fullCanvas.height },
+            client: { w: clientWScaled, h: clientHScaled },
+            scroll: { w: scrollWScaled, h: scrollHScaled },
+            src: { x: srcX, y: srcY, w: srcW, h: srcH },
+          })
+        }
 
         if (srcX >= fullCanvas.width || srcY >= fullCanvas.height) {
           throw new Error('Selection is outside rendered canvas bounds')
