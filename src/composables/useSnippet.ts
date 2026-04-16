@@ -20,7 +20,7 @@ let   suppressContextMenuUntil = 0
 let rafPending = false
 const SNIPPET_CAPTURE_DELAY_MS = 0
 
-/** Read paint color from a live DOM element (before html2canvas clones it) */
+/** Read paint color from a live DOM element */
 function readPaintColor(el: HTMLElement): string | null {
   const cs = getComputedStyle(el)
   const preview = cs.getPropertyValue('--snippet-paint-preview').trim()
@@ -34,18 +34,37 @@ function readPaintColor(el: HTMLElement): string | null {
   return null
 }
 
-/** Build a map of element index → paint color from the live DOM */
-function collectPaintColorMap(container: HTMLElement): Map<number, string> {
+/**
+ * Temporarily convert painted usernames from gradient-background to flat
+ * colored text in the LIVE DOM. Returns a restore function.
+ */
+function flattenPaintsForCapture(container: HTMLElement): () => void {
   const users = Array.from(container.querySelectorAll('.log-user')) as HTMLElement[]
-  const map = new Map<number, string>()
-  users.forEach((el, i) => {
+  const originals: { el: HTMLElement; cssText: string }[] = []
+
+  for (const el of users) {
     const cs = getComputedStyle(el)
     const clip = cs.getPropertyValue('-webkit-background-clip') || cs.getPropertyValue('background-clip')
-    if (clip !== 'text') return
+    if (clip !== 'text') continue
+
     const color = readPaintColor(el)
-    if (color) map.set(i, color)
-  })
-  return map
+    if (!color) continue
+
+    // Save original inline styles for restoration
+    originals.push({ el, cssText: el.style.cssText })
+
+    // Replace with flat colored text
+    el.style.cssText = `color: ${color}; -webkit-text-fill-color: ${color}; background-image: none; background-clip: border-box; -webkit-background-clip: border-box; filter: none; font-weight: 600; line-height: 1.1rem;`
+  }
+
+  console.log('[Snippet] Flattened', originals.length, 'painted users in live DOM')
+
+  return () => {
+    for (const { el, cssText } of originals) {
+      el.style.cssText = cssText
+    }
+    console.log('[Snippet] Restored', originals.length, 'painted users')
+  }
 }
 
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
@@ -147,13 +166,8 @@ export function useSnippet() {
     if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
     screenshotToast.value = { state: 'uploading', url: null, imgReady: false }
 
-    // Collect paint colors from LIVE DOM before html2canvas clones it.
-    // The clone loses background-clip:text rendering, so we need to
-    // convert painted users to flat colored text in the clone.
-    const paintColorMap = collectPaintColorMap(containerEl)
-
     const totalStart = performance.now()
-    console.log('[Snippet] Starting screenshot process, painted users:', paintColorMap.size)
+    console.log('[Snippet] Starting screenshot process')
 
     try {
       // @ts-ignore
@@ -165,6 +179,11 @@ export function useSnippet() {
       document.body.classList.add('snippet-capturing')
       // Let style changes settle before html2canvas snapshots computed styles.
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+      // Flatten painted usernames to flat colored text in the LIVE DOM.
+      // html2canvas will clone this already-flattened state.
+      const restorePaints = flattenPaintsForCapture(containerEl)
+
       let cropCanvas: HTMLCanvasElement
       try {
         const baseOptions = {
@@ -179,22 +198,6 @@ export function useSnippet() {
           logging:         false,
           scale,
           backgroundColor: '#0d0d10',
-          onclone: (_doc: Document, clonedEl: HTMLElement) => {
-            // Convert painted usernames from gradient-background to flat
-            // colored text. html2canvas can't render background-clip:text,
-            // so we replace the paint styles with a direct text color
-            // that we captured from the live DOM.
-            const users = Array.from(clonedEl.querySelectorAll('.log-user')) as HTMLElement[]
-            let converted = 0
-            users.forEach((el, i) => {
-              const paintColor = paintColorMap.get(i)
-              if (!paintColor) return
-              // Nuke all inline styles and set flat colored text
-              el.style.cssText = `color: ${paintColor} !important; -webkit-text-fill-color: ${paintColor} !important; background: none !important; -webkit-background-clip: border-box !important; background-clip: border-box !important; filter: none !important; font-weight: 600 !important;`
-              converted++
-            })
-            console.log('[Snippet] Converted', converted, 'painted users to flat text in clone')
-          },
         }
 
         cropCanvas = await html2canvas(containerEl, baseOptions)
@@ -205,6 +208,7 @@ export function useSnippet() {
           })
         }
       } finally {
+        restorePaints()
         document.body.classList.remove('snippet-capturing')
       }
       const html2Duration = performance.now() - html2Start
