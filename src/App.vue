@@ -12,7 +12,13 @@ const route  = useRoute()
 
 // >>> logs.shyboti.de - public logs site; full UI only if devgate cookie is present
 const isLogsMode = window.location.hostname === 'logs.shyboti.de'
-const hasDevGate = ref(!isLogsMode) // dev.shyboti.de always has full UI
+// >>> Read devgate cookie synchronously so there's no flash on first render.
+// >>> On dev.shyboti.de this is always true (no gate needed).
+// >>> On logs.shyboti.de we check the cookie immediately; onMounted re-validates with the server.
+function readDevGateCookie(): boolean {
+  return document.cookie.split(';').some(c => c.trim().startsWith('devgate='))
+}
+const hasDevGate = ref(isLogsMode ? readDevGateCookie() : true)
 const { t } = useI18n()
 const { locale, setLocale } = useLocale()
 
@@ -278,14 +284,17 @@ onMounted(async () => {
 
   if (token) await restoreSession(token)
 
-  // >>> On logs.shyboti.de, check if devgate cookie is valid to show full UI
   if (isLogsMode) {
+    // >>> Re-validate devgate with server (cookie could be expired/spoofed)
     try {
       const gateRes = await fetch('/api/devgate/verify', { credentials: 'include' })
       hasDevGate.value = gateRes.ok
     } catch { hasDevGate.value = false }
+    // >>> logs.shyboti.de: router already handles all routing (/ → /logs, all else → /logs)
+    return
   }
 
+  // >>> dev.shyboti.de: handle OAuth callbacks and initial navigation
   if (status === 'loggedin' && channel) {
     showToast(`Logged in as ${channel}`)
     showAddBanner.value = !availableChannels.value.includes(channel)
@@ -295,10 +304,6 @@ onMounted(async () => {
     router.push('/dashboard')
   } else if (status === 'removed' && channel) {
     showToast(`✓ ShyBoti left #${channel}`)
-  }
-
-  if (isLogsMode) {
-    // >>> logs.shyboti.de: router already redirects / → /logs, nothing extra needed
   } else if (route.path === '/' || route.path === '') {
     router.push(session.value ? '/dashboard' : '/')
   }
@@ -329,93 +334,85 @@ provide('searchOpenTrigger', searchOpenTrigger)
 <template>
   <div class="page" :class="{ 'logs-mode': isLogsMode && !hasDevGate }">
 
-    <!-- Full topbar when not in logs mode OR when devgate is valid -->
-    <div v-if="hasDevGate" class="topbar">
-      <div class="topbar-brand" @click="session ? router.push('/dashboard') : router.push('/')" style="cursor:pointer">
+    <!-- Topbar: full UI if hasDevGate, otherwise minimal brand-only bar -->
+    <div class="topbar">
+      <div class="topbar-brand" :style="hasDevGate ? 'cursor:pointer' : ''" @click="hasDevGate && (session ? router.push('/dashboard') : router.push('/'))">
         <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
         <span class="brand-name">ShyBoti</span>
       </div>
 
-      <!-- Universal search bar - desktop only -->
-      <div class="search-wrap hide-mobile" :class="{ open: searchOpen && searchResults.length > 0 }">
-        <svg class="search-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
-          <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <input
-          ref="searchInputDesktop"
-          v-model="searchQuery"
-          class="search-input"
-          placeholder="Search… (Ctrl+F)"
-          @input="onSearchInput"
-          @keydown="onSearchKeydown"
-          @focus="onSearchFocus"
-          @blur="onSearchBlur"
-          autocomplete="off"
-          spellcheck="false"
-        />
-        <kbd v-if="!searchQuery" class="search-kbd">Ctrl+F</kbd>
-        <button v-if="searchQuery" class="search-clear" @mousedown.prevent="searchQuery = ''; searchResults = []; searchOpen = false">✕</button>
-
-        <!-- Results dropdown -->
-        <div v-if="searchOpen && flatResults.length > 0" class="search-results">
-          <template v-for="(items, category) in groupedResults" :key="category">
-            <div class="result-group-label">{{ category }}</div>
-            <button
-              v-for="(r, idx) in items"
-              :key="r.label + idx"
-              class="result-item"
-              :class="{ active: flatResults.indexOf(r) === searchIndex }"
-              @mousedown.prevent="selectResult(r)"
-            >
-              <span class="result-icon">{{ r.icon }}</span>
-              <span class="result-label">{{ r.label }}</span>
-              <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
-            </button>
-          </template>
-        </div>
-        <div v-else-if="searchOpen && searchQuery.trim() && !flatResults.length" class="search-results search-empty">
-          No results for "{{ searchQuery }}"
-        </div>
-      </div>
-
-      <div class="topbar-right">
-        <div class="lang-switcher">
-          <button class="lang-opt" :class="{ active: locale === 'en' }" @click="setLocale('en')">EN</button>
-          <span class="lang-sep">|</span>
-          <button class="lang-opt" :class="{ active: locale === 'de' }" @click="setLocale('de')">DE</button>
-        </div>
-        <template v-if="session">
-          <div class="channel-switcher" v-if="availableChannels.length > 1">
-            <button class="channel-btn" @click="showChannelMenu = !showChannelMenu">
-              #{{ session.channel }} ▾
-            </button>
-            <div v-if="showChannelMenu" class="channel-menu">
-              <button v-for="ch in availableChannels" :key="ch"
-                class="channel-menu-item" :class="{ active: ch === session.channel }"
-                @click="selectChannel(ch)">#{{ ch }}</button>
-            </div>
+      <!-- Search + right-side controls: only when devgate is valid -->
+      <template v-if="hasDevGate">
+        <div class="search-wrap hide-mobile" :class="{ open: searchOpen && searchResults.length > 0 }">
+          <svg class="search-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <input
+            ref="searchInputDesktop"
+            v-model="searchQuery"
+            class="search-input"
+            placeholder="Search… (Ctrl+F)"
+            @input="onSearchInput"
+            @keydown="onSearchKeydown"
+            @focus="onSearchFocus"
+            @blur="onSearchBlur"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <kbd v-if="!searchQuery" class="search-kbd">Ctrl+F</kbd>
+          <button v-if="searchQuery" class="search-clear" @mousedown.prevent="searchQuery = ''; searchResults = []; searchOpen = false">✕</button>
+          <div v-if="searchOpen && flatResults.length > 0" class="search-results">
+            <template v-for="(items, category) in groupedResults" :key="category">
+              <div class="result-group-label">{{ category }}</div>
+              <button
+                v-for="(r, idx) in items"
+                :key="r.label + idx"
+                class="result-item"
+                :class="{ active: flatResults.indexOf(r) === searchIndex }"
+                @mousedown.prevent="selectResult(r)"
+              >
+                <span class="result-icon">{{ r.icon }}</span>
+                <span class="result-label">{{ r.label }}</span>
+                <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
+              </button>
+            </template>
           </div>
-          <span v-else class="logged-in-as hide-mobile">#{{ session.channel }}</span>
-          <button class="auth-btn logout-btn hide-mobile" @click="logout(); router.push('/')">{{ t('nav.logout') }}</button>
-        </template>
-        <button v-else class="auth-btn login-btn" :class="{ shake: loginShaking }" @click="login">
-          <span class="hide-mobile">{{ t('nav.login') }}</span>
-          <span class="show-mobile">{{ t('nav.login_short') }}</span>
-        </button>
-        <button class="hamburger show-mobile" @click="sidebarOpen = !sidebarOpen" :class="{ open: sidebarOpen }">
-          <span></span><span></span><span></span>
-        </button>
-      </div>
-    </div>
+          <div v-else-if="searchOpen && searchQuery.trim() && !flatResults.length" class="search-results search-empty">
+            No results for "{{ searchQuery }}"
+          </div>
+        </div>
 
-    <!-- Minimal topbar for logs.shyboti.de without devgate -->
-    <div v-if="isLogsMode && !hasDevGate" class="topbar">
-      <div class="topbar-brand">
-        <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
-        <span class="brand-name">ShyBoti</span>
-      </div>
-    </div>
+        <div class="topbar-right">
+          <div class="lang-switcher">
+            <button class="lang-opt" :class="{ active: locale === 'en' }" @click="setLocale('en')">EN</button>
+            <span class="lang-sep">|</span>
+            <button class="lang-opt" :class="{ active: locale === 'de' }" @click="setLocale('de')">DE</button>
+          </div>
+          <template v-if="session">
+            <div class="channel-switcher" v-if="availableChannels.length > 1">
+              <button class="channel-btn" @click="showChannelMenu = !showChannelMenu">
+                #{{ session.channel }} ▾
+              </button>
+              <div v-if="showChannelMenu" class="channel-menu">
+                <button v-for="ch in availableChannels" :key="ch"
+                  class="channel-menu-item" :class="{ active: ch === session.channel }"
+                  @click="selectChannel(ch)">#{{ ch }}</button>
+              </div>
+            </div>
+            <span v-else class="logged-in-as hide-mobile">#{{ session.channel }}</span>
+            <button class="auth-btn logout-btn hide-mobile" @click="logout(); router.push('/')">{{ t('nav.logout') }}</button>
+          </template>
+          <button v-else class="auth-btn login-btn" :class="{ shake: loginShaking }" @click="login">
+            <span class="hide-mobile">{{ t('nav.login') }}</span>
+            <span class="show-mobile">{{ t('nav.login_short') }}</span>
+          </button>
+          <button class="hamburger show-mobile" @click="sidebarOpen = !sidebarOpen" :class="{ open: sidebarOpen }">
+            <span></span><span></span><span></span>
+          </button>
+        </div>
+      </template>
+    </div><!-- /topbar -->
 
     <div v-if="hasDevGate && session && showAddBanner" class="add-banner">
       <span>👋 {{ t('banner.welcome') }}</span>
