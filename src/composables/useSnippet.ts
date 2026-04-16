@@ -20,7 +20,7 @@ let   suppressContextMenuUntil = 0
 // rAF throttle flag – one pending frame max
 let rafPending = false
 const SNIPPET_CAPTURE_DELAY_MS = 0
-const SNIPPET_DEBUG = false
+const SNIPPET_DEBUG = true
 const SNIPPET_MAX_RENDER_PIXELS = 2_400_000
 const SNIPPET_MIN_PIXEL_RATIO = 0.65
 
@@ -117,7 +117,45 @@ export function useSnippet() {
           cssFallback: getComputedStyle(el).getPropertyValue('--snippet-fallback-color').trim(),
           computedColor: getComputedStyle(el).color,
         }))
-        console.log('[Snippet] Selected .log-user count:', hits.length, sample)
+
+        const rowRefs = Array.from(containerEl.querySelectorAll('.log-row-outer'))
+          .slice(0, 3)
+          .map((el) => {
+            const row = el as HTMLElement
+            const r = row.getBoundingClientRect()
+            return {
+              id: row.id || null,
+              viewportTop: Math.round(r.top),
+              localTop: Math.round(r.top - panel.top + containerEl.scrollTop),
+            }
+          })
+
+        console.log('[Snippet] Selection geometry', {
+          panel: {
+            left: Math.round(panel.left),
+            top: Math.round(panel.top),
+            width: Math.round(panel.width),
+            height: Math.round(panel.height),
+          },
+          scroll: {
+            left: Math.round(containerEl.scrollLeft),
+            top: Math.round(containerEl.scrollTop),
+            width: Math.round(containerEl.scrollWidth),
+            height: Math.round(containerEl.scrollHeight),
+          },
+          selection: {
+            local: { x: Math.round(sel.x), y: Math.round(sel.y), w: Math.round(sel.w), h: Math.round(sel.h) },
+            viewport: {
+              left: Math.round(selLeft),
+              top: Math.round(selTop),
+              right: Math.round(selRight),
+              bottom: Math.round(selBottom),
+            },
+          },
+          selectedUsersCount: hits.length,
+          selectedUsersSample: sample,
+          rowRefs,
+        })
       } catch (err) {
         console.warn('[Snippet] Could not inspect selected usernames', err)
       }
@@ -184,6 +222,11 @@ export function useSnippet() {
             canvas: { w: fullCanvas.width, h: fullCanvas.height },
             client: { w: clientWScaled, h: clientHScaled },
             scroll: { w: scrollWScaled, h: scrollHScaled },
+            source: { x: sourceX, y: sourceY },
+            scrollOffsetsApplied: {
+              x: widthLooksLikeViewport,
+              y: heightLooksLikeViewport,
+            },
             src: { x: srcX, y: srcY, w: srcW, h: srcH },
           })
         }
