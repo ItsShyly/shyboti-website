@@ -1302,7 +1302,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .log-user { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
 .log-user::after { content: ':'; color: #555; margin-right: 5px; }
 .log-msg-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
-.log-msg-wrap.has-reply { padding-top: 12px; }
+.log-msg-wrap.has-reply { padding-top: 16px; }
 .log-markers { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 0 0 2px; }
 .log-msg  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
 
@@ -1310,7 +1310,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .reply-context {
   position: absolute; left: 0; right: 0; top: 0;
   display: flex; align-items: center; gap: 4px;
-  font-size: 10px; color: #555; padding: 0 0 1px;
+  font-size: 10px; color: #555; padding: 2px 0 3px;
+  line-height: 1.25;
   white-space: nowrap; overflow: hidden;
 }
 .reply-context-link { cursor: pointer; }
