@@ -579,9 +579,8 @@ function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; 
 async function ensurePaint(username: string) {
   const key = username.toLowerCase()
   if (paintCache.has(key)) return
-  paintCache.set(key, null) // >>> mark as fetching to avoid duplicate requests
+  paintCache.set(key, null) // <<< mark as fetching to avoid duplicate requests
   try {
-    // >>> Use our backend which resolves Twitch login → Twitch ID → 7TV paint
     const res = await fetch(`${API}/twitch/user/${encodeURIComponent(key)}`, {
       headers: session.value ? { Authorization: `Bearer ${session.value.token}` } : {}
     })
@@ -596,7 +595,6 @@ async function ensurePaint(username: string) {
   } catch {}
 }
 
-// >>> Watch msgs and prefetch paints for visible usernames
 watch(msgs, (list) => {
   const seen = new Set<string>()
   for (const m of list) {
@@ -612,12 +610,26 @@ watch(msgs, (list) => {
 const screenshotDrag    = ref(false)
 const screenshotRect    = ref<{ x: number; y: number; w: number; h: number } | null>(null)
 const screenshotAnchor  = ref<{ x: number; y: number } | null>(null)
-const screenshotToast   = ref<{ url: string } | null>(null)
-let   screenshotTimer: ReturnType<typeof setTimeout> | null = null
+
+// Toast state (yummy): null = hidden, 'uploading' = spinner, 'copied' = ready
+interface ScreenshotToast {
+  state:   'uploading' | 'copied'
+  url:     string | null
+  imgReady: boolean
+}
+const screenshotToast = ref<ScreenshotToast | null>(null)
+let   screenshotDismissTimer: ReturnType<typeof setTimeout> | null = null
+
+function onTbodyContextMenu(e: MouseEvent) {
+  // Only suppress context menu when we've actually dragged a rectangle
+  if (screenshotDrag.value || (screenshotRect.value && (screenshotRect.value.w > 4 || screenshotRect.value.h > 4))) {
+    e.preventDefault()
+  }
+}
 
 function onTbodyMouseDown(e: MouseEvent) {
-  // Only left-click, not on interactive elements
-  if (e.button !== 0) return
+  // >>> Only right-click starts the screenshot drag
+  if (e.button !== 2) return
   const target = e.target as HTMLElement
   if (target.closest('a, button, .log-share, .log-user-clickable')) return
   const tbody = bodyRef.value; if (!tbody) return
@@ -653,58 +665,81 @@ async function onTbodyMouseUp(e: MouseEvent) {
   if (!sel || sel.w < 10 || sel.h < 10) return
 
   const tbody = bodyRef.value; if (!tbody) return
-  const rect  = tbody.getBoundingClientRect()
 
-  // Use html2canvas-style approach: draw visible area using dom-to-image via canvas
-  // We use the Selection rect relative to the tbody bounding box, accounting for scroll
-  const scaleX = window.devicePixelRatio || 1
-  const scaleY = window.devicePixelRatio || 1
+  // >>> Show uploading state immediately
+  if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
+  screenshotToast.value = { state: 'uploading', url: null, imgReady: false }
 
-  // Clamp to visible area (viewport-relative)
-  const vpX = sel.x - tbody.scrollLeft
-  const vpY = sel.y - tbody.scrollTop
-
-  // We capture using html2canvas via dynamic import (already in node_modules via vite)
-  // Fallback: use canvas + foreignObject via window approach
   try {
     // @ts-ignore
     const html2canvas = (await import('html2canvas')).default
-    const canvas = await html2canvas(tbody, {
-      x: sel.x,
-      y: sel.y,
-      width:  sel.w,
-      height: sel.h,
-      scrollX: -rect.left,
-      scrollY: -rect.top,
-      useCORS: true,
-      allowTaint: true,
-      logging: false,
-      scale: scaleX,
-      backgroundColor: '#0d0d10'
+
+    // >>> Capture the entire tbody scrollable area, then crop to selection.
+    // >>> This is the reliable approach - html2canvas x/y crop options don't
+    // >>> account for scrollTop correctly when the element is a scroll container.
+    const scale = window.devicePixelRatio || 1
+    const fullCanvas = await html2canvas(tbody, {
+      scrollX:         0,
+      scrollY:         0,
+      useCORS:         true,
+      allowTaint:      true,
+      logging:         false,
+      scale,
+      backgroundColor: '#0d0d10',
+      // >>> Tell html2canvas the full scrollable size
+      width:           tbody.scrollWidth,
+      height:          tbody.scrollHeight,
+      windowWidth:     tbody.scrollWidth,
+      windowHeight:    tbody.scrollHeight,
     })
-    canvas.toBlob(async (blob: Blob | null) => {
-      if (!blob) return
+
+    // >>> Crop the selection out of the full canvas
+    const cropCanvas  = document.createElement('canvas')
+    cropCanvas.width  = Math.round(sel.w  * scale)
+    cropCanvas.height = Math.round(sel.h  * scale)
+    const ctx = cropCanvas.getContext('2d')!
+    ctx.drawImage(
+      fullCanvas,
+      Math.round(sel.x * scale), Math.round(sel.y * scale),   // source x, y
+      Math.round(sel.w * scale), Math.round(sel.h * scale),   // source w, h
+      0, 0,                                                     // dest x, y
+      Math.round(sel.w * scale), Math.round(sel.h * scale)    // dest w, h
+    )
+
+    cropCanvas.toBlob(async (blob: Blob | null) => {
+      if (!blob) { screenshotToast.value = null; return }
       const fd = new FormData()
       fd.append('file', new File([blob], 'logs-screenshot.png', { type: 'image/png' }))
       const headers: Record<string, string> = {}
       if (session.value) headers['Authorization'] = `Bearer ${session.value.token}`
       try {
         const res = await fetch(`${API}/images/upload`, { method: 'POST', headers, body: fd })
-        if (!res.ok) return
+        if (!res.ok) { screenshotToast.value = null; return }
         const data = await res.json() as { id: string }
         const url = `https://i.shyboti.de/${data.id}`
+
+        // >>> Copy to clipboard immediately
         await navigator.clipboard.writeText(url).catch(() => {})
-        if (screenshotTimer) clearTimeout(screenshotTimer)
-        screenshotToast.value = { url }
-        screenshotTimer = setTimeout(() => { screenshotToast.value = null }, 3000)
-      } catch {}
+
+        // >>> Switch toast to "copied" state, show the image preview
+        screenshotToast.value = { state: 'copied', url, imgReady: false }
+      } catch { screenshotToast.value = null }
     }, 'image/png')
   } catch (err) {
     console.error('Screenshot failed:', err)
+    screenshotToast.value = null
   }
 }
 
-// >>> User popup (same as DashboardView)
+// >>> Called when the preview image finishes loading - start the 3s dismiss timer
+function onScreenshotImgLoad() {
+  if (!screenshotToast.value) return
+  screenshotToast.value = { ...screenshotToast.value, imgReady: true }
+  if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
+  screenshotDismissTimer = setTimeout(() => { screenshotToast.value = null }, 3000)
+}
+
+// >>> User popup
 interface TwitchUser {
   login: string; displayName: string; avatar: string
   createdAt: string
@@ -794,9 +829,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
       <span class="summary-chevron">{{ searchExpanded ? '▲' : '▼' }}</span>
     </div>
 
-    <!-- >>> Search fields use lazy updates (no v-model on reactive computeds)
-         Each input uses :value + @change to avoid triggering Vue reactivity on every keystroke,
-         which would otherwise cause lag when msgs array is large. -->
     <div class="search-bar" :class="{ 'search-bar-collapsed': !searchExpanded }">
       <div class="field-wrap">
         <label class="field-lbl">{{ t('logs.field.channel') }}</label>
@@ -856,7 +888,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
       </button>
     </div>
 
-    <!-- Automod toggle - only for broadcaster viewing own channel after a search -->
+    <!-- Automod toggle -->
     <div v-if="searched && isBroadcaster && automodMsgs.length > 0" class="automod-bar">
       <button class="automod-toggle" :class="{ active: showAutomod }" @click="showAutomod = !showAutomod">
         ⚠ AutoMod ({{ automodMsgs.length }}) {{ showAutomod ? '- click to hide' : '- click to show' }}
@@ -885,9 +917,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           ref="bodyRef"
           :class="{ 'tbody-selecting': screenshotDrag }"
           @mousedown="onTbodyMouseDown"
+          @contextmenu="onTbodyContextMenu"
         >
-          <!-- >>> loadingMore indicator: v-show keeps the DOM node alive so it never
-               re-renders the parent search-bar or causes input fields to lose focus -->
           <div class="top-loader" v-show="loadingMore">
             <span class="spinner">⟳</span> {{ t('logs.load_older') }}
           </div>
@@ -906,10 +937,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           />
 
           <template v-for="item in displayItems" :key="item.kind === 'day' ? 'day-' + item.label : item.msg.id">
-            <!-- Day separator -->
             <div v-if="item.kind === 'day'" class="log-day-sep">{{ item.label }}</div>
 
-            <!-- AutoMod row -->
             <div
               v-else-if="item.kind === 'automod'"
               class="log-row log-row-automod"
@@ -925,7 +954,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               </div>
             </div>
 
-            <!-- Message row -->
             <div
               v-else
               :id="`log-${item.msg.id}`"
@@ -953,14 +981,34 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
         </div>
       </div>
     </div>
+
     <!-- Screenshot toast (bottom-right) -->
     <Teleport to="body">
       <transition name="screenshot-toast-fade">
         <div v-if="screenshotToast" class="screenshot-toast">
-          <div class="screenshot-toast-label">Copied to clipboard</div>
-          <a :href="screenshotToast.url" target="_blank" rel="noopener" class="screenshot-toast-img-link">
-            <img :src="screenshotToast.url" class="screenshot-toast-img" alt="screenshot" />
-          </a>
+          <!-- Uploading state -->
+          <template v-if="screenshotToast.state === 'uploading'">
+            <div class="screenshot-toast-uploading">
+              <div class="screenshot-toast-spinner"></div>
+              <div class="screenshot-toast-label">Uploading Image...</div>
+            </div>
+          </template>
+          <!-- Copied state -->
+          <template v-else>
+            <div class="screenshot-toast-label copied">Copied to clipboard ✓</div>
+            <a :href="screenshotToast.url!" target="_blank" rel="noopener" class="screenshot-toast-img-link">
+              <div v-if="!screenshotToast.imgReady" class="screenshot-toast-img-placeholder">
+                <div class="screenshot-toast-spinner small"></div>
+              </div>
+              <img
+                :src="screenshotToast.url!"
+                class="screenshot-toast-img"
+                :class="{ hidden: !screenshotToast.imgReady }"
+                alt="screenshot"
+                @load="onScreenshotImgLoad"
+              />
+            </a>
+          </template>
         </div>
       </transition>
     </Teleport>
@@ -1085,6 +1133,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   z-index: 50;
 }
 
+/* Screenshot toast */
 .screenshot-toast {
   position: fixed;
   bottom: 24px;
@@ -1096,30 +1145,71 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  min-width: 120px;
-  max-width: 260px;
+  gap: 10px;
+  padding: 12px 14px;
+  min-width: 160px;
+  max-width: 280px;
 }
+
+/* Uploading state */
+.screenshot-toast-uploading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+/* Spinner */
+.screenshot-toast-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #2a2a30;
+  border-top-color: #9d6cff;
+  border-radius: 50%;
+  animation: toast-spin .8s linear infinite;
+  flex-shrink: 0;
+}
+.screenshot-toast-spinner.small {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+@keyframes toast-spin { to { transform: rotate(360deg); } }
+
 .screenshot-toast-label {
   font-size: 11px;
   font-weight: 700;
-  color: #9d6cff;
+  color: #888;
   text-transform: uppercase;
   letter-spacing: .06em;
   text-align: center;
 }
+.screenshot-toast-label.copied { color: #9d6cff; }
+
+/* Image preview */
 .screenshot-toast-img-link { display: block; }
+.screenshot-toast-img-placeholder {
+  width: 120px;
+  height: 80px;
+  background: #111217;
+  border: 1px solid #2a2a30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 .screenshot-toast-img {
-  max-width: 240px;
-  max-height: 160px;
+  max-width: 252px;
+  max-height: 180px;
   display: block;
   object-fit: contain;
   border: 1px solid #2a2a30;
   cursor: pointer;
   transition: opacity .15s;
 }
+.screenshot-toast-img.hidden { display: none; }
 .screenshot-toast-img:hover { opacity: .85; }
+
 .screenshot-toast-fade-enter-active, .screenshot-toast-fade-leave-active { transition: opacity .25s, transform .25s; }
 .screenshot-toast-fade-enter-from, .screenshot-toast-fade-leave-to { opacity: 0; transform: translateY(12px); }
 
@@ -1162,7 +1252,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
 :deep(.chat-emote) { height: 28px; vertical-align: middle; display: inline-block; margin: 0 1px; }
 
-/* User popup - identical to DashboardView */
+/* User popup */
 .user-popup {
   position: fixed; z-index: 200;
   background: #1b1b1f; border: 1px solid #2a2a30;
