@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, inject, type Ref } from 'vue'
+import { ref, watch, onMounted, onUnmounted, inject, computed, type Ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useSnippet } from '../composables/useSnippet'
 
 const {
@@ -15,6 +16,10 @@ const {
 
 // Injected from App.vue – the .main-panel element ref
 const mainPanelRef = inject<Ref<HTMLElement | null>>('mainPanelRef')
+const route = useRoute()
+
+// Only activate snippet tool on the logs route
+const snippetEnabled = computed(() => route.path === '/logs')
 
 function getPanel(): HTMLElement | null {
   return mainPanelRef?.value ?? null
@@ -26,12 +31,22 @@ function toFixed(scrollRel: number, panelScrollPos: number, panelOrigin: number)
 }
 
 function handleMouseDown(e: MouseEvent) {
+  if (!snippetEnabled.value) return
   const c = getPanel(); if (!c) return
   onSnippetMouseDown(e, c)
 }
-function handleMouseMove(e: MouseEvent) { onWindowMouseMove(e, getPanel()) }
-function handleMouseUp  (e: MouseEvent) { onWindowMouseUp(e,   getPanel()) }
-function handleCtxMenu  (e: MouseEvent) { onSnippetContextMenu(e) }
+function handleMouseMove(e: MouseEvent) {
+  if (!snippetEnabled.value && !screenshotDrag.value) return
+  onWindowMouseMove(e, getPanel())
+}
+function handleMouseUp  (e: MouseEvent) {
+  if (!snippetEnabled.value && !screenshotDrag.value) return
+  onWindowMouseUp(e, getPanel())
+}
+function handleCtxMenu  (e: MouseEvent) {
+  if (!snippetEnabled.value) return
+  onSnippetContextMenu(e)
+}
 
 let panel: HTMLElement | null = null
 
@@ -54,6 +69,14 @@ onMounted(() => {
       panel.addEventListener('contextmenu', handleCtxMenu)
     }
   }, { immediate: true })
+  
+  // When navigating away from logs mid-drag, cancel the drag
+  watch(snippetEnabled, (enabled) => {
+    if (!enabled && screenshotDrag.value) {
+      screenshotDrag.value = false
+      screenshotRect.value = null
+    }
+  })
 })
 
 onUnmounted(() => {
