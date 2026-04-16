@@ -852,62 +852,64 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     </div>
 
     <div class="search-bar" :class="{ 'search-bar-collapsed': !searchExpanded }">
-      <div class="field-wrap">
-        <label class="field-lbl">{{ t('logs.field.channel') }}</label>
-        <input
-          ref="channelInputRef"
-          :value="channel"
-          class="field-input"
-          placeholder="channelname"
-          @keydown.enter="search"
-          autocomplete="off"
-          spellcheck="false"
-        />
-      </div>
-      <div class="field-wrap">
-        <label class="field-lbl">{{ t('logs.field.user') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
-        <input
-          ref="userInputRef"
-          :value="userFilter"
-          class="field-input"
-          placeholder="username"
-          @keydown.enter="search"
-          autocomplete="off"
-          spellcheck="false"
-        />
-      </div>
-      <div class="field-wrap">
-        <label class="field-lbl">{{ t('logs.field.term') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
-        <input
-          ref="termInputRef"
-          :value="termFilter"
-          class="field-input"
-          placeholder="search term"
-          @keydown.enter="search"
-          autocomplete="off"
-          spellcheck="false"
-        />
-      </div>
-      <div class="field-wrap">
-        <label class="field-lbl">{{ t('logs.field.date') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
-        <input
-          ref="dateInputRef"
-          :value="dateFilter"
-          class="field-input date-input"
-          type="date"
-          @keydown.enter="search"
-        />
-      </div>
-      <div class="field-wrap">
-        <label class="field-lbl">Direction</label>
-        <div class="dir-toggle">
-          <button class="dir-btn" :class="{ active: direction === 'newest' }" @click="direction = 'newest'">↓ Newest</button>
-          <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="direction = 'oldest'">↑ Oldest</button>
+      <div class="search-bar-content">
+        <div class="field-wrap">
+          <label class="field-lbl">{{ t('logs.field.channel') }}</label>
+          <input
+            ref="channelInputRef"
+            :value="channel"
+            class="field-input"
+            placeholder="channelname"
+            @keydown.enter="search"
+            autocomplete="off"
+            spellcheck="false"
+          />
         </div>
+        <div class="field-wrap">
+          <label class="field-lbl">{{ t('logs.field.user') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
+          <input
+            ref="userInputRef"
+            :value="userFilter"
+            class="field-input"
+            placeholder="username"
+            @keydown.enter="search"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+        <div class="field-wrap">
+          <label class="field-lbl">{{ t('logs.field.term') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
+          <input
+            ref="termInputRef"
+            :value="termFilter"
+            class="field-input"
+            placeholder="search term"
+            @keydown.enter="search"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+        <div class="field-wrap">
+          <label class="field-lbl">{{ t('logs.field.date') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
+          <input
+            ref="dateInputRef"
+            :value="dateFilter"
+            class="field-input date-input"
+            type="date"
+            @keydown.enter="search"
+          />
+        </div>
+        <div class="field-wrap">
+          <label class="field-lbl">Direction</label>
+          <div class="dir-toggle">
+            <button class="dir-btn" :class="{ active: direction === 'newest' }" @click="direction = 'newest'">↓ Newest</button>
+            <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="direction = 'oldest'">↑ Oldest</button>
+          </div>
+        </div>
+        <button class="search-btn" @click="search" :disabled="loading">
+          {{ loading ? '…' : t('logs.search') }}
+        </button>
       </div>
-      <button class="search-btn" @click="search" :disabled="loading">
-        {{ loading ? '…' : t('logs.search') }}
-      </button>
       <div class="snippet-info" v-if="!snippetInfoHidden">
         <label class="field-lbl">Right click + Drag to take a snippet</label>
         <div
@@ -1124,9 +1126,10 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .logs-title  { font-size: 18px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
 .logs-sub    { font-size: 12px; color: #555; }
 
-.search-bar  { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; background: #141418; border: 1px solid #1e1e24; padding: 14px 16px; flex-shrink: 0; }
+.search-bar  { display: flex; align-items: flex-start; gap: 16px; background: #141418; border: 1px solid #1e1e24; padding: 14px 16px; flex-shrink: 0; }
+.search-bar-content { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; flex: 1; }
 .field-wrap  { display: flex; flex-direction: column; gap: 4px; }
-.snippet-info { display: flex; flex-direction: column; gap: 4px; } /* has to be right in the search-bar  */
+.snippet-info { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 .snippet-gif-wrap { position: relative; cursor: pointer; display: inline-block; }
 .snippet-gif { display: block; max-height: 60px; max-width: 180px; border: 1px solid #2a2a30; }
 .snippet-hover-overlay {
@@ -1404,6 +1407,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     overflow: hidden; transition: max-height .2s ease, padding .2s ease;
     max-height: 400px;
   }
+  .search-bar-content { flex-direction: column; align-items: stretch; gap: 8px; }
   .search-bar-collapsed { max-height: 0 !important; padding: 0 14px !important; }
   .field-input { width: 100% !important; }
   .date-input  { width: 100% !important; }
