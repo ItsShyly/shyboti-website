@@ -1024,6 +1024,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .log-row-outer {
+  --reply-left-inset: 270px;
   border-bottom: 1px solid #1a1a1e;
   transition: background .1s; position: relative;
 }
@@ -1050,13 +1051,12 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 /* Reply thread indicator */
 .reply-context {
   display: flex; align-items: center; gap: 4px;
-  font-size: 10px; color: #555; padding: 2px 14px 0;
+  font-size: 10px; color: #555; padding: 2px 14px 0 var(--reply-left-inset);
   white-space: nowrap; overflow: hidden;
 }
 .reply-icon { color: #444; font-size: 11px; flex-shrink: 0; }
 .reply-parent-user { color: #777; font-weight: 600; flex-shrink: 0; }
 .reply-parent-body { color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.log-row-reply { border-left: 2px solid #555; }
 
 .log-share {
   display: flex; align-items: center; justify-content: center;
@@ -1212,6 +1212,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     padding: 3px 12px;
     grid-template-columns: unset !important;
   }
+  .log-row-outer { --reply-left-inset: 96px; }
   .log-time       { display: none; }
   .log-time-short { display: block; flex-shrink: 0; color: #555; font-size: 11px; white-space: nowrap; }
   .log-user  { flex-shrink: 0; font-size: 12px; padding-right: 0; white-space: nowrap; }
