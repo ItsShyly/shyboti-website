@@ -851,64 +851,66 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
       <span class="summary-chevron">{{ searchExpanded ? '▲' : '▼' }}</span>
     </div>
 
-    <div class="search-bar" :class="{ 'search-bar-collapsed': !searchExpanded }">
-      <div class="search-bar-content">
-        <div class="field-wrap">
-          <label class="field-lbl">{{ t('logs.field.channel') }}</label>
-          <input
-            ref="channelInputRef"
-            :value="channel"
-            class="field-input"
-            placeholder="channelname"
-            @keydown.enter="search"
-            autocomplete="off"
-            spellcheck="false"
-          />
-        </div>
-        <div class="field-wrap">
-          <label class="field-lbl">{{ t('logs.field.user') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
-          <input
-            ref="userInputRef"
-            :value="userFilter"
-            class="field-input"
-            placeholder="username"
-            @keydown.enter="search"
-            autocomplete="off"
-            spellcheck="false"
-          />
-        </div>
-        <div class="field-wrap">
-          <label class="field-lbl">{{ t('logs.field.term') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
-          <input
-            ref="termInputRef"
-            :value="termFilter"
-            class="field-input"
-            placeholder="search term"
-            @keydown.enter="search"
-            autocomplete="off"
-            spellcheck="false"
-          />
-        </div>
-        <div class="field-wrap">
-          <label class="field-lbl">{{ t('logs.field.date') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
-          <input
-            ref="dateInputRef"
-            :value="dateFilter"
-            class="field-input date-input"
-            type="date"
-            @keydown.enter="search"
-          />
-        </div>
-        <div class="field-wrap">
-          <label class="field-lbl">Direction</label>
-          <div class="dir-toggle">
-            <button class="dir-btn" :class="{ active: direction === 'newest' }" @click="direction = 'newest'">↓ Newest</button>
-            <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="direction = 'oldest'">↑ Oldest</button>
+    <div class="search-bar-wrapper">
+      <div class="search-bar" :class="{ 'search-bar-collapsed': !searchExpanded }">
+        <div class="search-bar-content">
+          <div class="field-wrap">
+            <label class="field-lbl">{{ t('logs.field.channel') }}</label>
+            <input
+              ref="channelInputRef"
+              :value="channel"
+              class="field-input"
+              placeholder="channelname"
+              @keydown.enter="search"
+              autocomplete="off"
+              spellcheck="false"
+            />
           </div>
+          <div class="field-wrap">
+            <label class="field-lbl">{{ t('logs.field.user') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
+            <input
+              ref="userInputRef"
+              :value="userFilter"
+              class="field-input"
+              placeholder="username"
+              @keydown.enter="search"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+          <div class="field-wrap">
+            <label class="field-lbl">{{ t('logs.field.term') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
+            <input
+              ref="termInputRef"
+              :value="termFilter"
+              class="field-input"
+              placeholder="search term"
+              @keydown.enter="search"
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </div>
+          <div class="field-wrap">
+            <label class="field-lbl">{{ t('logs.field.date') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
+            <input
+              ref="dateInputRef"
+              :value="dateFilter"
+              class="field-input date-input"
+              type="date"
+              @keydown.enter="search"
+            />
+          </div>
+          <div class="field-wrap">
+            <label class="field-lbl">Direction</label>
+            <div class="dir-toggle">
+              <button class="dir-btn" :class="{ active: direction === 'newest' }" @click="direction = 'newest'">↓ Newest</button>
+              <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="direction = 'oldest'">↑ Oldest</button>
+            </div>
+          </div>
+          <button class="search-btn" @click="search" :disabled="loading">
+            {{ loading ? '…' : t('logs.search') }}
+          </button>
         </div>
-        <button class="search-btn" @click="search" :disabled="loading">
-          {{ loading ? '…' : t('logs.search') }}
-        </button>
       </div>
       <div class="snippet-info" v-if="!snippetInfoHidden">
         <label class="field-lbl">Right click + Drag to take a snippet</label>
@@ -1126,10 +1128,11 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .logs-title  { font-size: 18px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
 .logs-sub    { font-size: 12px; color: #555; }
 
-.search-bar  { display: flex; align-items: flex-start; gap: 16px; background: #141418; border: 1px solid #1e1e24; padding: 14px 16px; flex-shrink: 0; }
-.search-bar-content { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; flex: 1; }
+.search-bar-wrapper { display: flex; gap: 12px; align-items: flex-start; flex-shrink: 0; }
+.search-bar  { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; background: #141418; border: 1px solid #1e1e24; padding: 14px 16px; flex-shrink: 0; flex: 1; }
+.search-bar-content { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .field-wrap  { display: flex; flex-direction: column; gap: 4px; }
-.snippet-info { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.snippet-info { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; align-items: center; padding: 14px 0; }
 .snippet-gif-wrap { position: relative; cursor: pointer; display: inline-block; }
 .snippet-gif { display: block; max-height: 60px; max-width: 180px; border: 1px solid #2a2a30; }
 .snippet-hover-overlay {
@@ -1401,6 +1404,9 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .summary-tag   { color: #888; background: #1e1e24; padding: 1px 6px; }
   .summary-chevron { font-size: 9px; color: #555; flex-shrink: 0; }
 
+  .search-bar-wrapper {
+    flex-direction: column; gap: 8px;
+  }
   .search-bar {
     flex-direction: column; align-items: stretch; gap: 8px;
     padding: 10px 14px; flex-shrink: 0;
