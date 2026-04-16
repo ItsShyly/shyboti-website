@@ -19,6 +19,8 @@ let   suppressContextMenuUntil = 0
 // rAF throttle flag – one pending frame max
 let rafPending = false
 const SNIPPET_CAPTURE_DELAY_MS = 0
+const SNIPPET_DEBUG = false
+const SNIPPET_MAX_RENDER_PIXELS = 2_400_000
 
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
   const start = Date.now()
@@ -41,6 +43,14 @@ async function loadToCanvasFn(): Promise<(node: HTMLElement, options?: Record<st
     throw new Error('Failed to load html-to-image toCanvas()')
   }
   return remote.toCanvas
+}
+
+function computeSnippetPixelRatio(selW: number, selH: number): number {
+  const dpr = window.devicePixelRatio || 1
+  const area = Math.max(1, selW * selH)
+  const cap = Math.sqrt(SNIPPET_MAX_RENDER_PIXELS / area)
+  const ratio = Math.max(1, Math.min(dpr, cap))
+  return Number(ratio.toFixed(2))
 }
 
 export function useSnippet() {
@@ -101,28 +111,30 @@ export function useSnippet() {
     // Suppress the native context menu that fires on mouseup after a drag
     suppressContextMenuUntil = Date.now() + 500
 
-    // Debug: verify painted usernames that are actually inside the selected region.
-    try {
-      const panel = containerEl.getBoundingClientRect()
-      const selLeft = panel.left + sel.x - containerEl.scrollLeft
-      const selTop = panel.top + sel.y - containerEl.scrollTop
-      const selRight = selLeft + sel.w
-      const selBottom = selTop + sel.h
-      const users = Array.from(containerEl.querySelectorAll('.log-user')) as HTMLElement[]
-      const hits = users.filter((el) => {
-        const r = el.getBoundingClientRect()
-        return r.right > selLeft && r.left < selRight && r.bottom > selTop && r.top < selBottom
-      })
-      const sample = hits.slice(0, 5).map((el) => ({
-        text: el.textContent?.trim()?.slice(0, 24) ?? '',
-        dataPaint: el.getAttribute('data-snippet-paint') ?? '',
-        cssPreview: getComputedStyle(el).getPropertyValue('--snippet-paint-preview').trim(),
-        cssFallback: getComputedStyle(el).getPropertyValue('--snippet-fallback-color').trim(),
-        computedColor: getComputedStyle(el).color,
-      }))
-      console.log('[Snippet] Selected .log-user count:', hits.length, sample)
-    } catch (err) {
-      console.warn('[Snippet] Could not inspect selected usernames', err)
+    if (SNIPPET_DEBUG) {
+      // Debug-only: inspect selected usernames and paint-related style vars.
+      try {
+        const panel = containerEl.getBoundingClientRect()
+        const selLeft = panel.left + sel.x - containerEl.scrollLeft
+        const selTop = panel.top + sel.y - containerEl.scrollTop
+        const selRight = selLeft + sel.w
+        const selBottom = selTop + sel.h
+        const users = Array.from(containerEl.querySelectorAll('.log-user')) as HTMLElement[]
+        const hits = users.filter((el) => {
+          const r = el.getBoundingClientRect()
+          return r.right > selLeft && r.left < selRight && r.bottom > selTop && r.top < selBottom
+        })
+        const sample = hits.slice(0, 5).map((el) => ({
+          text: el.textContent?.trim()?.slice(0, 24) ?? '',
+          dataPaint: el.getAttribute('data-snippet-paint') ?? '',
+          cssPreview: getComputedStyle(el).getPropertyValue('--snippet-paint-preview').trim(),
+          cssFallback: getComputedStyle(el).getPropertyValue('--snippet-fallback-color').trim(),
+          computedColor: getComputedStyle(el).color,
+        }))
+        console.log('[Snippet] Selected .log-user count:', hits.length, sample)
+      } catch (err) {
+        console.warn('[Snippet] Could not inspect selected usernames', err)
+      }
     }
 
     await waitForLogsJobsToSettle()
@@ -140,7 +152,7 @@ export function useSnippet() {
 
     try {
       const toCanvas = await loadToCanvasFn()
-      const scale = window.devicePixelRatio || 1
+      const scale = computeSnippetPixelRatio(sel.w, sel.h)
 
       const renderStart = performance.now()
       document.body.classList.add('snippet-capturing')
@@ -150,7 +162,7 @@ export function useSnippet() {
       try {
         const fullCanvas = await toCanvas(containerEl, {
           pixelRatio: scale,
-          cacheBust: true,
+          cacheBust: false,
           backgroundColor: '#0d0d10',
           style: {
             background: '#0d0d10',
@@ -180,6 +192,7 @@ export function useSnippet() {
 
       const renderDuration = performance.now() - renderStart
       console.log(`[Snippet] html-to-image render: ${renderDuration.toFixed(2)}ms`)
+      console.log(`[Snippet] Pixel ratio used: ${scale.toFixed(2)}`)
 
       cropCanvas.toBlob(async (blob: Blob | null) => {
         const blobTime = performance.now()
@@ -213,7 +226,7 @@ export function useSnippet() {
           console.error('[Snippet] Upload error:', err)
           screenshotToast.value = null 
         }
-      }, 'image/webp', 0.92)
+      }, 'image/webp', 1)
     } catch (err) {
       console.error('Snippet failed:', err)
       screenshotToast.value = null
