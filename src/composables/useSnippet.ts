@@ -53,9 +53,9 @@ function buildSnippetUserOverlays(users: HTMLElement[], selLeft: number, selTop:
     const rect = el.getBoundingClientRect()
     const cs = getComputedStyle(el)
     const rawColor =
-      el.getAttribute('data-snippet-paint') ||
       cs.getPropertyValue('--snippet-paint-preview').trim() ||
       cs.getPropertyValue('--snippet-fallback-color').trim() ||
+      el.getAttribute('data-snippet-paint') ||
       cs.color ||
       '#cccccc'
     const usable = snippetUsableColor(rawColor)
@@ -234,8 +234,13 @@ export function useSnippet() {
             let hardFallbackUsed = 0
 
             users.forEach((el: HTMLElement) => {
-              // data-snippet-paint is always set (paint preview or user color)
-              const raw = el.getAttribute('data-snippet-paint') ?? ''
+              const cs = getComputedStyle(el)
+              const raw =
+                cs.getPropertyValue('--snippet-paint-preview').trim() ||
+                cs.getPropertyValue('--snippet-fallback-color').trim() ||
+                el.getAttribute('data-snippet-paint') ||
+                cs.color ||
+                ''
               const validated = snippetUsableColor(raw)
               let textColor: string
               if (validated) {
