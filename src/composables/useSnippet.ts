@@ -84,6 +84,30 @@ export function useSnippet() {
     // Suppress the native context menu that fires on mouseup after a drag
     suppressContextMenuUntil = Date.now() + 500
 
+    // Debug: verify painted usernames that are actually inside the selected region.
+    try {
+      const panel = containerEl.getBoundingClientRect()
+      const selLeft = panel.left + sel.x - containerEl.scrollLeft
+      const selTop = panel.top + sel.y - containerEl.scrollTop
+      const selRight = selLeft + sel.w
+      const selBottom = selTop + sel.h
+      const users = Array.from(containerEl.querySelectorAll('.log-user')) as HTMLElement[]
+      const hits = users.filter((el) => {
+        const r = el.getBoundingClientRect()
+        return r.right > selLeft && r.left < selRight && r.bottom > selTop && r.top < selBottom
+      })
+      const sample = hits.slice(0, 5).map((el) => ({
+        text: el.textContent?.trim()?.slice(0, 24) ?? '',
+        dataPaint: el.getAttribute('data-snippet-paint') ?? '',
+        cssPreview: getComputedStyle(el).getPropertyValue('--snippet-paint-preview').trim(),
+        cssFallback: getComputedStyle(el).getPropertyValue('--snippet-fallback-color').trim(),
+        computedColor: getComputedStyle(el).color,
+      }))
+      console.log('[Snippet] Selected .log-user count:', hits.length, sample)
+    } catch (err) {
+      console.warn('[Snippet] Could not inspect selected usernames', err)
+    }
+
     await waitForLogsJobsToSettle()
 
     if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
@@ -118,17 +142,42 @@ export function useSnippet() {
           backgroundColor: '#0d0d10',
           onclone: (doc: Document) => {
             const users = doc.querySelectorAll('.log-user') as NodeListOf<HTMLElement>
+            let previewUsed = 0
+            let fallbackUsed = 0
+            let hardFallbackUsed = 0
+
+            const usable = (v: string | null | undefined): string => {
+              const s = String(v ?? '').trim()
+              const low = s.toLowerCase()
+              if (!s) return ''
+              if (low === 'transparent') return ''
+              if (low === 'rgba(0, 0, 0, 0)' || low === 'rgba(0,0,0,0)') return ''
+              return s
+            }
+
             users.forEach((el: HTMLElement) => {
-              const preview =
+              const previewRaw =
                 el.getAttribute('data-snippet-paint') ||
                 el.style.getPropertyValue('--snippet-paint-preview') ||
                 getComputedStyle(el).getPropertyValue('--snippet-paint-preview')
-              const fallback =
+              const fallbackRaw =
                 el.style.getPropertyValue('--snippet-fallback-color') ||
                 getComputedStyle(el).getPropertyValue('--snippet-fallback-color') ||
                 getComputedStyle(el).color ||
                 '#cccccc'
-              const textColor = (preview || fallback).trim() || '#cccccc'
+              const preview = usable(previewRaw)
+              const fallback = usable(fallbackRaw)
+              let textColor = '#cccccc'
+              if (preview) {
+                textColor = preview
+                previewUsed += 1
+              } else if (fallback) {
+                textColor = fallback
+                fallbackUsed += 1
+              } else {
+                hardFallbackUsed += 1
+              }
+
               el.style.backgroundImage = 'none'
               el.style.backgroundColor = 'transparent'
               el.style.backgroundClip = 'border-box'
@@ -137,6 +186,12 @@ export function useSnippet() {
               ;(el.style as any).webkitTextFillColor = textColor
               el.style.filter = 'none'
               el.style.textShadow = 'none'
+            })
+            console.log('[Snippet] Clone paint mapping', {
+              total: users.length,
+              previewUsed,
+              fallbackUsed,
+              hardFallbackUsed,
             })
           },
         })
