@@ -22,6 +22,7 @@ let rafPending = false
 const SNIPPET_CAPTURE_DELAY_MS = 0
 const SNIPPET_DEBUG = false
 const SNIPPET_MAX_RENDER_PIXELS = 2_400_000
+const SNIPPET_MIN_PIXEL_RATIO = 0.65
 
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
   const start = Date.now()
@@ -34,7 +35,7 @@ function computeSnippetPixelRatio(selW: number, selH: number): number {
   const dpr = window.devicePixelRatio || 1
   const area = Math.max(1, selW * selH)
   const cap = Math.sqrt(SNIPPET_MAX_RENDER_PIXELS / area)
-  const ratio = Math.max(1, Math.min(dpr, cap))
+  const ratio = Math.max(SNIPPET_MIN_PIXEL_RATIO, Math.min(dpr, cap))
   return Number(ratio.toFixed(2))
 }
 
@@ -153,16 +154,10 @@ export function useSnippet() {
           },
         })
 
-        const clientWScaled = Math.max(1, Math.round(containerEl.clientWidth * scale))
-        const clientHScaled = Math.max(1, Math.round(containerEl.clientHeight * scale))
-        const scrollWScaled = Math.max(1, Math.round(containerEl.scrollWidth * scale))
-        const scrollHScaled = Math.max(1, Math.round(containerEl.scrollHeight * scale))
-
-        const widthLooksLikeViewport = Math.abs(fullCanvas.width - clientWScaled) <= Math.abs(fullCanvas.width - scrollWScaled)
-        const heightLooksLikeViewport = Math.abs(fullCanvas.height - clientHScaled) <= Math.abs(fullCanvas.height - scrollHScaled)
-
-        const srcX = Math.max(0, Math.round((widthLooksLikeViewport ? (sel.x - containerEl.scrollLeft) : sel.x) * scale))
-        const srcY = Math.max(0, Math.round((heightLooksLikeViewport ? (sel.y - containerEl.scrollTop) : sel.y) * scale))
+        // html-to-image renders this container in content space for this view,
+        // so selection coordinates should be treated as content coordinates.
+        const srcX = Math.max(0, Math.round(sel.x * scale))
+        const srcY = Math.max(0, Math.round(sel.y * scale))
         const reqW = Math.max(1, Math.round(sel.w * scale))
         const reqH = Math.max(1, Math.round(sel.h * scale))
         const srcW = Math.max(1, Math.min(reqW, fullCanvas.width - srcX))
@@ -170,11 +165,7 @@ export function useSnippet() {
 
         if (SNIPPET_DEBUG) {
           console.log('[Snippet] Crop mode', {
-            widthLooksLikeViewport,
-            heightLooksLikeViewport,
             canvas: { w: fullCanvas.width, h: fullCanvas.height },
-            client: { w: clientWScaled, h: clientHScaled },
-            scroll: { w: scrollWScaled, h: scrollHScaled },
             src: { x: srcX, y: srcY, w: srcW, h: srcH },
           })
         }
@@ -229,7 +220,7 @@ export function useSnippet() {
           console.error('[Snippet] Upload error:', err)
           screenshotToast.value = null 
         }
-      }, 'image/webp', 1)
+      }, 'image/webp', 0.9)
     } catch (err) {
       console.error('Snippet failed:', err)
       screenshotToast.value = null
