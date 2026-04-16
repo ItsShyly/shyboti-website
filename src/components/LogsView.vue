@@ -20,19 +20,25 @@ interface EmoteMap { [name: string]: string }
 const channelInputRef    = ref<HTMLInputElement | null>(null)
 const userInputRef       = ref<HTMLInputElement | null>(null)
 const termInputRef       = ref<HTMLInputElement | null>(null)
-const dateInputRef       = ref<HTMLInputElement | null>(null)
+const dateFromInputRef   = ref<HTMLInputElement | null>(null)
+const dateUntilInputRef  = ref<HTMLInputElement | null>(null)
 
 // These are only updated when a search actually runs (for URL sync and summary bar)
 const channel    = ref('')
 const userFilter = ref('')
 const termFilter = ref('')
 const dateFilter = ref('')
+const dateFrom   = ref('')
+const dateUntil  = ref('')
 
 function readInputs() {
   channel.value    = channelInputRef.value?.value.trim().toLowerCase().replace(/^#/, '') ?? channel.value
   userFilter.value = userInputRef.value?.value.trim() ?? userFilter.value
   termFilter.value = termInputRef.value?.value.trim() ?? termFilter.value
-  dateFilter.value = dateInputRef.value?.value ?? dateFilter.value
+  dateFrom.value   = dateFromInputRef.value?.value ?? dateFrom.value
+  dateUntil.value  = dateUntilInputRef.value?.value ?? dateUntil.value
+  // Backwards compat: if only "from" is set, dateFilter = single day
+  dateFilter.value = dateFrom.value
 }
 
 interface AutomodMsg {
@@ -71,7 +77,8 @@ function buildUrl(msgId: string | null = null) {
   if (channel.value.trim())    p.set('channel', channel.value.trim().toLowerCase().replace(/^#/, ''))
   if (userFilter.value.trim()) p.set('user',    userFilter.value.trim())
   if (termFilter.value.trim()) p.set('term',    termFilter.value.trim())
-  if (dateFilter.value)        p.set('date',    dateFilter.value)
+  if (dateFrom.value)          p.set('from',    dateFrom.value)
+  if (dateUntil.value)         p.set('until',   dateUntil.value)
   const qs   = p.toString() ? '?' + p.toString() : ''
   const hash = msgId ? `#msg-${msgId}` : ''
   return window.location.pathname + qs + hash
@@ -90,7 +97,11 @@ function readUrlState() {
   if (p.get('channel')) channel.value    = p.get('channel')!
   if (p.get('user'))    userFilter.value = p.get('user')!
   if (p.get('term'))    termFilter.value = p.get('term')!
-  if (p.get('date'))    dateFilter.value = p.get('date')!
+  // Support legacy ?date= and new ?from=&until=
+  if (p.get('from'))    dateFrom.value   = p.get('from')!
+  else if (p.get('date')) dateFrom.value = p.get('date')!
+  if (p.get('until'))   dateUntil.value  = p.get('until')!
+  dateFilter.value = dateFrom.value
 }
 
 function readHashId(): string | null {
@@ -304,16 +315,33 @@ async function search() {
   cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   fetchEmotes(ch)
-  fetchAutomod(ch, dateFilter.value || undefined)
+  fetchAutomod(ch, dateFrom.value || undefined)
   const today   = new Date()
   const isUser  = !!userFilter.value.trim()
 
-  if (dateFilter.value) {
-    const [y, m, d] = dateFilter.value.split('-').map(Number)
+  // >>> Date range: fetch each day individually and merge
+  if (dateFrom.value) {
+    const startDate = new Date(dateFrom.value + 'T00:00:00')
+    const endDate   = dateUntil.value ? new Date(dateUntil.value + 'T00:00:00') : startDate
+    // Safety: cap range at 90 days
+    const maxRange = 90
+    const diffDays = Math.round((endDate.getTime() - startDate.getTime()) / 86_400_000)
+    if (diffDays < 0) { error.value = 'End date must be after start date.'; loading.value = false; return }
+    if (diffDays > maxRange) { error.value = `Date range too large (max ${maxRange} days).`; loading.value = false; return }
+
     try {
-      msgs.value = isUser
-        ? await fetchMonth(ch, y!, m!, abortCtrl.signal).then(ms => ms.filter(msg => msg.timestamp.startsWith(dateFilter.value)))
-        : await fetchDay(ch, y!, m!, d!, abortCtrl.signal)
+      const allMsgs: LogMsg[] = []
+      const d = new Date(startDate)
+      while (d <= endDate) {
+        if (abortCtrl.signal.aborted) break
+        const dayMsgs = isUser
+          ? await fetchMonth(ch, d.getFullYear(), d.getMonth() + 1, abortCtrl.signal)
+              .then(ms => ms.filter(msg => msg.timestamp.startsWith(d.toISOString().slice(0, 10))))
+          : await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal)
+        allMsgs.push(...dayMsgs)
+        d.setDate(d.getDate() + 1)
+      }
+      msgs.value = allMsgs
     } catch {}
     loading.value = false; noMore.value = true
     if (hashId) await scrollToMsg(hashId, true); else scrollToBottom()
@@ -456,10 +484,13 @@ onMounted(async () => {
   readUrlState()
   if (!channel.value && session.value?.channel) {
     channel.value = session.value.channel
-    // Also update the DOM input directly since it uses :value not v-model
     await nextTick()
     if (channelInputRef.value) channelInputRef.value.value = channel.value
   }
+  // Populate date inputs from URL state
+  await nextTick()
+  if (dateFromInputRef.value && dateFrom.value) dateFromInputRef.value.value = dateFrom.value
+  if (dateUntilInputRef.value && dateUntil.value) dateUntilInputRef.value.value = dateUntil.value
   if (channel.value) await search()
 })
 onUnmounted(() => {
@@ -683,7 +714,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
         <span class="summary-ch">#{{ channel || '?' }}</span>
         <span v-if="userFilter" class="summary-tag">@{{ userFilter }}</span>
         <span v-if="termFilter" class="summary-tag">"{{ termFilter }}"</span>
-        <span v-if="dateFilter" class="summary-tag">{{ dateFilter }}</span>
+        <span v-if="dateFrom" class="summary-tag">{{ dateFrom }}{{ dateUntil && dateUntil !== dateFrom ? ' → ' + dateUntil : '' }}</span>
       </span>
       <span class="summary-chevron">{{ searchExpanded ? '▲' : '▼' }}</span>
     </div>
@@ -728,10 +759,20 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             />
           </div>
           <div class="field-wrap">
-            <label class="field-lbl">{{ t('logs.field.date') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
+            <label class="field-lbl">From <span class="opt">{{ t('logs.field.optional') }}</span></label>
             <input
-              ref="dateInputRef"
-              :value="dateFilter"
+              ref="dateFromInputRef"
+              :value="dateFrom"
+              class="field-input date-input"
+              type="date"
+              @keydown.enter="search"
+            />
+          </div>
+          <div class="field-wrap">
+            <label class="field-lbl">Until <span class="opt">{{ t('logs.field.optional') }}</span></label>
+            <input
+              ref="dateUntilInputRef"
+              :value="dateUntil"
               class="field-input date-input"
               type="date"
               @keydown.enter="search"
@@ -809,7 +850,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :id="`log-${item.msg.id}`"
               v-memo="[item.msg.id, highlightId === item.msg.id]"
               class="log-row"
-              :class="{ highlighted: highlightId === item.msg.id }"
+              :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'] }"
             >
               <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
               <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
@@ -819,7 +860,14 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                 :class="{ 'log-user-clickable': true }"
                 @click.stop="openUserPopup(item.msg.username, channel || item.msg.channel?.replace('#',''), $event)"
               >{{ item.msg.displayName || item.msg.username }}</div>
-              <div class="log-msg" v-html="renderMsg(item.msg.text)"></div>
+              <div class="log-msg-wrap">
+                <div v-if="item.msg.tags?.['reply-parent-msg-body']" class="reply-context">
+                  <span class="reply-icon">↩</span>
+                  <span class="reply-parent-user">@{{ item.msg.tags['reply-parent-display-name'] || item.msg.tags['reply-parent-user-login'] || '?' }}</span>
+                  <span class="reply-parent-body">{{ item.msg.tags['reply-parent-msg-body'] }}</span>
+                </div>
+                <div class="log-msg" v-html="renderMsg(item.msg.text)"></div>
+              </div>
               <div class="log-share" @click="shareMsg(item.msg)" title="Copy link">
                 <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M10 2L14 6L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -993,7 +1041,19 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .log-day-sep    { display: none; }
 .log-user { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
 .log-user::after { content: ':'; color: #555; margin-right: 5px; }
+.log-msg-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .log-msg  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
+
+/* Reply thread indicator */
+.reply-context {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 10px; color: #555; padding: 1px 0 2px;
+  white-space: nowrap; overflow: hidden;
+}
+.reply-icon { color: #444; font-size: 11px; flex-shrink: 0; }
+.reply-parent-user { color: #777; font-weight: 600; flex-shrink: 0; }
+.reply-parent-body { color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-row-reply { border-left: 2px solid #333; }
 
 .log-share {
   display: flex; align-items: center; justify-content: center;

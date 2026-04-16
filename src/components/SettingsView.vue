@@ -25,6 +25,11 @@ const vanishHide   = ref(false)
 const vanishSaving = ref(false)
 const vanishMsg    = ref('')
 
+// >>> Name history opt-out
+const nameHistOptedOut = ref(false)
+const nameHistSaving   = ref(false)
+const nameHistMsg      = ref('')
+
 // >>> 7TV
 interface EmoteSetInfo { setId: string | null; setName: string | null; emoteCount?: number }
 const emoteSet        = ref<EmoteSetInfo>({ setId: null, setName: null })
@@ -61,9 +66,10 @@ async function load() {
   isBroadcaster.value = session.value.login === session.value.channel
   const headers = { Authorization: `Bearer ${session.value.token}` }
   try {
-    const [sRes, oRes] = await Promise.all([
+    const [sRes, oRes, nhRes] = await Promise.all([
       fetch(`${API}/settings/${session.value.channel}`, { headers }),
       fetch(`${API}/log-optout`, { headers }),
+      fetch(`${API}/name-history-optout`, { headers }),
     ])
     if (sRes.ok) {
       const d = await sRes.json()
@@ -71,6 +77,7 @@ async function load() {
       vanishHide.value = d.hide_vanish_timeouts ?? false
     }
     if (oRes.ok) { const d = await oRes.json(); optedOut.value = d.opted_out ?? false }
+    if (nhRes.ok) { const d = await nhRes.json(); nameHistOptedOut.value = d.opted_out ?? false }
   } catch {}
 }
 
@@ -120,6 +127,23 @@ async function toggleOptOut() {
     setTimeout(() => optMsg.value = '', 3000)
   } catch { optMsg.value = t('settings.optout.error') }
   optSaving.value = false
+}
+
+async function toggleNameHistOptOut() {
+  if (!session.value) return
+  nameHistSaving.value = true; nameHistMsg.value = ''
+  try {
+    await fetch(`${API}/name-history-optout`, {
+      method: nameHistOptedOut.value ? 'DELETE' : 'POST',
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    })
+    nameHistOptedOut.value = !nameHistOptedOut.value
+    nameHistMsg.value = nameHistOptedOut.value
+      ? 'Previous usernames are now hidden.'
+      : 'Previous usernames are now visible.'
+    setTimeout(() => nameHistMsg.value = '', 3000)
+  } catch { nameHistMsg.value = 'Failed to update preference.' }
+  nameHistSaving.value = false
 }
 
 async function saveVanish() {
@@ -248,6 +272,31 @@ async function doRemoveBot() {
         <div class="card-footer">
           <button class="toggle-btn" :class="{ 'toggle-btn-on': optedOut }" @click="toggleOptOut" :disabled="optSaving">
             {{ optSaving ? '...' : optedOut ? t('settings.optout.btn.in') : t('settings.optout.btn.out') }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Name History Opt-Out -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon">&#128221;</div>
+          <div class="card-title">Previous Usernames</div>
+          <div class="card-sub">Hide your previous Twitch usernames from being shown on other users' screens.</div>
+        </div>
+        <div class="card-body">
+          <div class="toggle-row">
+            <div class="status-dot" :class="{ active: !nameHistOptedOut }"></div>
+            <span class="status-text">{{ nameHistOptedOut ? 'Name history hidden' : 'Name history visible' }}</span>
+            <div class="spacer"></div>
+            <span class="status-badge" :class="nameHistOptedOut ? 'badge-off' : 'badge-on'">
+              {{ nameHistOptedOut ? 'Hidden' : 'Visible' }}
+            </span>
+          </div>
+          <div v-if="nameHistMsg" class="card-msg ok">{{ nameHistMsg }}</div>
+        </div>
+        <div class="card-footer">
+          <button class="toggle-btn" :class="{ 'toggle-btn-on': nameHistOptedOut }" @click="toggleNameHistOptOut" :disabled="nameHistSaving">
+            {{ nameHistSaving ? '...' : nameHistOptedOut ? 'Show Names' : 'Hide Names' }}
           </button>
         </div>
       </div>
