@@ -148,7 +148,7 @@ export function useSnippet() {
             }
           })
 
-        console.log('[Snippet] Selection geometry', {
+        const selectionGeom = {
           panel: {
             left: Math.round(panel.left),
             top: Math.round(panel.top),
@@ -173,7 +173,9 @@ export function useSnippet() {
           selectedUsersCount: hits.length,
           selectedUsersSample: sample,
           rowRefs,
-        })
+        }
+        console.log('[Snippet] Selection geometry', selectionGeom)
+        console.log('[Snippet] Selection geometry JSON:', JSON.stringify(selectionGeom))
       } catch (err) {
         console.warn('[Snippet] Could not inspect selected usernames', err)
       }
@@ -238,7 +240,7 @@ export function useSnippet() {
         if (SNIPPET_DEBUG) {
           const selectionTopRow = nearestRowAtLocalY(containerEl, sel.y)
           const cropTopRow = nearestRowAtLocalY(containerEl, sourceY)
-          console.log('[Snippet] Crop mode', {
+          const cropMode = {
             widthLooksLikeViewport,
             heightLooksLikeViewport,
             canvas: { w: fullCanvas.width, h: fullCanvas.height },
@@ -259,7 +261,12 @@ export function useSnippet() {
               selectionTopRow,
               cropTopRow,
             },
-          })
+          }
+          console.log('[Snippet] Crop mode', cropMode)
+          console.log('[Snippet] Crop mode JSON:', JSON.stringify(cropMode))
+          console.log(
+            `[Snippet] Crop numbers selY=${Math.round(sel.y)} sourceY=${Math.round(sourceY)} scrollTop=${Math.round(containerEl.scrollTop)} srcY=${srcY} reqH=${reqH} srcH=${srcH} scale=${scale.toFixed(2)}`
+          )
         }
 
         if (srcX >= fullCanvas.width || srcY >= fullCanvas.height) {
