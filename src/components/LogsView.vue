@@ -878,6 +878,10 @@ function intToRgba(c: number): string {
   return `rgba(${r},${g},${b},${a.toFixed(3)})`
 }
 
+function colorAlphaByte(c: number): number {
+  return c & 0xff
+}
+
 function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[]; color?: number | null; angle?: number | null; function?: string | null; repeat?: boolean }, fallbackColor?: string): Record<string, string> {
   const styles: Record<string, string> = {}
   const stopsArr = Array.isArray(paint.stops) ? paint.stops : []
@@ -892,7 +896,12 @@ function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; 
     const stops = normStops.map(s => `${intToRgba(s.color)} ${Math.round((s.at ?? 0) * 100)}%`).join(', ')
     const angle = Number.isFinite(paint.angle as number) ? Number(paint.angle) : 90
     const fn = paint.repeat ? 'repeating-linear-gradient' : 'linear-gradient'
-    styles['--snippet-paint-preview'] = intToRgba(normStops[0]!.color)
+    const bestStop = normStops.reduce((best, cur) => colorAlphaByte(cur.color) > colorAlphaByte(best.color) ? cur : best)
+    if (colorAlphaByte(bestStop.color) >= 40) {
+      styles['--snippet-paint-preview'] = intToRgba(bestStop.color)
+    } else if (fallbackColor) {
+      styles['--snippet-paint-preview'] = fallbackColor
+    }
     styles['backgroundImage'] = `${fn}(${angle}deg, ${stops})`
     styles['backgroundClip'] = 'text'
     styles['WebkitBackgroundClip'] = 'text'
@@ -901,7 +910,11 @@ function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; 
     styles['lineHeight'] = '1.1rem'
   } else if (paint.imageUrl) {
     if (paint.color !== null && paint.color !== undefined) {
-      styles['--snippet-paint-preview'] = intToRgba(paint.color)
+      if (colorAlphaByte(paint.color) >= 40) {
+        styles['--snippet-paint-preview'] = intToRgba(paint.color)
+      } else if (fallbackColor) {
+        styles['--snippet-paint-preview'] = fallbackColor
+      }
     } else if (fallbackColor) {
       styles['--snippet-paint-preview'] = fallbackColor
     }
@@ -915,7 +928,11 @@ function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; 
     styles['WebkitTextFillColor'] = 'transparent'
     styles['lineHeight'] = '1.1rem'
   } else if (paint.color !== null && paint.color !== undefined) {
-    styles['--snippet-paint-preview'] = intToRgba(paint.color)
+    if (colorAlphaByte(paint.color) >= 40) {
+      styles['--snippet-paint-preview'] = intToRgba(paint.color)
+    } else if (fallbackColor) {
+      styles['--snippet-paint-preview'] = fallbackColor
+    }
     styles['color'] = intToRgba(paint.color)
   } else if (fallbackColor) {
     // Some 7TV paints are glow-only and provide no fill stops/color.

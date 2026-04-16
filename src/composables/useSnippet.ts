@@ -152,6 +152,11 @@ export function useSnippet() {
               if (!s) return ''
               if (low === 'transparent') return ''
               if (low === 'rgba(0, 0, 0, 0)' || low === 'rgba(0,0,0,0)') return ''
+              const m = low.match(/^rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([0-9]*\.?[0-9]+)\s*\)$/)
+              if (m) {
+                const alpha = Number(m[1])
+                if (!Number.isFinite(alpha) || alpha <= 0.14) return ''
+              }
               return s
             }
 
