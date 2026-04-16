@@ -10,8 +10,9 @@ const { session, availableChannels, channelRole, restoreSession, switchChannel, 
 const router = useRouter()
 const route  = useRoute()
 
-// >>> logs.shyboti.de - stripped-down logs-only mode
+// >>> logs.shyboti.de - public logs site; full UI only if devgate cookie is present
 const isLogsMode = window.location.hostname === 'logs.shyboti.de'
+const hasDevGate = ref(!isLogsMode) // dev.shyboti.de always has full UI
 const { t } = useI18n()
 const { locale, setLocale } = useLocale()
 
@@ -277,6 +278,14 @@ onMounted(async () => {
 
   if (token) await restoreSession(token)
 
+  // >>> On logs.shyboti.de, check if devgate cookie is valid to show full UI
+  if (isLogsMode) {
+    try {
+      const gateRes = await fetch(`${API}/devgate/verify`, { credentials: 'include' })
+      hasDevGate.value = gateRes.ok
+    } catch { hasDevGate.value = false }
+  }
+
   if (status === 'loggedin' && channel) {
     showToast(`Logged in as ${channel}`)
     showAddBanner.value = !availableChannels.value.includes(channel)
@@ -289,7 +298,7 @@ onMounted(async () => {
   }
 
   if (isLogsMode) {
-    if (route.path !== '/logs') router.push('/logs')
+    // >>> logs.shyboti.de: router already redirects / → /logs, nothing extra needed
   } else if (route.path === '/' || route.path === '') {
     router.push(session.value ? '/dashboard' : '/')
   }
@@ -318,9 +327,10 @@ provide('searchOpenTrigger', searchOpenTrigger)
 </script>
 
 <template>
-  <div class="page" :class="{ 'logs-mode': isLogsMode }">
+  <div class="page" :class="{ 'logs-mode': isLogsMode && !hasDevGate }">
 
-    <div v-if="!isLogsMode" class="topbar">
+    <!-- Full topbar when not in logs mode OR when devgate is valid -->
+    <div v-if="hasDevGate" class="topbar">
       <div class="topbar-brand" @click="session ? router.push('/dashboard') : router.push('/')" style="cursor:pointer">
         <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
         <span class="brand-name">ShyBoti</span>
@@ -399,7 +409,15 @@ provide('searchOpenTrigger', searchOpenTrigger)
       </div>
     </div>
 
-    <div v-if="!isLogsMode && session && showAddBanner" class="add-banner">
+    <!-- Minimal topbar for logs.shyboti.de without devgate -->
+    <div v-if="isLogsMode && !hasDevGate" class="topbar">
+      <div class="topbar-brand">
+        <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
+        <span class="brand-name">ShyBoti</span>
+      </div>
+    </div>
+
+    <div v-if="hasDevGate && session && showAddBanner" class="add-banner">
       <span>👋 {{ t('banner.welcome') }}</span>
       <div class="banner-actions">
         <button class="banner-btn add" @click="addBot">{{ t('banner.add') }}</button>
@@ -408,9 +426,9 @@ provide('searchOpenTrigger', searchOpenTrigger)
     </div>
 
     <div class="body">
-      <div v-if="!isLogsMode && sidebarOpen" class="sidebar-overlay" @click="sidebarOpen = false"></div>
+      <div v-if="hasDevGate && sidebarOpen" class="sidebar-overlay" @click="sidebarOpen = false"></div>
 
-      <aside v-if="!isLogsMode" class="sidebar" :class="{ 'sidebar-open': sidebarOpen }">
+      <aside v-if="hasDevGate" class="sidebar" :class="{ 'sidebar-open': sidebarOpen }">
         <div class="sidebar-mobile-header show-mobile">
           <template v-if="session">
             <span class="sidebar-user">#{{ session.channel }}</span>

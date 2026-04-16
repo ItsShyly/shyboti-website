@@ -12,11 +12,10 @@ import ToolsView       from '../components/ToolsView.vue'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    // >>> logs.shyboti.de always lands on /logs
-    ...(window.location.hostname === 'logs.shyboti.de'
-      ? [{ path: '/:path(.*)', redirect: '/logs' }]
-      : []),
-    { path: '/',            component: () => import('../components/HomeView.vue') },
+    // >>> logs.shyboti.de: root lands on /logs, everything else stays accessible
+    { path: '/',            ...(window.location.hostname === 'logs.shyboti.de'
+      ? { redirect: '/logs' }
+      : { component: () => import('../components/HomeView.vue') }) },
     { path: '/home',        redirect: '/' },
     { path: '/dashboard',   component: DashboardView },
     { path: '/commands',    component: CommandsView },

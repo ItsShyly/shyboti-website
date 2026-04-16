@@ -56,7 +56,7 @@
     if (p.has('t')) {
       const token = p.get('t')
       const maxAge = 60 * 60 * 24 * 7 // 7 days
-      document.cookie = `devgate=${token}; Path=/; Max-Age=${maxAge}; SameSite=Lax; Secure`
+      document.cookie = `devgate=${token}; Path=/; Max-Age=${maxAge}; Domain=.shyboti.de; SameSite=Lax; Secure`
       window.location.replace('/')
     } else if (p.get('error') === 'unauthorized') {
       const el = document.getElementById('msg')
