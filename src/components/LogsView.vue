@@ -92,6 +92,7 @@ const virtualStart = ref(0)
 const virtualEnd = ref(0)
 const loadingOverlayLogoUrl = 'https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif'
 const domSettling = ref(false)
+let domSettleToken = 0
 
 const isMobile = () => window.matchMedia('(max-width: 680px)').matches
 
@@ -687,7 +688,18 @@ const bottomSpacerHeight = computed(() => {
   if (!useVirtual.value) return 0
   return Math.max(0, (displayItems.value.length - virtualEnd.value) * VIRTUAL_ROW_ESTIMATE)
 })
-const showFloatingFetch = computed(() => loading.value || loadingMore.value || domSettling.value)
+const showFloatingFetch = computed(() => domSettling.value)
+
+function markDomSettling() {
+  const token = ++domSettleToken
+  domSettling.value = true
+  void nextTick()
+    .then(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+    .then(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+    .then(() => {
+      if (token === domSettleToken) domSettling.value = false
+    })
+}
 
 function userColor(m: LogMsg): string {
   const tc = m.tags?.['color']
@@ -938,11 +950,12 @@ watch(msgs, (list) => {
 }, { flush: 'post' })
 
 watch(displayItems, async () => {
-  domSettling.value = true
-  await nextTick()
   recalcVirtualWindow()
-  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
-  domSettling.value = false
+  markDomSettling()
+}, { flush: 'post' })
+
+watch(paintStyles, () => {
+  markDomSettling()
 }, { flush: 'post' })
 
 // >>> User popup
@@ -1204,7 +1217,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             <div
               v-else
               :id="`log-${item.msg.id}`"
-              v-memo="[item.msg.id, highlightId === item.msg.id]"
               class="log-row-outer"
               :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'log-row-event': isHighlightedEvent(item.msg) }"
             >
@@ -1341,7 +1353,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
     <div v-if="showFloatingFetch" class="logs-fetch-floating" aria-live="polite" aria-busy="true">
       <img class="logs-fetch-logo" :src="loadingOverlayLogoUrl" alt="ShyBoti loading" loading="eager" decoding="async" />
-      <span class="logs-fetch-text">logs getting fetched...</span>
+      <span class="logs-fetch-text">logs getting displayed...</span>
     </div>
   </div>
 </template>
@@ -1429,6 +1441,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .log-row-outer.log-row-event:hover {
   background: linear-gradient(90deg, rgba(200, 50, 200, 0.24), rgba(200, 50, 200, 0.08) 50%, rgba(26, 26, 30, 0.9) 100%);
 }
+.log-row-outer.log-row-event .log-row { align-items: center; }
 @keyframes hl-fade {
   0%   { background: rgba(111,43,255,.25); }
   100% { background: transparent; }
