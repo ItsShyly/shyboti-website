@@ -134,7 +134,7 @@ export function useSnippet() {
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
       let cropCanvas: HTMLCanvasElement
       try {
-        cropCanvas = await html2canvas(containerEl, {
+        const baseOptions = {
           x:               Math.round(sel.x),
           y:               Math.round(sel.y),
           width:           Math.round(sel.w),
@@ -143,11 +143,18 @@ export function useSnippet() {
           scrollY:         0,
           useCORS:         true,
           allowTaint:      true,
-          foreignObjectRendering: true,
           logging:         false,
           scale,
           backgroundColor: '#0d0d10',
-        })
+        }
+
+        cropCanvas = await html2canvas(containerEl, baseOptions)
+        if (!cropCanvas.width || !cropCanvas.height) {
+          cropCanvas = await html2canvas(containerEl, {
+            ...baseOptions,
+            foreignObjectRendering: true,
+          })
+        }
       } finally {
         document.body.classList.remove('snippet-capturing')
       }
