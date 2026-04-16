@@ -80,12 +80,16 @@ export function useSnippet() {
     if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
     screenshotToast.value = { state: 'uploading', url: null, imgReady: false }
 
+    const totalStart = performance.now()
+    console.log('[Snippet] Starting screenshot process')
+
     try {
       // @ts-ignore
       const html2canvas = (await import('html2canvas')).default
       const scale = window.devicePixelRatio || 1
 
       // Only capture the selected region
+      const html2Start = performance.now()
       const cropCanvas = await html2canvas(containerEl, {
         x:               Math.round(sel.x),
         y:               Math.round(sel.y),
@@ -99,21 +103,37 @@ export function useSnippet() {
         scale,
         backgroundColor: '#0d0d10',
       })
+      const html2Duration = performance.now() - html2Start
+      console.log(`[Snippet] html2canvas render: ${html2Duration.toFixed(2)}ms`)
 
       cropCanvas.toBlob(async (blob: Blob | null) => {
+        const blobTime = performance.now()
         if (!blob) { screenshotToast.value = null; return }
+        console.log(`[Snippet] toBlob creation: ${(blobTime - html2Start - html2Duration).toFixed(2)}ms, size: ${(blob.size / 1024).toFixed(2)}KB`)
+
         const fd = new FormData()
         fd.append('file', new File([blob], 'snippet.png', { type: 'image/png' }))
         const headers: Record<string, string> = {}
         if (session.value) headers['Authorization'] = `Bearer ${session.value.token}`
         try {
+          const uploadStart = performance.now()
           const res = await fetch(`${API}/images/upload`, { method: 'POST', headers, body: fd })
+          const uploadDuration = performance.now() - uploadStart
+          
           if (!res.ok) { screenshotToast.value = null; return }
           const data = await res.json() as { id: string }
           const url = `https://i.shyboti.de/${data.id}`
+          const totalDuration = performance.now() - totalStart
+          
+          console.log(`[Snippet] Upload: ${uploadDuration.toFixed(2)}ms`)
+          console.log(`[Snippet] Total time: ${totalDuration.toFixed(2)}ms (render: ${html2Duration.toFixed(2)}ms, upload: ${uploadDuration.toFixed(2)}ms)`)
+          
           await navigator.clipboard.writeText(url).catch(() => {})
           screenshotToast.value = { state: 'copied', url, imgReady: false }
-        } catch { screenshotToast.value = null }
+        } catch (err) { 
+          console.error('[Snippet] Upload error:', err)
+          screenshotToast.value = null 
+        }
       }, 'image/webp', 0.92)
     } catch (err) {
       console.error('Snippet failed:', err)
