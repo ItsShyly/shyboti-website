@@ -23,7 +23,7 @@ const SNIPPET_CAPTURE_DELAY_MS = 0
 const SNIPPET_DEBUG = true
 const SNIPPET_MAX_RENDER_PIXELS = 2_400_000
 const SNIPPET_MIN_PIXEL_RATIO = 0.65
-const SNIPPET_LOG_VERSION = 'snippet-calib-v3'
+const SNIPPET_LOG_VERSION = 'snippet-calib-v4'
 
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
   const start = Date.now()
@@ -257,20 +257,33 @@ export function useSnippet() {
         const widthLooksLikeViewport = widthViewportDelta <= widthContentDelta
         const heightLooksLikeViewport = heightViewportDelta <= heightContentDelta
 
-        // selInCapture is content-space. If html-to-image rendered viewport-space,
-        // convert to viewport coordinates by subtracting captureRoot scroll offsets.
+        // selInCapture is content-space. html-to-image may render either viewport-space
+        // (client size) or content-space (scroll size), so compute both and choose the one
+        // that actually fits canvas bounds.
         const sourceX = widthLooksLikeViewport ? (selInCapture.x - captureRoot.scrollLeft) : selInCapture.x
-        let sourceY = heightLooksLikeViewport ? (selInCapture.y - captureRoot.scrollTop) : selInCapture.y
+        const sourceYViewport = selInCapture.y - captureRoot.scrollTop
+        const sourceYContent = selInCapture.y
+        const sourceYPreferred = heightLooksLikeViewport ? sourceYViewport : sourceYContent
 
-        // Safety: if Y is outside the rendered viewport bounds, reset to local selection Y.
-        if (sourceY < 0 || sourceY > captureRoot.clientHeight) {
-          sourceY = Math.max(0, Math.min(captureRoot.clientHeight - selInCapture.h, heightLooksLikeViewport ? (selInCapture.y - captureRoot.scrollTop) : selInCapture.y))
-        }
-
-        const srcX = Math.max(0, Math.round(sourceX * scale))
-        const srcY = Math.max(0, Math.round(sourceY * scale))
         const reqW = Math.max(1, Math.round(selInCapture.w * scale))
         const reqH = Math.max(1, Math.round(selInCapture.h * scale))
+        const srcX = Math.max(0, Math.round(sourceX * scale))
+
+        const minY = 0
+        const maxY = Math.max(0, fullCanvas.height - reqH)
+        const candidatePreferred = Math.round(sourceYPreferred * scale)
+        const candidateViewport = Math.round(sourceYViewport * scale)
+        const candidateContent = Math.round(sourceYContent * scale)
+
+        const inBounds = (y: number) => y >= minY && y <= maxY
+        let srcY = candidatePreferred
+        if (!inBounds(srcY)) {
+          if (inBounds(candidateViewport)) srcY = candidateViewport
+          else if (inBounds(candidateContent)) srcY = candidateContent
+          else srcY = Math.max(minY, Math.min(maxY, srcY))
+        }
+
+        const sourceY = srcY / Math.max(0.01, scale)
         const srcW = Math.max(1, Math.min(reqW, fullCanvas.width - srcX))
         const srcH = Math.max(1, Math.min(reqH, fullCanvas.height - srcY))
 
@@ -284,6 +297,11 @@ export function useSnippet() {
             client: { w: clientWScaled, h: clientHScaled },
             scroll: { w: scrollWScaled, h: scrollHScaled },
             source: { x: sourceX, y: sourceY },
+            sourceCandidates: {
+              viewport: sourceYViewport,
+              content: sourceYContent,
+              preferred: sourceYPreferred,
+            },
             scrollOffsetsApplied: {
               x: widthLooksLikeViewport,
               y: heightLooksLikeViewport,
