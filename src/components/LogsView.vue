@@ -385,6 +385,10 @@ async function search() {
   loading.value = true; error.value = ''; searched.value = true
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
   virtualStart.value = 0; virtualEnd.value = 0
+  paintCache.clear()
+  paintStyles.value = new Map()
+  sevenTvBadgeMap.value = new Map()
+  personalEmoteMaps.value = new Map()
   cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   fetchEmotes(ch)
@@ -895,7 +899,10 @@ async function ensurePaint(username: string) {
     const res = await fetch(`${API}/twitch/user/${encodeURIComponent(key)}`, {
       headers: session.value ? { Authorization: `Bearer ${session.value.token}` } : {}
     })
-    if (!res.ok) return
+    if (!res.ok) {
+      paintCache.delete(key)
+      return
+    }
     const data = await res.json() as {
       paint?: any
       sevenTv?: {
@@ -935,7 +942,9 @@ async function ensurePaint(username: string) {
       next.set(key, p)
       personalEmoteMaps.value = next
     }
-  } catch {}
+  } catch {
+    paintCache.delete(key)
+  }
 }
 
 watch(msgs, (list) => {
