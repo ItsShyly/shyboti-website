@@ -1132,7 +1132,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .search-bar  { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; background: #141418; border: 1px solid #1e1e24; padding: 14px 16px; flex-shrink: 0; flex: 1; }
 .search-bar-content { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .field-wrap  { display: flex; flex-direction: column; gap: 4px; }
-.snippet-info { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; align-items: center; padding: 14px 0; }
+.snippet-info { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; align-items: center; padding: 14px 0; align-items: center; }
 .snippet-gif-wrap { position: relative; cursor: pointer; display: inline-block; }
 .snippet-gif { display: block; max-height: 60px; max-width: 180px; border: 1px solid #2a2a30; }
 .snippet-hover-overlay {
@@ -1412,6 +1412,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     padding: 10px 14px; flex-shrink: 0;
     overflow: hidden; transition: max-height .2s ease, padding .2s ease;
     max-height: 400px;
+    width: 100%
   }
   .search-bar-content { flex-direction: column; align-items: stretch; gap: 8px; }
   .search-bar-collapsed { max-height: 0 !important; padding: 0 14px !important; }
