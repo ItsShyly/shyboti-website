@@ -1233,23 +1233,22 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="direction = 'oldest'">↑ Oldest</button>
             </div>
           </div>
+              <!-- Visuals bar -->
+          <div class="visuals-bar">
+            <button class="visuals-toggle" :class="{ open: visualsOpen }" @click="visualsOpen = !visualsOpen">
+              Visuals {{ visualsOpen ? '▲' : '▼' }}
+            </button>
+            <div v-if="visualsOpen" class="visuals-controls">
+              <button class="dir-btn" :class="{ active: !hide7tv }" @click="hide7tv = !hide7tv" title="Toggle 7TV paints & badges">7TV</button>
+              <button class="dir-btn" :class="{ active: plainUsernames }" @click="plainUsernames = !plainUsernames" title="Show all usernames in white">White names</button>
+            </div>
+          </div>
           <button class="search-btn" @click="search" :disabled="loading">
             {{ loading ? '…' : t('logs.search') }}
           </button>
         </div>
       </div>
       <div class="snippet-info" v-if="false"><!-- moved to global SnippetOverlay --></div>
-    </div>
-
-    <!-- Visuals bar -->
-    <div class="visuals-bar">
-      <button class="visuals-toggle" :class="{ open: visualsOpen }" @click="visualsOpen = !visualsOpen">
-        ◈ Visuals {{ visualsOpen ? '▲' : '▼' }}
-      </button>
-      <div v-if="visualsOpen" class="visuals-controls">
-        <button class="dir-btn" :class="{ active: !hide7tv }" @click="hide7tv = !hide7tv" title="Toggle 7TV paints & badges">7TV</button>
-        <button class="dir-btn" :class="{ active: plainUsernames }" @click="plainUsernames = !plainUsernames" title="Show all usernames in white">White names</button>
-      </div>
     </div>
 
     <!-- Automod toggle -->
@@ -1742,7 +1741,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 /* Visuals bar */
 .visuals-bar { flex-shrink: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .visuals-toggle {
-  height: 28px; padding: 0 14px; border: 1px solid #9d6cff44;
+  height: 35px; padding: 0 14px; border: 1px solid #9d6cff44;
   background: rgba(157,108,255,.06); color: #9d6cff;
   font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
   transition: background .15s;
