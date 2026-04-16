@@ -122,7 +122,7 @@ export function useSnippet() {
           console.log(`[Snippet] Hash request: ${hashDuration.toFixed(2)}ms`)
 
           const fd = new FormData()
-          fd.append('file', new File([blob], 'snippet.png', { type: 'image/png' }))
+          fd.append('file', new File([blob], 'snippet.webp', { type: 'image/webp' }))
           fd.append('width', String(cropCanvas.width))
           fd.append('height', String(cropCanvas.height))
           const headers: Record<string, string> = {
