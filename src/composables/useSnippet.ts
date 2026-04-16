@@ -18,6 +18,7 @@ let   suppressContextMenuUntil = 0
 
 // rAF throttle flag – one pending frame max
 let rafPending = false
+const SNIPPET_CAPTURE_DELAY_MS = 450
 
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
   const start = Date.now()
@@ -109,6 +110,11 @@ export function useSnippet() {
     }
 
     await waitForLogsJobsToSettle()
+
+    if (SNIPPET_CAPTURE_DELAY_MS > 0) {
+      console.log(`[Snippet] Extra capture delay: ${SNIPPET_CAPTURE_DELAY_MS}ms`)
+      await new Promise<void>((resolve) => setTimeout(resolve, SNIPPET_CAPTURE_DELAY_MS))
+    }
 
     if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
     screenshotToast.value = { state: 'uploading', url: null, imgReady: false }
