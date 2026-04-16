@@ -11,8 +11,9 @@
     "type-check": "vue-tsc --build"
   },
   "dependencies": {
-    "html2canvas": "^1.4.1",
+    "@vuepic/vue-datepicker": "^12.1.0",
     "html-to-image": "^1.11.13",
+    "html2canvas": "^1.4.1",
     "pinia": "^3.0.4",
     "vue": "^3.5.29",
     "vue-router": "^5.0.3"

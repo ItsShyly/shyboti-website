@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
+import { VueDatePicker } from '@vuepic/vue-datepicker'
+import '@vuepic/vue-datepicker/dist/main.css'
 
 const { session } = useAuth()
 const { t } = useI18n()
@@ -74,6 +76,7 @@ const emoteMap    = ref<EmoteMap>({})
 const twitchBadgeMap = ref<Map<string, TwitchBadgeAsset>>(new Map())
 const sevenTvBadgeMap = ref<Map<string, SevenTvBadgeAsset>>(new Map())
 const bodyRef     = ref<HTMLDivElement | null>(null)
+const visualsBarRef = ref<HTMLElement | null>(null)
 const highlightId = ref<string | null>(null)
 const copyToast     = ref(false)
 const searchExpanded = ref(true)
@@ -100,6 +103,39 @@ const isMobile = () => window.matchMedia('(max-width: 680px)').matches
 const hide7tv        = ref(false)
 const plainUsernames  = ref(false)
 const visualsOpen     = ref(false)
+
+function formatDateRange(dates: Date[] | null): string {
+  if (!dates || !dates[0]) return ''
+  const fmt = (d: Date) => d.toISOString().slice(0, 10)
+  return dates[1] && dates[1].getTime() !== dates[0].getTime()
+    ? `${fmt(dates[0])} → ${fmt(dates[1])}`
+    : fmt(dates[0])
+}
+
+const dateRange = computed({
+  get: (): Date[] | null => {
+    if (!dateFrom.value) return null
+    const from = new Date(dateFrom.value + 'T00:00:00')
+    const until = dateUntil.value ? new Date(dateUntil.value + 'T00:00:00') : from
+    return [from, until]
+  },
+  set: (val: Date[] | null) => {
+    if (val && val[0]) {
+      const fmt = (d: Date) => d.toISOString().slice(0, 10)
+      dateFrom.value = fmt(val[0])
+      dateUntil.value = val[1] ? fmt(val[1]) : fmt(val[0])
+    } else {
+      dateFrom.value = ''
+      dateUntil.value = ''
+    }
+  }
+})
+
+function onDocClickVisuals(e: MouseEvent) {
+  if (visualsOpen.value && visualsBarRef.value && !visualsBarRef.value.contains(e.target as Node)) {
+    visualsOpen.value = false
+  }
+}
 
 // >>> URL state sync
 function buildUrl(msgId: string | null = null) {
@@ -634,6 +670,7 @@ onMounted(async () => {
   if (dateFromInputRef.value && dateFrom.value) dateFromInputRef.value.value = dateFrom.value
   if (dateUntilInputRef.value && dateUntil.value) dateUntilInputRef.value.value = dateUntil.value
   window.addEventListener('resize', recalcVirtualWindow)
+  document.addEventListener('click', onDocClickVisuals, true)
   if (channel.value) await search()
 })
 onUnmounted(() => {
@@ -642,6 +679,7 @@ onUnmounted(() => {
   abortCtrl.abort()
   detachScrollListeners()
   window.removeEventListener('resize', recalcVirtualWindow)
+  document.removeEventListener('click', onDocClickVisuals, true)
   stopPopupDrag()
 })
 
@@ -1208,23 +1246,18 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           </div>
           <div class="field-wrap">
             <label class="field-lbl">Date range <span class="opt">{{ t('logs.field.optional') }}</span></label>
-            <div class="date-range-wrap">
-              <input
-                ref="dateFromInputRef"
-                :value="dateFrom"
-                class="field-input date-input"
-                type="date"
-                @keydown.enter="search"
-              />
-              <span class="date-range-sep">→</span>
-              <input
-                ref="dateUntilInputRef"
-                :value="dateUntil"
-                class="field-input date-input"
-                type="date"
-                @keydown.enter="search"
-              />
-            </div>
+            <VueDatePicker
+              v-model="dateRange"
+              range
+              :enable-time-picker="false"
+              dark
+              auto-apply
+              :format="formatDateRange"
+              placeholder="From → Until (optional)"
+              class="dp-logs"
+              :teleport="true"
+              :multi-calendars="true"
+            />
           </div>
           <div class="field-wrap">
             <label class="field-lbl">Direction</label>
@@ -1234,11 +1267,12 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             </div>
           </div>
               <!-- Visuals bar -->
-          <div class="visuals-bar">
-            <button class="visuals-toggle" :class="{ open: visualsOpen }" @click="visualsOpen = !visualsOpen">
+          <div class="field-wrap visuals-bar" ref="visualsBarRef">
+            <label class="field-lbl hide-mobile">Visuals</label>
+            <button class="visuals-toggle hide-mobile" :class="{ open: visualsOpen }" @click.stop="visualsOpen = !visualsOpen">
               Visuals {{ visualsOpen ? '▲' : '▼' }}
             </button>
-            <div v-if="visualsOpen" class="visuals-controls">
+            <div class="visuals-panel" :class="{ 'visuals-panel-open': visualsOpen }" @click.stop>
               <button class="dir-btn" :class="{ active: !hide7tv }" @click="hide7tv = !hide7tv" title="Toggle 7TV paints & badges">7TV</button>
               <button class="dir-btn" :class="{ active: plainUsernames }" @click="plainUsernames = !plainUsernames" title="Show all usernames in white">White names</button>
             </div>
@@ -1738,17 +1772,57 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .dir-btn:hover { color: #aaa; }
 .dir-btn.active { background: #1a1a24; color: #9d6cff; border-color: #6f2bff55; }
 
-/* Visuals bar */
-.visuals-bar { flex-shrink: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Visuals bar — desktop dropdown */
+.visuals-bar { position: relative; flex-shrink: 0; flex-direction: column; gap: 4px; }
 .visuals-toggle {
-  height: 35px; padding: 0 14px; border: 1px solid #9d6cff44;
+  height: 34px; padding: 0 14px; border: 1px solid #9d6cff44;
   background: rgba(157,108,255,.06); color: #9d6cff;
   font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
-  transition: background .15s;
+  transition: background .15s; white-space: nowrap;
 }
 .visuals-toggle:hover { background: rgba(157,108,255,.14); }
-.visuals-toggle.open { background: rgba(157,108,255,.18); border-color: #9d6cff88; }
-.visuals-controls { display: flex; gap: 0; }
+.visuals-toggle.open  { background: rgba(157,108,255,.18); border-color: #9d6cff88; }
+.visuals-panel {
+  display: none; flex-direction: column; gap: 2px;
+  position: absolute; top: calc(100% + 4px); left: 0;
+  background: #1a1a1e; border: 1px solid #2a2a30;
+  padding: 6px; min-width: 110px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.55); z-index: 30;
+}
+.visuals-panel .dir-btn { border-right: 1px solid #2a2a30 !important; }
+.visuals-panel-open { display: flex !important; }
+
+/* VueDatePicker dark theme overrides */
+.dp__theme_dark {
+  --dp-background-color: #141418;
+  --dp-text-color: #e0e0e0;
+  --dp-hover-color: #1e1e24;
+  --dp-hover-text-color: #fff;
+  --dp-primary-color: #6f2bff;
+  --dp-primary-text-color: #fff;
+  --dp-secondary-color: #1e1e24;
+  --dp-border-color: #2a2a30;
+  --dp-menu-border-color: #2a2a30;
+  --dp-border-color-hover: #9d6cff55;
+  --dp-icon-color: #9d6cff;
+  --dp-highlight-color: rgba(111,43,255,.12);
+  --dp-range-between-dates-background-color: rgba(111,43,255,.15);
+  --dp-range-between-dates-text-color: #e0e0e0;
+  --dp-range-between-border-color: rgba(111,43,255,.15);
+  --dp-font-family: 'JetBrains Mono', monospace;
+  --dp-font-size: 12px;
+  --dp-cell-size: 30px;
+}
+.dp-logs .dp__input {
+  background: #0d0d10; border: 1px solid #2a2a30; color: #e0e0e0;
+  font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  padding: 7px 10px; height: auto; border-radius: 0;
+  min-width: 200px;
+}
+.dp-logs .dp__input:focus { border-color: #6f2bff55; outline: none; }
+.dp-logs .dp__input_icon { display: none; }
+.dp-logs .dp__input_icon_pad { padding-left: 10px; }
+.dp-logs .dp__clear_icon { color: #555; right: 6px; }
 
 /* AutoMod bar */
 .automod-bar { flex-shrink: 0; }
@@ -1810,8 +1884,12 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .search-bar-collapsed { max-height: 0 !important; padding: 0 14px !important; }
   .field-input { width: 100% !important; }
   .date-input  { width: 100% !important; }
+  .dp-logs .dp__input { min-width: 0; width: 100%; }
   .search-btn  { width: 100%; }
   .snippet-info { display: none !important; }
+  /* Visuals: always show inline on mobile, no dropdown */
+  .visuals-toggle { display: none !important; }
+  .visuals-panel  { display: flex !important; position: static; background: none; border: none; padding: 0; box-shadow: none; flex-direction: row; min-width: 0; }
 
   .logs-results { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .logs-table   { flex: 1; min-height: 0; display: flex; flex-direction: column; }
