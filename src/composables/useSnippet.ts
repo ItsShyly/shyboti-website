@@ -85,8 +85,12 @@ export function useSnippet() {
       const html2canvas = (await import('html2canvas')).default
       const scale = window.devicePixelRatio || 1
 
-      // Capture the full scrollable area of the container
-      const fullCanvas = await html2canvas(containerEl, {
+      // Only capture the selected region - way faster than rendering my whole website
+      const cropCanvas = await html2canvas(containerEl, {
+        x:               Math.round(sel.x),
+        y:               Math.round(sel.y),
+        width:           Math.round(sel.w),
+        height:          Math.round(sel.h),
         scrollX:         0,
         scrollY:         0,
         useCORS:         true,
@@ -94,25 +98,9 @@ export function useSnippet() {
         logging:         false,
         scale,
         backgroundColor: '#0d0d10',
-        width:           containerEl.scrollWidth,
-        height:          containerEl.scrollHeight,
-        windowWidth:     containerEl.scrollWidth,
-        windowHeight:    containerEl.scrollHeight,
       })
 
-      // Crop the selection rectangle out of the full canvas
-      const cropCanvas  = document.createElement('canvas')
-      cropCanvas.width  = Math.round(sel.w  * scale)
-      cropCanvas.height = Math.round(sel.h  * scale)
-      const ctx = cropCanvas.getContext('2d')!
-      ctx.drawImage(
-        fullCanvas,
-        Math.round(sel.x * scale), Math.round(sel.y * scale),
-        Math.round(sel.w * scale), Math.round(sel.h * scale),
-        0, 0,
-        Math.round(sel.w * scale), Math.round(sel.h * scale),
-      )
-
+      // cropCanvas is already the right size - no manual crop needed i think
       cropCanvas.toBlob(async (blob: Blob | null) => {
         if (!blob) { screenshotToast.value = null; return }
         const fd = new FormData()
@@ -127,7 +115,7 @@ export function useSnippet() {
           await navigator.clipboard.writeText(url).catch(() => {})
           screenshotToast.value = { state: 'copied', url, imgReady: false }
         } catch { screenshotToast.value = null }
-      }, 'image/png')
+      }, 'image/webp', 0.92) // <<< i think webp is the fastest option here
     } catch (err) {
       console.error('Snippet failed:', err)
       screenshotToast.value = null
