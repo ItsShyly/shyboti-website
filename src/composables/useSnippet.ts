@@ -23,7 +23,7 @@ const SNIPPET_CAPTURE_DELAY_MS = 0
 const SNIPPET_DEBUG = true
 const SNIPPET_MAX_RENDER_PIXELS = 2_400_000
 const SNIPPET_MIN_PIXEL_RATIO = 0.65
-const SNIPPET_LOG_VERSION = 'snippet-calib-v5'
+const SNIPPET_LOG_VERSION = 'snippet-calib-v6'
 
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
   const start = Date.now()
@@ -116,12 +116,22 @@ export function useSnippet() {
     // Suppress the native context menu that fires on mouseup after a drag
     suppressContextMenuUntil = Date.now() + 500
 
-    // Keep selection and capture in the same coordinate space.
-    // html-to-image can lose nested scroller offsets in cloned DOM trees.
-    // Capturing the same host element that receives drag coordinates avoids that drift.
-    const captureRoot = containerEl
+    // Capture the inner scroller so we can force-expand it to full content height.
+    // html-to-image clones the DOM but resets scroll positions to 0, so we must
+    // render the full scrollable content and crop using content-space coordinates.
+    const captureRoot = (containerEl.querySelector('.logs-tbody') as HTMLElement | null) ?? containerEl
+    const hostRect = containerEl.getBoundingClientRect()
     const captureRect = captureRoot.getBoundingClientRect()
-    const selInCapture = { x: sel.x, y: sel.y, w: sel.w, h: sel.h }
+
+    // Convert selection from host-local space → viewport → capture-root content space
+    const selViewportLeft = hostRect.left + sel.x - containerEl.scrollLeft
+    const selViewportTop  = hostRect.top  + sel.y - containerEl.scrollTop
+    const selInCapture = {
+      x: selViewportLeft - captureRect.left + captureRoot.scrollLeft,
+      y: selViewportTop  - captureRect.top  + captureRoot.scrollTop,
+      w: sel.w,
+      h: sel.h,
+    }
 
     if (SNIPPET_DEBUG) {
       // Debug-only: inspect selected usernames and paint-related style vars.
@@ -228,94 +238,47 @@ export function useSnippet() {
 
       let cropCanvas: HTMLCanvasElement
       try {
+        // Force html-to-image to render the FULL scrollable content of the inner
+        // scroller by overriding overflow/height on the cloned node.  This way
+        // scroll position is irrelevant — all rows are physically laid out and
+        // content-space coordinates map 1:1 to canvas pixels.
+        const contentH = captureRoot.scrollHeight
+        const contentW = captureRoot.scrollWidth
+
         const fullCanvas = await toCanvas(captureRoot, {
           pixelRatio: scale,
           cacheBust: false,
+          width: contentW,
+          height: contentH,
           backgroundColor: '#0d0d10',
           style: {
+            overflow: 'visible',
+            height: `${contentH}px`,
+            maxHeight: 'none',
             background: '#0d0d10',
           },
         })
 
-        const clientWScaled = Math.max(1, Math.round(captureRoot.clientWidth * scale))
-        const clientHScaled = Math.max(1, Math.round(captureRoot.clientHeight * scale))
-        const scrollWScaled = Math.max(1, Math.round(captureRoot.scrollWidth * scale))
-        const scrollHScaled = Math.max(1, Math.round(captureRoot.scrollHeight * scale))
-
-        const widthViewportDelta = Math.abs(fullCanvas.width - clientWScaled)
-        const widthContentDelta = Math.abs(fullCanvas.width - scrollWScaled)
-        const heightViewportDelta = Math.abs(fullCanvas.height - clientHScaled)
-        const heightContentDelta = Math.abs(fullCanvas.height - scrollHScaled)
-
-        const widthLooksLikeViewport = widthViewportDelta <= widthContentDelta
-        const heightLooksLikeViewport = heightViewportDelta <= heightContentDelta
-
-        // selInCapture is content-space. html-to-image may render either viewport-space
-        // (client size) or content-space (scroll size), so compute both and choose the one
-        // that actually fits canvas bounds.
-        const sourceX = widthLooksLikeViewport ? (selInCapture.x - captureRoot.scrollLeft) : selInCapture.x
-        const sourceYViewport = selInCapture.y - captureRoot.scrollTop
-        const sourceYContent = selInCapture.y
-        const sourceYPreferred = heightLooksLikeViewport ? sourceYViewport : sourceYContent
-
+        // Content-space coordinates → scaled canvas pixels
+        const srcX = Math.max(0, Math.round(selInCapture.x * scale))
+        const srcY = Math.max(0, Math.round(selInCapture.y * scale))
         const reqW = Math.max(1, Math.round(selInCapture.w * scale))
         const reqH = Math.max(1, Math.round(selInCapture.h * scale))
-        const srcX = Math.max(0, Math.round(sourceX * scale))
-
-        const minY = 0
-        const maxY = Math.max(0, fullCanvas.height - reqH)
-        const candidatePreferred = Math.round(sourceYPreferred * scale)
-        const candidateViewport = Math.round(sourceYViewport * scale)
-        const candidateContent = Math.round(sourceYContent * scale)
-
-        const inBounds = (y: number) => y >= minY && y <= maxY
-        let srcY = candidatePreferred
-        if (!inBounds(srcY)) {
-          if (inBounds(candidateViewport)) srcY = candidateViewport
-          else if (inBounds(candidateContent)) srcY = candidateContent
-          else srcY = Math.max(minY, Math.min(maxY, srcY))
-        }
-
-        const sourceY = srcY / Math.max(0.01, scale)
-        const srcW = Math.max(1, Math.min(reqW, fullCanvas.width - srcX))
+        const srcW = Math.max(1, Math.min(reqW, fullCanvas.width  - srcX))
         const srcH = Math.max(1, Math.min(reqH, fullCanvas.height - srcY))
 
         if (SNIPPET_DEBUG) {
           const selectionTopRow = nearestRowAtLocalY(captureRoot, selInCapture.y)
-          const cropTopRow = nearestRowAtLocalY(captureRoot, sourceY)
           const cropMode = {
-            widthLooksLikeViewport,
-            heightLooksLikeViewport,
             canvas: { w: fullCanvas.width, h: fullCanvas.height },
-            client: { w: clientWScaled, h: clientHScaled },
-            scroll: { w: scrollWScaled, h: scrollHScaled },
-            source: { x: sourceX, y: sourceY },
-            sourceCandidates: {
-              viewport: sourceYViewport,
-              content: sourceYContent,
-              preferred: sourceYPreferred,
-            },
-            scrollOffsetsApplied: {
-              x: widthLooksLikeViewport,
-              y: heightLooksLikeViewport,
-            },
+            contentSize: { w: contentW, h: contentH },
+            scrollTop: captureRoot.scrollTop,
+            selInCapture: { x: Math.round(selInCapture.x), y: Math.round(selInCapture.y), w: Math.round(selInCapture.w), h: Math.round(selInCapture.h) },
             src: { x: srcX, y: srcY, w: srcW, h: srcH },
-            localMapping: {
-              selectionTopY: Math.round(sel.y),
-              selectionTopYCapture: Math.round(selInCapture.y),
-              cropTopY: Math.round(sourceY),
-              deltaY: Math.round(sourceY - selInCapture.y),
-            },
-            nearestRows: {
-              selectionTopRow,
-              cropTopRow,
-            },
+            selectionTopRow,
           }
           console.log('[Snippet] Crop mode', cropMode)
           console.log('[Snippet] Crop mode JSON:', JSON.stringify(cropMode))
-          console.log(
-            `[Snippet] Crop numbers selY=${Math.round(sel.y)} sourceY=${Math.round(sourceY)} scrollTop=${Math.round(containerEl.scrollTop)} srcY=${srcY} reqH=${reqH} srcH=${srcH} scale=${scale.toFixed(2)}`
-          )
         }
 
         if (srcX >= fullCanvas.width || srcY >= fullCanvas.height) {
