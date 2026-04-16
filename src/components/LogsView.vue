@@ -1785,7 +1785,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .log-time-short { display: block; flex-shrink: 0; color: #555; font-size: 11px; white-space: nowrap; }
   .log-badges { display: none; }
   .log-user  { display: none; }
-  .log-msg-wrap { flex: 1; min-width: 0; }
+  .log-msg-wrap { flex: 1; min-width: 0; display: block; }
   .log-msg-wrap:not(.is-system-mod)::before {
     content: attr(data-mobile-user) ': ';
     color: #cfcfcf;
