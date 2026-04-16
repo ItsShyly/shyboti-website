@@ -772,14 +772,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
     <div v-else-if="searched" class="logs-results">
       <div class="logs-count">{{ msgs.length.toLocaleString() }} {{ t('logs.count') }}</div>
-      <div class="logs-table">
+      <div class="logs-table" :style="{ '--user-width': nameColWidth + 'px' }">
         <div class="logs-thead">
-          <div>{{ t('logs.col.time') }}</div><div>{{ t('logs.col.user') }}</div><div>{{ t('logs.col.msg') }}</div>
+          <div>{{ t('logs.col.time') }}</div>
+          <div>{{ t('logs.col.user') }}</div>
+          <div>{{ t('logs.col.msg') }}</div>
         </div>
-        <div
-          class="logs-tbody"
-          ref="bodyRef"
-        >
+        <div class="logs-tbody" ref="bodyRef">
           <div class="top-loader" v-show="loadingMore">
             <span class="spinner">⟳</span> {{ t('logs.load_older') }}
           </div>
@@ -951,14 +950,21 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
 .logs-results { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .logs-table   { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.logs-thead   {
-  display: flex; gap: 0; align-items: baseline;
-  padding: 7px 14px; background: #0d0d10; border: 1px solid #1e1e24;
-  font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0;
+.logs-thead {
+  display: grid;
+  grid-template-columns: 150px var(--user-width, 140px) 1fr;
+  align-items: baseline;
+  padding: 7px 14px;
+  background: #0d0d10;
+  border: 1px solid #1e1e24;
+  font-size: 10px;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  flex-shrink: 0;
 }
-.logs-thead > div:nth-child(1) { color: #444; font-size: 11px; flex-shrink: 0; margin-right: 10px; }
-.logs-thead > div:nth-child(2) { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
-.logs-thead > div:nth-child(3) { flex: 1; min-width: 0; }
+
+
 .logs-tbody   { overflow-y: auto; flex: 1; position: relative; }
 .logs-tbody::-webkit-scrollbar { width: 3px; }
 .logs-tbody::-webkit-scrollbar-thumb { background: #333; }
