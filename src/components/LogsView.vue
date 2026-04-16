@@ -471,6 +471,32 @@ async function scrollToMsg(id: string, highlight = false): Promise<void> {
   }
 }
 
+function hasMsg(id: string): boolean {
+  return msgs.value.some(m => m.id === id)
+}
+
+async function jumpToMessage(id: string): Promise<void> {
+  const targetId = (id || '').trim()
+  if (!targetId) return
+
+  pushHash(targetId)
+
+  // If the target is not loaded yet, keep loading older chunks until found or exhausted.
+  let safety = 0
+  while (!hasMsg(targetId) && !noMore.value && safety++ < 60) {
+    await loadOlder()
+    await nextTick()
+  }
+
+  await scrollToMsg(targetId, true)
+}
+
+async function jumpToReplyParent(m: LogMsg): Promise<void> {
+  const parentId = m.tags?.['reply-parent-msg-id']?.trim() ?? ''
+  if (!parentId) return
+  await jumpToMessage(parentId)
+}
+
 function shareMsg(m: LogMsg) {
   pushHash(m.id)
   highlightId.value = m.id
@@ -862,7 +888,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                   @click.stop="openUserPopup(item.msg.username, channel || item.msg.channel?.replace('#',''), $event)"
                 >{{ item.msg.displayName || item.msg.username }}</div>
                 <div class="log-msg-wrap" :class="{ 'has-reply': !!item.msg.tags?.['reply-parent-msg-body'] }">
-                  <div v-if="item.msg.tags?.['reply-parent-msg-body']" class="reply-context">
+                  <div
+                    v-if="item.msg.tags?.['reply-parent-msg-body']"
+                    class="reply-context"
+                    :class="{ 'reply-context-link': !!item.msg.tags?.['reply-parent-msg-id'] }"
+                    :title="item.msg.tags?.['reply-parent-msg-id'] ? 'Jump to replied message' : undefined"
+                    @click.stop="jumpToReplyParent(item.msg)"
+                  >
                     <span class="reply-icon">↩</span>
                     <span class="reply-parent-user">@{{ item.msg.tags['reply-parent-display-name'] || item.msg.tags['reply-parent-user-login'] || '?' }}</span>
                     <span class="reply-parent-body">{{ item.msg.tags['reply-parent-msg-body'] }}</span>
@@ -1058,6 +1090,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   font-size: 10px; color: #555; padding: 0 0 1px;
   white-space: nowrap; overflow: hidden;
 }
+.reply-context-link { cursor: pointer; }
+.reply-context-link:hover { color: #7f7f7f; }
 .reply-icon { color: #444; font-size: 11px; flex-shrink: 0; }
 .reply-parent-user { color: #777; font-weight: 600; flex-shrink: 0; }
 .reply-parent-body { color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
