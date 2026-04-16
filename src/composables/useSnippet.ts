@@ -144,54 +144,32 @@ export function useSnippet() {
 
       let cropCanvas: HTMLCanvasElement
       try {
-        // Fast path: render the selected region directly by shifting
-        // the cloned container inside html-to-image.
-        const viewX = sel.x - containerEl.scrollLeft
-        const viewY = sel.y - containerEl.scrollTop
-        const targetW = Math.max(1, Math.round(sel.w))
-        const targetH = Math.max(1, Math.round(sel.h))
-
-        cropCanvas = await toCanvas(containerEl, {
+        const fullCanvas = await toCanvas(containerEl, {
           pixelRatio: scale,
           cacheBust: false,
           backgroundColor: '#0d0d10',
-          width: targetW,
-          height: targetH,
           style: {
             background: '#0d0d10',
-            transform: `translate(${-viewX}px, ${-viewY}px)`,
-            transformOrigin: 'top left',
           },
         })
 
-        // Safety fallback: if the direct transform capture is invalid,
-        // render full container and crop by coordinates.
-        if (!cropCanvas.width || !cropCanvas.height) {
-          const fullCanvas = await toCanvas(containerEl, {
-            pixelRatio: scale,
-            cacheBust: false,
-            backgroundColor: '#0d0d10',
-            style: {
-              background: '#0d0d10',
-            },
-          })
-          const srcX = Math.max(0, Math.round((sel.x - containerEl.scrollLeft) * scale))
-          const srcY = Math.max(0, Math.round((sel.y - containerEl.scrollTop) * scale))
-          const reqW = Math.max(1, Math.round(sel.w * scale))
-          const reqH = Math.max(1, Math.round(sel.h * scale))
-          const srcW = Math.max(1, Math.min(reqW, fullCanvas.width - srcX))
-          const srcH = Math.max(1, Math.min(reqH, fullCanvas.height - srcY))
-          if (srcX >= fullCanvas.width || srcY >= fullCanvas.height) {
-            throw new Error('Selection is outside rendered canvas bounds')
-          }
-          const fallbackCanvas = document.createElement('canvas')
-          fallbackCanvas.width = srcW
-          fallbackCanvas.height = srcH
-          const ctx = fallbackCanvas.getContext('2d')
-          if (!ctx) throw new Error('Could not create canvas context')
-          ctx.drawImage(fullCanvas, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH)
-          cropCanvas = fallbackCanvas
+        const srcX = Math.max(0, Math.round((sel.x - containerEl.scrollLeft) * scale))
+        const srcY = Math.max(0, Math.round((sel.y - containerEl.scrollTop) * scale))
+        const reqW = Math.max(1, Math.round(sel.w * scale))
+        const reqH = Math.max(1, Math.round(sel.h * scale))
+        const srcW = Math.max(1, Math.min(reqW, fullCanvas.width - srcX))
+        const srcH = Math.max(1, Math.min(reqH, fullCanvas.height - srcY))
+
+        if (srcX >= fullCanvas.width || srcY >= fullCanvas.height) {
+          throw new Error('Selection is outside rendered canvas bounds')
         }
+
+        cropCanvas = document.createElement('canvas')
+        cropCanvas.width = srcW
+        cropCanvas.height = srcH
+        const ctx = cropCanvas.getContext('2d')
+        if (!ctx) throw new Error('Could not create canvas context')
+        ctx.drawImage(fullCanvas, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH)
       } finally {
         document.body.classList.remove('snippet-capturing')
       }
