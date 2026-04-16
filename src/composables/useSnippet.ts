@@ -225,18 +225,16 @@ export function useSnippet() {
         const widthLooksLikeViewport = widthViewportDelta <= widthContentDelta
         const heightLooksLikeViewport = heightViewportDelta <= heightContentDelta
 
-        const nestedScrollHost = containerEl.querySelector('.logs-tbody') as HTMLElement | null
-        const nestedScrollLeft = nestedScrollHost?.scrollLeft ?? 0
-        const nestedScrollTop = nestedScrollHost?.scrollTop ?? 0
+        // Base mapping from container space. Nested scroll compensation proved
+        // to overcorrect (jumping far out of bounds), so we keep source Y in
+        // the same local coordinate space as selection.
+        const sourceX = widthLooksLikeViewport ? (sel.x - containerEl.scrollLeft) : sel.x
+        let sourceY = sel.y
 
-        // Base mapping from container space.
-        const baseSourceX = widthLooksLikeViewport ? (sel.x - containerEl.scrollLeft) : sel.x
-        // html-to-image appears to snapshot nested scrollers at top in this view.
-        // Compensate by adding the inner logs scroller offset.
-        const baseSourceY = sel.y
-
-        const sourceX = baseSourceX + nestedScrollLeft
-        const sourceY = baseSourceY + nestedScrollTop
+        // Safety: if Y is outside the rendered viewport bounds, reset to local selection Y.
+        if (sourceY < 0 || sourceY > containerEl.clientHeight) {
+          sourceY = sel.y
+        }
 
         const srcX = Math.max(0, Math.round(sourceX * scale))
         const srcY = Math.max(0, Math.round(sourceY * scale))
@@ -255,13 +253,6 @@ export function useSnippet() {
             client: { w: clientWScaled, h: clientHScaled },
             scroll: { w: scrollWScaled, h: scrollHScaled },
             source: { x: sourceX, y: sourceY },
-            nestedScrollHost: nestedScrollHost ? {
-              className: nestedScrollHost.className,
-              left: nestedScrollLeft,
-              top: nestedScrollTop,
-              clientH: nestedScrollHost.clientHeight,
-              scrollH: nestedScrollHost.scrollHeight,
-            } : null,
             scrollOffsetsApplied: {
               x: widthLooksLikeViewport,
               y: heightLooksLikeViewport,
