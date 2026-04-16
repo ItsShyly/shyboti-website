@@ -651,10 +651,10 @@ function onTbodyMouseDown(e: MouseEvent) {
   if (e.button !== 2) return
   const target = e.target as HTMLElement
   if (target.closest('a, button, .log-share, .log-user-clickable')) return
-  const tbody = bodyRef.value; if (!tbody) return
-  const rect  = tbody.getBoundingClientRect()
-  const x = e.clientX - rect.left + tbody.scrollLeft
-  const y = e.clientY - rect.top  + tbody.scrollTop
+  const container = bodyRef.value?.parentElement; if (!container) return
+  const rect  = container.getBoundingClientRect()
+  const x = e.clientX - rect.left + container.scrollLeft
+  const y = e.clientY - rect.top  + container.scrollTop
   screenshotAnchor.value = { x, y }
   screenshotRect.value   = { x, y, w: 0, h: 0 }
   screenshotDrag.value   = true
@@ -663,10 +663,10 @@ function onTbodyMouseDown(e: MouseEvent) {
 
 function onTbodyMouseMove(e: MouseEvent) {
   if (!screenshotDrag.value || !screenshotAnchor.value) return
-  const tbody = bodyRef.value; if (!tbody) return
-  const rect  = tbody.getBoundingClientRect()
-  const cx = e.clientX - rect.left + tbody.scrollLeft
-  const cy = e.clientY - rect.top  + tbody.scrollTop
+  const container = bodyRef.value?.parentElement; if (!container) return
+  const rect  = container.getBoundingClientRect()
+  const cx = e.clientX - rect.left + container.scrollLeft
+  const cy = e.clientY - rect.top  + container.scrollTop
   const ax = screenshotAnchor.value.x
   const ay = screenshotAnchor.value.y
   screenshotRect.value = {
@@ -686,7 +686,7 @@ async function onTbodyMouseUp(e: MouseEvent) {
   // Suppress context menu for 500ms after a valid drag completes
   suppressContextMenuUntil = Date.now() + 500
 
-  const tbody = bodyRef.value; if (!tbody) return
+  const container = bodyRef.value?.parentElement; if (!container) return
 
   // >>> Show uploading state immediately
   if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
@@ -696,11 +696,11 @@ async function onTbodyMouseUp(e: MouseEvent) {
     // @ts-ignore
     const html2canvas = (await import('html2canvas')).default
 
-    // >>> Capture the entire tbody scrollable area, then crop to selection.
+    // >>> Capture the entire container scrollable area, then crop to selection.
     // >>> This is the reliable approach - html2canvas x/y crop options don't
     // >>> account for scrollTop correctly when the element is a scroll container.
     const scale = window.devicePixelRatio || 1
-    const fullCanvas = await html2canvas(tbody, {
+    const fullCanvas = await html2canvas(container, {
       scrollX:         0,
       scrollY:         0,
       useCORS:         true,
@@ -709,10 +709,10 @@ async function onTbodyMouseUp(e: MouseEvent) {
       scale,
       backgroundColor: '#0d0d10',
       // >>> Tell html2canvas the full scrollable size
-      width:           tbody.scrollWidth,
-      height:          tbody.scrollHeight,
-      windowWidth:     tbody.scrollWidth,
-      windowHeight:    tbody.scrollHeight,
+      width:           container.scrollWidth,
+      height:          container.scrollHeight,
+      windowWidth:     container.scrollWidth,
+      windowHeight:    container.scrollHeight,
     })
 
     // >>> Crop the selection out of the full canvas
@@ -946,16 +946,18 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
     <div v-else-if="searched" class="logs-results">
       <div class="logs-count">{{ msgs.length.toLocaleString() }} {{ t('logs.count') }}</div>
-      <div class="logs-table">
+      <div
+        class="logs-table"
+        :class="{ 'tbody-selecting': screenshotDrag }"
+        @mousedown="onTbodyMouseDown"
+        @contextmenu="onTbodyContextMenu"
+      >
         <div class="logs-thead">
           <div>{{ t('logs.col.time') }}</div><div>{{ t('logs.col.user') }}</div><div>{{ t('logs.col.msg') }}</div>
         </div>
         <div
           class="logs-tbody"
           ref="bodyRef"
-          :class="{ 'tbody-selecting': screenshotDrag }"
-          @mousedown="onTbodyMouseDown"
-          @contextmenu="onTbodyContextMenu"
         >
           <div class="top-loader" v-show="loadingMore">
             <span class="spinner">⟳</span> {{ t('logs.load_older') }}
