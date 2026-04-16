@@ -97,6 +97,9 @@ let domSettleToken = 0
 
 const isMobile = () => window.matchMedia('(max-width: 680px)').matches
 
+const hide7tv       = ref(false)
+const plainUsernames = ref(false)
+
 // >>> URL state sync
 function buildUrl(msgId: string | null = null) {
   const p = new URLSearchParams()
@@ -772,8 +775,9 @@ function renderMsgForMessage(m: LogMsg): string {
 }
 
 function userNameStyle(m: LogMsg): Record<string, string> {
+  if (plainUsernames.value) return { color: '#ffffff', '--snippet-fallback-color': '#ffffff', '--snippet-paint-preview': '#ffffff' }
   const fallback = userColor(m)
-  const painted = paintStyles.value.get(m.username?.toLowerCase() ?? '')
+  const painted = hide7tv.value ? undefined : paintStyles.value.get(m.username?.toLowerCase() ?? '')
   return painted
     ? { ...painted, '--snippet-fallback-color': fallback }
     : { color: fallback, '--snippet-fallback-color': fallback, '--snippet-paint-preview': fallback }
@@ -825,7 +829,7 @@ function buildBadgeChips(m: LogMsg): BadgeChip[] {
     }
   }
   const sev = sevenTvBadgeMap.value.get((m.username ?? '').toLowerCase())
-  if (sev?.imageUrl) {
+  if (!hide7tv.value && sev?.imageUrl) {
     out.push({ key: '7tv', label: '7TV', kind: 'seventv', imageUrl: sev.imageUrl, title: sev.title })
   }
   return out
@@ -1202,30 +1206,37 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             />
           </div>
           <div class="field-wrap">
-            <label class="field-lbl">From <span class="opt">{{ t('logs.field.optional') }}</span></label>
-            <input
-              ref="dateFromInputRef"
-              :value="dateFrom"
-              class="field-input date-input"
-              type="date"
-              @keydown.enter="search"
-            />
-          </div>
-          <div class="field-wrap">
-            <label class="field-lbl">Until <span class="opt">{{ t('logs.field.optional') }}</span></label>
-            <input
-              ref="dateUntilInputRef"
-              :value="dateUntil"
-              class="field-input date-input"
-              type="date"
-              @keydown.enter="search"
-            />
+            <label class="field-lbl">Date range <span class="opt">{{ t('logs.field.optional') }}</span></label>
+            <div class="date-range-wrap">
+              <input
+                ref="dateFromInputRef"
+                :value="dateFrom"
+                class="field-input date-input"
+                type="date"
+                @keydown.enter="search"
+              />
+              <span class="date-range-sep">→</span>
+              <input
+                ref="dateUntilInputRef"
+                :value="dateUntil"
+                class="field-input date-input"
+                type="date"
+                @keydown.enter="search"
+              />
+            </div>
           </div>
           <div class="field-wrap">
             <label class="field-lbl">Direction</label>
             <div class="dir-toggle">
               <button class="dir-btn" :class="{ active: direction === 'newest' }" @click="direction = 'newest'">↓ Newest</button>
               <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="direction = 'oldest'">↑ Oldest</button>
+            </div>
+          </div>
+          <div class="field-wrap">
+            <label class="field-lbl">Visuals</label>
+            <div class="dir-toggle">
+              <button class="dir-btn" :class="{ active: hide7tv }" @click="hide7tv = !hide7tv" title="Toggle 7TV paints & badges">7TV</button>
+              <button class="dir-btn" :class="{ active: plainUsernames }" @click="plainUsernames = !plainUsernames" title="Show all usernames in white">White names</button>
             </div>
           </div>
           <button class="search-btn" @click="search" :disabled="loading">
@@ -1490,6 +1501,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .field-input { background: #0d0d10; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 7px 10px; outline: none; width: 160px; transition: border-color .15s; }
 .field-input:focus { border-color: #6f2bff55; }
 .date-input  { width: 140px; color-scheme: dark; }
+.date-range-wrap { display: flex; align-items: center; gap: 6px; }
+.date-range-sep  { color: #555; font-size: 12px; flex-shrink: 0; }
 .search-btn  { height: 34px; padding: 0 20px; background: #6f2bff; border: none; color: #fff; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; align-self: flex-end; transition: background .15s; }
 .search-btn:hover:not(:disabled) { background: #7f3fff; }
 .search-btn:disabled { opacity: .4; cursor: default; }
