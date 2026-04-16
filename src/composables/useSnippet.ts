@@ -96,7 +96,7 @@ export function useSnippet() {
         useCORS:         true,
         allowTaint:      true,
         logging:         false,
-        scale,
+        scale: 1,  
         backgroundColor: '#0d0d10',
       })
 
@@ -115,7 +115,7 @@ export function useSnippet() {
           await navigator.clipboard.writeText(url).catch(() => {})
           screenshotToast.value = { state: 'copied', url, imgReady: false }
         } catch { screenshotToast.value = null }
-      }, 'image/webp', 0.92) // <<< i think webp is the fastest option here
+      }, 'image/webp', 0.70) // <<< i think webp is the fastest option here
     } catch (err) {
       console.error('Snippet failed:', err)
       screenshotToast.value = null
