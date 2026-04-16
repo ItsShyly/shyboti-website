@@ -1746,7 +1746,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
 @media (max-width: 680px) {
   .logs-view {
-    height: calc(100vh - 52px);
+    height: calc(100dvh - 52px - 38px);
     overflow: hidden;
     gap: 0;
     margin: -35px;
@@ -1785,7 +1785,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .logs-results { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .logs-table   { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .logs-thead   { display: none !important; }
-  .logs-tbody   { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .logs-tbody   { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
   .log-day-sep {
     display: block;
