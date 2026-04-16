@@ -1676,16 +1676,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   to { transform: rotate(360deg); }
 }
 
-:global(body.snippet-capturing) .log-user {
-  background-image: none !important;
-  background-color: transparent !important;
-  background-clip: border-box !important;
-  -webkit-background-clip: border-box !important;
-  -webkit-text-fill-color: var(--snippet-paint-preview, var(--snippet-fallback-color, #ccc)) !important;
-  color: var(--snippet-paint-preview, var(--snippet-fallback-color, #ccc)) !important;
-  filter: none !important;
-}
-
 /* Direction toggle */
 .dir-toggle { display: flex; gap: 0; }
 .dir-btn {

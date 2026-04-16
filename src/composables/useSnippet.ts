@@ -18,7 +18,7 @@ let   suppressContextMenuUntil = 0
 
 // rAF throttle flag – one pending frame max
 let rafPending = false
-const SNIPPET_CAPTURE_DELAY_MS = 400
+const SNIPPET_CAPTURE_DELAY_MS = 0
 
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
   const start = Date.now()
@@ -189,14 +189,14 @@ export function useSnippet() {
                 hardFallbackUsed += 1
               }
 
-              el.style.backgroundImage = 'none'
-              el.style.backgroundColor = 'transparent'
-              el.style.backgroundClip = 'border-box'
-              ;(el.style as any).webkitBackgroundClip = 'border-box'
-              el.style.color = textColor
-              ;(el.style as any).webkitTextFillColor = textColor
-              el.style.filter = 'none'
-              el.style.textShadow = 'none'
+              el.style.setProperty('background-image', 'none', 'important')
+              el.style.setProperty('background-color', 'transparent', 'important')
+              el.style.setProperty('background-clip', 'border-box', 'important')
+              el.style.setProperty('-webkit-background-clip', 'border-box', 'important')
+              el.style.setProperty('color', textColor, 'important')
+              el.style.setProperty('-webkit-text-fill-color', textColor, 'important')
+              el.style.setProperty('filter', 'none', 'important')
+              el.style.setProperty('text-shadow', 'none', 'important')
             })
             console.log('[Snippet] Clone paint mapping', {
               total: users.length,
