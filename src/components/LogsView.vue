@@ -22,7 +22,7 @@ interface BadgeChip {
   title?: string
 }
 interface TwitchBadgeAsset { imageUrl: string; title: string }
-
+  
 // Input refs - read directly from DOM, not tracked by Vue reactivity.
 // This prevents any re-render on every keystroke.
 const channelInputRef    = ref<HTMLInputElement | null>(null)
@@ -628,6 +628,13 @@ function userColor(m: LogMsg): string {
   return colors[Math.abs(h) % colors.length]!
 }
 
+function userColorByName(username: string): string {
+  const colors = ['#ff7f7f','#ff9f40','#ffcf56','#6dd672','#4ec9b0','#56b6c2','#9d6cff','#c792ea','#f78c6c','#89ddff']
+  let h = 0
+  for (let i = 0; i < username.length; i++) h = (h * 31 + username.charCodeAt(i)) & 0xffffffff
+  return colors[Math.abs(h) % colors.length]!
+}
+
 function renderMsg(text: string): string {
   const em = emoteMap.value
   if (!Object.keys(em).length) return esc(text)
@@ -728,7 +735,7 @@ function intToRgba(c: number): string {
   return `rgba(${r},${g},${b},${a.toFixed(3)})`
 }
 
-function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[]; color?: number | null; angle?: number | null }): Record<string, string> {
+function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[]; color?: number | null; angle?: number | null }, fallbackColor?: string): Record<string, string> {
   const styles: Record<string, string> = {}
   const stopsArr = Array.isArray(paint.stops) ? paint.stops : []
   const firstStopColor = stopsArr[0]?.color ?? 0
@@ -742,18 +749,21 @@ function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; 
     const stops = normStops.map(s => `${intToRgba(s.color)} ${Math.round((s.at ?? 0) * 100)}%`).join(', ')
     const angle = Number.isFinite(paint.angle as number) ? Number(paint.angle) : 90
     styles['background'] = `linear-gradient(${angle}deg, ${stops})`
-    styles['background-clip'] = 'text'
-    styles['-webkit-background-clip'] = 'text'
+    styles['backgroundClip'] = 'text'
+    styles['WebkitBackgroundClip'] = 'text'
     styles['color'] = 'transparent'
-    styles['-webkit-text-fill-color'] = 'transparent'
+    styles['WebkitTextFillColor'] = 'transparent'
   } else if (paint.imageUrl) {
     styles['background'] = `url(${paint.imageUrl}) center/cover`
-    styles['background-clip'] = 'text'
-    styles['-webkit-background-clip'] = 'text'
+    styles['backgroundClip'] = 'text'
+    styles['WebkitBackgroundClip'] = 'text'
     styles['color'] = 'transparent'
-    styles['-webkit-text-fill-color'] = 'transparent'
+    styles['WebkitTextFillColor'] = 'transparent'
   } else if (paint.color !== null && paint.color !== undefined) {
     styles['color'] = intToRgba(paint.color)
+  } else if (fallbackColor) {
+    // Some 7TV paints are glow-only and provide no fill stops/color.
+    styles['color'] = fallbackColor
   }
   if (paint.shadows?.length) {
     styles['filter'] = paint.shadows
@@ -781,7 +791,7 @@ async function ensurePaint(username: string) {
     if (data.paint) {
       paintCache.set(key, data.paint)
       const newMap = new Map(paintStyles.value)
-      newMap.set(key, buildPaintStyle(data.paint))
+      newMap.set(key, buildPaintStyle(data.paint, userColorByName(key)))
       paintStyles.value = newMap
     }
     if (data.sevenTv?.hasAccount || data.sevenTv?.hasPersonalSet) {
