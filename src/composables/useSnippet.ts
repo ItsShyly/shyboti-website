@@ -20,8 +20,60 @@ let   suppressContextMenuUntil = 0
 let rafPending = false
 const SNIPPET_CAPTURE_DELAY_MS = 0
 
+function toOpaqueOnDark(color: string): string {
+  const s = color.trim()
+  const m = s.match(/^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*([0-9]*\.?[0-9]+)\s*\)$/i)
+  if (!m) return s
+  const r = Math.max(0, Math.min(255, Number(m[1])))
+  const g = Math.max(0, Math.min(255, Number(m[2])))
+  const b = Math.max(0, Math.min(255, Number(m[3])))
+  const a = Math.max(0, Math.min(1, Number(m[4])))
+  const bgR = 13
+  const bgG = 13
+  const bgB = 16
+  const outR = Math.round(r * a + bgR * (1 - a))
+  const outG = Math.round(g * a + bgG * (1 - a))
+  const outB = Math.round(b * a + bgB * (1 - a))
+  return `rgb(${outR}, ${outG}, ${outB})`
+}
+
+function colorScore(color: string): number {
+  const s = color.trim()
+  const m = s.match(/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*([0-9]*\.?[0-9]+))?\s*\)$/i)
+  if (!m) return 0
+  const r = Number(m[1])
+  const g = Number(m[2])
+  const b = Number(m[3])
+  const a = m[4] !== undefined ? Number(m[4]) : 1
+  if (!Number.isFinite(a) || a <= 0.14) return 0
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  return (max - min) * a
+}
+
+function readColorFromBackgroundImage(el: HTMLElement): string | null {
+  const bgImage = getComputedStyle(el).backgroundImage || ''
+  if (!bgImage || bgImage === 'none') return null
+  const matches = bgImage.match(/rgba?\([^\)]+\)/gi) ?? []
+  if (!matches.length) return null
+  let best: string | null = null
+  let bestScore = 0
+  for (const raw of matches) {
+    const score = colorScore(raw)
+    if (score > bestScore) {
+      best = raw
+      bestScore = score
+    }
+  }
+  if (!best) return null
+  return toOpaqueOnDark(best)
+}
+
 /** Read paint color from a live DOM element */
 function readPaintColor(el: HTMLElement): string | null {
+  const fromBg = readColorFromBackgroundImage(el)
+  if (fromBg) return fromBg
+
   const cs = getComputedStyle(el)
   const preview = cs.getPropertyValue('--snippet-paint-preview').trim()
   if (preview && preview !== 'transparent') return preview
@@ -54,7 +106,7 @@ function flattenPaintsForCapture(container: HTMLElement): () => void {
     originals.push({ el, cssText: el.style.cssText })
 
     // Replace with flat colored text
-    el.style.cssText = `color: ${color}; -webkit-text-fill-color: ${color}; background-image: none; background-clip: border-box; -webkit-background-clip: border-box; filter: none; font-weight: 600; line-height: 1.1rem;`
+    el.style.cssText = `color: ${color} !important; -webkit-text-fill-color: ${color} !important; background-image: none !important; background-clip: border-box !important; -webkit-background-clip: border-box !important; filter: none !important; font-weight: 600 !important; line-height: 1.1rem !important;`
   }
 
   console.log('[Snippet] Flattened', originals.length, 'painted users in live DOM')
