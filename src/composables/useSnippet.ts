@@ -154,10 +154,24 @@ export function useSnippet() {
           },
         })
 
-        // html-to-image renders this container in content space for this view,
-        // so selection coordinates should be treated as content coordinates.
-        const srcX = Math.max(0, Math.round(sel.x * scale))
-        const srcY = Math.max(0, Math.round(sel.y * scale))
+        const clientWScaled = Math.max(1, Math.round(containerEl.clientWidth * scale))
+        const clientHScaled = Math.max(1, Math.round(containerEl.clientHeight * scale))
+        const scrollWScaled = Math.max(1, Math.round(containerEl.scrollWidth * scale))
+        const scrollHScaled = Math.max(1, Math.round(containerEl.scrollHeight * scale))
+
+        const widthViewportDelta = Math.abs(fullCanvas.width - clientWScaled)
+        const widthContentDelta = Math.abs(fullCanvas.width - scrollWScaled)
+        const heightViewportDelta = Math.abs(fullCanvas.height - clientHScaled)
+        const heightContentDelta = Math.abs(fullCanvas.height - scrollHScaled)
+
+        const widthLooksLikeViewport = widthViewportDelta <= widthContentDelta
+        const heightLooksLikeViewport = heightViewportDelta <= heightContentDelta
+
+        const sourceX = widthLooksLikeViewport ? (sel.x - containerEl.scrollLeft) : sel.x
+        const sourceY = heightLooksLikeViewport ? (sel.y - containerEl.scrollTop) : sel.y
+
+        const srcX = Math.max(0, Math.round(sourceX * scale))
+        const srcY = Math.max(0, Math.round(sourceY * scale))
         const reqW = Math.max(1, Math.round(sel.w * scale))
         const reqH = Math.max(1, Math.round(sel.h * scale))
         const srcW = Math.max(1, Math.min(reqW, fullCanvas.width - srcX))
@@ -165,7 +179,11 @@ export function useSnippet() {
 
         if (SNIPPET_DEBUG) {
           console.log('[Snippet] Crop mode', {
+            widthLooksLikeViewport,
+            heightLooksLikeViewport,
             canvas: { w: fullCanvas.width, h: fullCanvas.height },
+            client: { w: clientWScaled, h: clientHScaled },
+            scroll: { w: scrollWScaled, h: scrollHScaled },
             src: { x: srcX, y: srcY, w: srcW, h: srcH },
           })
         }
