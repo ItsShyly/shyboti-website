@@ -23,6 +23,7 @@ const SNIPPET_CAPTURE_DELAY_MS = 0
 const SNIPPET_DEBUG = true
 const SNIPPET_MAX_RENDER_PIXELS = 2_400_000
 const SNIPPET_MIN_PIXEL_RATIO = 0.65
+const SNIPPET_LOG_VERSION = 'snippet-calib-v3'
 
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
   const start = Date.now()
@@ -192,7 +193,7 @@ export function useSnippet() {
     screenshotToast.value = { state: 'uploading', url: null, imgReady: false }
 
     const totalStart = performance.now()
-    console.log('[Snippet] Starting screenshot process')
+    console.log(`[Snippet] Starting screenshot process (${SNIPPET_LOG_VERSION})`)
 
     try {
       const scale = computeSnippetPixelRatio(sel.w, sel.h)
