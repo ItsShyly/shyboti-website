@@ -91,6 +91,8 @@ export function useSnippet() {
       // Only capture the selected region
       const html2Start = performance.now()
       document.body.classList.add('snippet-capturing')
+      // Let style changes settle before html2canvas snapshots computed styles.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
       let cropCanvas: HTMLCanvasElement
       try {
         cropCanvas = await html2canvas(containerEl, {
@@ -105,6 +107,24 @@ export function useSnippet() {
           logging:         false,
           scale,
           backgroundColor: '#0d0d10',
+          onclone: (doc: Document) => {
+            const users = doc.querySelectorAll('.log-user') as NodeListOf<HTMLElement>
+            users.forEach((el: HTMLElement) => {
+              const fallback =
+                el.style.getPropertyValue('--snippet-fallback-color') ||
+                getComputedStyle(el).getPropertyValue('--snippet-fallback-color') ||
+                getComputedStyle(el).color ||
+                '#cccccc'
+              el.style.backgroundImage = 'none'
+              el.style.backgroundColor = 'transparent'
+              el.style.backgroundClip = 'border-box'
+              ;(el.style as any).webkitBackgroundClip = 'border-box'
+              el.style.color = fallback.trim() || '#cccccc'
+              ;(el.style as any).webkitTextFillColor = fallback.trim() || '#cccccc'
+              el.style.filter = 'none'
+              el.style.textShadow = 'none'
+            })
+          },
         })
       } finally {
         document.body.classList.remove('snippet-capturing')
