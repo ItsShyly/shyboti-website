@@ -1750,8 +1750,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     height: calc(100dvh - 52px - 5px);
     overflow: hidden;
     gap: 0;
-    margin: -35px;
-    padding: 35px;
+    margin: -30px;
   }
   .logs-header { padding: 10px 14px 6px; flex-shrink: 0; }
   .logs-title  { font-size: 15px; margin-bottom: 2px; }
@@ -1795,7 +1794,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     color: #555; letter-spacing: .05em;
     border-top: 1px solid #1e1e24;
     background: #0d0d10;
-    position: sticky; top: 0; z-index: 1;
+    position: sticky; top: -2px; z-index: 1;
   }
 
   .log-row {
