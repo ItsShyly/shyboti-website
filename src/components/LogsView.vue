@@ -1747,7 +1747,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
 @media (max-width: 680px) {
   .logs-view {
-    height: calc(100dvh - 52px - 28px);
+    height: calc(100dvh - 52px - 15px);
     overflow: hidden;
     gap: 0;
     margin: -35px;

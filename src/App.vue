@@ -682,7 +682,7 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .show-mobile { display: none; }
 
 @media (max-width: 680px) {
-  html:has(body.logs-open), body.logs-open { overflow: hidden !important; height: 100dvh !important; }
+  body.logs-open { overflow: hidden !important; height: 100dvh !important; }
   body.logs-open .page { overflow: hidden !important; height: 100dvh !important; min-height: 0 !important; display: flex; flex-direction: column; }
   body.logs-open .main-panel { overflow: hidden !important; height: calc(100dvh - 52px) !important; min-height: 0 !important; padding-bottom: 38px !important; flex: none; }
 }
