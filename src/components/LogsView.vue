@@ -452,14 +452,7 @@ function shareMsg(m: LogMsg) {
   setTimeout(() => copyToast.value = false, 2000)
 }
 
-// >>> Global mousemove/mouseup to handle drag leaving the tbody
-function onWindowMouseMove(e: MouseEvent) { onTbodyMouseMove(e) }
-function onWindowMouseUp(e: MouseEvent)   { onTbodyMouseUp(e) }
-
 onMounted(async () => {
-  window.addEventListener('mousemove', onWindowMouseMove)
-  window.addEventListener('mouseup',   onWindowMouseUp)
-  loadSnippetInfoState()
   readUrlState()
   if (!channel.value && session.value?.channel) {
     channel.value = session.value.channel
@@ -470,8 +463,6 @@ onMounted(async () => {
   if (channel.value) await search()
 })
 onUnmounted(() => {
-  window.removeEventListener('mousemove', onWindowMouseMove)
-  window.removeEventListener('mouseup',   onWindowMouseUp)
   document.body.classList.remove('logs-open')
   abortCtrl.abort()
   detachScrollListeners()
@@ -606,160 +597,6 @@ watch(msgs, (list) => {
     }
   }
 }, { flush: 'post' })
-
-// >>> Screenshot drag-select on logs-tbody
-// >>> Snippet info tip (dismissable per account)
-const snippetInfoHidden = ref(false)
-const snippetInfoHovered = ref(false)
-
-function getSnippetStorageKey() {
-  return `shyboti_snippet_info_hidden_${session.value?.login ?? 'guest'}`
-}
-
-function loadSnippetInfoState() {
-  snippetInfoHidden.value = localStorage.getItem(getSnippetStorageKey()) === '1'
-}
-
-function hideSnippetInfo() {
-  snippetInfoHidden.value = true
-  localStorage.setItem(getSnippetStorageKey(), '1')
-}
-
-const screenshotDrag    = ref(false)
-const screenshotRect    = ref<{ x: number; y: number; w: number; h: number } | null>(null)
-const screenshotAnchor  = ref<{ x: number; y: number } | null>(null)
-let   suppressContextMenuUntil = 0  // timestamp to suppress context menu until
-
-// Toast state (yummy): null = hidden, 'uploading' = spinner, 'copied' = ready
-interface ScreenshotToast {
-  state:   'uploading' | 'copied'
-  url:     string | null
-  imgReady: boolean
-}
-const screenshotToast = ref<ScreenshotToast | null>(null)
-let   screenshotDismissTimer: ReturnType<typeof setTimeout> | null = null
-
-function onTbodyContextMenu(e: MouseEvent) {
-  // Suppress context menu if we're actively dragging or just finished dragging a valid selection
-  if (screenshotDrag.value || Date.now() < suppressContextMenuUntil) {
-    e.preventDefault()
-  }
-}
-
-function onTbodyMouseDown(e: MouseEvent) {
-  // >>> Only right-click starts the screenshot drag
-  if (e.button !== 2) return
-  const target = e.target as HTMLElement
-  if (target.closest('a, button, .log-share, .log-user-clickable')) return
-  const tbody = bodyRef.value; if (!tbody) return
-  const rect  = tbody.getBoundingClientRect()
-  const x = e.clientX - rect.left + tbody.scrollLeft
-  const y = e.clientY - rect.top  + tbody.scrollTop
-  screenshotAnchor.value = { x, y }
-  screenshotRect.value   = { x, y, w: 0, h: 0 }
-  screenshotDrag.value   = true
-  e.preventDefault()
-}
-
-function onTbodyMouseMove(e: MouseEvent) {
-  if (!screenshotDrag.value || !screenshotAnchor.value) return
-  const tbody = bodyRef.value; if (!tbody) return
-  const rect  = tbody.getBoundingClientRect()
-  const cx = e.clientX - rect.left + tbody.scrollLeft
-  const cy = e.clientY - rect.top  + tbody.scrollTop
-  const ax = screenshotAnchor.value.x
-  const ay = screenshotAnchor.value.y
-  screenshotRect.value = {
-    x: Math.min(ax, cx), y: Math.min(ay, cy),
-    w: Math.abs(cx - ax), h: Math.abs(cy - ay)
-  }
-}
-
-async function onTbodyMouseUp(e: MouseEvent) {
-  if (!screenshotDrag.value) return
-  screenshotDrag.value = false
-  const sel = screenshotRect.value
-  screenshotRect.value = null
-  screenshotAnchor.value = null
-  if (!sel || sel.w < 10 || sel.h < 10) return
-
-  // Suppress context menu for 500ms after a valid drag completes
-  suppressContextMenuUntil = Date.now() + 500
-
-  const tbody = bodyRef.value; if (!tbody) return
-
-  // >>> Show uploading state immediately
-  if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
-  screenshotToast.value = { state: 'uploading', url: null, imgReady: false }
-
-  try {
-    // @ts-ignore
-    const html2canvas = (await import('html2canvas')).default
-
-    // >>> Capture the entire tbody scrollable area, then crop to selection.
-    // >>> This is the reliable approach - html2canvas x/y crop options don't
-    // >>> account for scrollTop correctly when the element is a scroll container.
-    const scale = window.devicePixelRatio || 1
-    const fullCanvas = await html2canvas(tbody, {
-      scrollX:         0,
-      scrollY:         0,
-      useCORS:         true,
-      allowTaint:      true,
-      logging:         false,
-      scale,
-      backgroundColor: '#0d0d10',
-      // >>> Tell html2canvas the full scrollable size
-      width:           tbody.scrollWidth,
-      height:          tbody.scrollHeight,
-      windowWidth:     tbody.scrollWidth,
-      windowHeight:    tbody.scrollHeight,
-    })
-
-    // >>> Crop the selection out of the full canvas
-    const cropCanvas  = document.createElement('canvas')
-    cropCanvas.width  = Math.round(sel.w  * scale)
-    cropCanvas.height = Math.round(sel.h  * scale)
-    const ctx = cropCanvas.getContext('2d')!
-    ctx.drawImage(
-      fullCanvas,
-      Math.round(sel.x * scale), Math.round(sel.y * scale),   // source x, y
-      Math.round(sel.w * scale), Math.round(sel.h * scale),   // source w, h
-      0, 0,                                                     // dest x, y
-      Math.round(sel.w * scale), Math.round(sel.h * scale)    // dest w, h
-    )
-
-    cropCanvas.toBlob(async (blob: Blob | null) => {
-      if (!blob) { screenshotToast.value = null; return }
-      const fd = new FormData()
-      fd.append('file', new File([blob], 'logs-screenshot.png', { type: 'image/png' }))
-      const headers: Record<string, string> = {}
-      if (session.value) headers['Authorization'] = `Bearer ${session.value.token}`
-      try {
-        const res = await fetch(`${API}/images/upload`, { method: 'POST', headers, body: fd })
-        if (!res.ok) { screenshotToast.value = null; return }
-        const data = await res.json() as { id: string }
-        const url = `https://i.shyboti.de/${data.id}`
-
-        // >>> Copy to clipboard immediately
-        await navigator.clipboard.writeText(url).catch(() => {})
-
-        // >>> Switch toast to "copied" state, show the image preview
-        screenshotToast.value = { state: 'copied', url, imgReady: false }
-      } catch { screenshotToast.value = null }
-    }, 'image/png')
-  } catch (err) {
-    console.error('Screenshot failed:', err)
-    screenshotToast.value = null
-  }
-}
-
-// >>> Called when the preview image finishes loading - start the 3s dismiss timer
-function onScreenshotImgLoad() {
-  if (!screenshotToast.value) return
-  screenshotToast.value = { ...screenshotToast.value, imgReady: true }
-  if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
-  screenshotDismissTimer = setTimeout(() => { screenshotToast.value = null }, 3000)
-}
 
 // >>> User popup
 interface TwitchUser {
@@ -912,18 +749,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           </button>
         </div>
       </div>
-      <div class="snippet-info" v-if="!snippetInfoHidden">
-        <label class="field-lbl">Right click + Drag to take a snippet</label>
-        <div
-          class="snippet-gif-wrap"
-          @mouseenter="snippetInfoHovered = true"
-          @mouseleave="snippetInfoHovered = false"
-          @click="hideSnippetInfo"
-        >
-          <img src="/snippet-tip.gif" alt="Snippet tip" class="snippet-gif" />
-          <div v-if="snippetInfoHovered" class="snippet-hover-overlay">Don't show again?</div>
-        </div>
-      </div>
+      <div class="snippet-info" v-if="false"><!-- moved to global SnippetOverlay --></div>
     </div>
 
     <!-- Automod toggle -->
@@ -953,26 +779,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
         <div
           class="logs-tbody"
           ref="bodyRef"
-          :class="{ 'tbody-selecting': screenshotDrag }"
-          @mousedown="onTbodyMouseDown"
-          @contextmenu="onTbodyContextMenu"
         >
           <div class="top-loader" v-show="loadingMore">
             <span class="spinner">⟳</span> {{ t('logs.load_older') }}
           </div>
           <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
 
-          <!-- Screenshot selection overlay -->
-          <div
-            v-if="screenshotRect && screenshotDrag"
-            class="screenshot-selection"
-            :style="{
-              left:   screenshotRect.x + 'px',
-              top:    screenshotRect.y + 'px',
-              width:  screenshotRect.w + 'px',
-              height: screenshotRect.h + 'px'
-            }"
-          />
+          <!-- Selection rectangle is now handled globally by SnippetOverlay -->
 
           <template v-for="item in displayItems" :key="item.kind === 'day' ? 'day-' + item.label : item.msg.id">
             <div v-if="item.kind === 'day'" class="log-day-sep">{{ item.label }}</div>
@@ -1020,36 +833,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
       </div>
     </div>
 
-    <!-- Screenshot toast (bottom-right) -->
-    <Teleport to="body">
-      <transition name="screenshot-toast-fade">
-        <div v-if="screenshotToast" class="screenshot-toast">
-          <!-- Uploading state -->
-          <template v-if="screenshotToast.state === 'uploading'">
-            <div class="screenshot-toast-uploading">
-              <div class="screenshot-toast-spinner"></div>
-              <div class="screenshot-toast-label">Uploading Image...</div>
-            </div>
-          </template>
-          <!-- Copied state -->
-          <template v-else>
-            <div class="screenshot-toast-label copied">Copied to clipboard ✓</div>
-            <a :href="screenshotToast.url!" target="_blank" rel="noopener" class="screenshot-toast-img-link">
-              <div v-if="!screenshotToast.imgReady" class="screenshot-toast-img-placeholder">
-                <div class="screenshot-toast-spinner small"></div>
-              </div>
-              <img
-                :src="screenshotToast.url!"
-                class="screenshot-toast-img"
-                :class="{ hidden: !screenshotToast.imgReady }"
-                alt="screenshot"
-                @load="onScreenshotImgLoad"
-              />
-            </a>
-          </template>
-        </div>
-      </transition>
-    </Teleport>
+    <!-- Screenshot toast moved to global SnippetOverlay -->
 
     <!-- User popup -->
     <div v-if="popup" class="user-popup" :style="{ top: popup.y + 'px', left: popup.x + 'px' }" @click.stop>
@@ -1123,7 +907,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 </template>
 
 <style scoped>
-.logs-view   { display: flex; flex-direction: column; gap: 16px; height: 100%; min-height: 0; }
+.logs-view   { display: flex; flex-direction: column; gap: 16px; height: 100%; min-height: 0; margin: -20px; padding: 20px; }
 .logs-header { flex-shrink: 0; }
 .logs-title  { font-size: 18px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
 .logs-sub    { font-size: 12px; color: #555; }
@@ -1176,94 +960,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .logs-tbody::-webkit-scrollbar { width: 3px; }
 .logs-tbody::-webkit-scrollbar-thumb { background: #333; }
 .tbody-selecting { cursor: crosshair !important; user-select: none !important; }
-
-.screenshot-selection {
-  position: absolute;
-  border: 1.5px solid #9d6cff;
-  background: rgba(111, 43, 255, 0.12);
-  pointer-events: none;
-  z-index: 50;
-}
-
-/* Screenshot toast */
-.screenshot-toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 9999;
-  background: #1b1b1f;
-  border: 1px solid #6f2bff88;
-  box-shadow: 0 4px 24px #00000099;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  min-width: 160px;
-  max-width: 280px;
-}
-
-/* Uploading state */
-.screenshot-toast-uploading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 0;
-}
-
-/* Spinner */
-.screenshot-toast-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid #2a2a30;
-  border-top-color: #9d6cff;
-  border-radius: 50%;
-  animation: toast-spin .8s linear infinite;
-  flex-shrink: 0;
-}
-.screenshot-toast-spinner.small {
-  width: 20px;
-  height: 20px;
-  border-width: 2px;
-}
-@keyframes toast-spin { to { transform: rotate(360deg); } }
-
-.screenshot-toast-label {
-  font-size: 11px;
-  font-weight: 700;
-  color: #888;
-  text-transform: uppercase;
-  letter-spacing: .06em;
-  text-align: center;
-}
-.screenshot-toast-label.copied { color: #9d6cff; }
-
-/* Image preview */
-.screenshot-toast-img-link { display: block; }
-.screenshot-toast-img-placeholder {
-  width: 120px;
-  height: 80px;
-  background: #111217;
-  border: 1px solid #2a2a30;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.screenshot-toast-img {
-  max-width: 252px;
-  max-height: 180px;
-  display: block;
-  object-fit: contain;
-  border: 1px solid #2a2a30;
-  cursor: pointer;
-  transition: opacity .15s;
-}
-.screenshot-toast-img.hidden { display: none; }
-.screenshot-toast-img:hover { opacity: .85; }
-
-.screenshot-toast-fade-enter-active, .screenshot-toast-fade-leave-active { transition: opacity .25s, transform .25s; }
-.screenshot-toast-fade-enter-from, .screenshot-toast-fade-leave-to { opacity: 0; transform: translateY(12px); }
 
 .top-loader  { text-align: center; font-size: 11px; color: #555; padding: 8px; }
 .top-loader.no-more { color: #333; }

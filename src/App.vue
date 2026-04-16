@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch, nextTick, provide } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick, provide, type Ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { API } from './api'
 import { useAuth } from './auth'
 import { useI18n, useLocale, type Locale } from './i18n'
+import SnippetOverlay from './components/SnippetOverlay.vue'
 
 const { session, availableChannels, channelRole, restoreSession, switchChannel, logout, login } = useAuth()
 const router = useRouter()
@@ -296,6 +297,10 @@ const KEEP_ALIVE_ROUTES = ['DashboardView', 'CommandsView', 'AutomationsView']
 // >>> Expose nextActiveTab and searchOpenEdit for CommandsView via provide
 provide('nextActiveTab', nextActiveTab)
 
+// >>> mainPanelRef – provided to SnippetOverlay so it knows which element to capture
+const mainPanelRef = ref<HTMLElement | null>(null)
+provide('mainPanelRef', mainPanelRef)
+
 // >>> searchOpenEdit: when set to { name, builtIn }, CommandsView opens that edit panel directly
 const searchOpenEdit = ref<{ name: string; builtIn: boolean } | null>(null)
 provide('searchOpenEdit', searchOpenEdit)
@@ -497,7 +502,8 @@ provide('searchOpenTrigger', searchOpenTrigger)
         </div>
       </aside>
 
-      <main class="main-panel">
+      <main class="main-panel" ref="mainPanelRef">
+        <SnippetOverlay />
         <RouterView v-slot="{ Component }">
           <KeepAlive :include="KEEP_ALIVE_ROUTES">
             <component :is="Component" />
@@ -519,6 +525,8 @@ provide('searchOpenTrigger', searchOpenTrigger)
 html, body { height: 100%; overflow: hidden; }
 body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
 .page { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; user-select: none !important; }
 
 /*  Topbar  */
 .topbar { height: 52px; flex-shrink: 0; background: #0e0e12; border-bottom: 1px solid #1e1e24; display: flex; align-items: center; padding: 0 16px; gap: 10px; position: relative; }
