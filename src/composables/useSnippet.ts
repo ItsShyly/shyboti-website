@@ -148,76 +148,61 @@ export function useSnippet() {
           backgroundColor: '#0d0d10',
           onclone: (doc: Document) => {
             const users = doc.querySelectorAll('.log-user') as NodeListOf<HTMLElement>
-            let previewUsed = 0
-            let fallbackUsed = 0
+            let colorUsed = 0
             let hardFallbackUsed = 0
-
-            const usable = (v: string | null | undefined): string => {
-              const s = String(v ?? '').trim()
-              const low = s.toLowerCase()
-              if (!s) return ''
-              if (low.includes('var(')) return ''
-              if (low.includes('gradient(')) return ''
-              if (low === 'transparent') return ''
-              if (low === 'rgba(0, 0, 0, 0)' || low === 'rgba(0,0,0,0)') return ''
-              const m = low.match(/^rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([0-9]*\.?[0-9]+)\s*\)$/)
-              if (m) {
-                const alpha = Number(m[1])
-                if (!Number.isFinite(alpha) || alpha <= 0.14) return ''
-              }
-              return s
-            }
 
             const toOpaque = (v: string): string => {
               const s = v.trim()
               const rgba = s.match(/^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*([0-9]*\.?[0-9]+)\s*\)$/i)
-              if (rgba) {
-                const r = Math.max(0, Math.min(255, Number(rgba[1])))
-                const g = Math.max(0, Math.min(255, Number(rgba[2])))
-                const b = Math.max(0, Math.min(255, Number(rgba[3])))
-                return `rgb(${r}, ${g}, ${b})`
-              }
+              if (rgba) return `rgb(${rgba[1]}, ${rgba[2]}, ${rgba[3]})`
+              return s
+            }
+
+            const usable = (v: string | null | undefined): string => {
+              const s = String(v ?? '').trim()
+              if (!s) return ''
+              const low = s.toLowerCase()
+              if (low === 'transparent' || low === 'rgba(0, 0, 0, 0)' || low === 'rgba(0,0,0,0)') return ''
+              if (low.includes('var(') || low.includes('gradient(')) return ''
+              const m = low.match(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([0-9]*\.?[0-9]+)\s*\)/)
+              if (m && Number(m[1]) <= 0.14) return ''
               return s
             }
 
             users.forEach((el: HTMLElement) => {
-              const previewRaw =
-                el.getAttribute('data-snippet-paint') ||
-                el.style.getPropertyValue('--snippet-paint-preview') ||
-                getComputedStyle(el).getPropertyValue('--snippet-paint-preview')
-              const fallbackRaw =
-                el.style.getPropertyValue('--snippet-fallback-color') ||
-                getComputedStyle(el).getPropertyValue('--snippet-fallback-color') ||
-                getComputedStyle(el).color ||
-                '#cccccc'
-              const preview = usable(previewRaw)
-              const fallback = usable(fallbackRaw)
-              let textColor = '#cccccc'
-              if (preview) {
-                textColor = toOpaque(preview)
-                previewUsed += 1
-              } else if (fallback) {
-                textColor = toOpaque(fallback)
-                fallbackUsed += 1
+              // data-snippet-paint is always set (paint preview or user color)
+              const raw = el.getAttribute('data-snippet-paint') ?? ''
+              const validated = usable(raw)
+              let textColor: string
+              if (validated) {
+                textColor = toOpaque(validated)
+                colorUsed += 1
               } else {
+                textColor = '#cccccc'
                 hardFallbackUsed += 1
               }
 
-              el.style.setProperty('background-image', 'none', 'important')
-              el.style.setProperty('background-color', 'transparent', 'important')
-              el.style.setProperty('background-clip', 'border-box', 'important')
-              el.style.setProperty('-webkit-background-clip', 'border-box', 'important')
-              el.style.setProperty('color', textColor, 'important')
-              el.style.setProperty('-webkit-text-fill-color', textColor, 'important')
-              el.style.setProperty('filter', 'none', 'important')
-              el.style.setProperty('text-shadow', '0 0 0.01px rgba(0,0,0,0)', 'important')
-              el.style.setProperty('font-weight', '700', 'important')
+              // Completely replace inline styles to eliminate Vue-bound
+              // paint properties (background-image, color:transparent, etc.)
+              el.style.cssText = [
+                `color: ${textColor}`,
+                `-webkit-text-fill-color: ${textColor}`,
+                `background: none`,
+                `-webkit-background-clip: border-box`,
+                `background-clip: border-box`,
+                `filter: none`,
+                `font-weight: 700`,
+              ].join(' !important; ') + ' !important;'
             })
             console.log('[Snippet] Clone paint mapping', {
               total: users.length,
-              previewUsed,
-              fallbackUsed,
+              colorUsed,
               hardFallbackUsed,
+              sampleColors: Array.from(users).slice(0, 3).map(el => ({
+                text: el.textContent?.trim()?.slice(0, 20),
+                attr: el.getAttribute('data-snippet-paint'),
+                final: el.style.color,
+              })),
             })
           },
         })
