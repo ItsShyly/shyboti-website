@@ -365,7 +365,6 @@ provide('searchOpenTrigger', searchOpenTrigger)
       </div>
 
       <div class="topbar-right">
-        <span v-if="toast" class="toast">{{ toast }}</span>
         <div class="lang-switcher">
           <button class="lang-opt" :class="{ active: locale === 'en' }" @click="setLocale('en')">EN</button>
           <span class="lang-sep">|</span>
@@ -517,6 +516,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
       </main>
     </div>
     <span v-if="session" class="logged-in-float">#{{ session.channel }}</span>
+    <span v-if="toast" class="toast toast-float">{{ toast }}</span>
   </div>
 </template>
 
@@ -536,8 +536,7 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .brand-name   { font-size: 1rem; font-weight: 700; color: #ffd569; letter-spacing: 0.04em; white-space: nowrap; }
 .topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
 .logged-in-as { font-size: 12px; color: #9d6cff; font-weight: 600; white-space: nowrap; }
-.logged-in-float { position: fixed; bottom: 36px; right: 10px; font-size: 11px; color: #9d6cff99; font-weight: 600; white-space: nowrap; background: #0e0e12bb; border: 1px solid #2a2a30; padding: 3px 8px; z-index: 60; pointer-events: none; backdrop-filter: blur(4px); }
-.logged-in-float { position: fixed; bottom: 36px; right: 10px; font-size: 11px; color: #9d6cff; font-weight: 600; white-space: nowrap; background: #0e0e12cc; border: 1px solid #2a2a30; padding: 3px 8px; z-index: 60; pointer-events: none; backdrop-filter: blur(4px); }
+.logged-in-float { position: fixed; bottom: 36px; right: 10px; z-index: 60; pointer-events: none; font-size: 11px; color: #9d6cff; font-weight: 600; white-space: nowrap; background: #160d2e; border: 1px solid #9d6cff44; padding: 4px 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
 
 /*  Universal Search  */
 .search-wrap {
@@ -596,6 +595,8 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .channel-menu-item.active { color: #9d6cff; font-weight: 700; }
 
 .toast { font-size: 11px; color: #23d18b; background: #0e2a1e; border: 1px solid #23d18b44; padding: 4px 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast-float { position: fixed; bottom: 68px; right: 10px; z-index: 61; }
+.toast-float { position: fixed; bottom: 68px; right: 10px; z-index: 61; }
 .auth-btn { height: 34px; padding: 0 14px; border: none; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .login-btn { background: #6f2bff; color: #fff; }
 .login-btn:hover { background: #7f3fff; }
