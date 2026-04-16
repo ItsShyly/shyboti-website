@@ -206,7 +206,9 @@ export function useSnippet() {
         const heightLooksLikeViewport = heightViewportDelta <= heightContentDelta
 
         const sourceX = widthLooksLikeViewport ? (sel.x - containerEl.scrollLeft) : sel.x
-        const sourceY = heightLooksLikeViewport ? (sel.y - containerEl.scrollTop) : sel.y
+        // html-to-image can report viewport-like canvas sizes while still
+        // using content-space Y coordinates. For LogsView this is more stable.
+        const sourceY = sel.y
 
         const srcX = Math.max(0, Math.round(sourceX * scale))
         const srcY = Math.max(0, Math.round(sourceY * scale))
