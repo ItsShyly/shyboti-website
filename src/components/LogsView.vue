@@ -1405,7 +1405,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .summary-chevron { font-size: 9px; color: #555; flex-shrink: 0; }
 
   .search-bar-wrapper {
-    flex-direction: column; gap: 8px;
+    flex-direction: column; gap: 8px; align-items: center;
   }
   .search-bar {
     flex-direction: column; align-items: stretch; gap: 8px;
@@ -1418,6 +1418,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .field-input { width: 100% !important; }
   .date-input  { width: 100% !important; }
   .search-btn  { width: 100%; }
+  .snippet-info { display: none !important; }
 
   .logs-results { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .logs-table   { flex: 1; min-height: 0; display: flex; flex-direction: column; }
