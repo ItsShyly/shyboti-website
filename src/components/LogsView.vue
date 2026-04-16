@@ -1470,7 +1470,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .logs-sub    { font-size: 12px; color: #555; }
 
 .search-bar-wrapper { display: flex; gap: 12px; align-items: flex-start; flex-shrink: 0; }
-.search-bar  { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; background: #141418; border: 1px solid #1e1e24; padding: 14px 16px; flex-shrink: 0; flex: 1; }
+.search-bar  { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; background: #141418; padding: 14px 16px; flex-shrink: 0; flex: 1; }
 .search-bar-content { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 .field-wrap  { display: flex; flex-direction: column; gap: 4px; }
 .snippet-info { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; align-items: center; }
@@ -1512,7 +1512,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   display: grid;
   grid-template-columns: 120px var(--user-width, 140px) 1fr;
   align-items: baseline;
-  padding: 7px 14px;
+  padding: 7px 0  14px;
   background: #0d0d10;
   border: 1px solid #1e1e24;
   font-size: 10px;
@@ -1520,6 +1520,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   text-transform: uppercase;
   letter-spacing: 0.06em;
   flex-shrink: 0;
+  justify-items: center;
+  
 }
 
 
