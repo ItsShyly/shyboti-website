@@ -697,7 +697,9 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
   .search-kbd { display: none; }
   .sidebar { position: fixed; top: 52px; right: 0; bottom: 0; width: 240px; z-index: 100; transform: translateX(100%); border-left: 1px solid #2a2a30; box-shadow: -4px 0 24px #00000066; }
   .sidebar.sidebar-open { transform: translateX(0); }
-  .main-panel { padding: 14px; flex: none; min-height: calc(100vh - 52px); }
+  .main-panel { padding: 14px; flex: none; min-height: calc(100vh - 52px); padding-bottom: 38px; }
+  .site-footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 6px 14px; background: #141418; border-top: 1px solid #1e1e24; justify-content: center; z-index: 50; margin-top: 0; }
+  body.logs-open .site-footer { display: none; }
 }
 
 @media (min-width: 681px) and (max-width: 960px) {
