@@ -610,6 +610,7 @@ watch(msgs, (list) => {
 const screenshotDrag    = ref(false)
 const screenshotRect    = ref<{ x: number; y: number; w: number; h: number } | null>(null)
 const screenshotAnchor  = ref<{ x: number; y: number } | null>(null)
+let   suppressContextMenuUntil = 0  // timestamp to suppress context menu until
 
 // Toast state (yummy): null = hidden, 'uploading' = spinner, 'copied' = ready
 interface ScreenshotToast {
@@ -621,8 +622,8 @@ const screenshotToast = ref<ScreenshotToast | null>(null)
 let   screenshotDismissTimer: ReturnType<typeof setTimeout> | null = null
 
 function onTbodyContextMenu(e: MouseEvent) {
-  // Only suppress context menu when we've actually dragged a rectangle
-  if (screenshotDrag.value || (screenshotRect.value && (screenshotRect.value.w > 4 || screenshotRect.value.h > 4))) {
+  // Suppress context menu if we're actively dragging or just finished dragging a valid selection
+  if (screenshotDrag.value || Date.now() < suppressContextMenuUntil) {
     e.preventDefault()
   }
 }
@@ -663,6 +664,9 @@ async function onTbodyMouseUp(e: MouseEvent) {
   screenshotRect.value = null
   screenshotAnchor.value = null
   if (!sel || sel.w < 10 || sel.h < 10) return
+
+  // Suppress context menu for 500ms after a valid drag completes
+  suppressContextMenuUntil = Date.now() + 500
 
   const tbody = bodyRef.value; if (!tbody) return
 
