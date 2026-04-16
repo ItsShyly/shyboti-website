@@ -9,6 +9,9 @@ import SnippetOverlay from './components/SnippetOverlay.vue'
 const { session, availableChannels, channelRole, restoreSession, switchChannel, logout, login } = useAuth()
 const router = useRouter()
 const route  = useRoute()
+
+// >>> logs.shyboti.de - stripped-down logs-only mode
+const isLogsMode = window.location.hostname === 'logs.shyboti.de'
 const { t } = useI18n()
 const { locale, setLocale } = useLocale()
 
@@ -285,7 +288,9 @@ onMounted(async () => {
     showToast(`✓ ShyBoti left #${channel}`)
   }
 
-  if (route.path === '/' || route.path === '') {
+  if (isLogsMode) {
+    if (route.path !== '/logs') router.push('/logs')
+  } else if (route.path === '/' || route.path === '') {
     router.push(session.value ? '/dashboard' : '/')
   }
 })
@@ -313,9 +318,9 @@ provide('searchOpenTrigger', searchOpenTrigger)
 </script>
 
 <template>
-  <div class="page">
+  <div class="page" :class="{ 'logs-mode': isLogsMode }">
 
-    <div class="topbar">
+    <div v-if="!isLogsMode" class="topbar">
       <div class="topbar-brand" @click="session ? router.push('/dashboard') : router.push('/')" style="cursor:pointer">
         <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
         <span class="brand-name">ShyBoti</span>
@@ -394,7 +399,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
       </div>
     </div>
 
-    <div v-if="session && showAddBanner" class="add-banner">
+    <div v-if="!isLogsMode && session && showAddBanner" class="add-banner">
       <span>👋 {{ t('banner.welcome') }}</span>
       <div class="banner-actions">
         <button class="banner-btn add" @click="addBot">{{ t('banner.add') }}</button>
@@ -403,9 +408,9 @@ provide('searchOpenTrigger', searchOpenTrigger)
     </div>
 
     <div class="body">
-      <div v-if="sidebarOpen" class="sidebar-overlay" @click="sidebarOpen = false"></div>
+      <div v-if="!isLogsMode && sidebarOpen" class="sidebar-overlay" @click="sidebarOpen = false"></div>
 
-      <aside class="sidebar" :class="{ 'sidebar-open': sidebarOpen }">
+      <aside v-if="!isLogsMode" class="sidebar" :class="{ 'sidebar-open': sidebarOpen }">
         <div class="sidebar-mobile-header show-mobile">
           <template v-if="session">
             <span class="sidebar-user">#{{ session.channel }}</span>
@@ -525,6 +530,8 @@ provide('searchOpenTrigger', searchOpenTrigger)
 html, body { height: 100%; overflow: hidden; }
 body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
 .page { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+.logs-mode .main-panel { height: 100dvh !important; min-height: 100dvh !important; }
+.logs-mode .site-footer { display: none !important; }
 
 body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; user-select: none !important; }
 
