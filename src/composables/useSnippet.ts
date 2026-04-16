@@ -39,6 +39,24 @@ function computeSnippetPixelRatio(selW: number, selH: number): number {
   return Number(ratio.toFixed(2))
 }
 
+function nearestRowAtLocalY(containerEl: HTMLElement, localY: number): { id: string | null; localTop: number } | null {
+  const panel = containerEl.getBoundingClientRect()
+  const rows = Array.from(containerEl.querySelectorAll('.log-row-outer')) as HTMLElement[]
+  if (!rows.length) return null
+  let best: { id: string | null; localTop: number } | null = null
+  let bestDist = Number.POSITIVE_INFINITY
+  for (const row of rows) {
+    const r = row.getBoundingClientRect()
+    const rowLocalTop = r.top - panel.top + containerEl.scrollTop
+    const d = Math.abs(rowLocalTop - localY)
+    if (d < bestDist) {
+      bestDist = d
+      best = { id: row.id || null, localTop: Math.round(rowLocalTop) }
+    }
+  }
+  return best
+}
+
 export function useSnippet() {
   const { session } = useAuth()
 
@@ -218,6 +236,8 @@ export function useSnippet() {
         const srcH = Math.max(1, Math.min(reqH, fullCanvas.height - srcY))
 
         if (SNIPPET_DEBUG) {
+          const selectionTopRow = nearestRowAtLocalY(containerEl, sel.y)
+          const cropTopRow = nearestRowAtLocalY(containerEl, sourceY)
           console.log('[Snippet] Crop mode', {
             widthLooksLikeViewport,
             heightLooksLikeViewport,
@@ -230,6 +250,15 @@ export function useSnippet() {
               y: heightLooksLikeViewport,
             },
             src: { x: srcX, y: srcY, w: srcW, h: srcH },
+            localMapping: {
+              selectionTopY: Math.round(sel.y),
+              cropTopY: Math.round(sourceY),
+              deltaY: Math.round(sourceY - sel.y),
+            },
+            nearestRows: {
+              selectionTopRow,
+              cropTopRow,
+            },
           })
         }
 
