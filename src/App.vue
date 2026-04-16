@@ -281,7 +281,7 @@ onMounted(async () => {
   // >>> On logs.shyboti.de, check if devgate cookie is valid to show full UI
   if (isLogsMode) {
     try {
-      const gateRes = await fetch(`${API}/devgate/verify`, { credentials: 'include' })
+      const gateRes = await fetch('/api/devgate/verify', { credentials: 'include' })
       hasDevGate.value = gateRes.ok
     } catch { hasDevGate.value = false }
   }
