@@ -14,6 +14,7 @@ interface LogMsg {
   channel: string; timestamp: string; tags?: Record<string, string>
 }
 interface EmoteMap { [name: string]: string }
+interface BadgeChip { key: string; label: string; kind: 'twitch' | 'seventv' | 'marker' }
 
 // Input refs - read directly from DOM, not tracked by Vue reactivity.
 // This prevents any re-render on every keystroke.
@@ -604,6 +605,14 @@ function renderMsg(text: string): string {
   }).join(' ')
 }
 
+function renderMsgWithMap(text: string, em: EmoteMap): string {
+  if (!Object.keys(em).length) return esc(text)
+  return text.split(' ').map(word => {
+    const url = em[word]
+    return url ? `<img class="chat-emote" src="${url}" alt="${esc(word)}" title="${esc(word)}" loading="lazy">` : esc(word)
+  }).join(' ')
+}
+
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -627,14 +636,53 @@ function formatDisplayedMsg(m: LogMsg): string {
   return text
 }
 
+function renderMsgForMessage(m: LogMsg): string {
+  const key = (m.username ?? '').toLowerCase()
+  const personal = personalEmoteMaps.value.get(key) ?? {}
+  const merged: EmoteMap = { ...emoteMap.value, ...personal }
+  return renderMsgWithMap(formatDisplayedMsg(m), merged)
+}
+
+function buildBadgeChips(m: LogMsg): BadgeChip[] {
+  const out: BadgeChip[] = []
+  const tags = m.tags ?? {}
+  const badgeStr = tags['badges'] ?? ''
+  const raw = badgeStr.split(',').map(x => x.trim()).filter(Boolean)
+  const keys = raw.map(x => x.split('/')[0])
+  const order = ['broadcaster', 'moderator', 'vip', 'subscriber', 'founder', 'partner', 'staff', 'admin', 'global_mod']
+  const labelMap: Record<string, string> = {
+    broadcaster: 'Broadcaster', moderator: 'Mod', vip: 'VIP', subscriber: 'Sub', founder: 'Founder',
+    partner: 'Partner', staff: 'Staff', admin: 'Admin', global_mod: 'GMod',
+  }
+  for (const k of order) {
+    if (keys.includes(k)) out.push({ key: k, label: labelMap[k] ?? k, kind: 'twitch' })
+  }
+  if (sevenTvBadgeUsers.value.has((m.username ?? '').toLowerCase())) {
+    out.push({ key: '7tv', label: '7TV', kind: 'seventv' })
+  }
+  return out
+}
+
+function buildMarkerChips(m: LogMsg): BadgeChip[] {
+  const out: BadgeChip[] = []
+  const tags = m.tags ?? {}
+  if (tags['first-msg'] === '1') out.push({ key: 'first-msg', label: 'First Message', kind: 'marker' })
+  const msgId = (tags['msg-id'] ?? '').toLowerCase()
+  if (msgId === 'announcement') out.push({ key: 'announcement', label: 'Announcement', kind: 'marker' })
+  if (msgId === 'sub' || msgId === 'resub') out.push({ key: msgId, label: 'Subscription', kind: 'marker' })
+  return out
+}
+
 function esc(s: string) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
 
 // >>> 7TV paint: fetched via backend /twitch/user which resolves Twitch ID → 7TV
 // >>> Keyed by lowercase username. null = no paint, undefined = not fetched yet.
-const paintCache  = new Map<string, { stops: any[]; shadows: any[]; imageUrl: string | null } | null>()
+const paintCache  = new Map<string, { stops: any[]; shadows: any[]; imageUrl: string | null; color?: number | null; angle?: number | null } | null>()
 const paintStyles = ref<Map<string, Record<string, string>>>(new Map())
+const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map())
+const sevenTvBadgeUsers = ref<Set<string>>(new Set())
 
 function intToRgba(c: number): string {
   const r = (c >>> 24) & 0xff
@@ -644,11 +692,20 @@ function intToRgba(c: number): string {
   return `rgba(${r},${g},${b},${a.toFixed(3)})`
 }
 
-function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[] }): Record<string, string> {
+function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[]; color?: number | null; angle?: number | null }): Record<string, string> {
   const styles: Record<string, string> = {}
-  if (paint.stops?.length >= 2) {
-    const stops = paint.stops.map(s => `${intToRgba(s.color)} ${Math.round(s.at * 100)}%`).join(', ')
-    styles['background'] = `linear-gradient(90deg, ${stops})`
+  const stopsArr = Array.isArray(paint.stops) ? paint.stops : []
+  const firstStopColor = stopsArr[0]?.color ?? 0
+  const normStops = stopsArr.length >= 2
+    ? stopsArr
+    : stopsArr.length === 1
+      ? [{ at: 0, color: firstStopColor }, { at: 1, color: firstStopColor }]
+      : []
+
+  if (normStops.length >= 2) {
+    const stops = normStops.map(s => `${intToRgba(s.color)} ${Math.round((s.at ?? 0) * 100)}%`).join(', ')
+    const angle = Number.isFinite(paint.angle as number) ? Number(paint.angle) : 90
+    styles['background'] = `linear-gradient(${angle}deg, ${stops})`
     styles['background-clip'] = 'text'
     styles['-webkit-background-clip'] = 'text'
     styles['color'] = 'transparent'
@@ -659,6 +716,8 @@ function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; 
     styles['-webkit-background-clip'] = 'text'
     styles['color'] = 'transparent'
     styles['-webkit-text-fill-color'] = 'transparent'
+  } else if (paint.color !== null && paint.color !== undefined) {
+    styles['color'] = intToRgba(paint.color)
   }
   if (paint.shadows?.length) {
     styles['filter'] = paint.shadows
@@ -677,12 +736,28 @@ async function ensurePaint(username: string) {
       headers: session.value ? { Authorization: `Bearer ${session.value.token}` } : {}
     })
     if (!res.ok) return
-    const data = await res.json() as { paint?: any }
+    const data = await res.json() as {
+      paint?: any
+      sevenTv?: { hasAccount?: boolean; hasPersonalSet?: boolean }
+      personalEmotes?: Array<{ id: string; name: string; url: string }>
+    }
     if (data.paint) {
       paintCache.set(key, data.paint)
       const newMap = new Map(paintStyles.value)
       newMap.set(key, buildPaintStyle(data.paint))
       paintStyles.value = newMap
+    }
+    if (data.sevenTv?.hasAccount || data.sevenTv?.hasPersonalSet) {
+      const next = new Set(sevenTvBadgeUsers.value)
+      next.add(key)
+      sevenTvBadgeUsers.value = next
+    }
+    if (Array.isArray(data.personalEmotes) && data.personalEmotes.length > 0) {
+      const p: EmoteMap = {}
+      for (const e of data.personalEmotes) p[e.name] = e.url
+      const next = new Map(personalEmoteMaps.value)
+      next.set(key, p)
+      personalEmoteMaps.value = next
     }
   } catch {}
 }
@@ -924,6 +999,14 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               <div class="log-row">
                 <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
                 <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
+                <div v-if="buildBadgeChips(item.msg).length" class="log-badges">
+                  <span
+                    v-for="b in buildBadgeChips(item.msg)"
+                    :key="`${item.msg.id}-${b.kind}-${b.key}`"
+                    class="badge-chip"
+                    :class="[`badge-${b.kind}`, `badge-${b.key}`]"
+                  >{{ b.label }}</span>
+                </div>
                 <div
                   class="log-user"
                   :style="paintStyles.get(item.msg.username?.toLowerCase()) ?? { color: userColor(item.msg) }"
@@ -942,7 +1025,14 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                     <span class="reply-parent-user">@{{ item.msg.tags['reply-parent-display-name'] || item.msg.tags['reply-parent-user-login'] || '?' }}:</span>
                     <span class="reply-parent-body">{{ item.msg.tags['reply-parent-msg-body'] }}</span>
                   </div>
-                  <div class="log-msg" v-html="renderMsg(formatDisplayedMsg(item.msg))"></div>
+                  <div v-if="buildMarkerChips(item.msg).length" class="log-markers">
+                    <span
+                      v-for="m in buildMarkerChips(item.msg)"
+                      :key="`${item.msg.id}-marker-${m.key}`"
+                      class="badge-chip badge-marker"
+                    >{{ m.label }}</span>
+                  </div>
+                  <div class="log-msg" v-html="renderMsgForMessage(item.msg)"></div>
                 </div>
                 <div class="log-share" @click="shareMsg(item.msg)" title="Copy link">
                   <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1120,10 +1210,22 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .log-time       { color: #444; font-size: 11px; flex-shrink: 0; margin-right: 10px; }
 .log-time-short { display: none; }
 .log-day-sep    { display: none; }
+.log-badges { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; flex-shrink: 0; }
+.badge-chip {
+  display: inline-flex; align-items: center;
+  height: 15px; padding: 0 5px;
+  font-size: 9px; font-weight: 700; letter-spacing: .01em;
+  border-radius: 3px; border: 1px solid transparent;
+  line-height: 1;
+}
+.badge-twitch { background: #1e2430; border-color: #2d3546; color: #c4cfdd; }
+.badge-seventv { background: #183124; border-color: #28593e; color: #9ff0c0; }
+.badge-marker { background: #3a2d16; border-color: #5f4a22; color: #f2ce7d; }
 .log-user { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
 .log-user::after { content: ':'; color: #555; margin-right: 5px; }
 .log-msg-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .log-msg-wrap.has-reply { padding-top: 12px; }
+.log-markers { display: inline-flex; flex-wrap: wrap; gap: 4px; margin: 0 0 2px; }
 .log-msg  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
 
 /* Reply thread indicator */
