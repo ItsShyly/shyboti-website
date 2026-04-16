@@ -171,6 +171,20 @@ export function useSnippet() {
     // Suppress the native context menu that fires on mouseup after a drag
     suppressContextMenuUntil = Date.now() + 500
 
+    const captureRoot = (containerEl.querySelector('.logs-tbody') as HTMLElement | null) ?? containerEl
+    const hostRect = containerEl.getBoundingClientRect()
+    const captureRect = captureRoot.getBoundingClientRect()
+
+    // Convert selection from host-local space to viewport space, then into capture-root local space.
+    const selViewportLeft = hostRect.left + sel.x - containerEl.scrollLeft
+    const selViewportTop = hostRect.top + sel.y - containerEl.scrollTop
+    const selInCapture = {
+      x: selViewportLeft - captureRect.left + captureRoot.scrollLeft,
+      y: selViewportTop - captureRect.top + captureRoot.scrollTop,
+      w: sel.w,
+      h: sel.h,
+    }
+
     if (SNIPPET_DEBUG) {
       // Debug-only: inspect selected usernames and paint-related style vars.
       try {
@@ -211,6 +225,17 @@ export function useSnippet() {
             width: Math.round(panel.width),
             height: Math.round(panel.height),
           },
+          captureRoot: {
+            className: captureRoot.className,
+            left: Math.round(captureRect.left),
+            top: Math.round(captureRect.top),
+            width: Math.round(captureRect.width),
+            height: Math.round(captureRect.height),
+            scrollLeft: Math.round(captureRoot.scrollLeft),
+            scrollTop: Math.round(captureRoot.scrollTop),
+            scrollWidth: Math.round(captureRoot.scrollWidth),
+            scrollHeight: Math.round(captureRoot.scrollHeight),
+          },
           scroll: {
             left: Math.round(containerEl.scrollLeft),
             top: Math.round(containerEl.scrollTop),
@@ -219,6 +244,12 @@ export function useSnippet() {
           },
           selection: {
             local: { x: Math.round(sel.x), y: Math.round(sel.y), w: Math.round(sel.w), h: Math.round(sel.h) },
+            captureLocal: {
+              x: Math.round(selInCapture.x),
+              y: Math.round(selInCapture.y),
+              w: Math.round(selInCapture.w),
+              h: Math.round(selInCapture.h),
+            },
             viewport: {
               left: Math.round(selLeft),
               top: Math.round(selTop),
@@ -251,17 +282,17 @@ export function useSnippet() {
     console.log(`[Snippet] Starting screenshot process (${SNIPPET_LOG_VERSION})`)
 
     try {
-      const scale = computeSnippetPixelRatio(sel.w, sel.h)
+      const scale = computeSnippetPixelRatio(selInCapture.w, selInCapture.h)
 
       const renderStart = performance.now()
       document.body.classList.add('snippet-capturing')
       await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
 
       let cropCanvas: HTMLCanvasElement
-      const calibrationMarkerLocalY = Math.max(0, sel.y - 8)
-      const removeCalibrationMarker = addSnippetCalibrationMarker(containerEl, calibrationMarkerLocalY)
+      const calibrationMarkerLocalY = Math.max(0, selInCapture.y - 8)
+      const removeCalibrationMarker = addSnippetCalibrationMarker(captureRoot, calibrationMarkerLocalY)
       try {
-        const fullCanvas = await toCanvas(containerEl, {
+        const fullCanvas = await toCanvas(captureRoot, {
           pixelRatio: scale,
           cacheBust: false,
           backgroundColor: '#0d0d10',
@@ -270,10 +301,10 @@ export function useSnippet() {
           },
         })
 
-        const clientWScaled = Math.max(1, Math.round(containerEl.clientWidth * scale))
-        const clientHScaled = Math.max(1, Math.round(containerEl.clientHeight * scale))
-        const scrollWScaled = Math.max(1, Math.round(containerEl.scrollWidth * scale))
-        const scrollHScaled = Math.max(1, Math.round(containerEl.scrollHeight * scale))
+        const clientWScaled = Math.max(1, Math.round(captureRoot.clientWidth * scale))
+        const clientHScaled = Math.max(1, Math.round(captureRoot.clientHeight * scale))
+        const scrollWScaled = Math.max(1, Math.round(captureRoot.scrollWidth * scale))
+        const scrollHScaled = Math.max(1, Math.round(captureRoot.scrollHeight * scale))
 
         const widthViewportDelta = Math.abs(fullCanvas.width - clientWScaled)
         const widthContentDelta = Math.abs(fullCanvas.width - scrollWScaled)
@@ -286,12 +317,12 @@ export function useSnippet() {
         // Base mapping from container space. Nested scroll compensation proved
         // to overcorrect (jumping far out of bounds), so we keep source Y in
         // the same local coordinate space as selection.
-        const sourceX = widthLooksLikeViewport ? (sel.x - containerEl.scrollLeft) : sel.x
-        let sourceY = sel.y
+        const sourceX = widthLooksLikeViewport ? (selInCapture.x - captureRoot.scrollLeft) : selInCapture.x
+        let sourceY = selInCapture.y
 
         // Safety: if Y is outside the rendered viewport bounds, reset to local selection Y.
-        if (sourceY < 0 || sourceY > containerEl.clientHeight) {
-          sourceY = sel.y
+        if (sourceY < 0 || sourceY > captureRoot.clientHeight) {
+          sourceY = selInCapture.y
         }
 
         const markerYRendered = detectSnippetCalibrationMarkerY(fullCanvas)
@@ -313,14 +344,14 @@ export function useSnippet() {
 
         const srcX = Math.max(0, Math.round(sourceX * scale))
         const srcY = Math.max(0, Math.round(sourceY * scale))
-        const reqW = Math.max(1, Math.round(sel.w * scale))
-        const reqH = Math.max(1, Math.round(sel.h * scale))
+        const reqW = Math.max(1, Math.round(selInCapture.w * scale))
+        const reqH = Math.max(1, Math.round(selInCapture.h * scale))
         const srcW = Math.max(1, Math.min(reqW, fullCanvas.width - srcX))
         const srcH = Math.max(1, Math.min(reqH, fullCanvas.height - srcY))
 
         if (SNIPPET_DEBUG) {
-          const selectionTopRow = nearestRowAtLocalY(containerEl, sel.y)
-          const cropTopRow = nearestRowAtLocalY(containerEl, sourceY)
+          const selectionTopRow = nearestRowAtLocalY(captureRoot, selInCapture.y)
+          const cropTopRow = nearestRowAtLocalY(captureRoot, sourceY)
           const cropMode = {
             widthLooksLikeViewport,
             heightLooksLikeViewport,
@@ -335,8 +366,9 @@ export function useSnippet() {
             src: { x: srcX, y: srcY, w: srcW, h: srcH },
             localMapping: {
               selectionTopY: Math.round(sel.y),
+              selectionTopYCapture: Math.round(selInCapture.y),
               cropTopY: Math.round(sourceY),
-              deltaY: Math.round(sourceY - sel.y),
+              deltaY: Math.round(sourceY - selInCapture.y),
             },
             nearestRows: {
               selectionTopRow,
