@@ -100,22 +100,22 @@ export function useSnippet() {
         backgroundColor: '#0d0d10',
       })
 
-      // cropCanvas is already the right size - no manual crop needed i think
-      cropCanvas.toBlob(async (blob: Blob | null) => {
-        if (!blob) { screenshotToast.value = null; return }
-        const fd = new FormData()
-        fd.append('file', new File([blob], 'snippet.png', { type: 'image/png' }))
-        const headers: Record<string, string> = {}
-        if (session.value) headers['Authorization'] = `Bearer ${session.value.token}`
-        try {
-          const res = await fetch(`${API}/images/upload`, { method: 'POST', headers, body: fd })
-          if (!res.ok) { screenshotToast.value = null; return }
-          const data = await res.json() as { id: string }
-          const url = `https://i.shyboti.de/${data.id}`
-          await navigator.clipboard.writeText(url).catch(() => {})
-          screenshotToast.value = { state: 'copied', url, imgReady: false }
-        } catch { screenshotToast.value = null }
-      }, 'image/webp', 0.92) // <<< i think webp is the fastest option here
+      // >>> Convert canvas to base64 WebP and upload to optimized endpoint (skips FormData overhead)
+      const dataUrl = cropCanvas.toDataURL('image/webp', 0.92)
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (session.value) headers['Authorization'] = `Bearer ${session.value.token}`
+      try {
+        const res = await fetch(`${API}/images/upload-base64`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ data: dataUrl, filename: 'snippet.webp' })
+        })
+        if (!res.ok) { screenshotToast.value = null; return }
+        const data = await res.json() as { id: string }
+        const url = `https://i.shyboti.de/${data.id}`
+        await navigator.clipboard.writeText(url).catch(() => {})
+        screenshotToast.value = { state: 'copied', url, imgReady: false }
+      } catch { screenshotToast.value = null }
     } catch (err) {
       console.error('Snippet failed:', err)
       screenshotToast.value = null
