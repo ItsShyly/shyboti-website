@@ -33,21 +33,32 @@ function handleMouseMove(e: MouseEvent) { onWindowMouseMove(e, getPanel()) }
 function handleMouseUp  (e: MouseEvent) { onWindowMouseUp(e,   getPanel()) }
 function handleCtxMenu  (e: MouseEvent) { onSnippetContextMenu(e) }
 
+let panel: HTMLElement | null = null
+
 onMounted(() => {
   watch(screenshotDrag, (v) => document.body.classList.toggle('snippet-dragging', v))
   window.addEventListener('mousemove', handleMouseMove)
   window.addEventListener('mouseup',   handleMouseUp)
-  const panel = getPanel()
-  if (panel) {
-    panel.addEventListener('mousedown',   handleMouseDown)
-    panel.addEventListener('contextmenu', handleCtxMenu)
-  }
+  
+  // Watch for panel ref changes to attach/detach listeners
+  watch(() => mainPanelRef?.value, (newPanel) => {
+    // Detach from old panel
+    if (panel) {
+      panel.removeEventListener('mousedown',   handleMouseDown)
+      panel.removeEventListener('contextmenu', handleCtxMenu)
+    }
+    // Attach to new panel
+    panel = newPanel || null
+    if (panel) {
+      panel.addEventListener('mousedown',   handleMouseDown)
+      panel.addEventListener('contextmenu', handleCtxMenu)
+    }
+  }, { immediate: true })
 })
 
 onUnmounted(() => {
   window.removeEventListener('mousemove', handleMouseMove)
   window.removeEventListener('mouseup',   handleMouseUp)
-  const panel = getPanel()
   if (panel) {
     panel.removeEventListener('mousedown',   handleMouseDown)
     panel.removeEventListener('contextmenu', handleCtxMenu)
