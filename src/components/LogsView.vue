@@ -475,11 +475,31 @@ function hasMsg(id: string): boolean {
   return msgs.value.some(m => m.id === id)
 }
 
+function jumpToLoadedMessageNow(id: string): boolean {
+  const el = document.getElementById(`log-${id}`)
+  if (!el) return false
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  highlightId.value = id
+  setTimeout(() => { if (highlightId.value === id) highlightId.value = null }, 3000)
+  return true
+}
+
 async function jumpToMessage(id: string): Promise<void> {
   const targetId = (id || '').trim()
   if (!targetId) return
 
   pushHash(targetId)
+
+  // Fast path: already rendered in DOM
+  if (jumpToLoadedMessageNow(targetId)) return
+
+  // Fast path: already in loaded data; wait one render cycle and jump.
+  if (hasMsg(targetId)) {
+    await nextTick()
+    if (jumpToLoadedMessageNow(targetId)) return
+    await scrollToMsg(targetId, true)
+    return
+  }
 
   // If the target is not loaded yet, keep loading older chunks until found or exhausted.
   let safety = 0
