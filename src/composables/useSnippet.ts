@@ -23,7 +23,7 @@ const SNIPPET_CAPTURE_DELAY_MS = 0
 const SNIPPET_DEBUG = true
 const SNIPPET_MAX_RENDER_PIXELS = 2_400_000
 const SNIPPET_MIN_PIXEL_RATIO = 0.65
-const SNIPPET_LOG_VERSION = 'snippet-calib-v4'
+const SNIPPET_LOG_VERSION = 'snippet-calib-v5'
 
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
   const start = Date.now()
@@ -116,19 +116,12 @@ export function useSnippet() {
     // Suppress the native context menu that fires on mouseup after a drag
     suppressContextMenuUntil = Date.now() + 500
 
-    const captureRoot = (containerEl.querySelector('.logs-tbody') as HTMLElement | null) ?? containerEl
-    const hostRect = containerEl.getBoundingClientRect()
+    // Keep selection and capture in the same coordinate space.
+    // html-to-image can lose nested scroller offsets in cloned DOM trees.
+    // Capturing the same host element that receives drag coordinates avoids that drift.
+    const captureRoot = containerEl
     const captureRect = captureRoot.getBoundingClientRect()
-
-    // Convert selection from host-local space to viewport space, then into capture-root local space.
-    const selViewportLeft = hostRect.left + sel.x - containerEl.scrollLeft
-    const selViewportTop = hostRect.top + sel.y - containerEl.scrollTop
-    const selInCapture = {
-      x: selViewportLeft - captureRect.left + captureRoot.scrollLeft,
-      y: selViewportTop - captureRect.top + captureRoot.scrollTop,
-      w: sel.w,
-      h: sel.h,
-    }
+    const selInCapture = { x: sel.x, y: sel.y, w: sel.w, h: sel.h }
 
     if (SNIPPET_DEBUG) {
       // Debug-only: inspect selected usernames and paint-related style vars.
