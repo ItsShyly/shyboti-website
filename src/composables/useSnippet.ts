@@ -179,6 +179,13 @@ export function useSnippet() {
       console.warn('[Snippet] Could not inspect selected usernames', err)
     }
 
+    await waitForLogsJobsToSettle()
+
+    if (SNIPPET_CAPTURE_DELAY_MS > 0) {
+      console.log(`[Snippet] Extra capture delay: ${SNIPPET_CAPTURE_DELAY_MS}ms`)
+      await new Promise<void>((resolve) => setTimeout(resolve, SNIPPET_CAPTURE_DELAY_MS))
+    }
+
     const panel = containerEl.getBoundingClientRect()
     const selLeft = panel.left + sel.x - containerEl.scrollLeft
     const selTop = panel.top + sel.y - containerEl.scrollTop
@@ -190,13 +197,6 @@ export function useSnippet() {
       return r.right > selLeft && r.left < selRight && r.bottom > selTop && r.top < selBottom
     })
     const overlays = buildSnippetUserOverlays(overlayUsers, selLeft, selTop)
-
-    await waitForLogsJobsToSettle()
-
-    if (SNIPPET_CAPTURE_DELAY_MS > 0) {
-      console.log(`[Snippet] Extra capture delay: ${SNIPPET_CAPTURE_DELAY_MS}ms`)
-      await new Promise<void>((resolve) => setTimeout(resolve, SNIPPET_CAPTURE_DELAY_MS))
-    }
 
     if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
     screenshotToast.value = { state: 'uploading', url: null, imgReady: false }
