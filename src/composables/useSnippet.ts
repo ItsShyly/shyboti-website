@@ -81,41 +81,25 @@ export function useSnippet() {
     screenshotToast.value = { state: 'uploading', url: null, imgReady: false }
 
     try {
-      // @ts-ignore – html2canvas has no bundled types
-      const html2canvas = (await import('html2canvas')).default
-      const scale = window.devicePixelRatio || 1
-
-      // Only capture the selected region - way faster than rendering my whole website
-      const cropCanvas = await html2canvas(containerEl, {
-        x:               Math.round(sel.x),
-        y:               Math.round(sel.y),
-        width:           Math.round(sel.w),
-        height:          Math.round(sel.h),
-        scrollX:         0,
-        scrollY:         0,
-        useCORS:         true,
-        allowTaint:      true,
-        logging:         false,
-        scale,
-        backgroundColor: '#0d0d10',
-      })
-
-      // >>> Convert canvas to base64 WebP and upload to optimized endpoint (skips FormData overhead)
-      const dataUrl = cropCanvas.toDataURL('image/webp', 0.92)
+      // >>> Send URL + region coordinates to backend for server-side screenshot
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (session.value) headers['Authorization'] = `Bearer ${session.value.token}`
-      try {
-        const res = await fetch(`${API}/images/upload-base64`, {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({ data: dataUrl, filename: 'snippet.webp' })
+      const res = await fetch(`${API}/images/screenshot`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          url: window.location.href,
+          x: Math.round(sel.x),
+          y: Math.round(sel.y),
+          w: Math.round(sel.w),
+          h: Math.round(sel.h),
         })
-        if (!res.ok) { screenshotToast.value = null; return }
-        const data = await res.json() as { id: string }
-        const url = `https://i.shyboti.de/${data.id}`
-        await navigator.clipboard.writeText(url).catch(() => {})
-        screenshotToast.value = { state: 'copied', url, imgReady: false }
-      } catch { screenshotToast.value = null }
+      })
+      if (!res.ok) { screenshotToast.value = null; return }
+      const data = await res.json() as { id: string }
+      const url = `https://i.shyboti.de/${data.id}`
+      await navigator.clipboard.writeText(url).catch(() => {})
+      screenshotToast.value = { state: 'copied', url, imgReady: false }
     } catch (err) {
       console.error('Snippet failed:', err)
       screenshotToast.value = null
