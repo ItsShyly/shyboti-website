@@ -650,8 +650,13 @@ function onTbodyMouseDown(e: MouseEvent) {
   // >>> Only right-click starts the screenshot drag
   if (e.button !== 2) return
   const target = e.target as HTMLElement
+<<<<<<< HEAD
   if (target.closest('a, button, .log-share, .log-user-clickable, input, label, .field-wrap')) return
   const container = document.querySelector('.logs-view') as HTMLElement; if (!container) return
+=======
+  if (target.closest('a, button, .log-share, .log-user-clickable')) return
+  const container = bodyRef.value?.parentElement; if (!container) return
+>>>>>>> 6ca0d3ba557f79aec953e52ee17e20d7c25142a8
   const rect  = container.getBoundingClientRect()
   const x = e.clientX - rect.left + container.scrollLeft
   const y = e.clientY - rect.top  + container.scrollTop
@@ -663,7 +668,11 @@ function onTbodyMouseDown(e: MouseEvent) {
 
 function onTbodyMouseMove(e: MouseEvent) {
   if (!screenshotDrag.value || !screenshotAnchor.value) return
+<<<<<<< HEAD
   const container = document.querySelector('.logs-view') as HTMLElement; if (!container) return
+=======
+  const container = bodyRef.value?.parentElement; if (!container) return
+>>>>>>> 6ca0d3ba557f79aec953e52ee17e20d7c25142a8
   const rect  = container.getBoundingClientRect()
   const cx = e.clientX - rect.left + container.scrollLeft
   const cy = e.clientY - rect.top  + container.scrollTop
@@ -686,7 +695,11 @@ async function onTbodyMouseUp(e: MouseEvent) {
   // Suppress context menu for 500ms after a valid drag completes
   suppressContextMenuUntil = Date.now() + 500
 
+<<<<<<< HEAD
   const container = document.querySelector('.logs-view') as HTMLElement; if (!container) return
+=======
+  const container = bodyRef.value?.parentElement; if (!container) return
+>>>>>>> 6ca0d3ba557f79aec953e52ee17e20d7c25142a8
 
   // >>> Show uploading state immediately
   if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
@@ -948,6 +961,12 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
       <div class="logs-count">{{ msgs.length.toLocaleString() }} {{ t('logs.count') }}</div>
       <div
         class="logs-table"
+<<<<<<< HEAD
+=======
+        :class="{ 'tbody-selecting': screenshotDrag }"
+        @mousedown="onTbodyMouseDown"
+        @contextmenu="onTbodyContextMenu"
+>>>>>>> 6ca0d3ba557f79aec953e52ee17e20d7c25142a8
       >
         <div class="logs-thead">
           <div>{{ t('logs.col.time') }}</div><div>{{ t('logs.col.user') }}</div><div>{{ t('logs.col.msg') }}</div>
