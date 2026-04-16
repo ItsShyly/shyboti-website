@@ -156,12 +156,26 @@ export function useSnippet() {
               const s = String(v ?? '').trim()
               const low = s.toLowerCase()
               if (!s) return ''
+              if (low.includes('var(')) return ''
+              if (low.includes('gradient(')) return ''
               if (low === 'transparent') return ''
               if (low === 'rgba(0, 0, 0, 0)' || low === 'rgba(0,0,0,0)') return ''
               const m = low.match(/^rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([0-9]*\.?[0-9]+)\s*\)$/)
               if (m) {
                 const alpha = Number(m[1])
                 if (!Number.isFinite(alpha) || alpha <= 0.14) return ''
+              }
+              return s
+            }
+
+            const toOpaque = (v: string): string => {
+              const s = v.trim()
+              const rgba = s.match(/^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*([0-9]*\.?[0-9]+)\s*\)$/i)
+              if (rgba) {
+                const r = Math.max(0, Math.min(255, Number(rgba[1])))
+                const g = Math.max(0, Math.min(255, Number(rgba[2])))
+                const b = Math.max(0, Math.min(255, Number(rgba[3])))
+                return `rgb(${r}, ${g}, ${b})`
               }
               return s
             }
@@ -180,10 +194,10 @@ export function useSnippet() {
               const fallback = usable(fallbackRaw)
               let textColor = '#cccccc'
               if (preview) {
-                textColor = preview
+                textColor = toOpaque(preview)
                 previewUsed += 1
               } else if (fallback) {
-                textColor = fallback
+                textColor = toOpaque(fallback)
                 fallbackUsed += 1
               } else {
                 hardFallbackUsed += 1
@@ -196,7 +210,8 @@ export function useSnippet() {
               el.style.setProperty('color', textColor, 'important')
               el.style.setProperty('-webkit-text-fill-color', textColor, 'important')
               el.style.setProperty('filter', 'none', 'important')
-              el.style.setProperty('text-shadow', 'none', 'important')
+              el.style.setProperty('text-shadow', '0 0 0.01px rgba(0,0,0,0)', 'important')
+              el.style.setProperty('font-weight', '700', 'important')
             })
             console.log('[Snippet] Clone paint mapping', {
               total: users.length,
