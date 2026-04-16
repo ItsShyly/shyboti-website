@@ -531,53 +531,9 @@ function esc(s: string) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
 
-// >>> 7TV paint cache: username -> paint data (null = no paint, undefined = not fetched)
-const paintCache = new Map<string, { id: string; name: string; imageUrl: string | null; shadows: any[]; stops: any[] } | null>()
-
-async function fetchPaint(username: string): Promise<{ id: string; name: string; imageUrl: string | null; shadows: any[]; stops: any[] } | null> {
-  if (paintCache.has(username)) return paintCache.get(username) ?? null
-  try {
-    // Step 1: get 7TV user by Twitch login to find paint_id
-    const gqlUser = await fetch('https://7tv.io/v3/gql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: 'query($login: String!) { usersByConnection(platform: TWITCH, id: $login) { id style { paint_id } } }',
-        variables: { login: username }
-      })
-    })
-    const userData = await gqlUser.json() as any
-    const paintId = userData?.data?.usersByConnection?.[0]?.style?.paint_id
-    if (!paintId) { paintCache.set(username, null); return null }
-
-    // Step 2: fetch the paint definition
-    const gqlPaint = await fetch('https://7tv.io/v3/gql', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        query: 'query($id: ObjectID!) { paint(id: $id) { id name data { layers { type } } function stops { at color } shadows { x_offset y_offset radius color } image_url } }',
-        variables: { id: paintId }
-      })
-    })
-    const paintData = await gqlPaint.json() as any
-    const p = paintData?.data?.paint
-    if (!p) { paintCache.set(username, null); return null }
-    const result = {
-      id:       p.id,
-      name:     p.name,
-      imageUrl: p.image_url ?? null,
-      shadows:  p.shadows ?? [],
-      stops:    p.stops ?? [],
-    }
-    paintCache.set(username, result)
-    return result
-  } catch {
-    paintCache.set(username, null)
-    return null
-  }
-}
-
-// Prefetch paints for visible usernames (fire-and-forget, triggers reactivity via paintStyles)
+// >>> 7TV paint: fetched via backend /twitch/user which resolves Twitch ID → 7TV
+// >>> Keyed by lowercase username. null = no paint, undefined = not fetched yet.
+const paintCache  = new Map<string, { stops: any[]; shadows: any[]; imageUrl: string | null } | null>()
 const paintStyles = ref<Map<string, Record<string, string>>>(new Map())
 
 function intToRgba(c: number): string {
@@ -613,16 +569,26 @@ function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; 
 }
 
 async function ensurePaint(username: string) {
-  if (paintStyles.value.has(username)) return
-  const paint = await fetchPaint(username.toLowerCase())
-  if (paint) {
-    const newMap = new Map(paintStyles.value)
-    newMap.set(username, buildPaintStyle(paint))
-    paintStyles.value = newMap
-  }
+  const key = username.toLowerCase()
+  if (paintCache.has(key)) return
+  paintCache.set(key, null) // >>> mark as fetching to avoid duplicate requests
+  try {
+    // >>> Use our backend which resolves Twitch login → Twitch ID → 7TV paint
+    const res = await fetch(`${API}/twitch/user/${encodeURIComponent(key)}`, {
+      headers: session.value ? { Authorization: `Bearer ${session.value.token}` } : {}
+    })
+    if (!res.ok) return
+    const data = await res.json() as { paint?: any }
+    if (data.paint) {
+      paintCache.set(key, data.paint)
+      const newMap = new Map(paintStyles.value)
+      newMap.set(username, buildPaintStyle(data.paint))
+      paintStyles.value = newMap
+    }
+  } catch {}
 }
 
-// Watch msgs and prefetch paints for all visible usernames
+// >>> Watch msgs and prefetch paints for visible usernames
 watch(msgs, (list) => {
   const seen = new Set<string>()
   for (const m of list) {
@@ -644,6 +610,7 @@ interface TwitchUser {
   subTier:     string | null
   nameHistory: { name: string; lastSeen: string }[]
   paint: { id: string; name: string; imageUrl: string | null; shadows: any[]; stops: any[] } | null
+  botInChannel: boolean
 }
 const popup        = ref<{ username: string; channel: string; x: number; y: number } | null>(null)
 const popupUser    = ref<TwitchUser | null>(null)
@@ -892,6 +859,10 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             </div>
           </div>
           <div class="popup-relations">
+            <div v-if="!popupUser.botInChannel" class="popup-no-bot">
+              ShyBoti not in #{{ popup?.channel }} — follow/sub info unavailable
+            </div>
+            <template v-else>
             <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">
               <span class="rel-icon">♥</span>
               <span class="rel-label">
@@ -906,6 +877,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                 <template v-else>Not subscribed</template>
               </span>
             </div>
+            </template>
           </div>
           <div v-if="popupUser.paint" class="popup-paint">
             <div class="popup-paint-label">7TV Paint</div>
@@ -1033,6 +1005,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .stat-val    { font-size: 13px; font-weight: 700; color: #e0e0e0; }
 .stat-lbl    { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .05em; }
 .popup-relations { display: flex; flex-direction: column; gap: 4px; }
+.popup-no-bot { font-size: 10px; color: #555; font-style: italic; padding: 4px 0; }
 .popup-rel   { display: flex; align-items: center; gap: 7px; padding: 5px 8px; font-size: 12px; }
 .popup-rel.rel-yes { background: #1a2a1a; color: #23d18b; }
 .popup-rel.rel-no  { background: #1e1e22; color: #444; }
