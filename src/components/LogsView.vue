@@ -1250,13 +1250,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               v-model="dateRange"
               range
               :enable-time-picker="false"
+              :multi-calendars="false"
               dark
               auto-apply
               :format="formatDateRange"
               placeholder="From → Until (optional)"
               class="dp-logs"
               :teleport="true"
-              :multi-calendars="true"
             />
           </div>
           <div class="field-wrap">
