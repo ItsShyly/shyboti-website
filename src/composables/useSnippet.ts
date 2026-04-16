@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
+import { toCanvas } from 'html-to-image'
 
 // Shared reactive state – single instance across the whole app
 const screenshotDrag   = ref(false)
@@ -27,22 +28,6 @@ async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
   while (document.body.classList.contains('logs-jobs-running') && Date.now() - start < timeoutMs) {
     await new Promise<void>((resolve) => setTimeout(resolve, 60))
   }
-}
-
-async function loadToCanvasFn(): Promise<(node: HTMLElement, options?: Record<string, unknown>) => Promise<HTMLCanvasElement>> {
-  try {
-    // @ts-ignore module may not be installed locally yet
-    const local = await import('html-to-image')
-    if (typeof local.toCanvas === 'function') return local.toCanvas
-  } catch {
-    // Fall through to CDN import.
-  }
-  // @ts-ignore remote module has no local type declarations
-  const remote = await import(/* @vite-ignore */ 'https://esm.sh/html-to-image@1.11.13')
-  if (typeof remote.toCanvas !== 'function') {
-    throw new Error('Failed to load html-to-image toCanvas()')
-  }
-  return remote.toCanvas
 }
 
 function computeSnippetPixelRatio(selW: number, selH: number): number {
@@ -151,7 +136,6 @@ export function useSnippet() {
     console.log('[Snippet] Starting screenshot process')
 
     try {
-      const toCanvas = await loadToCanvasFn()
       const scale = computeSnippetPixelRatio(sel.w, sel.h)
 
       const renderStart = performance.now()
@@ -160,32 +144,47 @@ export function useSnippet() {
 
       let cropCanvas: HTMLCanvasElement
       try {
-        const fullCanvas = await toCanvas(containerEl, {
-          pixelRatio: scale,
-          cacheBust: false,
-          backgroundColor: '#0d0d10',
-          style: {
-            background: '#0d0d10',
-          },
-        })
+        // Render ONLY the selected region by cloning the current viewport
+        // and clipping via an offscreen wrapper. This avoids expensive
+        // full-canvas renders and fixes crop coordinate drift.
+        const viewX = sel.x - containerEl.scrollLeft
+        const viewY = sel.y - containerEl.scrollTop
 
-        const srcX = Math.max(0, Math.round((sel.x - containerEl.scrollLeft) * scale))
-        const srcY = Math.max(0, Math.round((sel.y - containerEl.scrollTop) * scale))
-        const reqW = Math.max(1, Math.round(sel.w * scale))
-        const reqH = Math.max(1, Math.round(sel.h * scale))
-        const srcW = Math.max(1, Math.min(reqW, fullCanvas.width - srcX))
-        const srcH = Math.max(1, Math.min(reqH, fullCanvas.height - srcY))
+        const wrapper = document.createElement('div')
+        wrapper.style.position = 'fixed'
+        wrapper.style.left = '-100000px'
+        wrapper.style.top = '0'
+        wrapper.style.width = `${Math.max(1, Math.round(sel.w))}px`
+        wrapper.style.height = `${Math.max(1, Math.round(sel.h))}px`
+        wrapper.style.overflow = 'hidden'
+        wrapper.style.pointerEvents = 'none'
+        wrapper.style.background = '#0d0d10'
+        wrapper.style.zIndex = '-1'
 
-        if (srcX >= fullCanvas.width || srcY >= fullCanvas.height) {
-          throw new Error('Selection is outside rendered canvas bounds')
+        const clone = containerEl.cloneNode(true) as HTMLElement
+        clone.style.margin = '0'
+        clone.style.width = `${containerEl.clientWidth}px`
+        clone.style.height = `${containerEl.clientHeight}px`
+        clone.style.transform = `translate(${-viewX}px, ${-viewY}px)`
+        clone.style.transformOrigin = 'top left'
+        clone.style.background = '#0d0d10'
+        clone.scrollTop = containerEl.scrollTop
+        clone.scrollLeft = containerEl.scrollLeft
+
+        wrapper.appendChild(clone)
+        document.body.appendChild(wrapper)
+        try {
+          cropCanvas = await toCanvas(wrapper, {
+            pixelRatio: scale,
+            cacheBust: false,
+            backgroundColor: '#0d0d10',
+            style: {
+              background: '#0d0d10',
+            },
+          })
+        } finally {
+          wrapper.remove()
         }
-
-        cropCanvas = document.createElement('canvas')
-        cropCanvas.width = srcW
-        cropCanvas.height = srcH
-        const ctx = cropCanvas.getContext('2d')
-        if (!ctx) throw new Error('Could not create canvas context')
-        ctx.drawImage(fullCanvas, srcX, srcY, srcW, srcH, 0, 0, srcW, srcH)
       } finally {
         document.body.classList.remove('snippet-capturing')
       }
