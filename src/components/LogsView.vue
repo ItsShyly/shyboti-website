@@ -80,6 +80,12 @@ let abortCtrl = new AbortController()
 let scrollListenerAttached = false
 let windowScrollAttached  = false
 
+const VIRTUAL_THRESHOLD = 500
+const VIRTUAL_OVERSCAN = 80
+const VIRTUAL_ROW_ESTIMATE = 30
+const virtualStart = ref(0)
+const virtualEnd = ref(0)
+
 const isMobile = () => window.matchMedia('(max-width: 680px)').matches
 
 // >>> URL state sync
@@ -277,8 +283,32 @@ async function loadUntilMsg(targetId: string): Promise<boolean> {
 }
 
 function onScroll() {
+  recalcVirtualWindow()
   if (!bodyRef.value || loadingMore.value || noMore.value) return
   if (bodyRef.value.scrollTop < 120) loadOlder()
+}
+
+function recalcVirtualWindow() {
+  const body = bodyRef.value
+  const total = displayItems.value.length
+  if (!body || total === 0) {
+    virtualStart.value = 0
+    virtualEnd.value = total
+    return
+  }
+
+  if (!useVirtual.value) {
+    virtualStart.value = 0
+    virtualEnd.value = total
+    return
+  }
+
+  const viewportRows = Math.ceil(body.clientHeight / VIRTUAL_ROW_ESTIMATE)
+  const firstRow = Math.max(0, Math.floor(body.scrollTop / VIRTUAL_ROW_ESTIMATE) - VIRTUAL_OVERSCAN)
+  const endRow = Math.min(total, firstRow + viewportRows + VIRTUAL_OVERSCAN * 2)
+
+  virtualStart.value = firstRow
+  virtualEnd.value = endRow
 }
 
 function attachScrollListener() {
@@ -346,6 +376,7 @@ async function search() {
   if (isMobile()) searchExpanded.value = false
   loading.value = true; error.value = ''; searched.value = true
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
+  virtualStart.value = 0; virtualEnd.value = 0
   cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   fetchEmotes(ch)
@@ -470,6 +501,7 @@ async function search() {
 
   await nextTick()
   attachScrollListener()
+  recalcVirtualWindow()
   await autoFillIfShort()
 }
 
@@ -489,6 +521,18 @@ function scrollToBottom() {
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
+  if (useVirtual.value) {
+    const idx = displayItems.value.findIndex((it) => it.kind !== 'day' && it.msg.id === id)
+    if (idx >= 0) {
+      const body = bodyRef.value
+      if (body) {
+        body.scrollTop = Math.max(0, idx * VIRTUAL_ROW_ESTIMATE - body.clientHeight * 0.5)
+      }
+      recalcVirtualWindow()
+      await nextTick()
+    }
+  }
+
   const deadline = Date.now() + 3000
   let el: HTMLElement | null = null
   while (Date.now() < deadline) {
@@ -572,12 +616,15 @@ onMounted(async () => {
   await nextTick()
   if (dateFromInputRef.value && dateFrom.value) dateFromInputRef.value.value = dateFrom.value
   if (dateUntilInputRef.value && dateUntil.value) dateUntilInputRef.value.value = dateUntil.value
+  window.addEventListener('resize', recalcVirtualWindow)
   if (channel.value) await search()
 })
 onUnmounted(() => {
   document.body.classList.remove('logs-open')
   abortCtrl.abort()
   detachScrollListeners()
+  window.removeEventListener('resize', recalcVirtualWindow)
+  stopPopupDrag()
 })
 
 // >>> Rendering
@@ -619,6 +666,19 @@ const displayItems = computed<DisplayItem[]>(() => {
     else                     items.push({ kind: 'msg',     msg: m as LogMsg })
   }
   return items
+})
+
+const useVirtual = computed(() => searched.value && displayItems.value.length > VIRTUAL_THRESHOLD)
+
+const visibleDisplayItems = computed<DisplayItem[]>(() => {
+  if (!useVirtual.value) return displayItems.value
+  return displayItems.value.slice(virtualStart.value, virtualEnd.value)
+})
+
+const topSpacerHeight = computed(() => useVirtual.value ? virtualStart.value * VIRTUAL_ROW_ESTIMATE : 0)
+const bottomSpacerHeight = computed(() => {
+  if (!useVirtual.value) return 0
+  return Math.max(0, (displayItems.value.length - virtualEnd.value) * VIRTUAL_ROW_ESTIMATE)
 })
 
 function userColor(m: LogMsg): string {
@@ -687,20 +747,26 @@ function renderMsgForMessage(m: LogMsg): string {
 function buildBadgeChips(m: LogMsg): BadgeChip[] {
   const out: BadgeChip[] = []
   const tags = m.tags ?? {}
-  const badgeStr = tags['badges'] ?? ''
-  const raw = badgeStr.split(',').map(x => x.trim()).filter(Boolean)
-  for (const entry of raw) {
-    const [setId = '', version = ''] = entry.split('/')
-    if (!setId || !version) continue
-    const k = `${setId}/${version}`
-    const asset = twitchBadgeMap.value.get(k)
-    out.push({
-      key: k,
-      label: setId,
-      kind: 'twitch',
-      imageUrl: asset?.imageUrl,
-      title: asset?.title ?? `${setId} ${version}`,
-    })
+  const seen = new Set<string>()
+  const sources = [tags['badges'] ?? '', tags['source-badges'] ?? '']
+
+  for (const src of sources) {
+    const raw = src.split(',').map(x => x.trim()).filter(Boolean)
+    for (const entry of raw) {
+      const [setId = '', version = ''] = entry.split('/')
+      if (!setId || !version) continue
+      const k = `${setId}/${version}`
+      if (seen.has(k)) continue
+      seen.add(k)
+      const asset = twitchBadgeMap.value.get(k)
+      out.push({
+        key: k,
+        label: setId,
+        kind: 'twitch',
+        imageUrl: asset?.imageUrl,
+        title: asset?.title ?? `${setId} ${version}`,
+      })
+    }
   }
   const sev = sevenTvBadgeMap.value.get((m.username ?? '').toLowerCase())
   if (sev?.imageUrl) {
@@ -843,6 +909,11 @@ watch(msgs, (list) => {
   }
 }, { flush: 'post' })
 
+watch(displayItems, async () => {
+  await nextTick()
+  recalcVirtualWindow()
+}, { flush: 'post' })
+
 // >>> User popup
 interface TwitchUser {
   login: string; displayName: string; avatar: string
@@ -858,6 +929,44 @@ interface TwitchUser {
 const popup        = ref<{ username: string; channel: string; x: number; y: number } | null>(null)
 const popupUser    = ref<TwitchUser | null>(null)
 const popupLoading = ref(false)
+const popupDragging = ref(false)
+let popupDragStartX = 0
+let popupDragStartY = 0
+let popupStartX = 0
+let popupStartY = 0
+
+function onPopupDragMove(evt: MouseEvent) {
+  if (!popupDragging.value || !popup.value) return
+  const dx = evt.clientX - popupDragStartX
+  const dy = evt.clientY - popupDragStartY
+  const nextX = popupStartX + dx
+  const nextY = popupStartY + dy
+  const maxX = Math.max(0, window.innerWidth - 240)
+  const maxY = Math.max(0, window.innerHeight - 120)
+  popup.value = {
+    ...popup.value,
+    x: Math.min(maxX, Math.max(0, nextX)),
+    y: Math.min(maxY, Math.max(0, nextY)),
+  }
+}
+
+function stopPopupDrag() {
+  popupDragging.value = false
+  window.removeEventListener('mousemove', onPopupDragMove)
+  window.removeEventListener('mouseup', stopPopupDrag)
+}
+
+function startPopupDrag(evt: MouseEvent) {
+  if (!popup.value) return
+  popupDragging.value = true
+  popupDragStartX = evt.clientX
+  popupDragStartY = evt.clientY
+  popupStartX = popup.value.x
+  popupStartY = popup.value.y
+  window.addEventListener('mousemove', onPopupDragMove)
+  window.addEventListener('mouseup', stopPopupDrag)
+  evt.preventDefault()
+}
 
 function openUserPopup(username: string, ch: string, evt: MouseEvent) {
   evt.stopPropagation()
@@ -1039,9 +1148,11 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           </div>
           <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
 
+          <div v-if="useVirtual" :style="{ height: topSpacerHeight + 'px' }"></div>
+
           <!-- Selection rectangle is now handled globally by SnippetOverlay -->
 
-          <template v-for="item in displayItems" :key="item.kind === 'day' ? 'day-' + item.label : item.msg.id">
+          <template v-for="item in visibleDisplayItems" :key="item.kind === 'day' ? 'day-' + item.label : item.msg.id">
             <div v-if="item.kind === 'day'" class="log-day-sep">{{ item.label }}</div>
 
             <div
@@ -1121,6 +1232,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               </div>
             </div>
           </template>
+
+          <div v-if="useVirtual" :style="{ height: bottomSpacerHeight + 'px' }"></div>
         </div>
       </div>
     </div>
@@ -1129,7 +1242,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
     <!-- User popup -->
     <div v-if="popup" class="user-popup" :style="{ top: popup.y + 'px', left: popup.x + 'px' }" @click.stop>
-      <div class="popup-header">
+      <div class="popup-header" @mousedown.stop="startPopupDrag">
         <div class="popup-avatar-wrap">
           <img v-if="popupUser?.avatar" :src="popupUser.avatar" class="popup-avatar" />
           <div v-else class="popup-avatar-placeholder">{{ popup.username[0]?.toUpperCase() }}</div>
@@ -1138,7 +1251,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           <div class="popup-name">{{ popupUser?.displayName ?? popup.username }}</div>
           <div class="popup-sub">in #{{ popup.channel }}</div>
         </div>
-        <button class="popup-close" @click="closePopup">✕</button>
+        <button class="popup-close" @mousedown.stop @click="closePopup">✕</button>
       </div>
       <div class="popup-body">
         <div v-if="popupLoading" class="popup-loading">Loading…</div>
@@ -1341,7 +1454,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   width: 300px; box-shadow: 0 8px 32px #00000088;
   transform: translate(-50%, 12px); overflow: hidden;
 }
-.popup-header { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px; border-bottom: 1px solid #1e1e22; }
+.popup-header { display: flex; align-items: center; gap: 10px; padding: 12px 12px 10px; border-bottom: 1px solid #1e1e22; cursor: move; user-select: none; }
 .popup-avatar-wrap { flex-shrink: 0; }
 .popup-avatar { width: 40px; height: 40px; border-radius: 50%; display: block; border: 2px solid #2a2a30; }
 .popup-avatar-placeholder { width: 40px; height: 40px; border-radius: 50%; background: #2a1a55; border: 2px solid #6f2bff44; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; color: #9d6cff; }
