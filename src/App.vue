@@ -516,6 +516,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
         </footer>
       </main>
     </div>
+    <span v-if="session" class="logged-in-float">#{{ session.channel }}</span>
   </div>
 </template>
 
@@ -535,6 +536,8 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .brand-name   { font-size: 1rem; font-weight: 700; color: #ffd569; letter-spacing: 0.04em; white-space: nowrap; }
 .topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
 .logged-in-as { font-size: 12px; color: #9d6cff; font-weight: 600; white-space: nowrap; }
+.logged-in-float { position: fixed; bottom: 36px; right: 10px; font-size: 11px; color: #9d6cff99; font-weight: 600; white-space: nowrap; background: #0e0e12bb; border: 1px solid #2a2a30; padding: 3px 8px; z-index: 60; pointer-events: none; backdrop-filter: blur(4px); }
+.logged-in-float { position: fixed; bottom: 36px; right: 10px; font-size: 11px; color: #9d6cff; font-weight: 600; white-space: nowrap; background: #0e0e12cc; border: 1px solid #2a2a30; padding: 3px 8px; z-index: 60; pointer-events: none; backdrop-filter: blur(4px); }
 
 /*  Universal Search  */
 .search-wrap {
