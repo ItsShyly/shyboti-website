@@ -385,10 +385,6 @@ async function search() {
   loading.value = true; error.value = ''; searched.value = true
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
   virtualStart.value = 0; virtualEnd.value = 0
-  paintCache.clear()
-  paintStyles.value = new Map()
-  sevenTvBadgeMap.value = new Map()
-  personalEmoteMaps.value = new Map()
   cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   fetchEmotes(ch)
@@ -618,6 +614,9 @@ function shareMsg(m: LogMsg) {
 }
 
 onMounted(async () => {
+  // Warm logo decode once so the floating indicator appears instantly.
+  const preload = new Image()
+  preload.src = loadingOverlayLogoUrl
   readUrlState()
   if (!channel.value && session.value?.channel) {
     channel.value = session.value.channel
@@ -766,6 +765,28 @@ function renderMsgForMessage(m: LogMsg): string {
   const personal = personalEmoteMaps.value.get(key) ?? {}
   const merged: EmoteMap = { ...emoteMap.value, ...personal }
   return renderMsgWithMap(formatDisplayedMsg(m), merged)
+}
+
+function userNameStyle(m: LogMsg): Record<string, string> {
+  const fallback = userColor(m)
+  const painted = paintStyles.value.get(m.username?.toLowerCase() ?? '')
+  return painted
+    ? { ...painted, '--snippet-fallback-color': fallback }
+    : { color: fallback, '--snippet-fallback-color': fallback }
+}
+
+function isModerationSystemMessage(m: LogMsg): boolean {
+  const u = String(m.username ?? '').trim().toLowerCase()
+  const t = String(m.text ?? '').trim().toLowerCase()
+  if (!u || !t) return false
+  return (
+    t.startsWith(`${u} has been banned`) ||
+    t.startsWith(`${u} has been timed out`) ||
+    t.startsWith(`${u} was timed out`) ||
+    t.includes(' has been banned') ||
+    t.includes(' has been timed out') ||
+    t.includes(' was timed out by ')
+  )
 }
 
 function buildBadgeChips(m: LogMsg): BadgeChip[] {
@@ -1238,7 +1259,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                   <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
                   <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
                 </div>
-                <div v-if="buildBadgeChips(item.msg).length" class="log-badges">
+                <div v-if="!isModerationSystemMessage(item.msg) && buildBadgeChips(item.msg).length" class="log-badges">
                   <template
                     v-for="b in buildBadgeChips(item.msg)"
                     :key="`${item.msg.id}-${b.kind}-${b.key}`"
@@ -1255,12 +1276,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                   </template>
                 </div>
                 <div
+                  v-if="!isModerationSystemMessage(item.msg)"
                   class="log-user"
-                  :style="paintStyles.get(item.msg.username?.toLowerCase()) ?? { color: userColor(item.msg) }"
+                  :style="userNameStyle(item.msg)"
                   :class="{ 'log-user-clickable': true }"
                   @click.stop="openUserPopup(item.msg.username, channel || item.msg.channel?.replace('#',''), $event)"
                 >{{ item.msg.displayName || item.msg.username }}</div>
-                <div class="log-msg-wrap" :class="{ 'has-reply': !!item.msg.tags?.['reply-parent-msg-body'] }">
+                <div class="log-msg-wrap" :class="{ 'has-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'is-system-mod': isModerationSystemMessage(item.msg) }">
                   <div
                     v-if="item.msg.tags?.['reply-parent-msg-body']"
                     class="reply-context"
@@ -1360,8 +1382,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
       </div>
     </div>
 
-    <div v-if="showFloatingFetch" class="logs-fetch-floating" aria-live="polite" aria-busy="true">
-      <img class="logs-fetch-logo" :src="loadingOverlayLogoUrl" alt="ShyBoti loading" loading="eager" decoding="async" />
+    <div class="logs-fetch-floating" :class="{ visible: showFloatingFetch }" aria-live="polite" :aria-busy="showFloatingFetch ? 'true' : 'false'">
+      <img class="logs-fetch-logo" :src="loadingOverlayLogoUrl" alt="ShyBoti loading" loading="eager" decoding="async" fetchpriority="high" />
       <span class="logs-fetch-text">logs getting displayed...</span>
     </div>
   </div>
@@ -1491,6 +1513,10 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .log-user::after { content: ':'; color: #555; margin-right: 5px; }
 .log-msg-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .log-msg-wrap.has-reply { padding-top: 16px; }
+.log-msg-wrap.is-system-mod .log-msg {
+  color: #d0a7a7;
+  font-style: italic;
+}
 .log-msg  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
 
 /* Reply thread indicator */
@@ -1579,6 +1605,15 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(2px);
   pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px);
+  visibility: hidden;
+  transition: opacity .16s ease, transform .16s ease, visibility .16s ease;
+}
+.logs-fetch-floating.visible {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
 }
 .logs-fetch-logo {
   width: 18px;
@@ -1596,6 +1631,16 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 }
 @keyframes logs-fetch-spin {
   to { transform: rotate(360deg); }
+}
+
+:global(body.snippet-capturing) .log-user {
+  background-image: none !important;
+  background-color: transparent !important;
+  background-clip: border-box !important;
+  -webkit-background-clip: border-box !important;
+  -webkit-text-fill-color: var(--snippet-fallback-color, #ccc) !important;
+  color: var(--snippet-fallback-color, #ccc) !important;
+  filter: none !important;
 }
 
 /* Direction toggle */

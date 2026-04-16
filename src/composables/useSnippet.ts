@@ -90,19 +90,25 @@ export function useSnippet() {
 
       // Only capture the selected region
       const html2Start = performance.now()
-      const cropCanvas = await html2canvas(containerEl, {
-        x:               Math.round(sel.x),
-        y:               Math.round(sel.y),
-        width:           Math.round(sel.w),
-        height:          Math.round(sel.h),
-        scrollX:         0,
-        scrollY:         0,
-        useCORS:         true,
-        allowTaint:      true,
-        logging:         false,
-        scale,
-        backgroundColor: '#0d0d10',
-      })
+      document.body.classList.add('snippet-capturing')
+      let cropCanvas: HTMLCanvasElement
+      try {
+        cropCanvas = await html2canvas(containerEl, {
+          x:               Math.round(sel.x),
+          y:               Math.round(sel.y),
+          width:           Math.round(sel.w),
+          height:          Math.round(sel.h),
+          scrollX:         0,
+          scrollY:         0,
+          useCORS:         true,
+          allowTaint:      true,
+          logging:         false,
+          scale,
+          backgroundColor: '#0d0d10',
+        })
+      } finally {
+        document.body.classList.remove('snippet-capturing')
+      }
       const html2Duration = performance.now() - html2Start
       console.log(`[Snippet] html2canvas render: ${html2Duration.toFixed(2)}ms`)
 
