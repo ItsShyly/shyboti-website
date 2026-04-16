@@ -20,76 +20,6 @@ let   suppressContextMenuUntil = 0
 let rafPending = false
 const SNIPPET_CAPTURE_DELAY_MS = 0
 
-type SnippetUserOverlay = {
-  text: string
-  x: number
-  y: number
-  color: string
-  fontSizePx: number
-  fontFamily: string
-  fontWeight: string
-}
-
-function snippetUsableColor(v: string | null | undefined): string {
-  const s = String(v ?? '').trim()
-  if (!s) return ''
-  const low = s.toLowerCase()
-  if (low === 'transparent' || low === 'rgba(0, 0, 0, 0)' || low === 'rgba(0,0,0,0)') return ''
-  if (low.includes('var(') || low.includes('gradient(')) return ''
-  const m = low.match(/rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([0-9]*\.?[0-9]+)\s*\)/)
-  if (m && Number(m[1]) <= 0.14) return ''
-  return s
-}
-
-function snippetToOpaque(v: string): string {
-  const s = v.trim()
-  const rgba = s.match(/^rgba\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*([0-9]*\.?[0-9]+)\s*\)$/i)
-  if (rgba) return `rgb(${rgba[1]}, ${rgba[2]}, ${rgba[3]})`
-  return s
-}
-
-function buildSnippetUserOverlays(users: HTMLElement[], selLeft: number, selTop: number): SnippetUserOverlay[] {
-  return users.map((el) => {
-    const rect = el.getBoundingClientRect()
-    const cs = getComputedStyle(el)
-    const rawColor =
-      cs.getPropertyValue('--snippet-paint-preview').trim() ||
-      cs.getPropertyValue('--snippet-fallback-color').trim() ||
-      el.getAttribute('data-snippet-paint') ||
-      cs.color ||
-      '#cccccc'
-    const usable = snippetUsableColor(rawColor)
-    const color = usable ? snippetToOpaque(usable) : '#cccccc'
-    const fontSizePx = Math.max(10, Number.parseFloat(cs.fontSize || '14') || 14)
-
-    return {
-      text: el.textContent?.trim() ?? '',
-      x: rect.left - selLeft,
-      // Baseline correction keeps canvas text vertically aligned with DOM text.
-      y: rect.top - selTop + fontSizePx * 0.82,
-      color,
-      fontSizePx,
-      fontFamily: cs.fontFamily || 'sans-serif',
-      fontWeight: cs.fontWeight || '700',
-    }
-  }).filter(o => !!o.text)
-}
-
-function paintSnippetUserOverlays(canvas: HTMLCanvasElement, overlays: SnippetUserOverlay[], scale: number) {
-  if (!overlays.length) return
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  ctx.save()
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'alphabetic'
-  for (const o of overlays) {
-    ctx.font = `${o.fontWeight} ${Math.round(o.fontSizePx * scale)}px ${o.fontFamily}`
-    ctx.fillStyle = o.color
-    ctx.fillText(o.text, o.x * scale, o.y * scale)
-  }
-  ctx.restore()
-}
-
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
   const start = Date.now()
   while (document.body.classList.contains('logs-jobs-running') && Date.now() - start < timeoutMs) {
@@ -186,18 +116,6 @@ export function useSnippet() {
       await new Promise<void>((resolve) => setTimeout(resolve, SNIPPET_CAPTURE_DELAY_MS))
     }
 
-    const panel = containerEl.getBoundingClientRect()
-    const selLeft = panel.left + sel.x - containerEl.scrollLeft
-    const selTop = panel.top + sel.y - containerEl.scrollTop
-    const selRight = selLeft + sel.w
-    const selBottom = selTop + sel.h
-    const usersForOverlay = Array.from(containerEl.querySelectorAll('.log-user')) as HTMLElement[]
-    const overlayUsers = usersForOverlay.filter((el) => {
-      const r = el.getBoundingClientRect()
-      return r.right > selLeft && r.left < selRight && r.bottom > selTop && r.top < selBottom
-    })
-    const overlays = buildSnippetUserOverlays(overlayUsers, selLeft, selTop)
-
     if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
     screenshotToast.value = { state: 'uploading', url: null, imgReady: false }
 
@@ -225,60 +143,14 @@ export function useSnippet() {
           scrollY:         0,
           useCORS:         true,
           allowTaint:      true,
+          foreignObjectRendering: true,
           logging:         false,
           scale,
           backgroundColor: '#0d0d10',
-          onclone: (doc: Document) => {
-            const users = doc.querySelectorAll('.log-user') as NodeListOf<HTMLElement>
-            let colorUsed = 0
-            let hardFallbackUsed = 0
-
-            users.forEach((el: HTMLElement) => {
-              const cs = getComputedStyle(el)
-              const raw =
-                cs.getPropertyValue('--snippet-paint-preview').trim() ||
-                cs.getPropertyValue('--snippet-fallback-color').trim() ||
-                el.getAttribute('data-snippet-paint') ||
-                cs.color ||
-                ''
-              const validated = snippetUsableColor(raw)
-              let textColor: string
-              if (validated) {
-                textColor = snippetToOpaque(validated)
-                colorUsed += 1
-              } else {
-                textColor = '#cccccc'
-                hardFallbackUsed += 1
-              }
-
-              // Completely replace inline styles to eliminate Vue-bound
-              // paint properties (background-image, color:transparent, etc.)
-              el.style.cssText = [
-                `color: ${textColor}`,
-                `-webkit-text-fill-color: ${textColor}`,
-                `background: none`,
-                `-webkit-background-clip: border-box`,
-                `background-clip: border-box`,
-                `filter: none`,
-                `font-weight: 700`,
-              ].join(' !important; ') + ' !important;'
-            })
-            console.log('[Snippet] Clone paint mapping', {
-              total: users.length,
-              colorUsed,
-              hardFallbackUsed,
-              sampleColors: Array.from(users).slice(0, 3).map(el => ({
-                text: el.textContent?.trim()?.slice(0, 20),
-                attr: el.getAttribute('data-snippet-paint'),
-                final: el.style.color,
-              })),
-            })
-          },
         })
       } finally {
         document.body.classList.remove('snippet-capturing')
       }
-      paintSnippetUserOverlays(cropCanvas, overlays, scale)
       const html2Duration = performance.now() - html2Start
       console.log(`[Snippet] html2canvas render: ${html2Duration.toFixed(2)}ms`)
 
