@@ -615,6 +615,7 @@ function shareMsg(m: LogMsg) {
 }
 
 onMounted(async () => {
+  document.body.classList.add('logs-open')
   // Warm logo decode once so the floating indicator appears instantly.
   const preload = new Image()
   preload.src = loadingOverlayLogoUrl
