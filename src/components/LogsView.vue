@@ -604,6 +604,29 @@ function renderMsg(text: string): string {
   }).join(' ')
 }
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function formatDisplayedMsg(m: LogMsg): string {
+  const text = m.text ?? ''
+  if (!m.tags?.['reply-parent-msg-id']) return text
+
+  const candidates = [
+    m.tags['reply-parent-display-name'],
+    m.tags['reply-parent-user-login'],
+  ].filter((x): x is string => !!x && !!x.trim())
+
+  for (const raw of candidates) {
+    const name = raw.trim().replace(/^@/, '')
+    if (!name) continue
+    const rx = new RegExp(`^\\s*@?${escapeRegExp(name)}[:;,]?\\s+`, 'i')
+    if (rx.test(text)) return text.replace(rx, '')
+  }
+
+  return text
+}
+
 function esc(s: string) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
@@ -915,11 +938,11 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                     :title="item.msg.tags?.['reply-parent-msg-id'] ? 'Jump to replied message' : undefined"
                     @click.stop="jumpToReplyParent(item.msg)"
                   >
-                    <span class="reply-icon">↩</span>
-                    <span class="reply-parent-user">@{{ item.msg.tags['reply-parent-display-name'] || item.msg.tags['reply-parent-user-login'] || '?' }}</span>
+                    <span class="reply-icon">⮣</span>
+                    <span class="reply-parent-user">@{{ item.msg.tags['reply-parent-display-name'] || item.msg.tags['reply-parent-user-login'] || '?' }}:</span>
                     <span class="reply-parent-body">{{ item.msg.tags['reply-parent-msg-body'] }}</span>
                   </div>
-                  <div class="log-msg" v-html="renderMsg(item.msg.text)"></div>
+                  <div class="log-msg" v-html="renderMsg(formatDisplayedMsg(item.msg))"></div>
                 </div>
                 <div class="log-share" @click="shareMsg(item.msg)" title="Copy link">
                   <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
