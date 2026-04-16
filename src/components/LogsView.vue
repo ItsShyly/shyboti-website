@@ -22,6 +22,7 @@ interface BadgeChip {
   title?: string
 }
 interface TwitchBadgeAsset { imageUrl: string; title: string }
+interface SevenTvBadgeAsset { imageUrl: string; title: string }
   
 // Input refs - read directly from DOM, not tracked by Vue reactivity.
 // This prevents any re-render on every keystroke.
@@ -66,6 +67,7 @@ const error       = ref('')
 const searched    = ref(false)
 const emoteMap    = ref<EmoteMap>({})
 const twitchBadgeMap = ref<Map<string, TwitchBadgeAsset>>(new Map())
+const sevenTvBadgeMap = ref<Map<string, SevenTvBadgeAsset>>(new Map())
 const bodyRef     = ref<HTMLDivElement | null>(null)
 const highlightId = ref<string | null>(null)
 const copyToast     = ref(false)
@@ -700,8 +702,9 @@ function buildBadgeChips(m: LogMsg): BadgeChip[] {
       title: asset?.title ?? `${setId} ${version}`,
     })
   }
-  if (sevenTvBadgeUsers.value.has((m.username ?? '').toLowerCase())) {
-    out.push({ key: '7tv', label: '7TV', kind: 'seventv' })
+  const sev = sevenTvBadgeMap.value.get((m.username ?? '').toLowerCase())
+  if (sev?.imageUrl) {
+    out.push({ key: '7tv', label: '7TV', kind: 'seventv', imageUrl: sev.imageUrl, title: sev.title })
   }
   return out
 }
@@ -722,10 +725,9 @@ function esc(s: string) {
 
 // >>> 7TV paint: fetched via backend /twitch/user which resolves Twitch ID → 7TV
 // >>> Keyed by lowercase username. null = no paint, undefined = not fetched yet.
-const paintCache  = new Map<string, { stops: any[]; shadows: any[]; imageUrl: string | null; color?: number | null; angle?: number | null } | null>()
+const paintCache  = new Map<string, { stops: any[]; shadows: any[]; imageUrl: string | null; color?: number | null; angle?: number | null; function?: string | null; repeat?: boolean } | null>()
 const paintStyles = ref<Map<string, Record<string, string>>>(new Map())
 const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map())
-const sevenTvBadgeUsers = ref<Set<string>>(new Set())
 
 function intToRgba(c: number): string {
   const r = (c >>> 24) & 0xff
@@ -735,7 +737,7 @@ function intToRgba(c: number): string {
   return `rgba(${r},${g},${b},${a.toFixed(3)})`
 }
 
-function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[]; color?: number | null; angle?: number | null }, fallbackColor?: string): Record<string, string> {
+function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[]; color?: number | null; angle?: number | null; function?: string | null; repeat?: boolean }, fallbackColor?: string): Record<string, string> {
   const styles: Record<string, string> = {}
   const stopsArr = Array.isArray(paint.stops) ? paint.stops : []
   const firstStopColor = stopsArr[0]?.color ?? 0
@@ -748,17 +750,23 @@ function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; 
   if (normStops.length >= 2) {
     const stops = normStops.map(s => `${intToRgba(s.color)} ${Math.round((s.at ?? 0) * 100)}%`).join(', ')
     const angle = Number.isFinite(paint.angle as number) ? Number(paint.angle) : 90
-    styles['background'] = `linear-gradient(${angle}deg, ${stops})`
+    const fn = paint.repeat ? 'repeating-linear-gradient' : 'linear-gradient'
+    styles['backgroundImage'] = `${fn}(${angle}deg, ${stops})`
     styles['backgroundClip'] = 'text'
     styles['WebkitBackgroundClip'] = 'text'
     styles['color'] = 'transparent'
     styles['WebkitTextFillColor'] = 'transparent'
+    styles['lineHeight'] = '1.1rem'
   } else if (paint.imageUrl) {
-    styles['background'] = `url(${paint.imageUrl}) center/cover`
+    styles['backgroundImage'] = `url(${paint.imageUrl})`
+    styles['backgroundSize'] = 'cover'
+    styles['backgroundPosition'] = 'center center'
+    if (paint.color !== null && paint.color !== undefined) styles['backgroundColor'] = intToRgba(paint.color)
     styles['backgroundClip'] = 'text'
     styles['WebkitBackgroundClip'] = 'text'
     styles['color'] = 'transparent'
     styles['WebkitTextFillColor'] = 'transparent'
+    styles['lineHeight'] = '1.1rem'
   } else if (paint.color !== null && paint.color !== undefined) {
     styles['color'] = intToRgba(paint.color)
   } else if (fallbackColor) {
@@ -784,7 +792,11 @@ async function ensurePaint(username: string) {
     if (!res.ok) return
     const data = await res.json() as {
       paint?: any
-      sevenTv?: { hasAccount?: boolean; hasPersonalSet?: boolean }
+      sevenTv?: {
+        hasAccount?: boolean
+        hasPersonalSet?: boolean
+        badge?: { id?: string; url?: string; tooltip?: string | null }
+      }
       personalEmotes?: Array<{ id: string; name: string; url: string }>
       twitchUserEmotes?: Array<{ id: string; name: string; url: string }>
     }
@@ -794,10 +806,14 @@ async function ensurePaint(username: string) {
       newMap.set(key, buildPaintStyle(data.paint, userColorByName(key)))
       paintStyles.value = newMap
     }
-    if (data.sevenTv?.hasAccount || data.sevenTv?.hasPersonalSet) {
-      const next = new Set(sevenTvBadgeUsers.value)
-      next.add(key)
-      sevenTvBadgeUsers.value = next
+    const sevBadgeUrl = String(data.sevenTv?.badge?.url ?? '').trim()
+    if (sevBadgeUrl) {
+      const next = new Map(sevenTvBadgeMap.value)
+      next.set(key, {
+        imageUrl: sevBadgeUrl,
+        title: String(data.sevenTv?.badge?.tooltip ?? '7TV Badge'),
+      })
+      sevenTvBadgeMap.value = next
     }
     const hasSevenTvPersonal = Array.isArray(data.personalEmotes) && data.personalEmotes.length > 0
     const hasTwitchUser = Array.isArray(data.twitchUserEmotes) && data.twitchUserEmotes.length > 0
@@ -836,7 +852,7 @@ interface TwitchUser {
   subbedSince: string | null
   subTier:     string | null
   nameHistory: { name: string; lastSeen: string }[]
-  paint: { id: string; name: string; imageUrl: string | null; shadows: any[]; stops: any[]; color?: number | null; angle?: number | null } | null
+  paint: { id: string; name: string; imageUrl: string | null; shadows: any[]; stops: any[]; color?: number | null; angle?: number | null; function?: string | null; repeat?: boolean } | null
   botInChannel: boolean
 }
 const popup        = ref<{ username: string; channel: string; x: number; y: number } | null>(null)
@@ -894,7 +910,7 @@ function fmtDuration(iso: string): string {
 function subTierLabel(tier: string): string {
   return tier === '3000' ? 'Tier 3' : tier === '2000' ? 'Tier 2' : 'Tier 1'
 }
-function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[]; color?: number | null; angle?: number | null }): Record<string, string> {
+function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[]; color?: number | null; angle?: number | null; function?: string | null; repeat?: boolean }): Record<string, string> {
   return buildPaintStyle(paint)
 }
 </script>
@@ -1054,22 +1070,20 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                 <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
                 <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
                 <div v-if="buildBadgeChips(item.msg).length" class="log-badges">
-                  <span
+                  <template
                     v-for="b in buildBadgeChips(item.msg)"
                     :key="`${item.msg.id}-${b.kind}-${b.key}`"
-                    class="badge-chip"
-                    :class="[`badge-${b.kind}`, `badge-${b.key}`]"
-                    :title="b.title || b.label"
                   >
                     <img
-                      v-if="b.kind === 'twitch' && b.imageUrl"
+                      v-if="b.imageUrl"
                       class="badge-img"
                       :src="b.imageUrl"
                       :alt="b.title || b.label"
+                      :title="b.title || b.label"
                       loading="lazy"
                     />
-                    <template v-else>{{ b.label }}</template>
-                  </span>
+                    <span v-else class="badge-fallback" :title="b.title || b.label">{{ b.label }}</span>
+                  </template>
                 </div>
                 <div
                   class="log-user"
@@ -1275,6 +1289,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .log-time-short { display: none; }
 .log-day-sep    { display: none; }
 .log-badges { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; flex-shrink: 0; }
+.badge-img { display: block; width: 18px; height: 18px; }
+.badge-fallback { font-size: 10px; color: #888; }
 .badge-chip {
   display: inline-flex; align-items: center;
   height: 15px; padding: 0 5px;
@@ -1282,9 +1298,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   border-radius: 3px; border: 1px solid transparent;
   line-height: 1;
 }
-.badge-img { display: block; width: 15px; height: 15px; }
-.badge-twitch { background: #1e2430; border-color: #2d3546; color: #c4cfdd; }
-.badge-seventv { background: #183124; border-color: #28593e; color: #9ff0c0; }
 .badge-marker { background: #3a2d16; border-color: #5f4a22; color: #f2ce7d; }
 .log-user { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
 .log-user::after { content: ':'; color: #555; margin-right: 5px; }
