@@ -861,7 +861,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                   :class="{ 'log-user-clickable': true }"
                   @click.stop="openUserPopup(item.msg.username, channel || item.msg.channel?.replace('#',''), $event)"
                 >{{ item.msg.displayName || item.msg.username }}</div>
-                <div class="log-msg-wrap">
+                <div class="log-msg-wrap" :class="{ 'has-reply': !!item.msg.tags?.['reply-parent-msg-body'] }">
                   <div v-if="item.msg.tags?.['reply-parent-msg-body']" class="reply-context">
                     <span class="reply-icon">↩</span>
                     <span class="reply-parent-user">@{{ item.msg.tags['reply-parent-display-name'] || item.msg.tags['reply-parent-user-login'] || '?' }}</span>
@@ -1047,11 +1047,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .log-day-sep    { display: none; }
 .log-user { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
 .log-user::after { content: ':'; color: #555; margin-right: 5px; }
-.log-msg-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.log-msg-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+.log-msg-wrap.has-reply { padding-top: 12px; }
 .log-msg  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
 
 /* Reply thread indicator */
 .reply-context {
+  position: absolute; left: 0; right: 0; top: 0;
   display: flex; align-items: center; gap: 4px;
   font-size: 10px; color: #555; padding: 0 0 1px;
   white-space: nowrap; overflow: hidden;
