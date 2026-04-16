@@ -860,7 +860,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           </div>
           <div class="popup-relations">
             <div v-if="!popupUser.botInChannel" class="popup-no-bot">
-              ShyBoti not in #{{ popup?.channel }} — follow/sub info unavailable
+              ShyBoti not in #{{ popup?.channel }} - follow/sub info unavailable
             </div>
             <template v-else>
             <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">

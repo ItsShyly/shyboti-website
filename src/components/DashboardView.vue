@@ -218,7 +218,7 @@ function goToAutomations(e: ActivityEntry) {
   router.push({ path: '/automations', query: { tab } })
 }
 
-// >>> Open user popup — works for any entry with a target username
+// >>> Open user popup - works for any entry with a target username
 function openUserPopup(username: string, channel: string, evt: MouseEvent) {
   evt.stopPropagation()
   const fakeEntry = { channel } as ActivityEntry

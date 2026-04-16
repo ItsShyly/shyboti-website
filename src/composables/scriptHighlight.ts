@@ -44,7 +44,7 @@ export function highlightScript(src: string, ifLevel = 0): string {
   let out = '', i = 0
 
   while (i < src.length) {
-    // Newline — preserve as-is
+    // Newline - preserve as-is
     if (src[i] === '\n') { out += '\n'; i++; continue }
 
     // Quoted string
@@ -93,10 +93,10 @@ export function highlightScript(src: string, ifLevel = 0): string {
       const afterCond = src.slice(condEnd + 1)
       const braceMatch = afterCond.match(/^\s*\{/)
 
-      // — $if keyword (no background, just color)
+      // - $if keyword (no background, just color)
       out += `<span class="sh-if-kw" style="color:${col.kw}">$if</span>`
 
-      // — condition slot: ( ... )
+      // - condition slot: ( ... )
       const condTrimmed = condSrc.trim()
       const condValid   = isValidCondition(condSrc)
       let condClass = ''
@@ -123,7 +123,7 @@ export function highlightScript(src: string, ifLevel = 0): string {
         if (gapText.trim() === '' && gapText.length > 0) out += gapText
 
         if (bodyEnd === -1) {
-          // Unclosed brace — emit body open, recurse, leave open
+          // Unclosed brace - emit body open, recurse, leave open
           const body = src.slice(braceStart + 1)
           const bodyTrimmed = body.trim()
           out += `<span class="sh-if-body${bodyTrimmed === '' ? ' sh-if-body-empty' : ''}" style="color:${col.body}">`
@@ -144,7 +144,7 @@ export function highlightScript(src: string, ifLevel = 0): string {
         i = bodyEnd + 1
 
       } else {
-        // Legacy $end syntax — kept for backward compat with old saved commands
+        // Legacy $end syntax - kept for backward compat with old saved commands
         const endRel = afterCond.indexOf('$end')
         if (endRel === -1) {
           i = condEnd + 1
@@ -159,7 +159,7 @@ export function highlightScript(src: string, ifLevel = 0): string {
           out += highlightScript(body, ifLevel + 1)
           out += `<span class="sh-if-paren sh-end-compat" style="color:${col.kw}">}</span>`
           out += `</span>`
-          out += `<span class="sh-end-legacy" title="Legacy syntax — consider updating to $if(...){ }">` +
+          out += `<span class="sh-end-legacy" title="Legacy syntax - consider updating to $if(...){ }">` +
                  `<span class="sh-kw sh-end" style="opacity:0.35;font-size:0.85em">$end</span>` +
                  `</span>`
           i = bodyEnd + 4
@@ -168,13 +168,13 @@ export function highlightScript(src: string, ifLevel = 0): string {
       continue
     }
 
-    // $else — simple keyword, no background
+    // $else - simple keyword, no background
     if (src.startsWith('$else', i) && !/\w/.test(src[i+5] ?? '')) {
       out += `<span class="sh-if-kw" style="color:#569cd6">$else</span>`
       i += 5; continue
     }
 
-    // $end — legacy, show faded/small
+    // $end - legacy, show faded/small
     if (src.startsWith('$end', i) && !/\w/.test(src[i+4] ?? '')) {
       out += `<span class="sh-end-legacy"><span class="sh-kw sh-end" style="opacity:0.35;font-size:0.85em">$end</span></span>`
       i += 4; continue

@@ -1265,7 +1265,7 @@ function removeArgVariant(i: number) {
   white-space: pre;
 }
 
-/* Validation badge — sits below the editor, inside editor-container */
+/* Validation badge - sits below the editor, inside editor-container */
 .validation-badge {
   display: flex;
   flex-wrap: wrap;
@@ -1344,19 +1344,19 @@ function removeArgVariant(i: number) {
 <style>
 /* ── $if coloring ─────────────────────────────────────────────────────────── */
 
-/* $if keyword — just color, no background */
+/* $if keyword - just color, no background */
 .sh-if-kw { font-weight: 600; }
 
-/* condition ( ... ) — subtle dashed underline shows it's a fillable slot */
+/* condition ( ... ) - subtle dashed underline shows it's a fillable slot */
 .sh-if-cond { }
 .sh-if-cond-empty   { background: rgba(126,200,227,.10); border-radius: 2px; outline: 1px dashed rgba(126,200,227,.4); }
 .sh-if-cond-invalid { background: rgba(249,168,77,.08);  border-radius: 2px; outline: 1px dashed rgba(249,168,77,.4);  }
 
-/* body { ... } — very faint tint to indicate it's a container */
+/* body { ... } - very faint tint to indicate it's a container */
 .sh-if-body { }
 .sh-if-body-empty { background: rgba(78,201,176,.06); border-radius: 2px; outline: 1px dashed rgba(78,201,176,.3); }
 
-/* parens/braces that belong to $if — inherit keyword color, bold */
+/* parens/braces that belong to $if - inherit keyword color, bold */
 .sh-if-paren { font-weight: 600; }
 
 /* ── Standard token colors ────────────────────────────────────────────────── */
