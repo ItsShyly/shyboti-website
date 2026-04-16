@@ -110,17 +110,21 @@ export function useSnippet() {
           onclone: (doc: Document) => {
             const users = doc.querySelectorAll('.log-user') as NodeListOf<HTMLElement>
             users.forEach((el: HTMLElement) => {
+              const preview =
+                el.style.getPropertyValue('--snippet-paint-preview') ||
+                getComputedStyle(el).getPropertyValue('--snippet-paint-preview')
               const fallback =
                 el.style.getPropertyValue('--snippet-fallback-color') ||
                 getComputedStyle(el).getPropertyValue('--snippet-fallback-color') ||
                 getComputedStyle(el).color ||
                 '#cccccc'
+              const textColor = (preview || fallback).trim() || '#cccccc'
               el.style.backgroundImage = 'none'
               el.style.backgroundColor = 'transparent'
               el.style.backgroundClip = 'border-box'
               ;(el.style as any).webkitBackgroundClip = 'border-box'
-              el.style.color = fallback.trim() || '#cccccc'
-              ;(el.style as any).webkitTextFillColor = fallback.trim() || '#cccccc'
+              el.style.color = textColor
+              ;(el.style as any).webkitTextFillColor = textColor
               el.style.filter = 'none'
               el.style.textShadow = 'none'
             })

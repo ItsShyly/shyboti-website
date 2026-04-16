@@ -772,7 +772,7 @@ function userNameStyle(m: LogMsg): Record<string, string> {
   const painted = paintStyles.value.get(m.username?.toLowerCase() ?? '')
   return painted
     ? { ...painted, '--snippet-fallback-color': fallback }
-    : { color: fallback, '--snippet-fallback-color': fallback }
+    : { color: fallback, '--snippet-fallback-color': fallback, '--snippet-paint-preview': fallback }
 }
 
 function isModerationSystemMessage(m: LogMsg): boolean {
@@ -882,6 +882,7 @@ function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; 
     const stops = normStops.map(s => `${intToRgba(s.color)} ${Math.round((s.at ?? 0) * 100)}%`).join(', ')
     const angle = Number.isFinite(paint.angle as number) ? Number(paint.angle) : 90
     const fn = paint.repeat ? 'repeating-linear-gradient' : 'linear-gradient'
+    styles['--snippet-paint-preview'] = intToRgba(normStops[0]!.color)
     styles['backgroundImage'] = `${fn}(${angle}deg, ${stops})`
     styles['backgroundClip'] = 'text'
     styles['WebkitBackgroundClip'] = 'text'
@@ -889,6 +890,11 @@ function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; 
     styles['WebkitTextFillColor'] = 'transparent'
     styles['lineHeight'] = '1.1rem'
   } else if (paint.imageUrl) {
+    if (paint.color !== null && paint.color !== undefined) {
+      styles['--snippet-paint-preview'] = intToRgba(paint.color)
+    } else if (fallbackColor) {
+      styles['--snippet-paint-preview'] = fallbackColor
+    }
     styles['backgroundImage'] = `url(${paint.imageUrl})`
     styles['backgroundSize'] = 'cover'
     styles['backgroundPosition'] = 'center center'
@@ -899,9 +905,11 @@ function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; 
     styles['WebkitTextFillColor'] = 'transparent'
     styles['lineHeight'] = '1.1rem'
   } else if (paint.color !== null && paint.color !== undefined) {
+    styles['--snippet-paint-preview'] = intToRgba(paint.color)
     styles['color'] = intToRgba(paint.color)
   } else if (fallbackColor) {
     // Some 7TV paints are glow-only and provide no fill stops/color.
+    styles['--snippet-paint-preview'] = fallbackColor
     styles['color'] = fallbackColor
   }
   if (paint.shadows?.length) {
@@ -1638,8 +1646,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   background-color: transparent !important;
   background-clip: border-box !important;
   -webkit-background-clip: border-box !important;
-  -webkit-text-fill-color: var(--snippet-fallback-color, #ccc) !important;
-  color: var(--snippet-fallback-color, #ccc) !important;
+  -webkit-text-fill-color: var(--snippet-paint-preview, var(--snippet-fallback-color, #ccc)) !important;
+  color: var(--snippet-paint-preview, var(--snippet-fallback-color, #ccc)) !important;
   filter: none !important;
 }
 
