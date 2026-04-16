@@ -446,7 +446,7 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
 .btn-new-disabled { opacity: .35; cursor: not-allowed; }
 .btn-action-disabled { opacity: .35; cursor: not-allowed; }
 
-.toast { padding: 8px 14px; font-size: 12px; margin-bottom: 4px; }
+.toast { padding: 10px 18px; font-size: 15px; margin-bottom: 4px; }
 .toast.success { background: rgba(35,209,139,.1); border: 1px solid rgba(35,209,139,.3); color: #23d18b; }
 .toast.error   { background: rgba(241,73,73,.1);  border: 1px solid rgba(241,73,73,.3);  color: #f14949; }
 .empty { color: #444; font-size: 13px; padding: 40px; text-align: center; }

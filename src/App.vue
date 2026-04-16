@@ -515,7 +515,6 @@ provide('searchOpenTrigger', searchOpenTrigger)
         </footer>
       </main>
     </div>
-    <span v-if="session" class="logged-in-float">#{{ session.channel }}</span>
     <span v-if="toast" class="toast toast-float">{{ toast }}</span>
   </div>
 </template>
@@ -595,7 +594,6 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .channel-menu-item.active { color: #9d6cff; font-weight: 700; }
 
 .toast { font-size: 11px; color: #23d18b; background: #0e2a1e; border: 1px solid #23d18b44; padding: 4px 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.toast-float { position: fixed; bottom: 68px; right: 10px; z-index: 61; }
 .toast-float { position: fixed; bottom: 68px; right: 10px; z-index: 61; }
 .auth-btn { height: 34px; padding: 0 14px; border: none; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
 .login-btn { background: #6f2bff; color: #fff; }
