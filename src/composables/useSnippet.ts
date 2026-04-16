@@ -113,44 +113,30 @@ export function useSnippet() {
         console.log(`[Snippet] toBlob creation: ${blobDuration.toFixed(2)}ms, size: ${(blob.size / 1024).toFixed(2)}KB`)
 
         try {
-          // >>> Request cryptographic hash from server
-          const hashStart = performance.now()
-          const hashRes = await fetch(`${API}/images/snippet-hash?size=${blob.size}&width=${cropCanvas.width}&height=${cropCanvas.height}&mime=image/webp`)
-          if (!hashRes.ok) { screenshotToast.value = null; return }
-          const hashData = await hashRes.json() as { hash: string }
-          const hashDuration = performance.now() - hashStart
-          console.log(`[Snippet] Hash request: ${hashDuration.toFixed(2)}ms`)
-
           const fd = new FormData()
           fd.append('file', new File([blob], 'snippet.webp', { type: 'image/webp' }))
           fd.append('width', String(cropCanvas.width))
           fd.append('height', String(cropCanvas.height))
-          const headers: Record<string, string> = {
-            'X-Snippet-Hash': hashData.hash // >>> Cryptographic proof it's a legitimate screenshot
-          }
+          const headers: Record<string, string> = {}
           if (session.value) headers['Authorization'] = `Bearer ${session.value.token}`
-          try {
-            const uploadStart = performance.now()
-            const res = await fetch(`${API}/images/upload`, { method: 'POST', headers, body: fd })
-            const uploadDuration = performance.now() - uploadStart
-            
-            if (!res.ok) { screenshotToast.value = null; return }
-            const data = await res.json() as { id: string }
-            const url = `https://i.shyboti.de/${data.id}`
-            const totalDuration = performance.now() - totalStart
-            
-            console.log(`[Snippet] Upload: ${uploadDuration.toFixed(2)}ms`)
-            console.log(`[Snippet] Total time: ${totalDuration.toFixed(2)}ms (render: ${html2Duration.toFixed(2)}ms, blob: ${blobDuration.toFixed(2)}ms, hash: ${hashDuration.toFixed(2)}ms, upload: ${uploadDuration.toFixed(2)}ms)`)
-            
-            await navigator.clipboard.writeText(url).catch(() => {})
-            screenshotToast.value = { state: 'copied', url, imgReady: false }
-          } catch (err) { 
-            console.error('[Snippet] Upload error:', err)
-            screenshotToast.value = null 
-          }
-        } catch (err) {
-          console.error('[Snippet] Hash request failed:', err)
-          screenshotToast.value = null
+          
+          const uploadStart = performance.now()
+          const res = await fetch(`${API}/images/upload`, { method: 'POST', headers, body: fd })
+          const uploadDuration = performance.now() - uploadStart
+          
+          if (!res.ok) { screenshotToast.value = null; return }
+          const data = await res.json() as { id: string }
+          const url = `https://i.shyboti.de/${data.id}`
+          const totalDuration = performance.now() - totalStart
+          
+          console.log(`[Snippet] Upload: ${uploadDuration.toFixed(2)}ms`)
+          console.log(`[Snippet] Total time: ${totalDuration.toFixed(2)}ms (render: ${html2Duration.toFixed(2)}ms, blob: ${blobDuration.toFixed(2)}ms, upload: ${uploadDuration.toFixed(2)}ms)`)
+          
+          await navigator.clipboard.writeText(url).catch(() => {})
+          screenshotToast.value = { state: 'copied', url, imgReady: false }
+        } catch (err) { 
+          console.error('[Snippet] Upload error:', err)
+          screenshotToast.value = null 
         }
       }, 'image/webp', 0.92)
     } catch (err) {
