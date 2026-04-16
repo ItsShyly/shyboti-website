@@ -1331,8 +1331,31 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                 <div
                   class="log-msg-wrap"
                   :class="{ 'has-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'is-system-mod': isModerationSystemMessage(item.msg) }"
-                  :data-mobile-user="isModerationSystemMessage(item.msg) ? '' : (item.msg.displayName || item.msg.username)"
                 >
+                  <div v-if="!isModerationSystemMessage(item.msg)" class="log-mobile-msgline">
+                    <span v-if="buildBadgeChips(item.msg).length" class="log-mobile-badges">
+                      <template
+                        v-for="b in buildBadgeChips(item.msg)"
+                        :key="`mob-${item.msg.id}-${b.kind}-${b.key}`"
+                      >
+                        <img
+                          v-if="b.imageUrl"
+                          class="badge-img"
+                          :src="b.imageUrl"
+                          :alt="b.title || b.label"
+                          :title="b.title || b.label"
+                          loading="lazy"
+                        />
+                        <span v-else class="badge-fallback" :title="b.title || b.label">{{ b.label }}</span>
+                      </template>
+                    </span>
+                    <span
+                      class="log-mobile-user"
+                      :data-snippet-paint="snippetPaintPreview(item.msg)"
+                      :style="userNameStyle(item.msg)"
+                    >{{ item.msg.displayName || item.msg.username }}</span><span class="log-mobile-user-colon">:</span>
+                    <span class="log-mobile-msg" v-html="renderMsgForMessage(item.msg)"></span>
+                  </div>
                   <div
                     v-if="item.msg.tags?.['reply-parent-msg-body']"
                     class="reply-context"
@@ -1563,6 +1586,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .log-user::after { content: ':'; color: #555; margin-right: 5px; }
 .log-msg-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .log-msg-wrap.has-reply { padding-top: 16px; }
+.log-mobile-msgline { display: none; }
 .log-msg-wrap.is-system-mod .log-msg {
   color: #d0a7a7;
   font-style: italic;
@@ -1725,6 +1749,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     height: calc(100vh - 52px);
     overflow: hidden;
     gap: 0;
+    margin: -30px;
+    padding: 30px;
   }
   .logs-header { padding: 10px 14px 6px; flex-shrink: 0; }
   .logs-title  { font-size: 15px; margin-bottom: 2px; }
@@ -1786,12 +1812,14 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .log-badges { display: none; }
   .log-user  { display: none; }
   .log-msg-wrap { flex: 1; min-width: 0; display: block; }
-  .log-msg-wrap:not(.is-system-mod)::before {
-    content: attr(data-mobile-user) ': ';
-    color: #cfcfcf;
-    font-weight: 600;
-  }
-  .log-msg { display: inline; font-size: 12px; min-width: 0; word-break: break-word; }
+  .log-msg-wrap:not(.is-system-mod) > .log-msg { display: none; }
+  .log-mobile-msgline { display: block; font-size: 12px; color: #ccc; line-height: 1.6; word-break: break-word; }
+  .log-mobile-badges { display: inline-flex; align-items: center; gap: 3px; margin-right: 4px; vertical-align: middle; }
+  .log-mobile-badges .badge-img { width: 16px; height: 16px; }
+  .log-mobile-user { font-weight: 600; vertical-align: baseline; }
+  .log-mobile-user-colon { color: #555; margin-right: 5px; }
+  .log-mobile-msg { display: inline; }
+  .log-msg { font-size: 12px; min-width: 0; word-break: break-word; }
   .log-share { flex-shrink: 0; opacity: 0.5 !important; }
 }
 </style>
