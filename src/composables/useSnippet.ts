@@ -16,14 +16,18 @@ export interface SnippetToast {
 const screenshotToast = ref<SnippetToast | null>(null)
 let   screenshotDismissTimer: ReturnType<typeof setTimeout> | null = null
 let   suppressContextMenuUntil = 0
+let   activeUploadController: AbortController | null = null
+let   activeSnippetRunId = 0
 
 // rAF throttle flag – one pending frame max
 let rafPending = false
 const SNIPPET_CAPTURE_DELAY_MS = 0
 const SNIPPET_DEBUG = true
-const SNIPPET_MAX_RENDER_PIXELS = 2_400_000
-const SNIPPET_MIN_PIXEL_RATIO = 0.65
-const SNIPPET_LOG_VERSION = 'snippet-calib-v6'
+const SNIPPET_MAX_RENDER_PIXELS = 3_800_000
+const SNIPPET_MIN_PIXEL_RATIO = 0.85
+const SNIPPET_QUALITY_BOOST = 1.15
+const SNIPPET_OUTPUT_QUALITY = 0.96
+const SNIPPET_LOG_VERSION = 'snippet-calib-v7'
 
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
   const start = Date.now()
@@ -36,7 +40,8 @@ function computeSnippetPixelRatio(selW: number, selH: number): number {
   const dpr = window.devicePixelRatio || 1
   const area = Math.max(1, selW * selH)
   const cap = Math.sqrt(SNIPPET_MAX_RENDER_PIXELS / area)
-  const ratio = Math.max(SNIPPET_MIN_PIXEL_RATIO, Math.min(dpr, cap))
+  const boosted = dpr * SNIPPET_QUALITY_BOOST
+  const ratio = Math.max(SNIPPET_MIN_PIXEL_RATIO, Math.min(boosted, cap))
   return Number(ratio.toFixed(2))
 }
 
@@ -115,6 +120,14 @@ export function useSnippet() {
 
     // Suppress the native context menu that fires on mouseup after a drag
     suppressContextMenuUntil = Date.now() + 500
+
+    // Same-session behavior: cancel any in-flight upload if a new snippet starts.
+    activeSnippetRunId += 1
+    const runId = activeSnippetRunId
+    if (activeUploadController) {
+      activeUploadController.abort()
+      activeUploadController = null
+    }
 
     // Capture the inner scroller so we can force-expand it to full content height.
     // html-to-image clones the DOM but resets scroll positions to 0, so we must
@@ -302,8 +315,10 @@ export function useSnippet() {
       cropCanvas.toBlob(async (blob: Blob | null) => {
         const blobTime = performance.now()
         if (!blob) { screenshotToast.value = null; return }
+        if (runId !== activeSnippetRunId) return
         const blobDuration = blobTime - renderStart - renderDuration
         console.log(`[Snippet] toBlob creation: ${blobDuration.toFixed(2)}ms, size: ${(blob.size / 1024).toFixed(2)}KB`)
+        let uploadController: AbortController | null = null
 
         try {
           const fd = new FormData()
@@ -312,10 +327,20 @@ export function useSnippet() {
           fd.append('height', String(cropCanvas.height))
           const headers: Record<string, string> = {}
           if (session.value) headers['Authorization'] = `Bearer ${session.value.token}`
+
+          uploadController = new AbortController()
+          activeUploadController = uploadController
           
           const uploadStart = performance.now()
-          const res = await fetch(`${API}/images/upload`, { method: 'POST', headers, body: fd })
+          const res = await fetch(`${API}/images/upload`, {
+            method: 'POST',
+            headers,
+            body: fd,
+            signal: uploadController.signal,
+          })
           const uploadDuration = performance.now() - uploadStart
+
+          if (runId !== activeSnippetRunId) return
           
           if (!res.ok) { screenshotToast.value = null; return }
           const data = await res.json() as { id: string }
@@ -327,11 +352,19 @@ export function useSnippet() {
           
           await navigator.clipboard.writeText(url).catch(() => {})
           screenshotToast.value = { state: 'copied', url, imgReady: false }
-        } catch (err) { 
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            console.log('[Snippet] Upload aborted by newer capture')
+            return
+          }
           console.error('[Snippet] Upload error:', err)
           screenshotToast.value = null 
+        } finally {
+          if (uploadController && activeUploadController === uploadController) {
+            activeUploadController = null
+          }
         }
-      }, 'image/webp', 0.9)
+      }, 'image/webp', SNIPPET_OUTPUT_QUALITY)
     } catch (err) {
       console.error('Snippet failed:', err)
       screenshotToast.value = null

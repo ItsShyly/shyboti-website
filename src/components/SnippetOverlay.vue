@@ -20,9 +20,6 @@ const route = useRoute()
 
 // Only activate snippet tool on the logs route
 const snippetEnabled = computed(() => route.path === '/logs')
-const captureFlashRect = ref<{ left: number; top: number; width: number; height: number } | null>(null)
-const captureFlashVisible = ref(false)
-let captureFlashTimer: ReturnType<typeof setTimeout> | null = null
 
 function getPanel(): HTMLElement | null {
   return mainPanelRef?.value ?? null
@@ -44,12 +41,7 @@ function handleMouseMove(e: MouseEvent) {
 }
 function handleMouseUp  (e: MouseEvent) {
   if (!snippetEnabled.value && !screenshotDrag.value) return
-  const shouldFlash = screenshotDrag.value
-  const rectBeforeRelease = shouldFlash ? fixedRect() : null
   onWindowMouseUp(e, getPanel())
-  if (shouldFlash && rectBeforeRelease && rectBeforeRelease.width >= 10 && rectBeforeRelease.height >= 10) {
-    triggerCaptureFlash(rectBeforeRelease)
-  }
 }
 function handleCtxMenu  (e: MouseEvent) {
   if (!snippetEnabled.value) return
@@ -57,24 +49,6 @@ function handleCtxMenu  (e: MouseEvent) {
 }
 
 let panel: HTMLElement | null = null
-
-function triggerCaptureFlash(rect: { left: number; top: number; width: number; height: number }) {
-  captureFlashRect.value = rect
-  captureFlashVisible.value = false
-  if (captureFlashTimer) {
-    clearTimeout(captureFlashTimer)
-    captureFlashTimer = null
-  }
-
-  requestAnimationFrame(() => {
-    captureFlashVisible.value = true
-    captureFlashTimer = setTimeout(() => {
-      captureFlashVisible.value = false
-      captureFlashRect.value = null
-      captureFlashTimer = null
-    }, 260)
-  })
-}
 
 onMounted(() => {
   watch(screenshotDrag, (v) => document.body.classList.toggle('snippet-dragging', v))
@@ -108,10 +82,6 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('mousemove', handleMouseMove)
   window.removeEventListener('mouseup',   handleMouseUp)
-  if (captureFlashTimer) {
-    clearTimeout(captureFlashTimer)
-    captureFlashTimer = null
-  }
   if (panel) {
     panel.removeEventListener('mousedown',   handleMouseDown)
     panel.removeEventListener('contextmenu', handleCtxMenu)
@@ -144,17 +114,6 @@ function fixedRect() {
         top:    fixedRect()!.top    + 'px',
         width:  fixedRect()!.width  + 'px',
         height: fixedRect()!.height + 'px',
-      }"
-    />
-
-    <div
-      v-if="captureFlashVisible && captureFlashRect"
-      class="snippet-global-rect snippet-global-rect-flash"
-      :style="{
-        left:   captureFlashRect.left   + 'px',
-        top:    captureFlashRect.top    + 'px',
-        width:  captureFlashRect.width  + 'px',
-        height: captureFlashRect.height + 'px',
       }"
     />
 
@@ -195,26 +154,6 @@ function fixedRect() {
   z-index: 9998;
   border: 1.5px solid #9d6cff;
   background: rgba(111, 43, 255, 0.10);
-}
-.snippet-global-rect-flash {
-  animation: snippet-capture-flash 260ms ease-out forwards;
-}
-@keyframes snippet-capture-flash {
-  0% {
-    background: rgba(111, 43, 255, 0.12);
-    border-color: rgba(157, 108, 255, 0.85);
-    box-shadow: 0 0 0 0 rgba(157, 108, 255, 0.45);
-  }
-  35% {
-    background: rgba(111, 43, 255, 0.32);
-    border-color: rgba(199, 173, 255, 0.95);
-    box-shadow: 0 0 0 6px rgba(157, 108, 255, 0.18);
-  }
-  100% {
-    background: rgba(111, 43, 255, 0);
-    border-color: rgba(157, 108, 255, 0);
-    box-shadow: 0 0 0 10px rgba(157, 108, 255, 0);
-  }
 }
 .snippet-toast-global {
   position: fixed;
