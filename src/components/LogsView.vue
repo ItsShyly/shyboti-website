@@ -1249,12 +1249,12 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             <VueDatePicker
               v-model="dateRange"
               range
-              :enable-time-picker="false"
+              no-time-picker
               :multi-calendars="false"
               dark
               auto-apply
               :format="formatDateRange"
-              placeholder="From → Until (optional)"
+              placeholder="Pick a date range"
               class="dp-logs"
               :teleport="true"
             />
@@ -1794,7 +1794,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
 /* VueDatePicker dark theme overrides */
 .dp__theme_dark {
-  --dp-background-color: #141418;
+  --dp-background-color: #0d0d10;
   --dp-text-color: #e0e0e0;
   --dp-hover-color: #1e1e24;
   --dp-hover-text-color: #fff;
