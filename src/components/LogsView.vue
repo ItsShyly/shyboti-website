@@ -852,11 +852,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               class="log-row-outer"
               :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'] }"
             >
-              <div v-if="item.msg.tags?.['reply-parent-msg-body']" class="reply-context">
-                <span class="reply-icon">↩</span>
-                <span class="reply-parent-user">@{{ item.msg.tags['reply-parent-display-name'] || item.msg.tags['reply-parent-user-login'] || '?' }}</span>
-                <span class="reply-parent-body">{{ item.msg.tags['reply-parent-msg-body'] }}</span>
-              </div>
               <div class="log-row">
                 <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
                 <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
@@ -866,7 +861,14 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                   :class="{ 'log-user-clickable': true }"
                   @click.stop="openUserPopup(item.msg.username, channel || item.msg.channel?.replace('#',''), $event)"
                 >{{ item.msg.displayName || item.msg.username }}</div>
-                <div class="log-msg" v-html="renderMsg(item.msg.text)"></div>
+                <div class="log-msg-wrap">
+                  <div v-if="item.msg.tags?.['reply-parent-msg-body']" class="reply-context">
+                    <span class="reply-icon">↩</span>
+                    <span class="reply-parent-user">@{{ item.msg.tags['reply-parent-display-name'] || item.msg.tags['reply-parent-user-login'] || '?' }}</span>
+                    <span class="reply-parent-body">{{ item.msg.tags['reply-parent-msg-body'] }}</span>
+                  </div>
+                  <div class="log-msg" v-html="renderMsg(item.msg.text)"></div>
+                </div>
                 <div class="log-share" @click="shareMsg(item.msg)" title="Copy link">
                   <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M10 2L14 6L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1024,7 +1026,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .log-row-outer {
-  --reply-left-inset: 270px;
   border-bottom: 1px solid #1a1a1e;
   transition: background .1s; position: relative;
 }
@@ -1046,12 +1047,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .log-day-sep    { display: none; }
 .log-user { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
 .log-user::after { content: ':'; color: #555; margin-right: 5px; }
+.log-msg-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .log-msg  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
 
 /* Reply thread indicator */
 .reply-context {
   display: flex; align-items: center; gap: 4px;
-  font-size: 10px; color: #555; padding: 2px 14px 0 var(--reply-left-inset);
+  font-size: 10px; color: #555; padding: 0 0 1px;
   white-space: nowrap; overflow: hidden;
 }
 .reply-icon { color: #444; font-size: 11px; flex-shrink: 0; }
@@ -1212,7 +1214,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     padding: 3px 12px;
     grid-template-columns: unset !important;
   }
-  .log-row-outer { --reply-left-inset: 96px; }
   .log-time       { display: none; }
   .log-time-short { display: block; flex-shrink: 0; color: #555; font-size: 11px; white-space: nowrap; }
   .log-user  { flex-shrink: 0; font-size: 12px; padding-right: 0; white-space: nowrap; }
