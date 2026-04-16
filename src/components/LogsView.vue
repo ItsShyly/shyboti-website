@@ -612,7 +612,7 @@ async function ensurePaint(username: string) {
     if (data.paint) {
       paintCache.set(key, data.paint)
       const newMap = new Map(paintStyles.value)
-      newMap.set(username, buildPaintStyle(data.paint))
+      newMap.set(key, buildPaintStyle(data.paint))
       paintStyles.value = newMap
     }
   } catch {}
@@ -849,30 +849,30 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               v-else
               :id="`log-${item.msg.id}`"
               v-memo="[item.msg.id, highlightId === item.msg.id]"
-              class="log-row"
+              class="log-row-outer"
               :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'] }"
             >
-              <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
-              <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
-              <div
-                class="log-user"
-                :style="paintStyles.get(item.msg.username) ?? { color: userColor(item.msg) }"
-                :class="{ 'log-user-clickable': true }"
-                @click.stop="openUserPopup(item.msg.username, channel || item.msg.channel?.replace('#',''), $event)"
-              >{{ item.msg.displayName || item.msg.username }}</div>
-              <div class="log-msg-wrap">
-                <div v-if="item.msg.tags?.['reply-parent-msg-body']" class="reply-context">
-                  <span class="reply-icon">↩</span>
-                  <span class="reply-parent-user">@{{ item.msg.tags['reply-parent-display-name'] || item.msg.tags['reply-parent-user-login'] || '?' }}</span>
-                  <span class="reply-parent-body">{{ item.msg.tags['reply-parent-msg-body'] }}</span>
-                </div>
-                <div class="log-msg" v-html="renderMsg(item.msg.text)"></div>
+              <div v-if="item.msg.tags?.['reply-parent-msg-body']" class="reply-context">
+                <span class="reply-icon">↩</span>
+                <span class="reply-parent-user">@{{ item.msg.tags['reply-parent-display-name'] || item.msg.tags['reply-parent-user-login'] || '?' }}</span>
+                <span class="reply-parent-body">{{ item.msg.tags['reply-parent-msg-body'] }}</span>
               </div>
-              <div class="log-share" @click="shareMsg(item.msg)" title="Copy link">
-                <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M10 2L14 6L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M14 6H6C4.34 6 3 7.34 3 9V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
+              <div class="log-row">
+                <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
+                <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
+                <div
+                  class="log-user"
+                  :style="paintStyles.get(item.msg.username?.toLowerCase()) ?? { color: userColor(item.msg) }"
+                  :class="{ 'log-user-clickable': true }"
+                  @click.stop="openUserPopup(item.msg.username, channel || item.msg.channel?.replace('#',''), $event)"
+                >{{ item.msg.displayName || item.msg.username }}</div>
+                <div class="log-msg" v-html="renderMsg(item.msg.text)"></div>
+                <div class="log-share" @click="shareMsg(item.msg)" title="Copy link">
+                  <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10 2L14 6L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M14 6H6C4.34 6 3 7.34 3 9V14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </div>
               </div>
             </div>
           </template>
@@ -1023,17 +1023,21 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .spinner     { display: inline-block; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.log-row {
-  display: flex; align-items: baseline; gap: 0;
-  padding: 3px 14px;
-  border-bottom: 1px solid #1a1a1e; font-size: 12px;
+.log-row-outer {
+  border-bottom: 1px solid #1a1a1e;
   transition: background .1s; position: relative;
 }
-.log-row:hover { background: #1a1a1e; }
-.log-row.highlighted { animation: hl-fade 3s ease forwards; }
+.log-row-outer:hover { background: #1a1a1e; }
+.log-row-outer.highlighted { animation: hl-fade 3s ease forwards; }
 @keyframes hl-fade {
   0%   { background: rgba(111,43,255,.25); }
   100% { background: transparent; }
+}
+
+.log-row {
+  display: flex; align-items: baseline; gap: 0;
+  padding: 3px 14px;
+  font-size: 12px;
 }
 
 .log-time       { color: #444; font-size: 11px; flex-shrink: 0; margin-right: 10px; }
@@ -1041,26 +1045,25 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .log-day-sep    { display: none; }
 .log-user { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
 .log-user::after { content: ':'; color: #555; margin-right: 5px; }
-.log-msg-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .log-msg  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
 
 /* Reply thread indicator */
 .reply-context {
   display: flex; align-items: center; gap: 4px;
-  font-size: 10px; color: #555; padding: 1px 0 2px;
+  font-size: 10px; color: #555; padding: 2px 14px 0;
   white-space: nowrap; overflow: hidden;
 }
 .reply-icon { color: #444; font-size: 11px; flex-shrink: 0; }
 .reply-parent-user { color: #777; font-weight: 600; flex-shrink: 0; }
 .reply-parent-body { color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.log-row-reply { border-left: 2px solid #333; }
+.log-row-reply { border-left: 2px solid #555; }
 
 .log-share {
   display: flex; align-items: center; justify-content: center;
   width: 20px; height: 20px; color: #444; cursor: pointer;
   opacity: 0; transition: opacity .15s, color .15s; flex-shrink: 0; margin-left: 6px;
 }
-.log-row:hover .log-share { opacity: 1; }
+.log-row-outer:hover .log-share { opacity: 1; }
 .log-share:hover { color: #9d6cff; }
 .log-share svg { width: 13px; height: 13px; }
 
