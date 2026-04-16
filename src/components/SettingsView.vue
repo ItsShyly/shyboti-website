@@ -41,6 +41,21 @@ const removeRemoving = ref(false)
 const removeMsg      = ref('')
 const removeError    = ref('')
 
+// >>> Hidden tips reset
+const tipsResetMsg = ref('')
+
+function resetAllHiddenInfos() {
+  const prefix = 'shyboti_snippet_info_hidden_'
+  const toRemove: string[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (key && key.startsWith(prefix)) toRemove.push(key)
+  }
+  toRemove.forEach(k => localStorage.removeItem(k))
+  tipsResetMsg.value = 'All hidden tips have been restored.'
+  setTimeout(() => tipsResetMsg.value = '', 3000)
+}
+
 async function load() {
   if (!session.value) return
   isBroadcaster.value = session.value.login === session.value.channel
@@ -335,6 +350,22 @@ async function doRemoveBot() {
           <button class="remove-btn" @click="clickRemoveBot" :disabled="removeRemoving">
             {{ removeRemoving ? t('settings.remove.removing') : t('settings.remove.btn') }}
           </button>
+        </div>
+      </div>
+
+      <!-- Show all hidden Infos again - all users -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon">&#128161;</div>
+          <div class="card-title">Hidden Tips</div>
+          <div class="card-sub">Restore all info tips you've dismissed (e.g. the snippet hint in Logs).</div>
+        </div>
+        <div class="card-body">
+          <div v-if="tipsResetMsg" class="card-msg ok">{{ tipsResetMsg }}</div>
+          <div v-else class="section-note">Tips that you've hidden via "Don't show again" will reappear.</div>
+        </div>
+        <div class="card-footer">
+          <button class="toggle-btn" @click="resetAllHiddenInfos">Show all hidden Infos again</button>
         </div>
       </div>
 

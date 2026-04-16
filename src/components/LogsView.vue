@@ -459,6 +459,7 @@ function onWindowMouseUp(e: MouseEvent)   { onTbodyMouseUp(e) }
 onMounted(async () => {
   window.addEventListener('mousemove', onWindowMouseMove)
   window.addEventListener('mouseup',   onWindowMouseUp)
+  loadSnippetInfoState()
   readUrlState()
   if (!channel.value && session.value?.channel) {
     channel.value = session.value.channel
@@ -607,6 +608,23 @@ watch(msgs, (list) => {
 }, { flush: 'post' })
 
 // >>> Screenshot drag-select on logs-tbody
+// >>> Snippet info tip (dismissable per account)
+const snippetInfoHidden = ref(false)
+const snippetInfoHovered = ref(false)
+
+function getSnippetStorageKey() {
+  return `shyboti_snippet_info_hidden_${session.value?.login ?? 'guest'}`
+}
+
+function loadSnippetInfoState() {
+  snippetInfoHidden.value = localStorage.getItem(getSnippetStorageKey()) === '1'
+}
+
+function hideSnippetInfo() {
+  snippetInfoHidden.value = true
+  localStorage.setItem(getSnippetStorageKey(), '1')
+}
+
 const screenshotDrag    = ref(false)
 const screenshotRect    = ref<{ x: number; y: number; w: number; h: number } | null>(null)
 const screenshotAnchor  = ref<{ x: number; y: number } | null>(null)
@@ -890,6 +908,18 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
       <button class="search-btn" @click="search" :disabled="loading">
         {{ loading ? '…' : t('logs.search') }}
       </button>
+      <div class="snippet-info" v-if="!snippetInfoHidden">
+        <label class="field-lbl">Right click + Drag to take a snippet</label>
+        <div
+          class="snippet-gif-wrap"
+          @mouseenter="snippetInfoHovered = true"
+          @mouseleave="snippetInfoHovered = false"
+          @click="hideSnippetInfo"
+        >
+          <img src="/snippet-tip.gif" alt="Snippet tip" class="snippet-gif" />
+          <div v-if="snippetInfoHovered" class="snippet-hover-overlay">Don't show again?</div>
+        </div>
+      </div>
     </div>
 
     <!-- Automod toggle -->
@@ -1096,6 +1126,18 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
 .search-bar  { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; background: #141418; border: 1px solid #1e1e24; padding: 14px 16px; flex-shrink: 0; }
 .field-wrap  { display: flex; flex-direction: column; gap: 4px; }
+.snippet-info { display: flex; flex-direction: column; gap: 4px; } /* has to be right in the search-bar  */
+.snippet-gif-wrap { position: relative; cursor: pointer; display: inline-block; }
+.snippet-gif { display: block; max-height: 60px; max-width: 180px; border: 1px solid #2a2a30; }
+.snippet-hover-overlay {
+  position: absolute; inset: 0;
+  background: rgba(13, 13, 16, 0.78);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #9d6cff;
+  pointer-events: none;
+  letter-spacing: .04em;
+}
+
 .field-lbl   { font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: .06em; display: flex; gap: 5px; align-items: center; }
 .opt         { font-size: 9px; color: #383838; font-weight: 400; text-transform: none; }
 .field-input { background: #0d0d10; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 7px 10px; outline: none; width: 160px; transition: border-color .15s; }
