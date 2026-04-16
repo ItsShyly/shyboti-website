@@ -952,10 +952,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .logs-results { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .logs-table   { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .logs-thead   {
-  display: flex; gap: 12px;
+  display: flex; gap: 0; align-items: baseline;
   padding: 7px 14px; background: #0d0d10; border: 1px solid #1e1e24;
   font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0;
 }
+.logs-thead > div:nth-child(1) { color: #444; font-size: 11px; flex-shrink: 0; margin-right: 10px; }
+.logs-thead > div:nth-child(2) { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
+.logs-thead > div:nth-child(3) { flex: 1; min-width: 0; }
 .logs-tbody   { overflow-y: auto; flex: 1; position: relative; }
 .logs-tbody::-webkit-scrollbar { width: 3px; }
 .logs-tbody::-webkit-scrollbar-thumb { background: #333; }
