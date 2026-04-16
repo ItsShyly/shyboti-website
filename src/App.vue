@@ -682,9 +682,10 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .show-mobile { display: none; }
 
 @media (max-width: 680px) {
-  body.logs-open { overflow: hidden !important; height: 100dvh !important; }
-  body.logs-open .page { overflow: hidden !important; height: 100dvh !important; display: flex; flex-direction: column; }
-  body.logs-open .main-panel { overflow: hidden !important; height: calc(100dvh - 52px) !important; min-height: 0 !important; flex: none; }
+  html:has(body.logs-open), body.logs-open { overflow: hidden !important; height: 100dvh !important; }
+  body.logs-open .page { overflow: hidden !important; height: 100dvh !important; min-height: 0 !important; display: flex; flex-direction: column; }
+  body.logs-open .main-panel { overflow: hidden !important; height: calc(100dvh - 52px) !important; min-height: 0 !important; padding-bottom: 14px !important; flex: none; }
+  body.logs-open .site-footer { display: none !important; }
 }
 
 @media (max-width: 680px) {
@@ -699,9 +700,8 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
   .search-kbd { display: none; }
   .sidebar { position: fixed; top: 52px; right: 0; bottom: 0; width: 240px; z-index: 100; transform: translateX(100%); border-left: 1px solid #2a2a30; box-shadow: -4px 0 24px #00000066; }
   .sidebar.sidebar-open { transform: translateX(0); }
-  .main-panel { padding: 14px; flex: none; min-height: calc(100vh - 52px); padding-bottom: 38px; }
+  .main-panel { padding: 14px; flex: none; min-height: calc(100dvh - 52px); padding-bottom: 38px; }
   .site-footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 6px 14px; background: #141418; border-top: 1px solid #1e1e24; justify-content: center; z-index: 50; margin-top: 0; }
-  body.logs-open .site-footer { display: none; }
 }
 
 @media (min-width: 681px) and (max-width: 960px) {
