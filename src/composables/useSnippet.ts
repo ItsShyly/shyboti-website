@@ -20,86 +20,32 @@ let   suppressContextMenuUntil = 0
 let rafPending = false
 const SNIPPET_CAPTURE_DELAY_MS = 0
 
-interface PaintedUserInfo {
-  text: string
-  /** position relative to the capture region */
-  x: number
-  y: number
-  color: string
-  fontSize: number
-  fontFamily: string
-  fontWeight: string
-}
-
 /** Read paint color from a live DOM element (before html2canvas clones it) */
 function readPaintColor(el: HTMLElement): string | null {
   const cs = getComputedStyle(el)
-  // --snippet-paint-preview holds an opaque paint-derived color
   const preview = cs.getPropertyValue('--snippet-paint-preview').trim()
   if (preview && preview !== 'transparent') return preview
-  // data attribute fallback
   const attr = el.getAttribute('data-snippet-paint')
   if (attr && attr !== 'transparent') return attr
-  // --snippet-fallback-color holds user's chat color
   const fallback = cs.getPropertyValue('--snippet-fallback-color').trim()
   if (fallback && fallback !== 'transparent') return fallback
-  // last resort: computed color (may be 'transparent' for painted users)
   const color = cs.color
   if (color && color !== 'transparent' && color !== 'rgba(0, 0, 0, 0)') return color
   return null
 }
 
-/** Is this element using background-clip paint (gradient/image text)? */
-function isPaintedUser(el: HTMLElement): boolean {
-  const cs = getComputedStyle(el)
-  const clip = cs.getPropertyValue('-webkit-background-clip') || cs.getPropertyValue('background-clip')
-  return clip === 'text'
-}
-
-/** Collect painted username info from live DOM before html2canvas clone */
-function collectPaintedUsers(container: HTMLElement, selX: number, selY: number): PaintedUserInfo[] {
+/** Build a map of element index → paint color from the live DOM */
+function collectPaintColorMap(container: HTMLElement): Map<number, string> {
   const users = Array.from(container.querySelectorAll('.log-user')) as HTMLElement[]
-  const containerRect = container.getBoundingClientRect()
-  const result: PaintedUserInfo[] = []
-
-  for (const el of users) {
-    if (!isPaintedUser(el)) continue
-    const color = readPaintColor(el)
-    if (!color) continue
-
-    const rect = el.getBoundingClientRect()
+  const map = new Map<number, string>()
+  users.forEach((el, i) => {
     const cs = getComputedStyle(el)
-    const fontSize = parseFloat(cs.fontSize) || 12
-
-    result.push({
-      text: el.textContent?.trim() ?? '',
-      // Position relative to the capture region origin
-      x: rect.left - containerRect.left + container.scrollLeft - selX,
-      y: rect.top - containerRect.top + container.scrollTop - selY,
-      color,
-      fontSize,
-      fontFamily: cs.fontFamily || 'sans-serif',
-      fontWeight: cs.fontWeight || '600',
-    })
-  }
-  return result.filter(p => p.text)
-}
-
-/** Draw painted usernames onto the canvas after html2canvas capture */
-function drawPaintedUsers(canvas: HTMLCanvasElement, users: PaintedUserInfo[], scale: number) {
-  if (!users.length) return
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return
-  ctx.save()
-  ctx.textBaseline = 'top'
-  for (const u of users) {
-    const sz = Math.round(u.fontSize * scale)
-    ctx.font = `${u.fontWeight} ${sz}px ${u.fontFamily}`
-    ctx.fillStyle = u.color
-    ctx.fillText(u.text, u.x * scale, u.y * scale)
-  }
-  ctx.restore()
-  console.log(`[Snippet] Drew ${users.length} painted usernames onto canvas`)
+    const clip = cs.getPropertyValue('-webkit-background-clip') || cs.getPropertyValue('background-clip')
+    if (clip !== 'text') return
+    const color = readPaintColor(el)
+    if (color) map.set(i, color)
+  })
+  return map
 }
 
 async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
@@ -201,12 +147,13 @@ export function useSnippet() {
     if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
     screenshotToast.value = { state: 'uploading', url: null, imgReady: false }
 
-    // Collect painted username positions + colors from the LIVE DOM
-    // (before html2canvas clones and loses background-clip: text)
-    const paintedUsers = collectPaintedUsers(containerEl, sel.x, sel.y)
+    // Collect paint colors from LIVE DOM before html2canvas clones it.
+    // The clone loses background-clip:text rendering, so we need to
+    // convert painted users to flat colored text in the clone.
+    const paintColorMap = collectPaintColorMap(containerEl)
 
     const totalStart = performance.now()
-    console.log('[Snippet] Starting screenshot process, painted users:', paintedUsers.length)
+    console.log('[Snippet] Starting screenshot process, painted users:', paintColorMap.size)
 
     try {
       // @ts-ignore
@@ -233,21 +180,20 @@ export function useSnippet() {
           scale,
           backgroundColor: '#0d0d10',
           onclone: (_doc: Document, clonedEl: HTMLElement) => {
-            // Hide painted usernames in the clone so html2canvas
-            // doesn't render them as colored rectangles.
-            // We'll draw them back onto the canvas afterwards.
-            const users = clonedEl.querySelectorAll('.log-user') as NodeListOf<HTMLElement>
-            users.forEach((el: HTMLElement) => {
-              const clip = el.style.getPropertyValue('-webkit-background-clip') ||
-                           el.style.getPropertyValue('background-clip') ||
-                           el.style.backgroundClip ||
-                           (el.style as any).WebkitBackgroundClip || ''
-              if (clip === 'text') {
-                // Make this element invisible to html2canvas
-                // but keep its space so layout isn't affected
-                el.style.setProperty('visibility', 'hidden', 'important')
-              }
+            // Convert painted usernames from gradient-background to flat
+            // colored text. html2canvas can't render background-clip:text,
+            // so we replace the paint styles with a direct text color
+            // that we captured from the live DOM.
+            const users = Array.from(clonedEl.querySelectorAll('.log-user')) as HTMLElement[]
+            let converted = 0
+            users.forEach((el, i) => {
+              const paintColor = paintColorMap.get(i)
+              if (!paintColor) return
+              // Nuke all inline styles and set flat colored text
+              el.style.cssText = `color: ${paintColor} !important; -webkit-text-fill-color: ${paintColor} !important; background: none !important; -webkit-background-clip: border-box !important; background-clip: border-box !important; filter: none !important; font-weight: 600 !important;`
+              converted++
             })
+            console.log('[Snippet] Converted', converted, 'painted users to flat text in clone')
           },
         }
 
@@ -261,8 +207,6 @@ export function useSnippet() {
       } finally {
         document.body.classList.remove('snippet-capturing')
       }
-      // Draw painted usernames back onto the canvas with their paint colors
-      drawPaintedUsers(cropCanvas, paintedUsers, scale)
       const html2Duration = performance.now() - html2Start
       console.log(`[Snippet] html2canvas render: ${html2Duration.toFixed(2)}ms`)
 
