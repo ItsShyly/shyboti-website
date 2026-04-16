@@ -19,6 +19,13 @@ let   suppressContextMenuUntil = 0
 // rAF throttle flag – one pending frame max
 let rafPending = false
 
+async function waitForLogsJobsToSettle(timeoutMs = 5000): Promise<void> {
+  const start = Date.now()
+  while (document.body.classList.contains('logs-jobs-running') && Date.now() - start < timeoutMs) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 60))
+  }
+}
+
 export function useSnippet() {
   const { session } = useAuth()
 
@@ -77,6 +84,8 @@ export function useSnippet() {
     // Suppress the native context menu that fires on mouseup after a drag
     suppressContextMenuUntil = Date.now() + 500
 
+    await waitForLogsJobsToSettle()
+
     if (screenshotDismissTimer) clearTimeout(screenshotDismissTimer)
     screenshotToast.value = { state: 'uploading', url: null, imgReady: false }
 
@@ -111,6 +120,7 @@ export function useSnippet() {
             const users = doc.querySelectorAll('.log-user') as NodeListOf<HTMLElement>
             users.forEach((el: HTMLElement) => {
               const preview =
+                el.getAttribute('data-snippet-paint') ||
                 el.style.getPropertyValue('--snippet-paint-preview') ||
                 getComputedStyle(el).getPropertyValue('--snippet-paint-preview')
               const fallback =

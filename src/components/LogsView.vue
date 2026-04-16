@@ -92,6 +92,7 @@ const virtualStart = ref(0)
 const virtualEnd = ref(0)
 const loadingOverlayLogoUrl = 'https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif'
 const domSettling = ref(false)
+const pendingPaintJobs = ref(0)
 let domSettleToken = 0
 
 const isMobile = () => window.matchMedia('(max-width: 680px)').matches
@@ -632,6 +633,7 @@ onMounted(async () => {
 })
 onUnmounted(() => {
   document.body.classList.remove('logs-open')
+  document.body.classList.remove('logs-jobs-running')
   abortCtrl.abort()
   detachScrollListeners()
   window.removeEventListener('resize', recalcVirtualWindow)
@@ -691,7 +693,8 @@ const bottomSpacerHeight = computed(() => {
   if (!useVirtual.value) return 0
   return Math.max(0, (displayItems.value.length - virtualEnd.value) * VIRTUAL_ROW_ESTIMATE)
 })
-const showFloatingFetch = computed(() => domSettling.value)
+const hasRunningJobs = computed(() => loading.value || loadingMore.value || domSettling.value || pendingPaintJobs.value > 0)
+const showFloatingFetch = computed(() => hasRunningJobs.value)
 
 function markDomSettling() {
   const token = ++domSettleToken
@@ -773,6 +776,13 @@ function userNameStyle(m: LogMsg): Record<string, string> {
   return painted
     ? { ...painted, '--snippet-fallback-color': fallback }
     : { color: fallback, '--snippet-fallback-color': fallback, '--snippet-paint-preview': fallback }
+}
+
+function snippetPaintPreview(m: LogMsg): string {
+  const painted = paintStyles.value.get(m.username?.toLowerCase() ?? '')
+  const preview = painted?.['--snippet-paint-preview']
+  if (typeof preview === 'string' && preview.trim()) return preview
+  return userColor(m)
 }
 
 function isModerationSystemMessage(m: LogMsg): boolean {
@@ -924,6 +934,7 @@ async function ensurePaint(username: string) {
   const key = username.toLowerCase()
   if (paintCache.has(key)) return
   paintCache.set(key, null) // <<< mark as fetching to avoid duplicate requests
+  pendingPaintJobs.value += 1
   try {
     const res = await fetch(`${API}/twitch/user/${encodeURIComponent(key)}`, {
       headers: session.value ? { Authorization: `Bearer ${session.value.token}` } : {}
@@ -973,6 +984,8 @@ async function ensurePaint(username: string) {
     }
   } catch {
     paintCache.delete(key)
+  } finally {
+    pendingPaintJobs.value = Math.max(0, pendingPaintJobs.value - 1)
   }
 }
 
@@ -995,6 +1008,10 @@ watch(displayItems, async () => {
 watch(paintStyles, () => {
   markDomSettling()
 }, { flush: 'post' })
+
+watch(hasRunningJobs, (running) => {
+  document.body.classList.toggle('logs-jobs-running', running)
+}, { immediate: true })
 
 // >>> User popup
 interface TwitchUser {
@@ -1286,6 +1303,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                 <div
                   v-if="!isModerationSystemMessage(item.msg)"
                   class="log-user"
+                  :data-snippet-paint="snippetPaintPreview(item.msg)"
                   :style="userNameStyle(item.msg)"
                   :class="{ 'log-user-clickable': true }"
                   @click.stop="openUserPopup(item.msg.username, channel || item.msg.channel?.replace('#',''), $event)"
