@@ -14,7 +14,14 @@ interface LogMsg {
   channel: string; timestamp: string; tags?: Record<string, string>
 }
 interface EmoteMap { [name: string]: string }
-interface BadgeChip { key: string; label: string; kind: 'twitch' | 'seventv' | 'marker' }
+interface BadgeChip {
+  key: string
+  label: string
+  kind: 'twitch' | 'seventv' | 'marker'
+  imageUrl?: string
+  title?: string
+}
+interface TwitchBadgeAsset { imageUrl: string; title: string }
 
 // Input refs - read directly from DOM, not tracked by Vue reactivity.
 // This prevents any re-render on every keystroke.
@@ -58,6 +65,7 @@ const noMore      = ref(false)
 const error       = ref('')
 const searched    = ref(false)
 const emoteMap    = ref<EmoteMap>({})
+const twitchBadgeMap = ref<Map<string, TwitchBadgeAsset>>(new Map())
 const bodyRef     = ref<HTMLDivElement | null>(null)
 const highlightId = ref<string | null>(null)
 const copyToast     = ref(false)
@@ -131,6 +139,29 @@ async function fetchEmotes(ch: string) {
       if (r.ok) { const d = await r.json() as any; for (const e of d.emotes ?? []) emoteMap.value[e.name] = e.url }
     } catch {}
   }
+}
+
+async function fetchTwitchBadges(ch: string) {
+  twitchBadgeMap.value = new Map()
+  try {
+    const r = await fetch(`${API}/twitch/badges/${encodeURIComponent(ch)}`, {
+      headers: session.value ? { Authorization: `Bearer ${session.value.token}` } : {}
+    })
+    if (!r.ok) return
+    const d = await r.json() as any
+    const src = d?.badgeMap ?? {}
+    const m = new Map<string, TwitchBadgeAsset>()
+    for (const [k, v] of Object.entries(src)) {
+      const b = v as any
+      const imageUrl = String(b?.image_url_2x ?? b?.image_url_1x ?? '')
+      if (!imageUrl) continue
+      m.set(k, {
+        imageUrl,
+        title: String(b?.title ?? k),
+      })
+    }
+    twitchBadgeMap.value = m
+  } catch {}
 }
 
 async function fetchDay(ch: string, y: number, m: number, d: number, signal: AbortSignal): Promise<LogMsg[]> {
@@ -316,6 +347,7 @@ async function search() {
   cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   fetchEmotes(ch)
+  fetchTwitchBadges(ch)
   fetchAutomod(ch, dateFrom.value || undefined)
   const today   = new Date()
   const isUser  = !!userFilter.value.trim()
@@ -648,14 +680,18 @@ function buildBadgeChips(m: LogMsg): BadgeChip[] {
   const tags = m.tags ?? {}
   const badgeStr = tags['badges'] ?? ''
   const raw = badgeStr.split(',').map(x => x.trim()).filter(Boolean)
-  const keys = raw.map(x => x.split('/')[0])
-  const order = ['broadcaster', 'moderator', 'vip', 'subscriber', 'founder', 'partner', 'staff', 'admin', 'global_mod']
-  const labelMap: Record<string, string> = {
-    broadcaster: 'Broadcaster', moderator: 'Mod', vip: 'VIP', subscriber: 'Sub', founder: 'Founder',
-    partner: 'Partner', staff: 'Staff', admin: 'Admin', global_mod: 'GMod',
-  }
-  for (const k of order) {
-    if (keys.includes(k)) out.push({ key: k, label: labelMap[k] ?? k, kind: 'twitch' })
+  for (const entry of raw) {
+    const [setId = '', version = ''] = entry.split('/')
+    if (!setId || !version) continue
+    const k = `${setId}/${version}`
+    const asset = twitchBadgeMap.value.get(k)
+    out.push({
+      key: k,
+      label: setId,
+      kind: 'twitch',
+      imageUrl: asset?.imageUrl,
+      title: asset?.title ?? `${setId} ${version}`,
+    })
   }
   if (sevenTvBadgeUsers.value.has((m.username ?? '').toLowerCase())) {
     out.push({ key: '7tv', label: '7TV', kind: 'seventv' })
@@ -740,6 +776,7 @@ async function ensurePaint(username: string) {
       paint?: any
       sevenTv?: { hasAccount?: boolean; hasPersonalSet?: boolean }
       personalEmotes?: Array<{ id: string; name: string; url: string }>
+      twitchUserEmotes?: Array<{ id: string; name: string; url: string }>
     }
     if (data.paint) {
       paintCache.set(key, data.paint)
@@ -752,9 +789,16 @@ async function ensurePaint(username: string) {
       next.add(key)
       sevenTvBadgeUsers.value = next
     }
-    if (Array.isArray(data.personalEmotes) && data.personalEmotes.length > 0) {
+    const hasSevenTvPersonal = Array.isArray(data.personalEmotes) && data.personalEmotes.length > 0
+    const hasTwitchUser = Array.isArray(data.twitchUserEmotes) && data.twitchUserEmotes.length > 0
+    if (hasSevenTvPersonal || hasTwitchUser) {
       const p: EmoteMap = {}
-      for (const e of data.personalEmotes) p[e.name] = e.url
+      for (const e of data.personalEmotes ?? []) {
+        if (e?.name && e?.url) p[e.name] = e.url
+      }
+      for (const e of data.twitchUserEmotes ?? []) {
+        if (e?.name && e?.url) p[e.name] = e.url
+      }
       const next = new Map(personalEmoteMaps.value)
       next.set(key, p)
       personalEmoteMaps.value = next
@@ -782,7 +826,7 @@ interface TwitchUser {
   subbedSince: string | null
   subTier:     string | null
   nameHistory: { name: string; lastSeen: string }[]
-  paint: { id: string; name: string; imageUrl: string | null; shadows: any[]; stops: any[] } | null
+  paint: { id: string; name: string; imageUrl: string | null; shadows: any[]; stops: any[]; color?: number | null; angle?: number | null } | null
   botInChannel: boolean
 }
 const popup        = ref<{ username: string; channel: string; x: number; y: number } | null>(null)
@@ -840,7 +884,7 @@ function fmtDuration(iso: string): string {
 function subTierLabel(tier: string): string {
   return tier === '3000' ? 'Tier 3' : tier === '2000' ? 'Tier 2' : 'Tier 1'
 }
-function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[] }): Record<string, string> {
+function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; color: number }[]; shadows: any[]; color?: number | null; angle?: number | null }): Record<string, string> {
   return buildPaintStyle(paint)
 }
 </script>
@@ -1005,7 +1049,17 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                     :key="`${item.msg.id}-${b.kind}-${b.key}`"
                     class="badge-chip"
                     :class="[`badge-${b.kind}`, `badge-${b.key}`]"
-                  >{{ b.label }}</span>
+                    :title="b.title || b.label"
+                  >
+                    <img
+                      v-if="b.kind === 'twitch' && b.imageUrl"
+                      class="badge-img"
+                      :src="b.imageUrl"
+                      :alt="b.title || b.label"
+                      loading="lazy"
+                    />
+                    <template v-else>{{ b.label }}</template>
+                  </span>
                 </div>
                 <div
                   class="log-user"
@@ -1218,6 +1272,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   border-radius: 3px; border: 1px solid transparent;
   line-height: 1;
 }
+.badge-img { display: block; width: 15px; height: 15px; }
 .badge-twitch { background: #1e2430; border-color: #2d3546; color: #c4cfdd; }
 .badge-seventv { background: #183124; border-color: #28593e; color: #9ff0c0; }
 .badge-marker { background: #3a2d16; border-color: #5f4a22; color: #f2ce7d; }
