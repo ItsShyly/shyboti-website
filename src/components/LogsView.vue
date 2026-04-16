@@ -952,7 +952,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .logs-table   { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .logs-thead {
   display: grid;
-  grid-template-columns: 150px var(--user-width, 140px) 1fr;
+  grid-template-columns: 120px var(--user-width, 140px) 1fr;
   align-items: baseline;
   padding: 7px 14px;
   background: #0d0d10;
