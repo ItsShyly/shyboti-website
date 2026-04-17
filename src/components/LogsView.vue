@@ -767,22 +767,7 @@ const bottomSpacerHeight = computed(() => {
   return Math.max(0, (displayItems.value.length - virtualEnd.value) * VIRTUAL_ROW_ESTIMATE)
 })
 const hasRunningJobs = computed(() => loading.value || loadingMore.value || domSettling.value || pendingPaintJobs.value > 0)
-const showFloatingFetch = computed(() => {
-  return hasRunningJobs.value || searchJobPhase.value === 'fetch' || searchJobPhase.value === 'display' || searchJobPhase.value === 'visuals'
-})
-const floatingFetchStatusText = computed(() => {
-  const phase = searchJobPhase.value
-  const phaseLabel = phase === 'fetch'
-    ? 'fetching logs'
-    : phase === 'display'
-      ? 'displaying logs'
-      : phase === 'visuals'
-        ? 'adding visuals'
-        : 'displaying logs'
-  const parts = [`job #${activeSearchJob.value}`, phaseLabel]
-  if (phase === 'visuals') parts.push(`queue ${pendingPaintJobs.value}`)
-  return parts.join(' | ')
-})
+const showFloatingFetch = computed(() => hasRunningJobs.value)
 let floatingFetchStartedAt: number | null = null
 
 function loadingDebugSnapshot() {
@@ -1186,8 +1171,7 @@ watch(paintStyles, () => {
 
 watch(hasRunningJobs, (running) => {
   document.body.classList.toggle('logs-jobs-running', running)
-  // Do not go idle between fetch/display and visuals; only finish after visuals are done.
-  if (!running && searchJobPhase.value === 'visuals') setSearchJobPhase('idle')
+  if (!running) setSearchJobPhase('idle')
 }, { immediate: true })
 
 watch([loading, loadingMore, domSettling, pendingPaintJobs], ([l, lm, ds, pp], [prevL, prevLm, prevDs, prevPp]) => {
@@ -1641,10 +1625,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
     <div class="logs-fetch-floating" :class="{ visible: showFloatingFetch }" aria-live="polite" :aria-busy="showFloatingFetch ? 'true' : 'false'">
       <img class="logs-fetch-logo" :src="loadingOverlayLogoUrl" alt="ShyBoti loading" loading="eager" decoding="async" fetchpriority="high" />
-      <div class="logs-fetch-copy">
-        <span class="logs-fetch-text">logs getting displayed...</span>
-        <span class="logs-fetch-meta">{{ floatingFetchStatusText }}</span>
-      </div>
+      <span class="logs-fetch-text">logs getting displayed...</span>
     </div>
   </div>
 </template>
@@ -1887,23 +1868,12 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   animation: logs-fetch-spin 1s linear infinite;
   transform-origin: center center;
 }
-.logs-fetch-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
 .logs-fetch-text {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .03em;
   color: #f2d3ff;
   text-transform: lowercase;
-}
-.logs-fetch-meta {
-  font-size: 10px;
-  letter-spacing: .02em;
-  color: #b99bc8;
-  text-transform: none;
 }
 @keyframes logs-fetch-spin {
   to { transform: rotate(360deg); }
