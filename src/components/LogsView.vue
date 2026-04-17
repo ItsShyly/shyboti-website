@@ -751,6 +751,20 @@ const bottomSpacerHeight = computed(() => {
 })
 const hasRunningJobs = computed(() => loading.value || loadingMore.value || domSettling.value || pendingPaintJobs.value > 0)
 const showFloatingFetch = computed(() => hasRunningJobs.value)
+let floatingFetchStartedAt: number | null = null
+
+function loadingDebugSnapshot() {
+  return {
+    loading: loading.value,
+    loadingMore: loadingMore.value,
+    domSettling: domSettling.value,
+    pendingPaintJobs: pendingPaintJobs.value,
+    msgs: msgs.value.length,
+    displayItems: displayItems.value.length,
+    visibleItems: visibleDisplayItems.value.length,
+    useVirtual: useVirtual.value,
+  }
+}
 
 function markDomSettling() {
   const token = ++domSettleToken
@@ -1092,6 +1106,24 @@ watch(paintStyles, () => {
 
 watch(hasRunningJobs, (running) => {
   document.body.classList.toggle('logs-jobs-running', running)
+}, { immediate: true })
+
+watch([loading, loadingMore, domSettling, pendingPaintJobs], ([l, lm, ds, pp], [prevL, prevLm, prevDs, prevPp]) => {
+  if (l === prevL && lm === prevLm && ds === prevDs && pp === prevPp) return
+  console.debug('[logs:loading-state]', loadingDebugSnapshot())
+}, { flush: 'sync' })
+
+watch(showFloatingFetch, (visible, prevVisible) => {
+  if (visible && !prevVisible) {
+    floatingFetchStartedAt = performance.now()
+    console.debug('[logs:overlay] show', loadingDebugSnapshot())
+    return
+  }
+  if (!visible && prevVisible) {
+    const elapsed = floatingFetchStartedAt == null ? 0 : ((performance.now() - floatingFetchStartedAt) | 0)
+    floatingFetchStartedAt = null
+    console.debug(`[logs:overlay] hide after ${elapsed}ms`, loadingDebugSnapshot())
+  }
 }, { immediate: true })
 
 // >>> User popup
