@@ -767,10 +767,19 @@ const bottomSpacerHeight = computed(() => {
   return Math.max(0, (displayItems.value.length - virtualEnd.value) * VIRTUAL_ROW_ESTIMATE)
 })
 const hasRunningJobs = computed(() => loading.value || loadingMore.value || domSettling.value || pendingPaintJobs.value > 0)
-const showFloatingFetch = computed(() => hasRunningJobs.value)
+const showFloatingFetch = computed(() => {
+  return hasRunningJobs.value || searchJobPhase.value === 'fetch' || searchJobPhase.value === 'display' || searchJobPhase.value === 'visuals'
+})
 const floatingFetchStatusText = computed(() => {
   const phase = searchJobPhase.value
-  const parts = [`job #${activeSearchJob.value}`, phase]
+  const phaseLabel = phase === 'fetch'
+    ? 'fetching logs'
+    : phase === 'display'
+      ? 'displaying logs'
+      : phase === 'visuals'
+        ? 'adding visuals'
+        : 'displaying logs'
+  const parts = [`job #${activeSearchJob.value}`, phaseLabel]
   if (phase === 'visuals') parts.push(`queue ${pendingPaintJobs.value}`)
   return parts.join(' | ')
 })
@@ -1177,7 +1186,8 @@ watch(paintStyles, () => {
 
 watch(hasRunningJobs, (running) => {
   document.body.classList.toggle('logs-jobs-running', running)
-  if (!running) setSearchJobPhase('idle')
+  // Do not go idle between fetch/display and visuals; only finish after visuals are done.
+  if (!running && searchJobPhase.value === 'visuals') setSearchJobPhase('idle')
 }, { immediate: true })
 
 watch([loading, loadingMore, domSettling, pendingPaintJobs], ([l, lm, ds, pp], [prevL, prevLm, prevDs, prevPp]) => {
