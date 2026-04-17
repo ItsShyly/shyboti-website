@@ -97,6 +97,16 @@ const loadingOverlayLogoUrl = 'https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995
 const domSettling = ref(false)
 const pendingPaintJobs = ref(0)
 let domSettleToken = 0
+type SearchJobPhase = 'idle' | 'fetch' | 'display' | 'visuals'
+const searchJobPhase = ref<SearchJobPhase>('idle')
+const activeSearchJob = ref(0)
+const visualsPhaseActive = ref(false)
+
+function setSearchJobPhase(phase: SearchJobPhase) {
+  if (searchJobPhase.value === phase) return
+  searchJobPhase.value = phase
+  console.debug(`[logs:job] phase=${phase}`, { job: activeSearchJob.value })
+}
 
 const isMobile = () => window.matchMedia('(max-width: 680px)').matches
 
@@ -423,6 +433,9 @@ async function fetchOldestDate(ch: string): Promise<Date> {
 async function search() {
   readInputs()
   if (!channel.value.trim()) { error.value = 'Channel is required.'; return }
+  activeSearchJob.value += 1
+  visualsPhaseActive.value = false
+  setSearchJobPhase('fetch')
   const _dbgT0 = performance.now()
   console.debug('[logs:search] started', { channel: channel.value, dateFrom: dateFrom.value, dateUntil: dateUntil.value, user: userFilter.value })
 
@@ -435,6 +448,9 @@ async function search() {
   if (isMobile()) searchExpanded.value = false
   loading.value = true; error.value = ''; searched.value = true
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
+  paintQueue.length = 0
+  pendingPaintJobs.value = 0
+  paintConcurrent = 0
   paintAutoRequested = 0
   virtualStart.value = 0; virtualEnd.value = 0
   cursorDate = null; cursorMonth = null
@@ -760,6 +776,7 @@ function loadingDebugSnapshot() {
     loadingMore: loadingMore.value,
     domSettling: domSettling.value,
     pendingPaintJobs: pendingPaintJobs.value,
+    phase: searchJobPhase.value,
     msgs: msgs.value.length,
     displayItems: displayItems.value.length,
     visibleItems: visibleDisplayItems.value.length,
@@ -944,7 +961,7 @@ const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map())
 const PAINT_MAX_CONCURRENT = 4
 const PAINT_AUTO_LIMIT = 32
 let paintConcurrent = 0
-const paintQueue: string[] = []
+const paintQueue: Array<{ key: string; jobId: number }> = []
 let paintAutoRequested = 0
 
 function intToRgba(c: number): string {
@@ -1033,7 +1050,7 @@ function drainPaintQueue() {
     if (!next) break
     paintConcurrent += 1
     pendingPaintJobs.value += 1
-    void fetchPaint(next).finally(() => {
+    void fetchPaint(next.key, next.jobId).finally(() => {
       paintConcurrent = Math.max(0, paintConcurrent - 1)
       pendingPaintJobs.value = Math.max(0, pendingPaintJobs.value - 1)
       drainPaintQueue()
@@ -1041,7 +1058,8 @@ function drainPaintQueue() {
   }
 }
 
-async function fetchPaint(key: string) {
+async function fetchPaint(key: string, jobId: number) {
+  if (jobId !== activeSearchJob.value) return
   try {
     const res = await fetch(`${API}/twitch/user/${encodeURIComponent(key)}`, {
       headers: session.value ? { Authorization: `Bearer ${session.value.token}` } : {}
@@ -1060,6 +1078,7 @@ async function fetchPaint(key: string) {
       personalEmotes?: Array<{ id: string; name: string; url: string }>
       twitchUserEmotes?: Array<{ id: string; name: string; url: string }>
     }
+    if (jobId !== activeSearchJob.value) return
     if (data.paint) {
       paintCache.set(key, data.paint)
       const newMap = new Map(paintStyles.value)
@@ -1098,11 +1117,12 @@ async function ensurePaint(username: string) {
   const key = username.toLowerCase()
   if (paintCache.has(key)) return
   paintCache.set(key, null) // mark queued/fetching to avoid duplicate requests
-  paintQueue.push(key)
+  paintQueue.push({ key, jobId: activeSearchJob.value })
   drainPaintQueue()
 }
 
 watch(visibleDisplayItems, (list) => {
+  if (!visualsPhaseActive.value) return
   if (paintAutoRequested >= PAINT_AUTO_LIMIT) return
   const seen = new Set<string>()
   for (const item of list) {
@@ -1126,6 +1146,24 @@ watch(displayItems, async () => {
   markDomSettling()
 }, { flush: 'post' })
 
+watch(loading, (isLoading) => {
+  if (isLoading) {
+    visualsPhaseActive.value = false
+    setSearchJobPhase('fetch')
+    return
+  }
+  const jobId = activeSearchJob.value
+  setSearchJobPhase('display')
+  void nextTick()
+    .then(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+    .then(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+    .then(() => {
+      if (jobId !== activeSearchJob.value) return
+      visualsPhaseActive.value = true
+      setSearchJobPhase('visuals')
+    })
+}, { flush: 'post' })
+
 watch(paintStyles, () => {
   // Avoid retriggering DOM settling for each background paint update.
   if (loading.value || loadingMore.value) markDomSettling()
@@ -1133,6 +1171,7 @@ watch(paintStyles, () => {
 
 watch(hasRunningJobs, (running) => {
   document.body.classList.toggle('logs-jobs-running', running)
+  if (!running) setSearchJobPhase('idle')
 }, { immediate: true })
 
 watch([loading, loadingMore, domSettling, pendingPaintJobs], ([l, lm, ds, pp], [prevL, prevLm, prevDs, prevPp]) => {
