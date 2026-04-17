@@ -940,6 +940,9 @@ function esc(s: string) {
 const paintCache  = new Map<string, { stops: any[]; shadows: any[]; imageUrl: string | null; color?: number | null; angle?: number | null; function?: string | null; repeat?: boolean } | null>()
 const paintStyles = ref<Map<string, Record<string, string>>>(new Map())
 const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map())
+const PAINT_MAX_CONCURRENT = 4
+let paintConcurrent = 0
+const paintQueue: string[] = []
 
 function intToRgba(c: number): string {
   const r = (c >>> 24) & 0xff
@@ -1021,11 +1024,21 @@ function buildPaintStyle(paint: { imageUrl: string | null; stops: { at: number; 
   return styles
 }
 
-async function ensurePaint(username: string) {
-  const key = username.toLowerCase()
-  if (paintCache.has(key)) return
-  paintCache.set(key, null) // <<< mark as fetching to avoid duplicate requests
-  pendingPaintJobs.value += 1
+function drainPaintQueue() {
+  while (paintConcurrent < PAINT_MAX_CONCURRENT && paintQueue.length > 0) {
+    const next = paintQueue.shift()
+    if (!next) break
+    paintConcurrent += 1
+    pendingPaintJobs.value += 1
+    void fetchPaint(next).finally(() => {
+      paintConcurrent = Math.max(0, paintConcurrent - 1)
+      pendingPaintJobs.value = Math.max(0, pendingPaintJobs.value - 1)
+      drainPaintQueue()
+    })
+  }
+}
+
+async function fetchPaint(key: string) {
   try {
     const res = await fetch(`${API}/twitch/user/${encodeURIComponent(key)}`, {
       headers: session.value ? { Authorization: `Bearer ${session.value.token}` } : {}
@@ -1075,15 +1088,22 @@ async function ensurePaint(username: string) {
     }
   } catch {
     paintCache.delete(key)
-  } finally {
-    pendingPaintJobs.value = Math.max(0, pendingPaintJobs.value - 1)
   }
 }
 
-watch(msgs, (list) => {
+async function ensurePaint(username: string) {
+  const key = username.toLowerCase()
+  if (paintCache.has(key)) return
+  paintCache.set(key, null) // mark queued/fetching to avoid duplicate requests
+  paintQueue.push(key)
+  drainPaintQueue()
+}
+
+watch(visibleDisplayItems, (list) => {
   const seen = new Set<string>()
-  for (const m of list) {
-    const u = m.username?.toLowerCase()
+  for (const item of list) {
+    if (item.kind !== 'msg') continue
+    const u = item.msg.username?.toLowerCase()
     if (u && !seen.has(u) && !paintCache.has(u)) {
       seen.add(u)
       ensurePaint(u)
@@ -1264,6 +1284,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :value="channel"
               class="field-input"
               placeholder="channelname"
+              @input="channel = ($event.target as HTMLInputElement).value"
               @keydown.enter="search"
               autocomplete="off"
               spellcheck="false"
@@ -1276,6 +1297,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :value="userFilter"
               class="field-input"
               placeholder="username"
+              @input="userFilter = ($event.target as HTMLInputElement).value"
               @keydown.enter="search"
               autocomplete="off"
               spellcheck="false"
@@ -1288,6 +1310,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :value="termFilter"
               class="field-input"
               placeholder="search term"
+              @input="termFilter = ($event.target as HTMLInputElement).value"
               @keydown.enter="search"
               autocomplete="off"
               spellcheck="false"
