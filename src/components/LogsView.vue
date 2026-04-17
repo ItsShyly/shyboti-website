@@ -435,6 +435,7 @@ async function search() {
   if (isMobile()) searchExpanded.value = false
   loading.value = true; error.value = ''; searched.value = true
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
+  paintAutoRequested = 0
   virtualStart.value = 0; virtualEnd.value = 0
   cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
@@ -941,8 +942,10 @@ const paintCache  = new Map<string, { stops: any[]; shadows: any[]; imageUrl: st
 const paintStyles = ref<Map<string, Record<string, string>>>(new Map())
 const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map())
 const PAINT_MAX_CONCURRENT = 4
+const PAINT_AUTO_LIMIT = 32
 let paintConcurrent = 0
 const paintQueue: string[] = []
+let paintAutoRequested = 0
 
 function intToRgba(c: number): string {
   const r = (c >>> 24) & 0xff
@@ -1100,12 +1103,15 @@ async function ensurePaint(username: string) {
 }
 
 watch(visibleDisplayItems, (list) => {
+  if (paintAutoRequested >= PAINT_AUTO_LIMIT) return
   const seen = new Set<string>()
   for (const item of list) {
     if (item.kind !== 'msg') continue
+    if (paintAutoRequested >= PAINT_AUTO_LIMIT) break
     const u = item.msg.username?.toLowerCase()
     if (u && !seen.has(u) && !paintCache.has(u)) {
       seen.add(u)
+      paintAutoRequested += 1
       ensurePaint(u)
     }
   }
@@ -1121,7 +1127,8 @@ watch(displayItems, async () => {
 }, { flush: 'post' })
 
 watch(paintStyles, () => {
-  markDomSettling()
+  // Avoid retriggering DOM settling for each background paint update.
+  if (loading.value || loadingMore.value) markDomSettling()
 }, { flush: 'post' })
 
 watch(hasRunningJobs, (running) => {
