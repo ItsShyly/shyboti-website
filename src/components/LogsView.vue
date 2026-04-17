@@ -226,10 +226,14 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
   const dd  = String(d).padStart(2, '0')
   const params = new URLSearchParams({ channel: ch, year: String(y), month: mm, day: dd, limit: '10000' })
   if (termFilter.value.trim()) params.set('q', termFilter.value.trim())
+  const _t0 = performance.now()
   const res = await fetch(`${API}/logs/day?${params}`, { signal })
   if (!res.ok) return []
-  const data = await res.json() as any
+  const raw = await res.text()
+  const _fetchMs = performance.now() - _t0 | 0
+  const data = JSON.parse(raw) as any
   let messages: LogMsg[] = data?.messages ?? []
+  console.debug(`[logs:fetchDay] ${ch} ${y}-${mm}-${dd} → ${messages.length} msgs, ${(raw.length/1024)|0}KB, ${_fetchMs}ms`)
   if (termFilter.value.trim()) {
     const term = termFilter.value.trim().toLowerCase()
     messages = messages.filter(m => m.text.toLowerCase().includes(term))
@@ -241,10 +245,14 @@ async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal)
   const mm  = String(m).padStart(2, '0')
   const u   = userFilter.value.trim().toLowerCase()
   const params = new URLSearchParams({ channel: ch, user: u, year: String(y), month: mm, limit: '100000' })
+  const _t0 = performance.now()
   const res = await fetch(`${API}/logs/usermonth?${params}`, { signal })
   if (!res.ok) return []
-  const data = await res.json() as any
+  const raw = await res.text()
+  const _fetchMs = performance.now() - _t0 | 0
+  const data = JSON.parse(raw) as any
   let messages: LogMsg[] = data?.messages ?? []
+  console.debug(`[logs:fetchMonth] ${ch} ${y}-${mm} user=${u||'(all)'} → ${messages.length} msgs, ${(raw.length/1024)|0}KB, ${_fetchMs}ms`)
   if (termFilter.value.trim()) {
     const term = termFilter.value.trim().toLowerCase()
     messages = messages.filter(m => m.text.toLowerCase().includes(term))
@@ -415,6 +423,8 @@ async function fetchOldestDate(ch: string): Promise<Date> {
 async function search() {
   readInputs()
   if (!channel.value.trim()) { error.value = 'Channel is required.'; return }
+  const _dbgT0 = performance.now()
+  console.debug('[logs:search] started', { channel: channel.value, dateFrom: dateFrom.value, dateUntil: dateUntil.value, user: userFilter.value })
 
   const hashId = readHashId()
   pushSearchUrl()
@@ -547,6 +557,9 @@ async function search() {
       scrollToBottom()
     }
   }
+
+  const _dbgTDone = performance.now()
+  console.debug(`[logs:search] done — ${msgs.value.length} msgs, virtual=${useVirtual.value}, total=${_dbgTDone - _dbgT0 | 0}ms`)
 
   await nextTick()
   attachScrollListener()
@@ -1065,7 +1078,11 @@ watch(msgs, (list) => {
 }, { flush: 'post' })
 
 watch(displayItems, async () => {
+  const _t0 = performance.now()
   recalcVirtualWindow()
+  await nextTick()
+  const _t1 = performance.now()
+  console.debug(`[logs:displayItems] recalcVirtualWindow=${(_t1-_t0)|0}ms, items=${displayItems.value.length}, virtual=${useVirtual.value}, visible=${visibleDisplayItems.value.length}`)
   markDomSettling()
 }, { flush: 'post' })
 
