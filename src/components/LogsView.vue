@@ -768,6 +768,12 @@ const bottomSpacerHeight = computed(() => {
 })
 const hasRunningJobs = computed(() => loading.value || loadingMore.value || domSettling.value || pendingPaintJobs.value > 0)
 const showFloatingFetch = computed(() => hasRunningJobs.value)
+const floatingFetchStatusText = computed(() => {
+  const phase = searchJobPhase.value
+  const parts = [`job #${activeSearchJob.value}`, phase]
+  if (phase === 'visuals') parts.push(`queue ${pendingPaintJobs.value}`)
+  return parts.join(' | ')
+})
 let floatingFetchStartedAt: number | null = null
 
 function loadingDebugSnapshot() {
@@ -1625,7 +1631,10 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
     <div class="logs-fetch-floating" :class="{ visible: showFloatingFetch }" aria-live="polite" :aria-busy="showFloatingFetch ? 'true' : 'false'">
       <img class="logs-fetch-logo" :src="loadingOverlayLogoUrl" alt="ShyBoti loading" loading="eager" decoding="async" fetchpriority="high" />
-      <span class="logs-fetch-text">logs getting displayed...</span>
+      <div class="logs-fetch-copy">
+        <span class="logs-fetch-text">logs getting displayed...</span>
+        <span class="logs-fetch-meta">{{ floatingFetchStatusText }}</span>
+      </div>
     </div>
   </div>
 </template>
@@ -1868,12 +1877,23 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   animation: logs-fetch-spin 1s linear infinite;
   transform-origin: center center;
 }
+.logs-fetch-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 .logs-fetch-text {
   font-size: 11px;
   font-weight: 700;
   letter-spacing: .03em;
   color: #f2d3ff;
   text-transform: lowercase;
+}
+.logs-fetch-meta {
+  font-size: 10px;
+  letter-spacing: .02em;
+  color: #b99bc8;
+  text-transform: none;
 }
 @keyframes logs-fetch-spin {
   to { transform: rotate(360deg); }
