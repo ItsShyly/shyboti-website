@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick, type VNode } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, type VNode, type Directive } from 'vue'
 import { useRouter } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
@@ -8,6 +8,55 @@ import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+
+// ─── DOM-cache directive for server-rendered rows ────────────────────────────
+// The virtual scroller recycles DOM elements on scroll. With v-html, every
+// recycle destroys and recreates all <img> elements, triggering re-decode even
+// when the images are already in cache. This directive caches the actual DOM
+// subtree by message ID and re-attaches it on recycle — images stay loaded.
+const _rowDomCache = new Map<string, Element>()
+const _ROW_CACHE_MAX = 600
+
+function _applyCachedHtml(el: HTMLElement, id: string, html: string) {
+  if (el.dataset.cid === id) return                  // same item → nothing to do
+
+  // detach old content and save to cache
+  const oldId = el.dataset.cid
+  if (oldId && el.firstElementChild) {
+    _rowDomCache.set(oldId, el.removeChild(el.firstElementChild) as Element)
+  }
+  while (el.lastChild) el.removeChild(el.lastChild)  // clear leftovers
+
+  el.dataset.cid = id
+
+  // restore from cache or create new
+  const cached = _rowDomCache.get(id)
+  if (cached) {
+    el.appendChild(cached)
+  } else {
+    el.innerHTML = html
+    if (el.firstElementChild) _rowDomCache.set(id, el.firstElementChild)
+  }
+
+  // simple eviction: drop oldest entries
+  while (_rowDomCache.size > _ROW_CACHE_MAX) {
+    const first = _rowDomCache.keys().next().value
+    if (first === undefined) break
+    _rowDomCache.delete(first)
+  }
+}
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const vCachedHtml: Directive<HTMLElement, { id: string; html: string }> = {
+  mounted(el, { value: { id, html } })  { _applyCachedHtml(el, id, html) },
+  updated(el, { value: { id, html } })  { _applyCachedHtml(el, id, html) },
+  beforeUnmount(el) {
+    const id = el.dataset.cid
+    if (id && el.firstElementChild) {
+      _rowDomCache.set(id, el.removeChild(el.firstElementChild) as Element)
+    }
+  },
+}
 
 // ─── Scroll / render timing logs ─────────────────────────────────────────────
 // Set any of these to true in the browser console to enable that category:
@@ -901,6 +950,7 @@ onUnmounted(() => {
   const scrollerEl = getBody()
   if (scrollerEl) detachEmoteObserver(scrollerEl)
   if (_paintStyleEl) { _paintStyleEl.remove(); _paintStyleEl = null }
+  _rowDomCache.clear()
 })
 
 // Attach/detach the emote MutationObserver + event delegation whenever the scroller mounts.
@@ -1876,7 +1926,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                 'log-row-reply': item.msg._hasReply,
                 'log-row-event': !!item.msg._eventMeta,
               }"
-              v-html="item.msg._rowHtml"
+              v-cached-html="{ id: item.msg.id, html: item.msg._rowHtml }"
             ></div>
 
             <!-- Client-rendered fallback (when server did not pre-render) -->
