@@ -322,13 +322,17 @@ watch(msgs, (list: LogMsg[]) => {
 
 // >>> Emotes
 async function fetchEmotes(ch: string) {
-  emoteMap.value = {}
+  // Accumulate into a plain object first, then assign once.
+  // A single ref replacement is the cheapest way to trigger reactivity watchers
+  // and ensures the row cache is invalidated only once (not on every emote mutation).
+  const next: EmoteMap = {}
   for (const path of [`/emotes/${ch}`, `/emotes/twitch/${ch}`]) {
     try {
       const r = await fetch(`${API}${path}`)
-      if (r.ok) { const d = await r.json() as any; for (const e of d.emotes ?? []) emoteMap.value[e.name] = e.url }
+      if (r.ok) { const d = await r.json() as any; for (const e of d.emotes ?? []) next[e.name] = e.url }
     } catch {}
   }
+  emoteMap.value = next
 }
 
 async function fetchTwitchBadges(ch: string) {
@@ -351,6 +355,13 @@ async function fetchTwitchBadges(ch: string) {
       })
     }
     twitchBadgeMap.value = m
+    // Pre-warm the browser image cache for all badge images so they render
+    // instantly when a badge <img> element is mounted into the virtual list.
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(() => { m.forEach(b => { (new Image()).src = b.imageUrl }) }, { timeout: 2000 })
+    } else {
+      setTimeout(() => { m.forEach(b => { (new Image()).src = b.imageUrl }) }, 100)
+    }
   } catch {}
 }
 
@@ -1087,6 +1098,46 @@ function eventToneClass(m: LogMsg): string {
   return meta ? `tone-${meta.tone}` : ''
 }
 
+// >>> Per-row render cache ─────────────────────────────────────────────────────
+// Each message is expensive to render: badge chip building, paint style lookup,
+// HTML generation, etc. are all called 2× per row (desktop + mobile layout) on
+// every Vue update pass. We cache the results by message-id and bust the cache
+// only when the underlying data (emotes, badges, paints…) actually changes.
+//
+// rowDataVersion is included in v-memo so Vue skips the subtree diff entirely
+// when neither the message ID nor the data version has changed — this eliminates
+// the repeated 200–300 ms per-row cost during virtual-scroll recycling.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface RowData {
+  html:         string
+  badges:       BadgeChip[]
+  nameStyle:    Record<string, string>
+  isMod:        boolean
+  eventMeta:    EventMeta | null
+  paintPreview: string
+}
+
+const rowDataVersion = ref(0)
+const _rowCache = new Map<string, RowData>()
+// The watch is registered after paintStyles/personalEmoteMaps are declared (see below).
+
+function getRowData(m: LogMsg): RowData {
+  const key = m.id ?? `${m.timestamp}:${m.username}`
+  const cached = _rowCache.get(key)
+  if (cached) return cached   // O(1) path — no reactive access, Vue tracks nothing extra
+  const d: RowData = {
+    html:         renderMsgForMessage(m),
+    badges:       buildBadgeChips(m),
+    nameStyle:    userNameStyle(m),
+    isMod:        isModerationSystemMessage(m),
+    eventMeta:    getEventMeta(m),
+    paintPreview: snippetPaintPreview(m),
+  }
+  _rowCache.set(key, d)
+  return d
+}
+
 function esc(s: string) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')
 }
@@ -1096,6 +1147,15 @@ function esc(s: string) {
 const paintCache  = new Map<string, { stops: any[]; shadows: any[]; imageUrl: string | null; color?: number | null; angle?: number | null; function?: string | null; repeat?: boolean } | null>()
 const paintStyles = ref<Map<string, Record<string, string>>>(new Map())
 const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map())
+
+// Bust the row cache whenever any visual dependency changes.
+// emoteMap, personalEmoteMaps and paintStyles are replaced atomically (never
+// mutated in-place after our fetchEmotes fix) so a shallow watch is sufficient.
+watch(
+  [emoteMap, personalEmoteMaps, paintStyles, twitchBadgeMap, sevenTvBadgeMap, hide7tv, plainUsernames],
+  () => { _rowCache.clear(); rowDataVersion.value++ },
+)
+
 const PAINT_MAX_CONCURRENT = 16 // higher concurrency — network is the bottleneck, not CPU
 const PAINT_AUTO_LIMIT = 80   // cover a large viewport's worth of unique users
 let paintConcurrent = 0
@@ -1247,6 +1307,12 @@ function commitCosmetics(acc: {
     const m = new Map(sevenTvBadgeMap.value)
     acc.badges.forEach((v, k) => m.set(k, v))
     sevenTvBadgeMap.value = m
+    // Pre-warm browser image cache for 7TV badge images
+    if (typeof requestIdleCallback !== 'undefined') {
+      requestIdleCallback(() => { acc.badges.forEach(b => { (new Image()).src = b.imageUrl }) }, { timeout: 2000 })
+    } else {
+      setTimeout(() => { acc.badges.forEach(b => { (new Image()).src = b.imageUrl }) }, 100)
+    }
   }
   if (acc.emotes.size) {
     const m = new Map(personalEmoteMaps.value)
@@ -1677,23 +1743,24 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               v-else
               :id="`log-${item.msg.id}`"
               class="log-row-outer"
-              :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'log-row-event': isHighlightedEvent(item.msg) }"
+              v-memo="[item.msg.id, highlightId === item.msg.id, rowDataVersion]"
+              :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'log-row-event': getRowData(item.msg).eventMeta !== null }"
               @vnodeMounted="(vn: VNode) => rowMounted(vn.el as Element)"
               @vnodeBeforeUpdate="(vn: VNode) => rowBeforeUpdate(vn.el as Element)"
               @vnodeUpdated="(vn: VNode) => rowUpdated(vn.el as Element)"
             >
               <div class="log-row">
                 <div class="log-time-col">
-                  <div v-if="getEventMeta(item.msg)" class="log-event-label" :class="eventToneClass(item.msg)">
-                    <span class="log-event-icon">{{ getEventMeta(item.msg)!.icon }}</span>
-                    <span>{{ getEventMeta(item.msg)!.label }}</span>
+                  <div v-if="getRowData(item.msg).eventMeta" class="log-event-label" :class="`tone-${getRowData(item.msg).eventMeta!.tone}`">
+                    <span class="log-event-icon">{{ getRowData(item.msg).eventMeta!.icon }}</span>
+                    <span>{{ getRowData(item.msg).eventMeta!.label }}</span>
                   </div>
                   <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
                   <div class="log-time-short">{{ fmtTimeOnly(item.msg.timestamp) }}</div>
                 </div>
-                <div v-if="!isModerationSystemMessage(item.msg) && buildBadgeChips(item.msg).length" class="log-badges">
+                <div v-if="!getRowData(item.msg).isMod && getRowData(item.msg).badges.length" class="log-badges">
                   <template
-                    v-for="b in buildBadgeChips(item.msg)"
+                    v-for="b in getRowData(item.msg).badges"
                     :key="`${item.msg.id}-${b.kind}-${b.key}`"
                   >
                     <img
@@ -1711,21 +1778,21 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                   </template>
                 </div>
                 <div
-                  v-if="!isModerationSystemMessage(item.msg)"
+                  v-if="!getRowData(item.msg).isMod"
                   class="log-user"
-                  :data-snippet-paint="snippetPaintPreview(item.msg)"
-                  :style="userNameStyle(item.msg)"
+                  :data-snippet-paint="getRowData(item.msg).paintPreview"
+                  :style="getRowData(item.msg).nameStyle"
                   :class="{ 'log-user-clickable': true }"
                   @click.stop="openUserPopup(item.msg.username, channel || item.msg.channel?.replace('#',''), $event)"
                 >{{ item.msg.displayName || item.msg.username }}</div>
                 <div
                   class="log-msg-wrap"
-                  :class="{ 'has-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'is-system-mod': isModerationSystemMessage(item.msg) }"
+                  :class="{ 'has-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'is-system-mod': getRowData(item.msg).isMod }"
                 >
-                  <div v-if="!isModerationSystemMessage(item.msg)" class="log-mobile-msgline">
-                    <span v-if="buildBadgeChips(item.msg).length" class="log-mobile-badges">
+                  <div v-if="!getRowData(item.msg).isMod" class="log-mobile-msgline">
+                    <span v-if="getRowData(item.msg).badges.length" class="log-mobile-badges">
                       <template
-                        v-for="b in buildBadgeChips(item.msg)"
+                        v-for="b in getRowData(item.msg).badges"
                         :key="`mob-${item.msg.id}-${b.kind}-${b.key}`"
                       >
                         <img
@@ -1740,10 +1807,10 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                     </span>
                     <span
                       class="log-mobile-user"
-                      :data-snippet-paint="snippetPaintPreview(item.msg)"
-                      :style="userNameStyle(item.msg)"
+                      :data-snippet-paint="getRowData(item.msg).paintPreview"
+                      :style="getRowData(item.msg).nameStyle"
                     >{{ item.msg.displayName || item.msg.username }}</span><span class="log-mobile-user-colon">:</span>
-                    <span class="log-mobile-msg" v-html="renderMsgForMessage(item.msg)"></span>
+                    <span class="log-mobile-msg" v-html="getRowData(item.msg).html"></span>
                   </div>
                   <div
                     v-if="item.msg.tags?.['reply-parent-msg-body']"
@@ -1756,7 +1823,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                     <span class="reply-parent-user">@{{ item.msg.tags['reply-parent-display-name'] || item.msg.tags['reply-parent-user-login'] || '?' }}:</span>
                     <span class="reply-parent-body">{{ item.msg.tags['reply-parent-msg-body'] }}</span>
                   </div>
-                  <div class="log-msg" v-html="renderMsgForMessage(item.msg)"></div>
+                  <div class="log-msg" v-html="getRowData(item.msg).html"></div>
                 </div>
                 <div class="log-share" @click="shareMsg(item.msg)" title="Copy link">
                   <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
