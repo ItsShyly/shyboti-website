@@ -2105,20 +2105,20 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .log-row-outer.log-row-event:hover {
   background: linear-gradient(90deg, rgba(200, 50, 200, 0.24), rgba(200, 50, 200, 0.08) 50%, rgba(26, 26, 30, 0.9) 100%);
 }
-.log-row-outer.log-row-event .log-row { align-items: center; }
+.log-row-outer.log-row-event :deep(.log-row) { align-items: center; }
 @keyframes hl-fade {
   0%   { background: rgba(111,43,255,.25); }
   100% { background: transparent; }
 }
 
-.log-row {
+:deep(.log-row) {
   display: flex; align-items: baseline; gap: 0;
   padding: 3px 14px;
   font-size: 12px;
 }
 
-.log-time-col { display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0; margin-right: 10px; min-width: 120px; }
-.log-event-label {
+:deep(.log-time-col) { display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0; margin-right: 10px; min-width: 120px; }
+:deep(.log-event-label) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -2132,52 +2132,52 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   border: 1px solid transparent;
   white-space: nowrap;
 }
-.log-event-icon { font-size: 10px; line-height: 1; }
-.log-event-label.tone-first { background: rgba(200, 50, 200, 0.16); border-color: rgba(200, 50, 200, 0.55); color: #f4c2f4; }
-.log-event-label.tone-sub { background: rgba(255, 208, 69, 0.14); border-color: rgba(255, 208, 69, 0.45); color: #ffdd7d; }
-.log-event-label.tone-announce { background: rgba(93, 171, 255, 0.12); border-color: rgba(93, 171, 255, 0.45); color: #a8d3ff; }
-.log-time       { color: #444; font-size: 11px; flex-shrink: 0; }
-.log-time-short { display: none; }
-.log-day-sep    { display: none; }
-.log-badges { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; flex-shrink: 0; }
-.badge-img { display: block; width: 18px; height: 18px; }
-.badge-fallback { font-size: 10px; color: #888; }
-.log-user { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
-.log-user::after { content: ':'; color: #555; margin-right: 5px; }
-.log-msg-wrap { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
-.log-msg-wrap.has-reply { padding-top: 16px; }
-.log-mobile-msgline { display: none; }
-.log-msg-wrap.is-system-mod .log-msg {
+:deep(.log-event-icon) { font-size: 10px; line-height: 1; }
+:deep(.log-event-label.tone-first) { background: rgba(200, 50, 200, 0.16); border-color: rgba(200, 50, 200, 0.55); color: #f4c2f4; }
+:deep(.log-event-label.tone-sub) { background: rgba(255, 208, 69, 0.14); border-color: rgba(255, 208, 69, 0.45); color: #ffdd7d; }
+:deep(.log-event-label.tone-announce) { background: rgba(93, 171, 255, 0.12); border-color: rgba(93, 171, 255, 0.45); color: #a8d3ff; }
+:deep(.log-time)       { color: #444; font-size: 11px; flex-shrink: 0; }
+:deep(.log-time-short) { display: none; }
+:deep(.log-day-sep)    { display: none; }
+:deep(.log-badges) { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; flex-shrink: 0; }
+:deep(.badge-img) { display: block; width: 18px; height: 18px; }
+:deep(.badge-fallback) { font-size: 10px; color: #888; }
+:deep(.log-user) { font-weight: 600; white-space: nowrap; flex-shrink: 0; padding-right: 0; }
+:deep(.log-user)::after { content: ':'; color: #555; margin-right: 5px; }
+:deep(.log-msg-wrap) { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+:deep(.log-msg-wrap.has-reply) { padding-top: 16px; }
+:deep(.log-mobile-msgline) { display: none; }
+:deep(.log-msg-wrap.is-system-mod .log-msg) {
   color: #d0a7a7;
   font-style: italic;
 }
-.log-msg  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
+:deep(.log-msg)  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
 
 /* Reply thread indicator */
-.reply-context {
+:deep(.reply-context) {
   position: absolute; left: 0; right: 0; top: 0;
   display: flex; align-items: center; gap: 4px;
   font-size: 10px; color: #555; padding: 2px 0 3px;
   line-height: 1.25;
   white-space: nowrap; overflow: hidden;
 }
-.reply-context-link { cursor: pointer; }
-.reply-context-link:hover { color: #7f7f7f; }
-.reply-icon { color: #444; font-size: 11px; flex-shrink: 0; }
-.reply-parent-user { color: #777; font-weight: 600; flex-shrink: 0; }
-.reply-parent-body { color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:deep(.reply-context-link) { cursor: pointer; }
+:deep(.reply-context-link):hover { color: #7f7f7f; }
+:deep(.reply-icon) { color: #444; font-size: 11px; flex-shrink: 0; }
+:deep(.reply-parent-user) { color: #777; font-weight: 600; flex-shrink: 0; }
+:deep(.reply-parent-body) { color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.log-share {
+:deep(.log-share) {
   display: flex; align-items: center; justify-content: center;
   width: 20px; height: 20px; color: #444; cursor: pointer;
   opacity: 0; transition: opacity .15s, color .15s; flex-shrink: 0; margin-left: 6px;
 }
-.log-row-outer:hover .log-share { opacity: 1; }
-.log-share:hover { color: #9d6cff; }
-.log-share svg { width: 13px; height: 13px; }
+.log-row-outer:hover :deep(.log-share) { opacity: 1; }
+:deep(.log-share):hover { color: #9d6cff; }
+:deep(.log-share svg) { width: 13px; height: 13px; }
 
-.log-user-clickable { cursor: pointer; }
-.log-user-clickable:hover { opacity: 0.8; text-decoration: underline dotted; }
+:deep(.log-user-clickable) { cursor: pointer; }
+:deep(.log-user-clickable):hover { opacity: 0.8; text-decoration: underline dotted; }
 
 :deep(.chat-emote) { height: 28px; vertical-align: middle; display: inline-block; margin: 0 1px; }
 
@@ -2402,7 +2402,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .logs-thead   { display: none !important; }
   .logs-tbody   { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
-  .log-day-sep {
+  :deep(.log-day-sep) {
     display: block;
     padding: 6px 12px 3px;
     font-size: 10px; font-weight: 700;
@@ -2412,7 +2412,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     position: sticky; top: -2px; z-index: 1;
   }
 
-  .log-row {
+  :deep(.log-row) {
     display: flex !important;
     flex-wrap: nowrap;
     align-items: baseline;
@@ -2420,21 +2420,21 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     padding: 3px 12px;
     grid-template-columns: unset !important;
   }
-  .log-time-col { min-width: auto; margin-right: 0; }
-  .log-event-label { display: none; }
-  .log-time       { display: none; }
-  .log-time-short { display: block; flex-shrink: 0; color: #555; font-size: 11px; white-space: nowrap; }
-  .log-badges { display: none; }
-  .log-user  { display: none; }
-  .log-msg-wrap { flex: 1; min-width: 0; display: block; }
-  .log-msg-wrap:not(.is-system-mod) > .log-msg { display: none; }
-  .log-mobile-msgline { display: block; font-size: 12px; color: #ccc; line-height: 1.6; word-break: break-word; }
-  .log-mobile-badges { display: inline-flex; align-items: center; gap: 3px; margin-right: 4px; vertical-align: middle; }
-  .log-mobile-badges .badge-img { width: 16px; height: 16px; }
-  .log-mobile-user { font-weight: 600; vertical-align: baseline; }
-  .log-mobile-user-colon { color: #555; margin-right: 5px; }
-  .log-mobile-msg { display: inline; }
-  .log-msg { font-size: 12px; min-width: 0; word-break: break-word; }
-  .log-share { flex-shrink: 0; opacity: 0.5 !important; }
+  :deep(.log-time-col) { min-width: auto; margin-right: 0; }
+  :deep(.log-event-label) { display: none; }
+  :deep(.log-time)       { display: none; }
+  :deep(.log-time-short) { display: block; flex-shrink: 0; color: #555; font-size: 11px; white-space: nowrap; }
+  :deep(.log-badges) { display: none; }
+  :deep(.log-user)  { display: none; }
+  :deep(.log-msg-wrap) { flex: 1; min-width: 0; display: block; }
+  :deep(.log-msg-wrap:not(.is-system-mod) > .log-msg) { display: none; }
+  :deep(.log-mobile-msgline) { display: block; font-size: 12px; color: #ccc; line-height: 1.6; word-break: break-word; }
+  :deep(.log-mobile-badges) { display: inline-flex; align-items: center; gap: 3px; margin-right: 4px; vertical-align: middle; }
+  :deep(.log-mobile-badges .badge-img) { width: 16px; height: 16px; }
+  :deep(.log-mobile-user) { font-weight: 600; vertical-align: baseline; }
+  :deep(.log-mobile-user-colon) { color: #555; margin-right: 5px; }
+  :deep(.log-mobile-msg) { display: inline; }
+  :deep(.log-msg) { font-size: 12px; min-width: 0; word-break: break-word; }
+  :deep(.log-share) { flex-shrink: 0; opacity: 0.5 !important; }
 }
 </style>
