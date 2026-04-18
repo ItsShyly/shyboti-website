@@ -251,6 +251,7 @@ const loadingMore = ref(false)
 const loadingNewer = ref(false)
 const noMore      = ref(false)
 const noNewer     = ref(true)   // true = we're at the most-recent data
+const isNearBottom = ref(true)  // false = user has scrolled up; show "jump to newest" button
 const error       = ref('')
 const searched    = ref(false)
 const emoteMap    = ref<EmoteMap>({})
@@ -572,26 +573,33 @@ async function prependMsgs(newMsgs: LogMsg[]) {
 }
 
 async function appendMsgs(newMsgs: LogMsg[]) {
-  const body   = getBody()
-  const prevST = body?.scrollTop ?? 0
-  const prevSH = body?.scrollHeight ?? 0
+  const body = getBody()
   const existingIds = new Set(msgs.value.map(m => m.id))
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
   if (!deduped.length) return
-  let next = [...msgs.value, ...deduped]
-  // Trim the oldest end to stay within the sliding window
-  if (next.length > MSG_MAX_SHOWN) {
-    const lastTrimmed = next[next.length - MSG_MAX_SHOWN - 1]!
+  const combined = [...msgs.value, ...deduped]
+
+  if (combined.length > MSG_MAX_SHOWN) {
+    const trimCount  = combined.length - MSG_MAX_SHOWN
+    const lastTrimmed = combined[trimCount - 1]!
     const ts = new Date(lastTrimmed.timestamp)
-    // Reset older cursor to the trimmed day so loadOlder re-fetches from cache
     cursorDate  = new Date(ts.getFullYear(), ts.getMonth(), ts.getDate())
     cursorMonth = { y: ts.getFullYear(), m: ts.getMonth() + 1 }
-    next = next.slice(next.length - MSG_MAX_SHOWN)
-    noMore.value = false  // more older content exists (was trimmed)
+    noMore.value = false
+
+    // Step 1: trim the head only — measure the scroll-height shrinkage and correct.
+    // This keeps the viewport anchored to the same visual rows after top items vanish.
+    const prevST = body?.scrollTop ?? 0
+    const prevSH = body?.scrollHeight ?? 0
+    msgs.value = msgs.value.slice(trimCount)
+    await nextTick()
+    if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH) // delta is negative → scrollTop decreases
+
+    // Step 2: append new items at the bottom — they appear below the viewport, no correction needed.
+    msgs.value = [...msgs.value, ...deduped]
+  } else {
+    msgs.value = combined
   }
-  msgs.value = next
-  await nextTick()
-  if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
 
 async function loadOlder() {
@@ -783,8 +791,9 @@ function onScroll() {
     rafScrollPending = false
     const body = getBody()
     if (!body) return
-    if (!loadingMore.value && !noMore.value && body.scrollTop < 120) loadOlder()
     const distFromBottom = body.scrollHeight - body.clientHeight - body.scrollTop
+    isNearBottom.value = distFromBottom < 200
+    if (!loadingMore.value && !noMore.value && body.scrollTop < 120) loadOlder()
     if (!loadingNewer.value && !noNewer.value && distFromBottom < 120) loadNewer()
     if (!wheelScrollActive) checkPaints()
   })
@@ -894,7 +903,7 @@ async function search() {
   if (isMobile()) searchExpanded.value = false
   loading.value = true; error.value = ''; searched.value = true
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
-  noNewer.value = true; loadingNewer.value = false
+  noNewer.value = true; loadingNewer.value = false; isNearBottom.value = true
   paintQueue.length = 0
   pendingPaintJobs.value = 0
   paintConcurrent = 0
@@ -1054,6 +1063,37 @@ function scrollToBottom() {
     }
     settle()
   })
+}
+
+async function jumpToNewest() {
+  if (noNewer.value) {
+    // We already have the most recent messages — just scroll there.
+    scrollToBottom()
+    return
+  }
+  // Reload the sliding window from the newest end, then scroll down.
+  abortCtrl.abort(); abortCtrl = new AbortController()
+  const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
+  msgs.value = []
+  noMore.value = false; loadingMore.value = false
+  noNewer.value = true; loadingNewer.value = false
+  isNearBottom.value = true
+  cursorNewerDate = null; cursorNewerMonth = null
+  loading.value = true
+  const today = new Date()
+  if (userFilter.value.trim()) {
+    const y = today.getFullYear(), m = today.getMonth() + 1
+    try { msgs.value = await fetchMonth(ch, y, m, abortCtrl.signal) } catch {}
+    cursorMonth = prevMonth({ y, m })
+  } else {
+    try { msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal) } catch {}
+    cursorDate = prevDay(today)
+  }
+  loading.value = false
+  await nextTick()
+  scrollToBottom()
+  attachScrollListener()
+  await autoFillIfShort()
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
@@ -2409,6 +2449,16 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           </template>
             </DynamicScroller>
           </div>
+
+          <!-- Jump-to-newest pill: appears when the user has scrolled up -->
+          <transition name="jump-fade">
+            <button
+              v-if="searched && !isNearBottom"
+              class="jump-to-newest-btn"
+              @click="jumpToNewest"
+            >{{ t('logs.jump_to_newest') }}</button>
+          </transition>
+
           <div v-if="!isMobileView" class="event-rail" aria-hidden="true">
             <button
               v-for="m in timelineMarkers"
@@ -2652,6 +2702,29 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .top-loader.no-more { color: #333; }
 .spinner     { display: inline-block; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* Jump-to-newest pill */
+.jump-to-newest-btn {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: 5px 14px;
+  background: #7c3aed;
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,.5);
+  transition: background .15s, opacity .15s;
+}
+.jump-to-newest-btn:hover { background: #6d28d9; }
+.jump-fade-enter-active, .jump-fade-leave-active { transition: opacity .2s, transform .2s; }
+.jump-fade-enter-from, .jump-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(6px); }
 
 .log-row-outer {
   border-bottom: 1px solid #1a1a1e;
