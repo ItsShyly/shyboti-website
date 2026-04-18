@@ -466,6 +466,7 @@ async function search() {
   pendingPaintJobs.value = 0
   paintConcurrent = 0
   paintAutoRequested = 0
+  bulkFetchDone = false
   cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   fetchEmotes(ch)
@@ -772,7 +773,8 @@ const displayItems = computed<DisplayItem[]>(() => {
   return items
 })
 
-const hasRunningJobs = computed(() => loading.value || loadingMore.value || domSettling.value || pendingPaintJobs.value > 0)
+// Paint loading is background-only — it must NOT block the UI phase or overlay.
+const hasRunningJobs = computed(() => loading.value || loadingMore.value || domSettling.value)
 const showFloatingFetch = computed(() => hasRunningJobs.value)
 let floatingFetchStartedAt: number | null = null
 
@@ -820,7 +822,8 @@ function renderMsg(text: string): string {
   if (!Object.keys(em).length) return esc(text)
   return text.split(' ').map(word => {
     const url = em[word]
-    return url ? `<img class="chat-emote" src="${url}" alt="${esc(word)}" title="${esc(word)}" loading="lazy">` : esc(word)
+    // No loading="lazy" — virtual scroller only mounts rows when visible, eager is correct here.
+    return url ? `<img class="chat-emote" src="${url}" alt="${esc(word)}" title="${esc(word)}">` : esc(word)
   }).join(' ')
 }
 
@@ -828,7 +831,7 @@ function renderMsgWithMap(text: string, em: EmoteMap): string {
   if (!Object.keys(em).length) return esc(text)
   return text.split(' ').map(word => {
     const url = em[word]
-    return url ? `<img class="chat-emote" src="${url}" alt="${esc(word)}" title="${esc(word)}" loading="lazy">` : esc(word)
+    return url ? `<img class="chat-emote" src="${url}" alt="${esc(word)}" title="${esc(word)}">` : esc(word)
   }).join(' ')
 }
 
@@ -962,8 +965,8 @@ function esc(s: string) {
 const paintCache  = new Map<string, { stops: any[]; shadows: any[]; imageUrl: string | null; color?: number | null; angle?: number | null; function?: string | null; repeat?: boolean } | null>()
 const paintStyles = ref<Map<string, Record<string, string>>>(new Map())
 const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map())
-const PAINT_MAX_CONCURRENT = 4
-const PAINT_AUTO_LIMIT = 32
+const PAINT_MAX_CONCURRENT = 16 // higher concurrency — network is the bottleneck, not CPU
+const PAINT_AUTO_LIMIT = 80   // cover a large viewport's worth of unique users
 let paintConcurrent = 0
 const paintQueue: Array<{ key: string; jobId: number }> = []
 let paintAutoRequested = 0
@@ -1062,56 +1065,85 @@ function drainPaintQueue() {
   }
 }
 
+// Applies one user's cosmetic payload into the reactive maps.
+function applyCosmetic(key: string, data: {
+  paint?: any
+  sevenTv?: { badge?: { id?: string; url?: string; tooltip?: string | null } | null }
+  personalEmotes?: Array<{ id: string; name: string; url: string }>
+  twitchUserEmotes?: Array<{ id: string; name: string; url: string }>
+}) {
+  if (data.paint) {
+    paintCache.set(key, data.paint)
+    const newMap = new Map(paintStyles.value)
+    newMap.set(key, buildPaintStyle(data.paint, userColorByName(key)))
+    paintStyles.value = newMap
+  } else {
+    // Mark as fetched-but-no-paint so we never re-request.
+    if (!paintCache.has(key)) paintCache.set(key, null)
+  }
+  const sevBadgeUrl = String(data.sevenTv?.badge?.url ?? '').trim()
+  if (sevBadgeUrl) {
+    const next = new Map(sevenTvBadgeMap.value)
+    next.set(key, { imageUrl: sevBadgeUrl, title: String(data.sevenTv?.badge?.tooltip ?? '7TV Badge') })
+    sevenTvBadgeMap.value = next
+  }
+  const hasPersonal = Array.isArray(data.personalEmotes) && data.personalEmotes.length > 0
+  const hasTwitchUser = Array.isArray(data.twitchUserEmotes) && data.twitchUserEmotes.length > 0
+  if (hasPersonal || hasTwitchUser) {
+    const p: EmoteMap = {}
+    for (const e of data.personalEmotes ?? []) { if (e?.name && e?.url) p[e.name] = e.url }
+    for (const e of data.twitchUserEmotes ?? []) { if (e?.name && e?.url) p[e.name] = e.url }
+    const next = new Map(personalEmoteMaps.value)
+    next.set(key, p)
+    personalEmoteMaps.value = next
+  }
+}
+
+// Bulk fetch cosmetics for multiple users in one request.
+// Processes results as they arrive so the UI updates progressively.
+async function fetchBulkCosmetics(logins: string[], jobId: number) {
+  if (logins.length === 0) return
+  const CHUNK = 80 // 7TV GQL aliases per request; keep well below any size limit
+  for (let i = 0; i < logins.length; i += CHUNK) {
+    if (jobId !== activeSearchJob.value) return
+    const chunk = logins.slice(i, i + CHUNK)
+    try {
+      const res = await fetch(`${API}/twitch/users/cosmetics`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session.value ? { Authorization: `Bearer ${session.value.token}` } : {}),
+        },
+        body: JSON.stringify({ logins: chunk, channel: channel.value || undefined }),
+      })
+      if (!res.ok || jobId !== activeSearchJob.value) continue
+      const data = await res.json() as { results: Record<string, any> }
+      if (jobId !== activeSearchJob.value) continue
+      for (const [login, cosmetic] of Object.entries(data.results ?? {})) {
+        applyCosmetic(login, cosmetic)
+      }
+    } catch {
+      // Non-fatal: fall back to per-user queue for this chunk
+      for (const login of chunk) ensurePaint(login)
+    }
+  }
+}
+
 async function fetchPaint(key: string, jobId: number) {
   if (jobId !== activeSearchJob.value) return
   try {
     const res = await fetch(`${API}/twitch/user/${encodeURIComponent(key)}`, {
       headers: session.value ? { Authorization: `Bearer ${session.value.token}` } : {}
     })
-    if (!res.ok) {
-      paintCache.delete(key)
-      return
-    }
+    if (!res.ok) { paintCache.delete(key); return }
     const data = await res.json() as {
       paint?: any
-      sevenTv?: {
-        hasAccount?: boolean
-        hasPersonalSet?: boolean
-        badge?: { id?: string; url?: string; tooltip?: string | null }
-      }
+      sevenTv?: { badge?: { id?: string; url?: string; tooltip?: string | null } | null }
       personalEmotes?: Array<{ id: string; name: string; url: string }>
       twitchUserEmotes?: Array<{ id: string; name: string; url: string }>
     }
     if (jobId !== activeSearchJob.value) return
-    if (data.paint) {
-      paintCache.set(key, data.paint)
-      const newMap = new Map(paintStyles.value)
-      newMap.set(key, buildPaintStyle(data.paint, userColorByName(key)))
-      paintStyles.value = newMap
-    }
-    const sevBadgeUrl = String(data.sevenTv?.badge?.url ?? '').trim()
-    if (sevBadgeUrl) {
-      const next = new Map(sevenTvBadgeMap.value)
-      next.set(key, {
-        imageUrl: sevBadgeUrl,
-        title: String(data.sevenTv?.badge?.tooltip ?? '7TV Badge'),
-      })
-      sevenTvBadgeMap.value = next
-    }
-    const hasSevenTvPersonal = Array.isArray(data.personalEmotes) && data.personalEmotes.length > 0
-    const hasTwitchUser = Array.isArray(data.twitchUserEmotes) && data.twitchUserEmotes.length > 0
-    if (hasSevenTvPersonal || hasTwitchUser) {
-      const p: EmoteMap = {}
-      for (const e of data.personalEmotes ?? []) {
-        if (e?.name && e?.url) p[e.name] = e.url
-      }
-      for (const e of data.twitchUserEmotes ?? []) {
-        if (e?.name && e?.url) p[e.name] = e.url
-      }
-      const next = new Map(personalEmoteMaps.value)
-      next.set(key, p)
-      personalEmoteMaps.value = next
-    }
+    applyCosmetic(key, data)
   } catch {
     paintCache.delete(key)
   }
@@ -1120,26 +1152,46 @@ async function fetchPaint(key: string, jobId: number) {
 async function ensurePaint(username: string) {
   const key = username.toLowerCase()
   if (paintCache.has(key)) return
-  paintCache.set(key, null) // mark queued/fetching to avoid duplicate requests
+  paintCache.set(key, null) // mark queued/fetching
   paintQueue.push({ key, jobId: activeSearchJob.value })
   drainPaintQueue()
 }
 
-// Load paints for the most recently visible users (from the end of the list,
-// since newest messages are at the bottom).
-function checkPaints() {
-  if (!visualsPhaseActive.value || paintAutoRequested >= PAINT_AUTO_LIMIT) return
+// Called when visuals phase activates (initial load) or on scroll (new users entering view).
+// On initial load, collect ALL unique users and send one bulk request.
+// On scroll, new users trickle into the per-user queue.
+let bulkFetchDone = false
+function checkPaints(bulk = false) {
+  if (!visualsPhaseActive.value) return
   const list = displayItems.value
   const seen = new Set<string>()
-  for (let i = list.length - 1; i >= 0 && paintAutoRequested < PAINT_AUTO_LIMIT; i--) {
+  const newUsers: string[] = []
+  for (let i = list.length - 1; i >= 0; i--) {
     const item = list[i]!
     if (item.kind !== 'msg') continue
     const u = item.msg.username?.toLowerCase()
     if (u && !seen.has(u) && !paintCache.has(u)) {
       seen.add(u)
-      paintAutoRequested++
-      ensurePaint(u)
+      newUsers.push(u)
+      // Pre-mark as queued so concurrent calls don't double-enqueue
+      paintCache.set(u, null)
     }
+  }
+  if (newUsers.length === 0) return
+
+  if (bulk || !bulkFetchDone) {
+    // Initial load: send all at once
+    bulkFetchDone = true
+    paintAutoRequested += newUsers.length
+    void fetchBulkCosmetics(newUsers, activeSearchJob.value)
+  } else {
+    // Scroll: only enqueue newly visible users (cap at PAINT_AUTO_LIMIT)
+    for (const u of newUsers) {
+      if (paintAutoRequested >= PAINT_AUTO_LIMIT) break
+      paintAutoRequested++
+      paintQueue.push({ key: u, jobId: activeSearchJob.value })
+    }
+    drainPaintQueue()
   }
 }
 
@@ -1164,7 +1216,7 @@ watch(loading, (isLoading) => {
       if (jobId !== activeSearchJob.value) return
       visualsPhaseActive.value = true
       setSearchJobPhase('visuals')
-      checkPaints()
+      checkPaints(true) // bulk=true: send all users in one request
     })
 }, { flush: 'post' })
 
@@ -1475,7 +1527,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                       :src="b.imageUrl"
                       :alt="b.title || b.label"
                       :title="b.title || b.label"
-                      loading="lazy"
                     />
                     <span v-else class="badge-fallback" :title="b.title || b.label">{{ b.label }}</span>
                   </template>
@@ -1504,7 +1555,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                           :src="b.imageUrl"
                           :alt="b.title || b.label"
                           :title="b.title || b.label"
-                          loading="lazy"
                         />
                         <span v-else class="badge-fallback" :title="b.title || b.label">{{ b.label }}</span>
                       </template>
