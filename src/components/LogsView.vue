@@ -6,7 +6,8 @@ import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
-// vue-virtual-scroller removed — all items rendered in plain DOM for instant scroll
+import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 
 // ─── DOM-cache directive for server-rendered rows ────────────────────────────
 // The virtual scroller recycles DOM elements on scroll. With v-html, every
@@ -124,19 +125,11 @@ function badgeError(ev: Event) {
   _badgeT0.delete(src)
 }
 
-// DynamicScroller @update event — removed; visibleStartIndex now computed from scroll position in onScroll.
-function updateVisibleStartIndex() {
-  const body = getBody()
-  if (!body) return
-  const scrollTop = body.scrollTop
-  // Walk children to find the first row whose bottom is past scrollTop
-  const children = body.children
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i] as HTMLElement
-    if (child.offsetTop + child.offsetHeight > scrollTop) {
-      visibleStartIndex.value = i
-      return
-    }
+// DynamicScroller @update event — tells us when the visible range changes.
+function onScrollerUpdate(startIndex: number, endIndex: number, visibleStart: number, visibleEnd: number) {
+  visibleStartIndex.value = visibleStart
+  if (dbg('recycleEvt')) {
+    console.debug(`[scroll:range] rendered=${startIndex}-${endIndex} visible=${visibleStart}-${visibleEnd} (${endIndex-startIndex+1} in DOM)`)
   }
 }
 
@@ -244,35 +237,27 @@ interface AutomodMsg {
   _automod: true; _category: string; _status: string
 }
 
-// Sliding window: max messages kept in the DOM at once.
-// Enough to cover fast scrollbar dragging without blank space (buffer pre-renders
-// buffer/minItemSize rows, ~360 with buffer=10000 and minItemSize=28).
-const MSG_MAX_SHOWN = 2000
-
 const msgs         = ref<LogMsg[]>([])
 const automodMsgs  = ref<AutomodMsg[]>([])
 const showAutomod  = ref(false)   // toggled by user; only shown to broadcaster
 const isBroadcaster = ref(false)  // true when viewing own channel
 const loading     = ref(false)
 const loadingMore = ref(false)
-const loadingNewer = ref(false)
 const noMore      = ref(false)
-const noNewer     = ref(true)   // true = we're at the most-recent data
-const isNearBottom = ref(true)  // false = user has scrolled up; show "jump to newest" button
 const error       = ref('')
 const searched    = ref(false)
 const emoteMap    = ref<EmoteMap>({})
 const twitchBadgeMap = ref<Map<string, TwitchBadgeAsset>>(new Map())
 const sevenTvBadgeMap = ref<Map<string, SevenTvBadgeAsset>>(new Map())
-const scrollerRef  = ref<HTMLElement | null>(null)
+const scrollerRef  = ref<{ scrollToItem: (idx: number) => void; $el: HTMLElement; scrollToPosition: (pos: number) => void } | null>(null)
 const visualsBarRef = ref<HTMLElement | null>(null)
 const tableWrapRef = ref<HTMLElement | null>(null)
 const tableShellRef = ref<HTMLElement | null>(null)
 const isMobileView = ref(false)
 const desktopLogWidth = ref<number | null>(null)
-// Returns the scroll container DOM element.
+// Returns the RecycleScroller's actual scroll container DOM element.
 function getBody(): HTMLElement | null {
-  return scrollerRef.value ?? null
+  return (scrollerRef.value as any)?.$el ?? null
 }
 const highlightId = ref<string | null>(null)
 const copyToast     = ref(false)
@@ -281,9 +266,6 @@ const direction   = ref<'newest' | 'oldest'>('newest')  // sort direction
 
 let cursorDate:  Date | null = null
 let cursorMonth: { y: number; m: number } | null = null
-// Cursors for loading newer (re-fetching trimmed content going forward in time)
-let cursorNewerDate:  Date | null = null
-let cursorNewerMonth: { y: number; m: number } | null = null
 let abortCtrl = new AbortController()
 let scrollListenerAttached = false
 let rafScrollPending = false
@@ -497,7 +479,7 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
     console.debug(`[logs:fetchDay] cache hit ${ch} ${y}-${mm}-${dd}`)
     return hit.data.slice()
   }
-  const params = new URLSearchParams({ channel: ch, year: String(y), month: mm, day: dd, limit: '10000', render: '0' })
+  const params = new URLSearchParams({ channel: ch, year: String(y), month: mm, day: dd, limit: '10000', render: '1' })
   if (term) params.set('q', term)
   const _t0 = performance.now()
   const res = await fetch(`${API}/logs/day?${params}`, { signal })
@@ -526,7 +508,7 @@ async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal)
     console.debug(`[logs:fetchMonth] cache hit ${ch} ${y}-${mm} user=${u||'(all)'}`)
     return hit.data.slice()
   }
-  const params = new URLSearchParams({ channel: ch, user: u, year: String(y), month: mm, limit: '100000', render: '0' })
+  const params = new URLSearchParams({ channel: ch, user: u, year: String(y), month: mm, limit: '100000', render: '1' })
   const _t0 = performance.now()
   const res = await fetch(`${API}/logs/usermonth?${params}`, { signal })
   if (!res.ok) return []
@@ -547,71 +529,40 @@ async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal)
 function prevDay(d: Date): Date {
   const p = new Date(d); p.setDate(p.getDate() - 1); return p
 }
-function nextDay(d: Date): Date {
-  const n = new Date(d); n.setDate(n.getDate() + 1); return n
-}
 function prevMonth(ym: { y: number; m: number }): { y: number; m: number } {
   return ym.m === 1 ? { y: ym.y - 1, m: 12 } : { y: ym.y, m: ym.m - 1 }
-}
-function nextMonth(ym: { y: number; m: number }): { y: number; m: number } {
-  return ym.m === 12 ? { y: ym.y + 1, m: 1 } : { y: ym.y, m: ym.m + 1 }
 }
 
 async function prependMsgs(newMsgs: LogMsg[]) {
   const body   = getBody()
-  const anchorEl = body
-    ? Array.from(body.querySelectorAll<HTMLElement>('[id^="log-"], [id^="day-"]'))
-        .find(el => el.offsetTop + el.offsetHeight > (body.scrollTop + 1))
+  const anchor = body
+    ? Array.from(body.querySelectorAll<HTMLElement>('[id^="day-"], [id^="log-"]'))
+        .find(el => el.offsetTop + el.offsetHeight > body.scrollTop + 1)
     : null
-  const anchorId = anchorEl?.id ?? null
-  const anchorOffset = (body && anchorEl) ? (anchorEl.offsetTop - body.scrollTop) : 0
+  const anchorId = anchor?.id ?? null
+  const anchorOffset = body && anchor ? (anchor.offsetTop - body.scrollTop) : 0
   const prevST = body?.scrollTop ?? 0
   const prevSH = body?.scrollHeight ?? 0
   const existingIds = new Set(msgs.value.map(m => m.id))
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
   if (!deduped.length) return
-  let next = [...deduped, ...msgs.value]
-  // Trim the newest end to stay within the sliding window
-  if (next.length > MSG_MAX_SHOWN) {
-    const firstTrimmed = next[MSG_MAX_SHOWN]!
-    const ts = new Date(firstTrimmed.timestamp)
-    cursorNewerDate  = new Date(ts.getFullYear(), ts.getMonth(), ts.getDate())
-    cursorNewerMonth = { y: ts.getFullYear(), m: ts.getMonth() + 1 }
-    next = next.slice(0, MSG_MAX_SHOWN)
-    noNewer.value = false
-  }
-  msgs.value = next
+  msgs.value = [...deduped, ...msgs.value]
   await nextTick()
   if (!body) return
-  // Prefer restoring against an element anchor for exact stability.
+
+  // DynamicScroller may settle layout in RAF, so restore after one frame.
+  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
+
   if (anchorId) {
-    const newAnchor = document.getElementById(anchorId)
-    if (newAnchor) {
-      body.scrollTop = Math.max(0, newAnchor.offsetTop - anchorOffset)
+    const sameRow = document.getElementById(anchorId)
+    if (sameRow) {
+      body.scrollTop = Math.max(0, sameRow.offsetTop - anchorOffset)
       return
     }
   }
-  // Fallback if anchor no longer exists.
-  body.scrollTop = prevST + (body.scrollHeight - prevSH)
-}
 
-async function appendMsgs(newMsgs: LogMsg[]) {
-  const existingIds = new Set(msgs.value.map(m => m.id))
-  const deduped = newMsgs.filter(m => !existingIds.has(m.id))
-  if (!deduped.length) return
-  let next = [...msgs.value, ...deduped]
-  // Trim the oldest end to stay within the sliding window
-  if (next.length > MSG_MAX_SHOWN) {
-    const trimCount  = next.length - MSG_MAX_SHOWN
-    const lastTrimmed = next[trimCount - 1]!
-    const ts = new Date(lastTrimmed.timestamp)
-    cursorDate  = new Date(ts.getFullYear(), ts.getMonth(), ts.getDate())
-    cursorMonth = { y: ts.getFullYear(), m: ts.getMonth() + 1 }
-    next = next.slice(trimCount)
-    noMore.value = false
-  }
-  msgs.value = next
-  // Browser scroll anchoring keeps viewport in place automatically
+  // Fallback path if anchor row is no longer mounted.
+  body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
 
 async function loadOlder() {
@@ -646,43 +597,6 @@ async function loadOlder() {
       else { loadingMore.value = false; return loadOlder() }
     } catch {}
     loadingMore.value = false
-  }
-}
-
-async function loadNewer() {
-  if (loadingNewer.value || noNewer.value) return
-  const ch     = channel.value.trim().toLowerCase().replace(/^#/, '')
-  const signal = abortCtrl.signal
-  const today  = new Date(); today.setHours(23, 59, 59, 999)
-
-  if (userFilter.value.trim()) {
-    if (!cursorNewerMonth) { noNewer.value = true; return }
-    loadingNewer.value = true
-    const cur = cursorNewerMonth
-    cursorNewerMonth = nextMonth(cur)
-    if (new Date(cur.y, cur.m - 1, 1) > today) { noNewer.value = true; loadingNewer.value = false; return }
-    try {
-      const newMsgs = await fetchMonth(ch, cur.y, cur.m, signal)
-      if (signal.aborted) { loadingNewer.value = false; return }
-      if (newMsgs.length > 0) await appendMsgs(newMsgs)
-      else { loadingNewer.value = false; return loadNewer() }
-    } catch {}
-    loadingNewer.value = false
-    if (new Date(cursorNewerMonth.y, cursorNewerMonth.m - 1, 1) > today) noNewer.value = true
-  } else {
-    if (!cursorNewerDate) { noNewer.value = true; return }
-    loadingNewer.value = true
-    const d = cursorNewerDate
-    cursorNewerDate = nextDay(d)
-    if (d > today) { noNewer.value = true; loadingNewer.value = false; return }
-    try {
-      const newMsgs = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)
-      if (signal.aborted) { loadingNewer.value = false; return }
-      if (newMsgs.length > 0) await appendMsgs(newMsgs)
-      else { loadingNewer.value = false; return loadNewer() }
-    } catch {}
-    loadingNewer.value = false
-    if (cursorNewerDate > today) noNewer.value = true
   }
 }
 
@@ -802,12 +716,8 @@ function onScroll() {
   requestAnimationFrame(() => {
     rafScrollPending = false
     const body = getBody()
-    if (!body) return
-    const distFromBottom = body.scrollHeight - body.clientHeight - body.scrollTop
-    isNearBottom.value = distFromBottom < 200
-    if (!loadingMore.value && !noMore.value && body.scrollTop < 120) loadOlder()
-    if (!loadingNewer.value && !noNewer.value && distFromBottom < 120) loadNewer()
-    updateVisibleStartIndex()
+    if (!body || loadingMore.value || noMore.value) return
+    if (body.scrollTop < 120) loadOlder()
     if (!wheelScrollActive) checkPaints()
   })
 }
@@ -830,7 +740,7 @@ function onScrollbarTrackPointerDown(ev: PointerEvent) {
   ev.preventDefault()
 }
 
-// No-op: kept for any callers that reference it.
+// No-op: RecycleScroller manages its own virtual window.
 function recalcVirtualWindow() {}
 
 function attachScrollListener() {
@@ -916,13 +826,12 @@ async function search() {
   if (isMobile()) searchExpanded.value = false
   loading.value = true; error.value = ''; searched.value = true
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
-  noNewer.value = true; loadingNewer.value = false; isNearBottom.value = true
   paintQueue.length = 0
   pendingPaintJobs.value = 0
   paintConcurrent = 0
   paintAutoRequested = 0
   bulkFetchDone = false
-  cursorDate = null; cursorMonth = null; cursorNewerDate = null; cursorNewerMonth = null
+  cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   preloadChannelAssets(ch)
   fetchEmotes(ch)
@@ -1078,40 +987,29 @@ function scrollToBottom() {
   })
 }
 
-async function jumpToNewest() {
-  if (noNewer.value) {
-    // We already have the most recent messages — just scroll there.
-    scrollToBottom()
-    return
-  }
-  // Reload the sliding window from the newest end, then scroll down.
-  abortCtrl.abort(); abortCtrl = new AbortController()
-  const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
-  msgs.value = []
-  noMore.value = false; loadingMore.value = false
-  noNewer.value = true; loadingNewer.value = false
-  isNearBottom.value = true
-  cursorNewerDate = null; cursorNewerMonth = null
-  loading.value = true
-  const today = new Date()
-  if (userFilter.value.trim()) {
-    const y = today.getFullYear(), m = today.getMonth() + 1
-    try { msgs.value = await fetchMonth(ch, y, m, abortCtrl.signal) } catch {}
-    cursorMonth = prevMonth({ y, m })
-  } else {
-    try { msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal) } catch {}
-    cursorDate = prevDay(today)
-  }
-  loading.value = false
-  await nextTick()
-  scrollToBottom()
-  attachScrollListener()
-  await autoFillIfShort()
-}
-
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
-  await nextTick()
-  const el = document.getElementById(`log-${id}`)
+  // Scroll the recycler to the item so RecycleScroller mounts it in the DOM.
+  const idx = displayItems.value.findIndex((it) => it.kind !== 'day' && it.msg.id === id)
+  if (idx >= 0 && scrollerRef.value) {
+    ;(scrollerRef.value as any).scrollToItem(idx)
+    const body = getBody()
+    if (body) {
+      await nextTick()
+      // Center the item in the viewport
+      body.scrollTop = body.scrollTop - body.clientHeight * 0.4
+    }
+  }
+
+  // Poll until the DOM element is mounted (RecycleScroller may need a frame).
+  const deadline = Date.now() + 3000
+  let el: HTMLElement | null = null
+  while (Date.now() < deadline) {
+    await nextTick()
+    await new Promise<void>(r => requestAnimationFrame(() => r()))
+    el = document.getElementById(`log-${id}`)
+    if (el) break
+    await new Promise(r => setTimeout(r, 80))
+  }
   if (!el) return
   el.scrollIntoView({ behavior: 'smooth', block: 'center' })
   if (highlight) {
@@ -1213,11 +1111,11 @@ onUnmounted(() => {
 // Attach/detach the emote MutationObserver + event delegation whenever the scroller mounts.
 watch(scrollerRef, (newVal, oldVal) => {
   if (oldVal) {
-    const el = oldVal as HTMLElement | null
+    const el = (oldVal as any).$el as HTMLElement | undefined
     if (el) { detachEmoteObserver(el); el.removeEventListener('click', onRowClick) }
   }
   if (newVal) {
-    const el = newVal as HTMLElement | null
+    const el = (newVal as any).$el as HTMLElement | undefined
     if (el) { attachEmoteObserver(el); el.addEventListener('click', onRowClick) }
   }
 })
@@ -1293,8 +1191,36 @@ type DisplayItem =
   | { kind: 'msg';     id: string; msg: LogMsg }
   | { kind: 'automod'; id: string; msg: AutomodMsg }
 
+const measuredItemHeights = ref<Map<string, number>>(new Map())
+
+function fallbackItemHeight(it: DisplayItem): number {
+  if (it.kind === 'day') return 22
+  if (it.kind === 'automod') return 34
+  return 28
+}
+
+function updateMeasuredItemHeight(itemId: string, px: number) {
+  if (!Number.isFinite(px) || px <= 0) return
+  const prev = measuredItemHeights.value.get(itemId)
+  if (prev !== undefined && Math.abs(prev - px) < 1) return
+  const next = new Map(measuredItemHeights.value)
+  next.set(itemId, px)
+  measuredItemHeights.value = next
+}
+
 function domIdForDisplayItem(it: DisplayItem): string {
   return it.kind === 'day' ? `day-${it.id}` : `log-${it.msg.id}`
+}
+
+function onDisplayItemResize(id: string | number) {
+  const itemId = String(id)
+  requestAnimationFrame(() => {
+    const it = displayItems.value.find(x => x.id === itemId)
+    if (!it) return
+    const el = document.getElementById(domIdForDisplayItem(it))
+    if (!el) return
+    updateMeasuredItemHeight(itemId, el.offsetHeight)
+  })
 }
 
 const displayItems = computed<DisplayItem[]>(() => {
@@ -1376,20 +1302,33 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
   if (isMobileView.value) return []
   const list = displayItems.value
   if (!list.length) return []
-  const count = list.length
+  const sizeMap = measuredItemHeights.value
+  const heights: number[] = []
+  let totalHeight = 0
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i]!
+    const h = sizeMap.get(it.id) ?? fallbackItemHeight(it)
+    heights.push(h)
+    totalHeight += h
+  }
+  const denomHeight = Math.max(1, totalHeight)
   const out: TimelineMarker[] = []
 
-  for (let i = 0; i < count; i++) {
+  let y = 0
+  for (let i = 0; i < list.length; i++) {
     const it = list[i]!
-    const topPct = (i / count) * 100
+    const h = heights[i]!
+    const topPct = ((y + h * 0.5) / denomHeight) * 100
 
     if (it.kind === 'day') {
       out.push({ key: `day-${i}`, color: '#3a3a3a', topPct, index: i, anchorId: `day-${it.id}`, thin: true, title: `Day: ${it.label}` })
+      y += h
       continue
     }
 
     if (it.kind === 'automod') {
       out.push({ key: `automod-${i}`, color: '#7a7a7a', topPct, index: i, anchorId: `log-${it.msg.id}`, title: 'Ban/timeout (AutoMod)' })
+      y += h
       continue
     }
 
@@ -1403,17 +1342,15 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
     if (isSub) out.push({ key: `sub-${i}`, color: '#755ebc', topPct, index: i, anchorId: `log-${msg.id}`, title: 'Subscription event' })
     else if (isFirst) out.push({ key: `first-${i}`, color: '#c832c8', topPct, index: i, anchorId: `log-${msg.id}`, title: 'First-time chatter' })
     else if (isMod) out.push({ key: `mod-${i}`, color: '#454545', topPct, index: i, anchorId: `log-${msg.id}`, title: 'Ban/timeout message' })
+    y += h
   }
 
   return out
 })
 
 function scrollToDisplayIndex(idx: number) {
-  const item = displayItems.value[idx]
-  if (!item) return
-  const elId = domIdForDisplayItem(item)
-  const el = document.getElementById(elId)
-  if (el) el.scrollIntoView({ block: 'start' })
+  if (!scrollerRef.value) return
+  ;(scrollerRef.value as any).scrollToItem(Math.max(0, idx))
 }
 
 async function jumpToTimelineMarker(marker: TimelineMarker) {
@@ -2247,16 +2184,27 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             <div v-if="!isMobileView" class="day-jump-bar">
               <button class="day-jump-btn" @click="jumpOneDayUp">↑ jump to {{ jumpTargetDayLabel || '...' }}</button>
             </div>
-            <div
+            <DynamicScroller
               class="logs-tbody"
               ref="scrollerRef"
+              :items="displayItems"
+              :min-item-size="28"
+              key-field="id"
+              :buffer="2000"
+              @update="onScrollerUpdate"
             >
-          <div class="top-loader" v-show="loadingMore">
-            <span class="spinner">⟳</span> {{ t('logs.load_older') }}
-          </div>
-          <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
+          <template #before>
+            <div class="top-loader" v-show="loadingMore">
+              <span class="spinner">⟳</span> {{ t('logs.load_older') }}
+            </div>
+            <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
+          </template>
 
-          <template v-for="item in displayItems" :key="item.id">
+          <template #default="{ item, index, active }">
+            <DynamicScrollerItem :item="item" :active="active" :data-index="index" :emit-resize="true"
+              @resize="onDisplayItemResize"
+              @hook:mounted="() => { if (item.kind === 'msg') rowBecameActive(item.id) }"
+            >
             <div v-if="item.kind === 'day'" :id="`day-${item.id}`" class="log-day-sep">{{ item.label }}</div>
 
             <div
@@ -2382,23 +2330,10 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                 </div>
               </div>
             </div>
+            </DynamicScrollerItem>
           </template>
-
-          <div class="top-loader" v-show="loadingNewer">
-            <span class="spinner">⟳</span> {{ t('logs.load_newer') }}
+            </DynamicScroller>
           </div>
-            </div>
-          </div>
-
-          <!-- Jump-to-newest pill: appears when the user has scrolled up -->
-          <transition name="jump-fade">
-            <button
-              v-if="searched && !isNearBottom"
-              class="jump-to-newest-btn"
-              @click="jumpToNewest"
-            >{{ t('logs.jump_to_newest') }}</button>
-          </transition>
-
           <div v-if="!isMobileView" class="event-rail" aria-hidden="true">
             <button
               v-for="m in timelineMarkers"
@@ -2586,7 +2521,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 }
 .day-jump-btn:hover { color: #d2d2df; border-color: #505062; }
 
-.logs-tbody   { overflow-y: auto; overflow-anchor: auto; flex: 1; position: relative; min-height: 0; }
+.logs-tbody   { overflow-y: auto; flex: 1; position: relative; min-height: 0; }
 .logs-tbody::-webkit-scrollbar { width: 14px; }
 .logs-tbody::-webkit-scrollbar-track { background: rgba(21, 21, 26, 0.92); }
 .logs-tbody::-webkit-scrollbar-thumb { background: rgba(104, 104, 118, 0.88); border-radius: 0; border: none;  border-left: 1px red; }
@@ -2633,33 +2568,15 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     #17171d;
 }
 
+.tbody-selecting { cursor: crosshair !important; user-select: none !important; }
+/* DynamicScroller item wrapper */
+:deep(.vue-recycle-scroller__item-view),
+:deep(.dynamic-scroller-item) { width: 100%; }
+
 .top-loader  { text-align: center; font-size: 11px; color: #555; padding: 8px; }
 .top-loader.no-more { color: #333; }
 .spinner     { display: inline-block; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
-
-/* Jump-to-newest pill */
-.jump-to-newest-btn {
-  position: absolute;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 20;
-  padding: 5px 14px;
-  background: #7c3aed;
-  color: #fff;
-  border: none;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0,0,0,.5);
-  transition: background .15s, opacity .15s;
-}
-.jump-to-newest-btn:hover { background: #6d28d9; }
-.jump-fade-enter-active, .jump-fade-leave-active { transition: opacity .2s, transform .2s; }
-.jump-fade-enter-from, .jump-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(6px); }
 
 .log-row-outer {
   border-bottom: 1px solid #1a1a1e;
