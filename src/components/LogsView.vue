@@ -293,11 +293,6 @@ function setSearchJobPhase(phase: SearchJobPhase) {
 
 const isMobile = () => window.matchMedia('(max-width: 680px)').matches
 
-// Render-all mode: oversizes the virtual scroller buffer so every item stays
-// mounted in the DOM regardless of scroll position (no virtualisation clipping).
-const renderAllMessages = ref(true)
-const scrollerBufferPx = computed(() => renderAllMessages.value ? 2_000_000 : 2_000)
-
 function syncViewportMode() {
   isMobileView.value = isMobile()
   if (isMobileView.value) desktopLogWidth.value = null
@@ -542,18 +537,12 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   const body   = getBody()
   const prevST = body?.scrollTop ?? 0
   const prevSH = body?.scrollHeight ?? 0
-  const wasNearTop = prevST < 200
   const existingIds = new Set(msgs.value.map(m => m.id))
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
-  console.debug(`[prepend] in=${newMsgs.length} deduped=${deduped.length} prevTotal=${msgs.value.length} prevST=${prevST|0} prevSH=${prevSH|0} wasNearTop=${wasNearTop}`)
   if (!deduped.length) return
   msgs.value = [...deduped, ...msgs.value]
   await nextTick()
-  const newST = body?.scrollTop ?? 0
-  const newSH = body?.scrollHeight ?? 0
-  const delta = newSH - prevSH
-  console.debug(`[prepend] after nextTick — newST=${newST|0} newSH=${newSH|0} delta=${delta|0} => action=${wasNearTop ? 'leave' : `set ${(prevST+delta)|0}`}`)
-  if (body && !wasNearTop) body.scrollTop = prevST + delta
+  if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
 
 async function loadOlder() {
@@ -958,13 +947,11 @@ async function autoFillIfShort() {
   if (noMore.value) return
   await nextTick()
   const body = getBody(); if (!body) return
-  console.debug(`[autoFill] scrollHeight=${body.scrollHeight} clientHeight=${body.clientHeight} scrollTop=${body.scrollTop|0}`)
   let safety = 0
   while (body.scrollHeight <= body.clientHeight + 20 && !noMore.value && safety++ < 10) {
     await loadOlder()
     await nextTick()
   }
-  console.debug(`[autoFill] done — safety=${safety} scrollHeight=${body.scrollHeight} clientHeight=${body.clientHeight}`)
 }
 
 function scrollToBottom() {
@@ -973,7 +960,6 @@ function scrollToBottom() {
     if (!b) return
     let i = 0
     const settle = () => {
-      if (i === 0) console.debug(`[scrollToBottom] scrollHeight=${b.scrollHeight} clientHeight=${b.clientHeight} setting scrollTop=${b.scrollHeight}`)
       b.scrollTop = b.scrollHeight
       if (++i < 8) requestAnimationFrame(settle)
     }
@@ -2184,7 +2170,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :items="displayItems"
               :min-item-size="28"
               key-field="id"
-              :buffer="scrollerBufferPx"
+              :buffer="2000"
               @update="onScrollerUpdate"
             >
           <template #before>
@@ -2515,7 +2501,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 }
 .day-jump-btn:hover { color: #d2d2df; border-color: #505062; }
 
-.logs-tbody   { overflow-y: auto; flex: 1; position: relative; min-height: 0; overflow-anchor: none; }
+.logs-tbody   { overflow-y: auto; flex: 1; position: relative; min-height: 0; }
 .logs-tbody::-webkit-scrollbar { width: 14px; }
 .logs-tbody::-webkit-scrollbar-track { background: rgba(21, 21, 26, 0.92); }
 .logs-tbody::-webkit-scrollbar-thumb { background: rgba(104, 104, 118, 0.88); border-radius: 0; border: none;  border-left: 1px red; }
