@@ -482,6 +482,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'logs.col.msg':                'Message',
     'logs.load_older':             'Loading older messages…',
     'logs.no_older':               '↑ No older logs',
+    'logs.load_newer':             'Loading newer messages…',
     'logs.copied':                 '✓ Copied to clipboard',
 
     // >>> Settings <<<
@@ -1143,6 +1144,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'logs.col.msg':                'Nachricht',
     'logs.load_older':             'Ältere Nachrichten werden geladen…',
     'logs.no_older':               '↑ Keine älteren Logs',
+    'logs.load_newer':             'Neuere Nachrichten werden geladen…',
     'logs.copied':                 '✓ In Zwischenablage kopiert',
 
     // >>> Settings <<<

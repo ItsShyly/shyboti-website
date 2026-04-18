@@ -237,13 +237,20 @@ interface AutomodMsg {
   _automod: true; _category: string; _status: string
 }
 
+// Sliding window: max messages kept in the DOM at once.
+// Enough to cover fast scrollbar dragging without blank space (buffer pre-renders
+// buffer/minItemSize rows, ~360 with buffer=10000 and minItemSize=28).
+const MSG_MAX_SHOWN = 2000
+
 const msgs         = ref<LogMsg[]>([])
 const automodMsgs  = ref<AutomodMsg[]>([])
 const showAutomod  = ref(false)   // toggled by user; only shown to broadcaster
 const isBroadcaster = ref(false)  // true when viewing own channel
 const loading     = ref(false)
 const loadingMore = ref(false)
+const loadingNewer = ref(false)
 const noMore      = ref(false)
+const noNewer     = ref(true)   // true = we're at the most-recent data
 const error       = ref('')
 const searched    = ref(false)
 const emoteMap    = ref<EmoteMap>({})
@@ -266,6 +273,9 @@ const direction   = ref<'newest' | 'oldest'>('newest')  // sort direction
 
 let cursorDate:  Date | null = null
 let cursorMonth: { y: number; m: number } | null = null
+// Cursors for loading newer (re-fetching trimmed content going forward in time)
+let cursorNewerDate:  Date | null = null
+let cursorNewerMonth: { y: number; m: number } | null = null
 let abortCtrl = new AbortController()
 let scrollListenerAttached = false
 let rafScrollPending = false
@@ -529,8 +539,14 @@ async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal)
 function prevDay(d: Date): Date {
   const p = new Date(d); p.setDate(p.getDate() - 1); return p
 }
+function nextDay(d: Date): Date {
+  const n = new Date(d); n.setDate(n.getDate() + 1); return n
+}
 function prevMonth(ym: { y: number; m: number }): { y: number; m: number } {
   return ym.m === 1 ? { y: ym.y - 1, m: 12 } : { y: ym.y, m: ym.m - 1 }
+}
+function nextMonth(ym: { y: number; m: number }): { y: number; m: number } {
+  return ym.m === 12 ? { y: ym.y + 1, m: 1 } : { y: ym.y, m: ym.m + 1 }
 }
 
 async function prependMsgs(newMsgs: LogMsg[]) {
@@ -540,7 +556,40 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   const existingIds = new Set(msgs.value.map(m => m.id))
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
   if (!deduped.length) return
-  msgs.value = [...deduped, ...msgs.value]
+  let next = [...deduped, ...msgs.value]
+  // Trim the newest end to stay within the sliding window
+  if (next.length > MSG_MAX_SHOWN) {
+    const firstTrimmed = next[MSG_MAX_SHOWN]!
+    const ts = new Date(firstTrimmed.timestamp)
+    cursorNewerDate  = new Date(ts.getFullYear(), ts.getMonth(), ts.getDate())
+    cursorNewerMonth = { y: ts.getFullYear(), m: ts.getMonth() + 1 }
+    next = next.slice(0, MSG_MAX_SHOWN)
+    noNewer.value = false
+  }
+  msgs.value = next
+  await nextTick()
+  if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
+}
+
+async function appendMsgs(newMsgs: LogMsg[]) {
+  const body   = getBody()
+  const prevST = body?.scrollTop ?? 0
+  const prevSH = body?.scrollHeight ?? 0
+  const existingIds = new Set(msgs.value.map(m => m.id))
+  const deduped = newMsgs.filter(m => !existingIds.has(m.id))
+  if (!deduped.length) return
+  let next = [...msgs.value, ...deduped]
+  // Trim the oldest end to stay within the sliding window
+  if (next.length > MSG_MAX_SHOWN) {
+    const lastTrimmed = next[next.length - MSG_MAX_SHOWN - 1]!
+    const ts = new Date(lastTrimmed.timestamp)
+    // Reset older cursor to the trimmed day so loadOlder re-fetches from cache
+    cursorDate  = new Date(ts.getFullYear(), ts.getMonth(), ts.getDate())
+    cursorMonth = { y: ts.getFullYear(), m: ts.getMonth() + 1 }
+    next = next.slice(next.length - MSG_MAX_SHOWN)
+    noMore.value = false  // more older content exists (was trimmed)
+  }
+  msgs.value = next
   await nextTick()
   if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
@@ -577,6 +626,43 @@ async function loadOlder() {
       else { loadingMore.value = false; return loadOlder() }
     } catch {}
     loadingMore.value = false
+  }
+}
+
+async function loadNewer() {
+  if (loadingNewer.value || noNewer.value) return
+  const ch     = channel.value.trim().toLowerCase().replace(/^#/, '')
+  const signal = abortCtrl.signal
+  const today  = new Date(); today.setHours(23, 59, 59, 999)
+
+  if (userFilter.value.trim()) {
+    if (!cursorNewerMonth) { noNewer.value = true; return }
+    loadingNewer.value = true
+    const cur = cursorNewerMonth
+    cursorNewerMonth = nextMonth(cur)
+    if (new Date(cur.y, cur.m - 1, 1) > today) { noNewer.value = true; loadingNewer.value = false; return }
+    try {
+      const newMsgs = await fetchMonth(ch, cur.y, cur.m, signal)
+      if (signal.aborted) { loadingNewer.value = false; return }
+      if (newMsgs.length > 0) await appendMsgs(newMsgs)
+      else { loadingNewer.value = false; return loadNewer() }
+    } catch {}
+    loadingNewer.value = false
+    if (new Date(cursorNewerMonth.y, cursorNewerMonth.m - 1, 1) > today) noNewer.value = true
+  } else {
+    if (!cursorNewerDate) { noNewer.value = true; return }
+    loadingNewer.value = true
+    const d = cursorNewerDate
+    cursorNewerDate = nextDay(d)
+    if (d > today) { noNewer.value = true; loadingNewer.value = false; return }
+    try {
+      const newMsgs = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)
+      if (signal.aborted) { loadingNewer.value = false; return }
+      if (newMsgs.length > 0) await appendMsgs(newMsgs)
+      else { loadingNewer.value = false; return loadNewer() }
+    } catch {}
+    loadingNewer.value = false
+    if (cursorNewerDate > today) noNewer.value = true
   }
 }
 
@@ -696,8 +782,10 @@ function onScroll() {
   requestAnimationFrame(() => {
     rafScrollPending = false
     const body = getBody()
-    if (!body || loadingMore.value || noMore.value) return
-    if (body.scrollTop < 120) loadOlder()
+    if (!body) return
+    if (!loadingMore.value && !noMore.value && body.scrollTop < 120) loadOlder()
+    const distFromBottom = body.scrollHeight - body.clientHeight - body.scrollTop
+    if (!loadingNewer.value && !noNewer.value && distFromBottom < 120) loadNewer()
     if (!wheelScrollActive) checkPaints()
   })
 }
@@ -806,12 +894,13 @@ async function search() {
   if (isMobile()) searchExpanded.value = false
   loading.value = true; error.value = ''; searched.value = true
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
+  noNewer.value = true; loadingNewer.value = false
   paintQueue.length = 0
   pendingPaintJobs.value = 0
   paintConcurrent = 0
   paintAutoRequested = 0
   bulkFetchDone = false
-  cursorDate = null; cursorMonth = null
+  cursorDate = null; cursorMonth = null; cursorNewerDate = null; cursorNewerMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   preloadChannelAssets(ch)
   fetchEmotes(ch)
@@ -2170,7 +2259,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :items="displayItems"
               :min-item-size="28"
               key-field="id"
-              :buffer="2000"
+              :buffer="10000"
               @update="onScrollerUpdate"
             >
           <template #before>
@@ -2178,6 +2267,12 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               <span class="spinner">⟳</span> {{ t('logs.load_older') }}
             </div>
             <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
+          </template>
+
+          <template #after>
+            <div class="top-loader" v-show="loadingNewer">
+              <span class="spinner">⟳</span> {{ t('logs.load_newer') }}
+            </div>
           </template>
 
           <template #default="{ item, index, active }">
