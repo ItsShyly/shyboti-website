@@ -266,6 +266,13 @@ const emoteMap    = ref<EmoteMap>({})
 const twitchBadgeMap = ref<Map<string, TwitchBadgeAsset>>(new Map())
 const sevenTvBadgeMap = ref<Map<string, SevenTvBadgeAsset>>(new Map())
 const scrollerRef  = ref<HTMLElement | null>(null)
+const customScrollbarRef = ref<HTMLElement | null>(null)
+const customThumbTop = ref(0)
+const customThumbH   = ref(40)
+const customThumbStyle = computed(() => ({
+  top:    customThumbTop.value + 'px',
+  height: customThumbH.value   + 'px',
+}))
 const visualsBarRef = ref<HTMLElement | null>(null)
 const tableWrapRef = ref<HTMLElement | null>(null)
 const tableShellRef = ref<HTMLElement | null>(null)
@@ -407,6 +414,7 @@ watch(msgs, (list: LogMsg[]) => {
     if (len > max) max = len
   }
   nameColWidth.value = Math.min(240, Math.max(80, max * 7.8))
+  nextTick(updateCustomScrollbar)
 }, { flush: 'post' })
 
 // >>> Emotes
@@ -851,27 +859,75 @@ function onScroll() {
     if (!loadingMore.value && !noMore.value && body.scrollTop < 120) loadOlder()
     if (!loadingNewer.value && !noNewer.value && distFromBottom < 120) loadNewer()
     updateVisibleStartIndex()
+    updateCustomScrollbar()
     if (!wheelScrollActive) checkPaints()
   })
 }
 
-function onScrollbarTrackPointerDown(ev: PointerEvent) {
-  if (isMobileView.value) return
+// --- Custom scrollbar ---
+function updateCustomScrollbar() {
+  const body = getBody()
+  const bar  = customScrollbarRef.value
+  if (!body || !bar) return
+  const trackH    = bar.clientHeight
+  const ratio     = body.scrollHeight > 0 ? body.clientHeight / body.scrollHeight : 1
+  const thumbH    = Math.max(28, ratio * trackH)
+  const maxScroll = body.scrollHeight - body.clientHeight
+  const top       = maxScroll > 0 ? (body.scrollTop / maxScroll) * (trackH - thumbH) : 0
+  customThumbTop.value = top
+  customThumbH.value   = thumbH
+}
+
+function onCustomScrollbarTrackPointerDown(ev: PointerEvent) {
   if (ev.button !== 0) return
-  const body = ev.currentTarget as HTMLElement | null
-  if (!body) return
-
-  const rect = body.getBoundingClientRect()
-  const x = ev.clientX - rect.left
-  const gutterWidth = Math.max(14, body.offsetWidth - body.clientWidth)
-  const gutterStart = rect.width - gutterWidth - 2
-  if (x < gutterStart) return
-
-  const y = Math.max(0, Math.min(rect.height, ev.clientY - rect.top))
-  const ratio = rect.height > 0 ? y / rect.height : 0
-  body.scrollTop = ratio * Math.max(0, body.scrollHeight - body.clientHeight)
+  const body = getBody()
+  const bar  = customScrollbarRef.value
+  if (!body || !bar) return
+  const rect    = bar.getBoundingClientRect()
+  const trackH  = rect.height
+  const thumbH  = customThumbH.value
+  const clickY  = ev.clientY - rect.top
+  // If clicking on the thumb itself, don't jump — let onThumbDragStart handle it
+  if (clickY >= customThumbTop.value && clickY <= customThumbTop.value + thumbH) return
+  // Center thumb on the click position
+  const newTop    = Math.max(0, Math.min(trackH - thumbH, clickY - thumbH / 2))
+  const maxScroll = body.scrollHeight - body.clientHeight
+  body.scrollTop  = maxScroll > 0 ? (newTop / Math.max(1, trackH - thumbH)) * maxScroll : 0
   ev.preventDefault()
 }
+
+let _thumbDragStartY  = 0
+let _thumbDragStartST = 0
+
+function onThumbDragStart(ev: PointerEvent) {
+  if (ev.button !== 0) return
+  const body = getBody()
+  if (!body) return
+  _thumbDragStartY  = ev.clientY
+  _thumbDragStartST = body.scrollTop
+  ;(ev.currentTarget as HTMLElement).setPointerCapture(ev.pointerId)
+  window.addEventListener('pointermove', onThumbDragMove)
+  window.addEventListener('pointerup', onThumbDragEnd, { once: true })
+  ev.preventDefault()
+}
+
+function onThumbDragMove(ev: PointerEvent) {
+  const body = getBody()
+  const bar  = customScrollbarRef.value
+  if (!body || !bar) return
+  const trackH    = bar.clientHeight
+  const thumbH    = customThumbH.value
+  const maxThumb  = trackH - thumbH
+  const maxScroll = body.scrollHeight - body.clientHeight
+  const dy        = ev.clientY - _thumbDragStartY
+  const ratio     = maxThumb > 0 ? dy / maxThumb : 0
+  body.scrollTop  = _thumbDragStartST + ratio * maxScroll
+}
+
+function onThumbDragEnd() {
+  window.removeEventListener('pointermove', onThumbDragMove)
+}
+// --- /Custom scrollbar ---
 
 // No-op: kept for any callers that reference it.
 function recalcVirtualWindow() {}
@@ -882,7 +938,6 @@ function attachScrollListener() {
   if (!body) return
   body.addEventListener('scroll', onScroll, { passive: true })
   body.addEventListener('wheel', onWheel, { passive: true })
-  body.addEventListener('pointerdown', onScrollbarTrackPointerDown)
   scrollListenerAttached = true
 }
 
@@ -891,7 +946,6 @@ function detachScrollListeners() {
   if (body) {
     body.removeEventListener('scroll', onScroll)
     body.removeEventListener('wheel', onWheel)
-    body.removeEventListener('pointerdown', onScrollbarTrackPointerDown)
   }
   if (wheelIdleTimer !== null) {
     window.clearTimeout(wheelIdleTimer)
@@ -2288,6 +2342,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             <div v-if="!isMobileView" class="day-jump-bar">
               <button class="day-jump-btn" @click="jumpOneDayUp">↑ jump to {{ jumpTargetDayLabel || '...' }}</button>
             </div>
+            <div class="logs-tbody-wrap">
             <div
               class="logs-tbody"
               ref="scrollerRef"
@@ -2428,6 +2483,20 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           <div class="top-loader" v-show="loadingNewer">
             <span class="spinner">⟳</span> {{ t('logs.load_newer') }}
           </div>
+            </div>
+              <!-- Custom scrollbar overlay (desktop only) -->
+              <div
+                v-if="!isMobileView"
+                class="logs-custom-scrollbar"
+                ref="customScrollbarRef"
+                @pointerdown.stop="onCustomScrollbarTrackPointerDown"
+              >
+                <div
+                  class="logs-custom-thumb"
+                  :style="customThumbStyle"
+                  @pointerdown.stop.prevent="onThumbDragStart"
+                ></div>
+              </div>
             </div>
           </div>
 
@@ -2627,10 +2696,32 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 }
 .day-jump-btn:hover { color: #d2d2df; border-color: #505062; }
 
-.logs-tbody   { overflow-y: auto; overflow-anchor: auto; flex: 1; position: relative; min-height: 0; }
-.logs-tbody::-webkit-scrollbar { width: 14px; }
-.logs-tbody::-webkit-scrollbar-track { background: rgba(21, 21, 26, 0.92); }
-.logs-tbody::-webkit-scrollbar-thumb { background: rgba(104, 104, 118, 0.88); border-radius: 0; border: none;  border-left: 1px red; }
+.logs-tbody-wrap { display: flex; flex: 1; min-height: 0; }
+.logs-tbody   { overflow-y: scroll; overflow-anchor: auto; flex: 1; position: relative; min-height: 0; scrollbar-width: none; }
+.logs-tbody::-webkit-scrollbar { width: 0; height: 0; }
+.logs-custom-scrollbar {
+  width: 14px;
+  flex-shrink: 0;
+  background: rgba(21, 21, 26, 0.92);
+  position: relative;
+  pointer-events: all;
+  cursor: pointer;
+  user-select: none;
+  border-left: 1px solid #1e1e26;
+}
+.logs-custom-thumb {
+  position: absolute;
+  left: 2px;
+  width: calc(100% - 4px);
+  background: rgba(104, 104, 118, 0.88);
+  border-radius: 3px;
+  pointer-events: all;
+  cursor: grab;
+  transition: background 0.1s;
+  min-height: 28px;
+}
+.logs-custom-thumb:hover  { background: rgba(140, 140, 160, 0.95); }
+.logs-custom-thumb:active { cursor: grabbing; }
 
 .event-rail {
   position: absolute;
@@ -3026,7 +3117,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .day-jump-bar, .event-rail, .logs-resize-handle { display: none !important; }
   .logs-thead   { display: none !important; }
   .logs-tbody   { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-  .logs-tbody::-webkit-scrollbar { width: 0; height: 0; }
 
   :deep(.log-day-sep) {
     display: block;
