@@ -2461,7 +2461,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
 .event-rail {
   position: absolute;
-  top: 0;
+  top: 50px;
   bottom: 0;
   right: 2px;
   width: 10px;
