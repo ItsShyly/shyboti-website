@@ -558,15 +558,23 @@ function nextMonth(ym: { y: number; m: number }): { y: number; m: number } {
 }
 
 async function prependMsgs(newMsgs: LogMsg[]) {
-  const body   = getBody()
-  const anchorEl = body
-    ? Array.from(body.querySelectorAll<HTMLElement>('[id^="log-"], [id^="day-"]'))
-        .find(el => el.offsetTop + el.offsetHeight > (body.scrollTop + 1))
-    : null
-  const anchorId = anchorEl?.id ?? null
-  const anchorOffset = (body && anchorEl) ? (anchorEl.offsetTop - body.scrollTop) : 0
-  const prevST = body?.scrollTop ?? 0
-  const prevSH = body?.scrollHeight ?? 0
+  const body = getBody()
+  // Find the first row element that is at or past the top of the viewport.
+  // We track its ID so we can use scrollIntoView after the prepend — this is
+  // more reliable than computing a scroll delta because the browser's own
+  // overflow-anchor and line-height rounding can fight a manual scrollTop correction.
+  let anchorId: string | null = null
+  if (body) {
+    const scrollTop = body.scrollTop
+    const rows = body.querySelectorAll<HTMLElement>('[id^="log-"],[id^="day-"]')
+    for (const el of rows) {
+      if (el.offsetTop + el.offsetHeight > scrollTop) {
+        anchorId = el.id
+        break
+      }
+    }
+  }
+
   const existingIds = new Set(msgs.value.map(m => m.id))
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
   if (!deduped.length) return
@@ -582,17 +590,10 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   }
   msgs.value = next
   await nextTick()
-  if (!body) return
-  // Prefer restoring against an element anchor for exact stability.
-  if (anchorId) {
-    const newAnchor = document.getElementById(anchorId)
-    if (newAnchor) {
-      body.scrollTop = Math.max(0, newAnchor.offsetTop - anchorOffset)
-      return
-    }
-  }
-  // Fallback if anchor no longer exists.
-  body.scrollTop = prevST + (body.scrollHeight - prevSH)
+  if (!body || !anchorId) return
+  // Scroll so the previously-visible top row is back at the top of the viewport.
+  const anchor = document.getElementById(anchorId)
+  if (anchor) anchor.scrollIntoView({ block: 'start' })
 }
 
 async function appendMsgs(newMsgs: LogMsg[]) {
@@ -1079,12 +1080,8 @@ function scrollToBottom() {
 }
 
 async function jumpToNewest() {
-  if (noNewer.value) {
-    // We already have the most recent messages — just scroll there.
-    scrollToBottom()
-    return
-  }
-  // Reload the sliding window from the newest end, then scroll down.
+  // Always reload from newest so cursor and noMore state are clean.
+  // (Fetches are cached so this is instant when data is fresh.)
   abortCtrl.abort(); abortCtrl = new AbortController()
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   msgs.value = []
