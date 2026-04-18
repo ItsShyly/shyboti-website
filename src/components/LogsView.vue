@@ -248,6 +248,7 @@ interface AutomodMsg {
 // Enough to cover fast scrollbar dragging without blank space (buffer pre-renders
 // buffer/minItemSize rows, ~360 with buffer=10000 and minItemSize=28).
 const MSG_MAX_SHOWN = 2000
+const MSG_CHUNK     = 1000  // messages fetched / shown per load step
 
 const msgs         = ref<LogMsg[]>([])
 const automodMsgs  = ref<AutomodMsg[]>([])
@@ -281,6 +282,11 @@ const direction   = ref<'newest' | 'oldest'>('newest')  // sort direction
 
 let cursorDate:  Date | null = null
 let cursorMonth: { y: number; m: number } | null = null
+// When the cached day/month has more than MSG_CHUNK messages, these track how many
+// messages at the head of the cache haven't been shown yet.  loadOlder consumes
+// them in MSG_CHUNK steps before advancing to the previous day/month.
+let cursorDayTail:   number | null = null
+let cursorMonthTail: number | null = null
 // Cursors for loading newer (re-fetching trimmed content going forward in time)
 let cursorNewerDate:  Date | null = null
 let cursorNewerMonth: { y: number; m: number } | null = null
@@ -623,26 +629,60 @@ async function loadOlder() {
 
   if (userFilter.value.trim()) {
     if (!cursorMonth) { noMore.value = true; return }
-    loadingMore.value = true
     const cur = cursorMonth
-    cursorMonth = prevMonth(cur)
-    if (new Date(cur.y, cur.m - 1, 1) < cutoff) { noMore.value = true; loadingMore.value = false; return }
+    if (new Date(cur.y, cur.m - 1, 1) < cutoff) { noMore.value = true; return }
+    loadingMore.value = true
     try {
-      const newMsgs = await fetchMonth(ch, cur.y, cur.m, signal)
+      const full = await fetchMonth(ch, cur.y, cur.m, signal)  // instant from cache when paginating
       if (signal.aborted) { loadingMore.value = false; return }
+      let newMsgs: LogMsg[]
+      if (cursorMonthTail !== null) {
+        // Still consuming the head of the cached month — deliver the next chunk
+        const end = cursorMonthTail
+        const start = Math.max(0, end - MSG_CHUNK)
+        newMsgs = full.slice(start, end)
+        if (start === 0) { cursorMonthTail = null; cursorMonth = prevMonth(cur) }
+        else             { cursorMonthTail = start }
+      } else {
+        // First time touching this month
+        if (full.length > MSG_CHUNK) {
+          cursorMonthTail = full.length - MSG_CHUNK  // stay on cur until tail is consumed
+          newMsgs = full.slice(-MSG_CHUNK)
+        } else {
+          cursorMonth = prevMonth(cur)
+          newMsgs = full
+        }
+      }
       if (newMsgs.length > 0) await prependMsgs(newMsgs)
       else { loadingMore.value = false; return loadOlder() }
     } catch {}
     loadingMore.value = false
   } else {
     if (!cursorDate) { noMore.value = true; return }
-    loadingMore.value = true
     const d = cursorDate
-    cursorDate = prevDay(d)
-    if (d < cutoff) { noMore.value = true; loadingMore.value = false; return }
+    if (d < cutoff) { noMore.value = true; return }
+    loadingMore.value = true
     try {
-      const newMsgs = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)
+      const full = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)  // instant from cache when paginating
       if (signal.aborted) { loadingMore.value = false; return }
+      let newMsgs: LogMsg[]
+      if (cursorDayTail !== null) {
+        // Still consuming the head of the cached day — deliver the next chunk
+        const end = cursorDayTail
+        const start = Math.max(0, end - MSG_CHUNK)
+        newMsgs = full.slice(start, end)
+        if (start === 0) { cursorDayTail = null; cursorDate = prevDay(d) }
+        else             { cursorDayTail = start }
+      } else {
+        // First time touching this day
+        if (full.length > MSG_CHUNK) {
+          cursorDayTail = full.length - MSG_CHUNK  // stay on d until tail is consumed
+          newMsgs = full.slice(-MSG_CHUNK)
+        } else {
+          cursorDate = prevDay(d)
+          newMsgs = full
+        }
+      }
       if (newMsgs.length > 0) await prependMsgs(newMsgs)
       else { loadingMore.value = false; return loadOlder() }
     } catch {}
@@ -918,12 +958,14 @@ async function search() {
   loading.value = true; error.value = ''; searched.value = true
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
   noNewer.value = true; loadingNewer.value = false; isNearBottom.value = true
+  _rowCache.clear()  // ensure badges re-track twitchBadgeMap on the first render
   paintQueue.length = 0
   pendingPaintJobs.value = 0
   paintConcurrent = 0
   paintAutoRequested = 0
   bulkFetchDone = false
   cursorDate = null; cursorMonth = null; cursorNewerDate = null; cursorNewerMonth = null
+  cursorDayTail = null; cursorMonthTail = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   preloadChannelAssets(ch)
   fetchEmotes(ch)
@@ -996,16 +1038,27 @@ async function search() {
 
   if (isUser) {
     const y = today.getFullYear(), m = today.getMonth() + 1
-    try { msgs.value = await fetchMonth(ch, y, m, abortCtrl.signal) } catch {}
-    cursorMonth = prevMonth({ y, m })
+    let _raw: LogMsg[] = []
+    try { _raw = await fetchMonth(ch, y, m, abortCtrl.signal) } catch {}
+    if (_raw.length > MSG_CHUNK) {
+      msgs.value = _raw.slice(-MSG_CHUNK); cursorMonth = { y, m }; cursorMonthTail = _raw.length - MSG_CHUNK
+    } else {
+      msgs.value = _raw; cursorMonth = prevMonth({ y, m }); cursorMonthTail = null
+    }
     // >>> If current month empty, walk backwards up to 1 year to find logs
     if (!msgs.value.length && !abortCtrl.signal.aborted) {
       const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 1)
       while (!msgs.value.length && !abortCtrl.signal.aborted) {
         const cur = cursorMonth
         if (new Date(cur.y, cur.m - 1, 1) < cutoff) break
-        cursorMonth = prevMonth(cur)
-        try { msgs.value = await fetchMonth(ch, cur.y, cur.m, abortCtrl.signal) } catch {}
+        cursorMonth = prevMonth(cur)  // pre-advance; overridden below if >MSG_CHUNK
+        let _wr: LogMsg[] = []
+        try { _wr = await fetchMonth(ch, cur.y, cur.m, abortCtrl.signal) } catch {}
+        if (_wr.length > MSG_CHUNK) {
+          msgs.value = _wr.slice(-MSG_CHUNK); cursorMonth = cur; cursorMonthTail = _wr.length - MSG_CHUNK
+        } else {
+          msgs.value = _wr; cursorMonthTail = null
+        }
       }
     }
     loading.value = false
@@ -1021,15 +1074,26 @@ async function search() {
       scrollToBottom()
     }
   } else {
-    try { msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal) } catch {}
-    cursorDate = prevDay(today)
+    let _raw: LogMsg[] = []
+    try { _raw = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal) } catch {}
+    if (_raw.length > MSG_CHUNK) {
+      msgs.value = _raw.slice(-MSG_CHUNK); cursorDate = new Date(today.getFullYear(), today.getMonth(), today.getDate()); cursorDayTail = _raw.length - MSG_CHUNK
+    } else {
+      msgs.value = _raw; cursorDate = prevDay(today); cursorDayTail = null
+    }
     // >>> If today empty, walk backwards up to 1 year to find logs
     if (!msgs.value.length && !abortCtrl.signal.aborted) {
       const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 1)
       while (!msgs.value.length && cursorDate && cursorDate > cutoff && !abortCtrl.signal.aborted) {
         const d = cursorDate
-        cursorDate = prevDay(d)
-        try { msgs.value = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal) } catch {}
+        cursorDate = prevDay(d)  // pre-advance; overridden below if >MSG_CHUNK
+        let _wr: LogMsg[] = []
+        try { _wr = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal) } catch {}
+        if (_wr.length > MSG_CHUNK) {
+          msgs.value = _wr.slice(-MSG_CHUNK); cursorDate = d; cursorDayTail = _wr.length - MSG_CHUNK
+        } else {
+          msgs.value = _wr; cursorDayTail = null
+        }
       }
     }
     loading.value = false
@@ -1085,19 +1149,31 @@ async function jumpToNewest() {
   abortCtrl.abort(); abortCtrl = new AbortController()
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   msgs.value = []
+  _rowCache.clear()  // ensure badges re-track twitchBadgeMap on the first render
   noMore.value = false; loadingMore.value = false
   noNewer.value = true; loadingNewer.value = false
   isNearBottom.value = true
   cursorNewerDate = null; cursorNewerMonth = null
+  cursorDayTail = null; cursorMonthTail = null
   loading.value = true
   const today = new Date()
   if (userFilter.value.trim()) {
     const y = today.getFullYear(), m = today.getMonth() + 1
-    try { msgs.value = await fetchMonth(ch, y, m, abortCtrl.signal) } catch {}
-    cursorMonth = prevMonth({ y, m })
+    let _raw: LogMsg[] = []
+    try { _raw = await fetchMonth(ch, y, m, abortCtrl.signal) } catch {}
+    if (_raw.length > MSG_CHUNK) {
+      msgs.value = _raw.slice(-MSG_CHUNK); cursorMonth = { y, m }; cursorMonthTail = _raw.length - MSG_CHUNK
+    } else {
+      msgs.value = _raw; cursorMonth = prevMonth({ y, m }); cursorMonthTail = null
+    }
   } else {
-    try { msgs.value = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal) } catch {}
-    cursorDate = prevDay(today)
+    let _raw: LogMsg[] = []
+    try { _raw = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal) } catch {}
+    if (_raw.length > MSG_CHUNK) {
+      msgs.value = _raw.slice(-MSG_CHUNK); cursorDate = new Date(today.getFullYear(), today.getMonth(), today.getDate()); cursorDayTail = _raw.length - MSG_CHUNK
+    } else {
+      msgs.value = _raw; cursorDate = prevDay(today); cursorDayTail = null
+    }
   }
   loading.value = false
   await nextTick()
