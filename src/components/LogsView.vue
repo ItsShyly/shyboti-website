@@ -497,7 +497,7 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
     console.debug(`[logs:fetchDay] cache hit ${ch} ${y}-${mm}-${dd}`)
     return hit.data.slice()
   }
-  const params = new URLSearchParams({ channel: ch, year: String(y), month: mm, day: dd, limit: '10000', render: '1' })
+  const params = new URLSearchParams({ channel: ch, year: String(y), month: mm, day: dd, limit: '10000', render: '0' })
   if (term) params.set('q', term)
   const _t0 = performance.now()
   const res = await fetch(`${API}/logs/day?${params}`, { signal })
@@ -526,7 +526,7 @@ async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal)
     console.debug(`[logs:fetchMonth] cache hit ${ch} ${y}-${mm} user=${u||'(all)'}`)
     return hit.data.slice()
   }
-  const params = new URLSearchParams({ channel: ch, user: u, year: String(y), month: mm, limit: '100000', render: '1' })
+  const params = new URLSearchParams({ channel: ch, user: u, year: String(y), month: mm, limit: '100000', render: '0' })
   const _t0 = performance.now()
   const res = await fetch(`${API}/logs/usermonth?${params}`, { signal })
   if (!res.ok) return []
@@ -559,6 +559,12 @@ function nextMonth(ym: { y: number; m: number }): { y: number; m: number } {
 
 async function prependMsgs(newMsgs: LogMsg[]) {
   const body   = getBody()
+  const anchorEl = body
+    ? Array.from(body.querySelectorAll<HTMLElement>('[id^="log-"], [id^="day-"]'))
+        .find(el => el.offsetTop + el.offsetHeight > (body.scrollTop + 1))
+    : null
+  const anchorId = anchorEl?.id ?? null
+  const anchorOffset = (body && anchorEl) ? (anchorEl.offsetTop - body.scrollTop) : 0
   const prevST = body?.scrollTop ?? 0
   const prevSH = body?.scrollHeight ?? 0
   const existingIds = new Set(msgs.value.map(m => m.id))
@@ -576,8 +582,17 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   }
   msgs.value = next
   await nextTick()
-  // Correct scroll position: content was inserted above → scrollHeight grew by delta
-  if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
+  if (!body) return
+  // Prefer restoring against an element anchor for exact stability.
+  if (anchorId) {
+    const newAnchor = document.getElementById(anchorId)
+    if (newAnchor) {
+      body.scrollTop = Math.max(0, newAnchor.offsetTop - anchorOffset)
+      return
+    }
+  }
+  // Fallback if anchor no longer exists.
+  body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
 
 async function appendMsgs(newMsgs: LogMsg[]) {
@@ -1198,11 +1213,11 @@ onUnmounted(() => {
 // Attach/detach the emote MutationObserver + event delegation whenever the scroller mounts.
 watch(scrollerRef, (newVal, oldVal) => {
   if (oldVal) {
-    const el = (oldVal as any).$el as HTMLElement | undefined
+    const el = oldVal as HTMLElement | null
     if (el) { detachEmoteObserver(el); el.removeEventListener('click', onRowClick) }
   }
   if (newVal) {
-    const el = (newVal as any).$el as HTMLElement | undefined
+    const el = newVal as HTMLElement | null
     if (el) { attachEmoteObserver(el); el.addEventListener('click', onRowClick) }
   }
 })
