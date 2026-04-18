@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, type VNode } from 'vue'
 import { useRouter } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
@@ -8,6 +8,67 @@ import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
+
+// ─── Scroll / render timing logs ─────────────────────────────────────────────
+// Set any of these to true in the browser console to enable that category:
+//   window.__logsDbg.rowMount   = true
+//   window.__logsDbg.rowActive  = true
+//   window.__logsDbg.badgeLoad  = true
+//   window.__logsDbg.recycleEvt = true
+const _dbgDefaults = { rowMount: false, rowActive: false, badgeLoad: false, recycleEvt: false }
+if (typeof window !== 'undefined') {
+  (window as any).__logsDbg = Object.assign(_dbgDefaults, (window as any).__logsDbg ?? {})
+}
+function dbg(category: keyof typeof _dbgDefaults): boolean {
+  return typeof window !== 'undefined' && !!(window as any).__logsDbg?.[category]
+}
+
+// Called by onVnodeMounted / onVnodeUpdated on the row outer div.
+// Records the time from when the item became "active" to when its DOM exists.
+const _rowMountTimes = new Map<string, number>() // id → performance.now() when active flipped
+function rowBecameActive(id: string) {
+  _rowMountTimes.set(id, performance.now())
+  if (dbg('rowActive')) console.debug(`[scroll:active] ${id}`)
+}
+function rowMounted(el: Element) {
+  const id = (el as HTMLElement).id ?? '?'
+  const t0 = _rowMountTimes.get(id)
+  if (t0 !== undefined) {
+    _rowMountTimes.delete(id)
+    if (dbg('rowMount')) console.debug(`[scroll:mount] ${id} +${(performance.now() - t0).toFixed(1)}ms`)
+  } else {
+    if (dbg('rowMount')) console.debug(`[scroll:mount] ${id} (no active timestamp)`)
+  }
+}
+function rowUpdated(el: Element) {
+  if (dbg('rowMount')) console.debug(`[scroll:update] ${(el as HTMLElement).id ?? '?'}`)
+}
+
+// Badge / emote image timing.
+function badgeLoadStart(src: string) {
+  if (dbg('badgeLoad')) _badgeT0.set(src, performance.now())
+}
+const _badgeT0 = new Map<string, number>()
+function badgeLoaded(ev: Event) {
+  if (!dbg('badgeLoad')) return
+  const src = (ev.target as HTMLImageElement).src
+  const t0 = _badgeT0.get(src)
+  console.debug(`[scroll:badge-load] ${src.split('/').pop()} +${t0 !== undefined ? (performance.now()-t0).toFixed(1)+'ms' : '?ms'}`)
+  if (t0 !== undefined) _badgeT0.delete(src)
+}
+function badgeError(ev: Event) {
+  if (!dbg('badgeLoad')) return
+  const src = (ev.target as HTMLImageElement).src
+  console.debug(`[scroll:badge-err] ${src.split('/').pop()}`)
+  _badgeT0.delete(src)
+}
+
+// DynamicScroller @update event — tells us when the visible range changes.
+function onScrollerUpdate(startIndex: number, endIndex: number, visibleStart: number, visibleEnd: number) {
+  if (dbg('recycleEvt')) {
+    console.debug(`[scroll:range] rendered=${startIndex}-${endIndex} visible=${visibleStart}-${visibleEnd} (${endIndex-startIndex+1} in DOM)`)
+  }
+}
 
 const { session } = useAuth()
 const { t } = useI18n()
@@ -1512,6 +1573,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           :min-item-size="28"
           key-field="id"
           :buffer="1200"
+          @update="onScrollerUpdate"
         >
           <template #before>
             <div class="top-loader" v-show="loadingMore">
@@ -1521,7 +1583,9 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           </template>
 
           <template #default="{ item, index, active }">
-            <DynamicScrollerItem :item="item" :active="active" :data-index="index">
+            <DynamicScrollerItem :item="item" :active="active" :data-index="index"
+              @hook:mounted="() => { if (item.kind === 'msg') rowBecameActive(item.id) }"
+            >
             <div v-if="item.kind === 'day'" class="log-day-sep">{{ item.label }}</div>
 
             <div
@@ -1544,6 +1608,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :id="`log-${item.msg.id}`"
               class="log-row-outer"
               :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'log-row-event': isHighlightedEvent(item.msg) }"
+              @vnodeMounted="(vn: VNode) => rowMounted(vn.el as Element)"
+              @vnodeUpdated="(vn: VNode) => rowUpdated(vn.el as Element)"
             >
               <div class="log-row">
                 <div class="log-time-col">
@@ -1565,6 +1631,9 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                       :src="b.imageUrl"
                       :alt="b.title || b.label"
                       :title="b.title || b.label"
+                      @vnodeMounted="() => badgeLoadStart(b.imageUrl!)"
+                      @load="badgeLoaded"
+                      @error="badgeError"
                     />
                     <span v-else class="badge-fallback" :title="b.title || b.label">{{ b.label }}</span>
                   </template>
