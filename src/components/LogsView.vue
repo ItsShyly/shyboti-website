@@ -575,7 +575,7 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   }
 }
 
-async function loadOlder() {
+async function loadOlder(_emptySkip = 0) {
   if (loadingMore.value || noMore.value) return
   const ch     = channel.value.trim().toLowerCase().replace(/^#/, '')
   const signal = abortCtrl.signal
@@ -591,7 +591,8 @@ async function loadOlder() {
       const newMsgs = await fetchMonth(ch, cur.y, cur.m, signal)
       if (signal.aborted) { loadingMore.value = false; return }
       if (newMsgs.length > 0) await prependMsgs(newMsgs)
-      else { loadingMore.value = false; return loadOlder() }
+      // Skip up to 24 consecutive empty months before yielding back to the scroll handler.
+      else { loadingMore.value = false; if (_emptySkip < 24) return loadOlder(_emptySkip + 1) }
     } catch {}
     loadingMore.value = false
   } else {
@@ -604,7 +605,8 @@ async function loadOlder() {
       const newMsgs = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)
       if (signal.aborted) { loadingMore.value = false; return }
       if (newMsgs.length > 0) await prependMsgs(newMsgs)
-      else { loadingMore.value = false; return loadOlder() }
+      // Skip up to 60 consecutive empty days before yielding back to the scroll handler.
+      else { loadingMore.value = false; if (_emptySkip < 60) return loadOlder(_emptySkip + 1) }
     } catch {}
     loadingMore.value = false
   }
@@ -975,12 +977,23 @@ async function search() {
 
 async function autoFillIfShort() {
   if (noMore.value) return
+  // DynamicScroller needs several render frames to mount items and compute scrollHeight.
+  // Checking too early makes it look like the viewport is empty even when it isn't,
+  // which causes runaway loadOlder() calls that can pile up tens-of-thousands of messages.
   await nextTick()
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   const body = getBody(); if (!body) return
   let safety = 0
   while (body.scrollHeight <= body.clientHeight + 20 && !noMore.value && safety++ < 10) {
+    // Stop auto-filling if we already have a lot of messages — the browser may still be
+    // mounting them all (render-all mode). Triggering more loads while thousands of DOM
+    // nodes are being created freezes the page and shows nothing.
+    if (msgs.value.length >= 2000) break
     await loadOlder()
     await nextTick()
+    // Give the scroller one frame to update its measured height before re-checking.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   }
 }
 
