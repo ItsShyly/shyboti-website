@@ -1220,7 +1220,7 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
 
     if (isSub) out.push({ key: `sub-${i}`, color: '#755ebc', topPct, index: i, title: 'Subscription event' })
     else if (isFirst) out.push({ key: `first-${i}`, color: '#c832c8', topPct, index: i, title: 'First-time chatter' })
-    else if (isMod) out.push({ key: `mod-${i}`, color: '#8a8a8a', topPct, index: i, title: 'Ban/timeout message' })
+    else if (isMod) out.push({ key: `mod-${i}`, color: '#454545', topPct, index: i, title: 'Ban/timeout message' })
   }
 
   return out
@@ -2394,14 +2394,14 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .logs-tbody   { overflow-y: auto; flex: 1; position: relative; min-height: 0; }
 .logs-tbody::-webkit-scrollbar { width: 12px; }
 .logs-tbody::-webkit-scrollbar-track { background: #15151a; }
-.logs-tbody::-webkit-scrollbar-thumb { background: #3b3b45; border-radius: 10px; border: 2px solid #15151a; }
+.logs-tbody::-webkit-scrollbar-thumb { background: #3b3b45; border: 2px solid #15151a; }
 
 .event-rail {
   position: absolute;
-  top: 31px;
-  bottom: 0;
+  top: 40px;
+  bottom: 5px;
   right: 14px;
-  width: 6px;
+  width: 10px;
   background: rgba(255, 255, 255, 0.04);
   border-radius: 4px;
   pointer-events: none;
@@ -2416,7 +2416,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   padding: 0;
   margin: 0;
   transform: translateY(-50%);
-  border-radius: 4px;
   cursor: pointer;
   pointer-events: auto;
 }
@@ -2515,7 +2514,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 :deep(.log-msg-wrap.has-reply) { padding-top: 16px; }
 :deep(.log-mobile-msgline) { display: none; }
 :deep(.log-msg-wrap.is-system-mod .log-msg) {
-  color: #d0a7a7;
+  color: #898989;
   font-style: italic;
 }
 :deep(.log-msg)  { flex: 1; color: #ccc; word-break: break-word; line-height: 1.6; min-width: 0; }
