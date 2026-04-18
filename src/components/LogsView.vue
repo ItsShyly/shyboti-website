@@ -370,6 +370,28 @@ async function fetchTwitchBadges(ch: string) {
   } catch {}
 }
 
+/* ── Pre-load images extracted from server-rendered row HTML ── */
+const _preloadedUrls = new Set<string>()
+const _imgSrcRe = / src="(https:\/\/[^"]+)"/g
+function preloadRowImages(messages: LogMsg[]) {
+  const fresh: string[] = []
+  for (const m of messages) {
+    if (!m._rowHtml) continue
+    _imgSrcRe.lastIndex = 0
+    let match: RegExpExecArray | null
+    while ((match = _imgSrcRe.exec(m._rowHtml))) {
+      const url = match[1]!
+      if (!_preloadedUrls.has(url)) {
+        _preloadedUrls.add(url)
+        fresh.push(url)
+      }
+    }
+  }
+  if (!fresh.length) return
+  console.debug(`[logs:preload] warming ${fresh.length} unique image URLs`)
+  for (const url of fresh) (new Image()).src = url
+}
+
 async function fetchDay(ch: string, y: number, m: number, d: number, signal: AbortSignal): Promise<LogMsg[]> {
   const mm  = String(m).padStart(2, '0')
   const dd  = String(d).padStart(2, '0')
@@ -395,6 +417,7 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
     messages = messages.filter(m => m.text.toLowerCase().includes(termLow))
   }
   dayFetchCache.set(cacheKey, { data: messages, ts: Date.now() })
+  preloadRowImages(messages)
   return messages
 }
 
@@ -422,6 +445,7 @@ async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal)
     messages = messages.filter(m => m.text.toLowerCase().includes(termLow))
   }
   monthFetchCache.set(cacheKey, { data: messages, ts: Date.now() })
+  preloadRowImages(messages)
   return messages
 }
 
