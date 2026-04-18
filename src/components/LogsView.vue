@@ -554,7 +554,16 @@ async function prependMsgs(newMsgs: LogMsg[]) {
     scrollerAny.forceUpdate(true)
     await nextTick()
   }
-  if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  if (body) {
+    // First anchor restore after the main layout pass.
+    body.scrollTop = prevST + Math.max(0, body.scrollHeight - prevSH)
+    // Some browsers/scroller states finalize heights one frame later.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    const target = prevST + Math.max(0, body.scrollHeight - prevSH)
+    if (Math.abs(body.scrollTop - target) > 1) body.scrollTop = target
+  }
 }
 
 async function loadOlder() {
