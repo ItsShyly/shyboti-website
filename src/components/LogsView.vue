@@ -547,6 +547,13 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   if (!deduped.length) return
   msgs.value = [...deduped, ...msgs.value]
   await nextTick()
+  // In "render all" mode, DynamicScroller can defer layout after prepend.
+  // Force a size recalculation before restoring the viewport anchor.
+  const scrollerAny = scrollerRef.value as any
+  if (typeof scrollerAny?.forceUpdate === 'function') {
+    scrollerAny.forceUpdate(true)
+    await nextTick()
+  }
   if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
 
