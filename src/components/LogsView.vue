@@ -6,6 +6,8 @@ import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
+import { RecycleScroller } from 'vue-virtual-scroller'
+import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 
 const { session } = useAuth()
 const { t } = useI18n()
@@ -75,8 +77,12 @@ const searched    = ref(false)
 const emoteMap    = ref<EmoteMap>({})
 const twitchBadgeMap = ref<Map<string, TwitchBadgeAsset>>(new Map())
 const sevenTvBadgeMap = ref<Map<string, SevenTvBadgeAsset>>(new Map())
-const bodyRef     = ref<HTMLDivElement | null>(null)
+const scrollerRef  = ref<{ scrollToItem: (idx: number) => void; $el: HTMLElement } | null>(null)
 const visualsBarRef = ref<HTMLElement | null>(null)
+// Returns the RecycleScroller's actual scroll container DOM element.
+function getBody(): HTMLElement | null {
+  return (scrollerRef.value as any)?.$el ?? null
+}
 const highlightId = ref<string | null>(null)
 const copyToast     = ref(false)
 const searchExpanded = ref(true)
@@ -86,14 +92,8 @@ let cursorDate:  Date | null = null
 let cursorMonth: { y: number; m: number } | null = null
 let abortCtrl = new AbortController()
 let scrollListenerAttached = false
-let windowScrollAttached  = false
 let rafScrollPending = false
 
-const VIRTUAL_THRESHOLD = 500
-const VIRTUAL_OVERSCAN = 80
-const VIRTUAL_ROW_ESTIMATE = 30
-const virtualStart = ref(0)
-const virtualEnd = ref(0)
 const loadingOverlayLogoUrl = 'https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif'
 const domSettling = ref(false)
 const pendingPaintJobs = ref(0)
@@ -301,7 +301,7 @@ function prevMonth(ym: { y: number; m: number }): { y: number; m: number } {
 }
 
 async function prependMsgs(newMsgs: LogMsg[]) {
-  const body   = bodyRef.value
+  const body   = getBody()
   const prevST = body?.scrollTop ?? 0
   const prevSH = body?.scrollHeight ?? 0
   const existingIds = new Set(msgs.value.map(m => m.id))
@@ -380,45 +380,28 @@ function onScroll() {
   rafScrollPending = true
   requestAnimationFrame(() => {
     rafScrollPending = false
-    recalcVirtualWindow()
-    if (!bodyRef.value || loadingMore.value || noMore.value) return
-    if (bodyRef.value.scrollTop < 120) loadOlder()
+    const body = getBody()
+    if (!body || loadingMore.value || noMore.value) return
+    if (body.scrollTop < 120) loadOlder()
+    checkPaints()
   })
 }
 
-function recalcVirtualWindow() {
-  const body = bodyRef.value
-  const total = displayItems.value.length
-  if (!body || total === 0) {
-    virtualStart.value = 0
-    virtualEnd.value = total
-    return
-  }
-
-  if (!useVirtual.value) {
-    virtualStart.value = 0
-    virtualEnd.value = total
-    return
-  }
-
-  const viewportRows = Math.ceil(body.clientHeight / VIRTUAL_ROW_ESTIMATE)
-  const firstRow = Math.max(0, Math.floor(body.scrollTop / VIRTUAL_ROW_ESTIMATE) - VIRTUAL_OVERSCAN)
-  const endRow = Math.min(total, firstRow + viewportRows + VIRTUAL_OVERSCAN * 2)
-
-  virtualStart.value = firstRow
-  virtualEnd.value = endRow
-}
+// No-op: RecycleScroller manages its own virtual window.
+function recalcVirtualWindow() {}
 
 function attachScrollListener() {
-  if (scrollListenerAttached || !bodyRef.value) return
-  bodyRef.value.addEventListener('scroll', onScroll, { passive: true })
+  if (scrollListenerAttached) return
+  const body = getBody()
+  if (!body) return
+  body.addEventListener('scroll', onScroll, { passive: true })
   scrollListenerAttached = true
 }
 
 function detachScrollListeners() {
-  if (bodyRef.value) bodyRef.value.removeEventListener('scroll', onScroll)
+  const body = getBody()
+  if (body) body.removeEventListener('scroll', onScroll)
   scrollListenerAttached = false
-  windowScrollAttached   = false
 }
 
 // >>> Fetch automod messages for current day (broadcaster-only)
@@ -483,7 +466,6 @@ async function search() {
   pendingPaintJobs.value = 0
   paintConcurrent = 0
   paintAutoRequested = 0
-  virtualStart.value = 0; virtualEnd.value = 0
   cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   fetchEmotes(ch)
@@ -550,7 +532,7 @@ async function search() {
     }
     loading.value = false
     // Oldest-first: scroll to top (earliest messages)
-    nextTick(() => { if (bodyRef.value) bodyRef.value.scrollTop = 0 })
+    nextTick(() => { const b = getBody(); if (b) b.scrollTop = 0 })
     return
   }
 
@@ -607,18 +589,17 @@ async function search() {
   }
 
   const _dbgTDone = performance.now()
-  console.debug(`[logs:search] done — ${msgs.value.length} msgs, virtual=${useVirtual.value}, total=${_dbgTDone - _dbgT0 | 0}ms`)
+  console.debug(`[logs:search] done — ${msgs.value.length} msgs, total=${_dbgTDone - _dbgT0 | 0}ms`)
 
   await nextTick()
   attachScrollListener()
-  recalcVirtualWindow()
   await autoFillIfShort()
 }
 
 async function autoFillIfShort() {
   if (noMore.value) return
   await nextTick()
-  const body = bodyRef.value; if (!body) return
+  const body = getBody(); if (!body) return
   let safety = 0
   while (body.scrollHeight <= body.clientHeight + 20 && !noMore.value && safety++ < 10) {
     await loadOlder()
@@ -627,22 +608,23 @@ async function autoFillIfShort() {
 }
 
 function scrollToBottom() {
-  nextTick(() => { if (bodyRef.value) bodyRef.value.scrollTop = bodyRef.value.scrollHeight })
+  nextTick(() => { const b = getBody(); if (b) b.scrollTop = b.scrollHeight })
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
-  if (useVirtual.value) {
-    const idx = displayItems.value.findIndex((it) => it.kind !== 'day' && it.msg.id === id)
-    if (idx >= 0) {
-      const body = bodyRef.value
-      if (body) {
-        body.scrollTop = Math.max(0, idx * VIRTUAL_ROW_ESTIMATE - body.clientHeight * 0.5)
-      }
-      recalcVirtualWindow()
+  // Scroll the recycler to the item so RecycleScroller mounts it in the DOM.
+  const idx = displayItems.value.findIndex((it) => it.kind !== 'day' && it.msg.id === id)
+  if (idx >= 0 && scrollerRef.value) {
+    ;(scrollerRef.value as any).scrollToItem(idx)
+    const body = getBody()
+    if (body) {
       await nextTick()
+      // Center the item in the viewport
+      body.scrollTop = body.scrollTop - body.clientHeight * 0.4
     }
   }
 
+  // Poll until the DOM element is mounted (RecycleScroller may need a frame).
   const deadline = Date.now() + 3000
   let el: HTMLElement | null = null
   while (Date.now() < deadline) {
@@ -730,7 +712,7 @@ onMounted(async () => {
   await nextTick()
   if (dateFromInputRef.value && dateFrom.value) dateFromInputRef.value.value = dateFrom.value
   if (dateUntilInputRef.value && dateUntil.value) dateUntilInputRef.value.value = dateUntil.value
-  window.addEventListener('resize', recalcVirtualWindow)
+  window.addEventListener('resize', () => {}) // RecycleScroller handles resize internally
   document.addEventListener('click', onDocClickVisuals, true)
   if (channel.value) await search()
 })
@@ -739,7 +721,6 @@ onUnmounted(() => {
   document.body.classList.remove('logs-jobs-running')
   abortCtrl.abort()
   detachScrollListeners()
-  window.removeEventListener('resize', recalcVirtualWindow)
   document.removeEventListener('click', onDocClickVisuals, true)
   stopPopupDrag()
 })
@@ -762,9 +743,9 @@ function fmtDayLabel(ts: string) {
 }
 
 type DisplayItem =
-  | { kind: 'day';     label: string }
-  | { kind: 'msg';     msg: LogMsg }
-  | { kind: 'automod'; msg: AutomodMsg }
+  | { kind: 'day';     id: string; label: string }
+  | { kind: 'msg';     id: string; msg: LogMsg }
+  | { kind: 'automod'; id: string; msg: AutomodMsg }
 
 const displayItems = computed<DisplayItem[]>(() => {
   // Merge regular msgs + automod msgs (if enabled), sort by timestamp
@@ -776,27 +757,21 @@ const displayItems = computed<DisplayItem[]>(() => {
   }
   const items: DisplayItem[] = []
   let lastDay = ''
+  // Deduplicate by message ID to prevent the same event appearing multiple times
+  // when consecutive day fetches overlap (e.g. moderation events near midnight).
+  const seenIds = new Set<string>()
   for (const m of all) {
+    const msgId = m.id || `${m.timestamp}:${m.username}`
+    if (seenIds.has(msgId)) continue
+    seenIds.add(msgId)
     const day = fmtDayLabel(m.timestamp)
-    if (day !== lastDay) { items.push({ kind: 'day', label: day }); lastDay = day }
-    if ((m as any)._automod) items.push({ kind: 'automod', msg: m as AutomodMsg })
-    else                     items.push({ kind: 'msg',     msg: m as LogMsg })
+    if (day !== lastDay) { items.push({ kind: 'day', id: `day-${day}`, label: day }); lastDay = day }
+    if ((m as any)._automod) items.push({ kind: 'automod', id: msgId, msg: m as AutomodMsg })
+    else                     items.push({ kind: 'msg',     id: msgId, msg: m as LogMsg })
   }
   return items
 })
 
-const useVirtual = computed(() => searched.value && displayItems.value.length > VIRTUAL_THRESHOLD)
-
-const visibleDisplayItems = computed<DisplayItem[]>(() => {
-  if (!useVirtual.value) return displayItems.value
-  return displayItems.value.slice(virtualStart.value, virtualEnd.value)
-})
-
-const topSpacerHeight = computed(() => useVirtual.value ? virtualStart.value * VIRTUAL_ROW_ESTIMATE : 0)
-const bottomSpacerHeight = computed(() => {
-  if (!useVirtual.value) return 0
-  return Math.max(0, (displayItems.value.length - virtualEnd.value) * VIRTUAL_ROW_ESTIMATE)
-})
 const hasRunningJobs = computed(() => loading.value || loadingMore.value || domSettling.value || pendingPaintJobs.value > 0)
 const showFloatingFetch = computed(() => hasRunningJobs.value)
 let floatingFetchStartedAt: number | null = null
@@ -810,8 +785,6 @@ function loadingDebugSnapshot() {
     phase: searchJobPhase.value,
     msgs: msgs.value.length,
     displayItems: displayItems.value.length,
-    visibleItems: visibleDisplayItems.value.length,
-    useVirtual: useVirtual.value,
   }
 }
 
@@ -995,11 +968,6 @@ let paintConcurrent = 0
 const paintQueue: Array<{ key: string; jobId: number }> = []
 let paintAutoRequested = 0
 
-// Bumped whenever shared rendering state changes (emotes, badges, visibility toggles).
-// Used as a v-memo dependency so rows re-render when global visuals change, while
-// still skipping re-renders during per-user paint/emote loading for other users.
-const rowRenderKey = ref(0)
-
 function intToRgba(c: number): string {
   const r = (c >>> 24) & 0xff
   const g = (c >>> 16) & 0xff
@@ -1157,28 +1125,27 @@ async function ensurePaint(username: string) {
   drainPaintQueue()
 }
 
-watch(visibleDisplayItems, (list) => {
-  if (!visualsPhaseActive.value) return
-  if (paintAutoRequested >= PAINT_AUTO_LIMIT) return
+// Load paints for the most recently visible users (from the end of the list,
+// since newest messages are at the bottom).
+function checkPaints() {
+  if (!visualsPhaseActive.value || paintAutoRequested >= PAINT_AUTO_LIMIT) return
+  const list = displayItems.value
   const seen = new Set<string>()
-  for (const item of list) {
+  for (let i = list.length - 1; i >= 0 && paintAutoRequested < PAINT_AUTO_LIMIT; i--) {
+    const item = list[i]!
     if (item.kind !== 'msg') continue
-    if (paintAutoRequested >= PAINT_AUTO_LIMIT) break
     const u = item.msg.username?.toLowerCase()
     if (u && !seen.has(u) && !paintCache.has(u)) {
       seen.add(u)
-      paintAutoRequested += 1
+      paintAutoRequested++
       ensurePaint(u)
     }
   }
-}, { flush: 'post' })
+}
 
 watch(displayItems, async () => {
-  const _t0 = performance.now()
-  recalcVirtualWindow()
   await nextTick()
-  const _t1 = performance.now()
-  console.debug(`[logs:displayItems] recalcVirtualWindow=${(_t1-_t0)|0}ms, items=${displayItems.value.length}, virtual=${useVirtual.value}, visible=${visibleDisplayItems.value.length}`)
+  console.debug(`[logs:displayItems] items=${displayItems.value.length}`)
   markDomSettling()
 }, { flush: 'post' })
 
@@ -1197,6 +1164,7 @@ watch(loading, (isLoading) => {
       if (jobId !== activeSearchJob.value) return
       visualsPhaseActive.value = true
       setSearchJobPhase('visuals')
+      checkPaints()
     })
 }, { flush: 'post' })
 
@@ -1205,33 +1173,9 @@ watch(paintStyles, () => {
   if (loading.value || loadingMore.value) markDomSettling()
 }, { flush: 'post' })
 
-// Bump rowRenderKey when shared rendering state changes so v-memo'd rows
-// re-render correctly on badge loads, emote loads, or visibility toggles.
-watch([hide7tv, plainUsernames, twitchBadgeMap, emoteMap], () => {
-  rowRenderKey.value++
-}, { flush: 'post' })
-
 watch(hasRunningJobs, (running) => {
   document.body.classList.toggle('logs-jobs-running', running)
   if (!running) setSearchJobPhase('idle')
-}, { immediate: true })
-
-watch([loading, loadingMore, domSettling, pendingPaintJobs], ([l, lm, ds, pp], [prevL, prevLm, prevDs, prevPp]) => {
-  if (l === prevL && lm === prevLm && ds === prevDs && pp === prevPp) return
-  console.debug('[logs:loading-state]', loadingDebugSnapshot())
-}, { flush: 'sync' })
-
-watch(showFloatingFetch, (visible, prevVisible) => {
-  if (visible && !prevVisible) {
-    floatingFetchStartedAt = performance.now()
-    console.debug('[logs:overlay] show', loadingDebugSnapshot())
-    return
-  }
-  if (!visible && prevVisible) {
-    const elapsed = floatingFetchStartedAt == null ? 0 : ((performance.now() - floatingFetchStartedAt) | 0)
-    floatingFetchStartedAt = null
-    console.debug(`[logs:overlay] hide after ${elapsed}ms`, loadingDebugSnapshot())
-  }
 }, { immediate: true })
 
 // >>> User popup
@@ -1471,18 +1415,23 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           <div>{{ t('logs.col.user') }}</div>
           <div>{{ t('logs.col.msg') }}</div>
         </div>
-        <div class="logs-tbody" ref="bodyRef">
-          <div class="top-loader" v-show="loadingMore">
-            <span class="spinner">⟳</span> {{ t('logs.load_older') }}
-          </div>
-          <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
+        <RecycleScroller
+          class="logs-tbody"
+          ref="scrollerRef"
+          :items="displayItems"
+          :item-size="36"
+          key-field="id"
+          :buffer="400"
+        >
+          <template #before>
+            <div class="top-loader" v-show="loadingMore">
+              <span class="spinner">⟳</span> {{ t('logs.load_older') }}
+            </div>
+            <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
+          </template>
 
-          <div v-if="useVirtual" :style="{ height: topSpacerHeight + 'px' }"></div>
-
-          <!-- Selection rectangle is now handled globally by SnippetOverlay -->
-
-          <template v-for="item in visibleDisplayItems" :key="item.kind === 'day' ? 'day-' + item.label : item.msg.id">
-            <div v-if="item.kind === 'day'" class="log-day-sep">{{ item.label }}</div>
+          <template #default="{ item }">
+            <div v-if="item.kind === 'day'" class="log-day-sep log-day-sep-virtual">{{ item.label }}</div>
 
             <div
               v-else-if="item.kind === 'automod'"
@@ -1588,9 +1537,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               </div>
             </div>
           </template>
-
-          <div v-if="useVirtual" :style="{ height: bottomSpacerHeight + 'px' }"></div>
-        </div>
+        </RecycleScroller>
       </div>
     </div>
 
@@ -1736,10 +1683,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 }
 
 
-.logs-tbody   { overflow-y: auto; flex: 1; position: relative; }
+.logs-tbody   { overflow-y: auto; flex: 1; position: relative; min-height: 0; }
 .logs-tbody::-webkit-scrollbar { width: 3px; }
 .logs-tbody::-webkit-scrollbar-thumb { background: #333; }
 .tbody-selecting { cursor: crosshair !important; user-select: none !important; }
+/* RecycleScroller item wrapper — each recycled row */
+:deep(.vue-recycle-scroller__item-view) { width: 100%; }
+.log-day-sep-virtual { display: block !important; }
 
 .top-loader  { text-align: center; font-size: 11px; color: #555; padding: 8px; }
 .top-loader.no-more { color: #333; }
