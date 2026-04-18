@@ -539,40 +539,10 @@ function prevMonth(ym: { y: number; m: number }): { y: number; m: number } {
 }
 
 async function prependMsgs(newMsgs: LogMsg[]) {
-  const body   = getBody()
-  const prevST = body?.scrollTop ?? 0
-  const prevSH = body?.scrollHeight ?? 0
-  const wasNearTop = prevST < 140
   const existingIds = new Set(msgs.value.map(m => m.id))
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
   if (!deduped.length) return
   msgs.value = [...deduped, ...msgs.value]
-  await nextTick()
-  // In "render all" mode, DynamicScroller can defer layout after prepend.
-  // Force a size recalculation before restoring the viewport anchor.
-  const scrollerAny = scrollerRef.value as any
-  if (typeof scrollerAny?.forceUpdate === 'function') {
-    scrollerAny.forceUpdate(true)
-    await nextTick()
-  }
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-  if (body) {
-    const delta = Math.max(0, body.scrollHeight - prevSH)
-    // Default behavior keeps the same viewport anchor.
-    let target = prevST + delta
-    // But when user is actively loading older near the top, reveal a slice of
-    // the newly prepended chunk so scrolling up actually progresses into older days.
-    if (wasNearTop) target = Math.max(0, target - Math.min(320, delta))
-    body.scrollTop = target
-    // Some browsers/scroller states finalize heights one frame later.
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    const lateDelta = Math.max(0, body.scrollHeight - prevSH)
-    let lateTarget = prevST + lateDelta
-    if (wasNearTop) lateTarget = Math.max(0, lateTarget - Math.min(320, lateDelta))
-    target = lateTarget
-    if (Math.abs(body.scrollTop - target) > 1) body.scrollTop = target
-  }
 }
 
 async function loadOlder(_emptySkip = 0) {
@@ -986,7 +956,7 @@ async function autoFillIfShort() {
   const body = getBody(); if (!body) return
   let safety = 0
   while (body.scrollHeight <= body.clientHeight + 20 && !noMore.value && safety++ < 10) {
-    // Stop auto-filling if we already have a lot of messages — the browser may still be
+    // Stop auto-filling if we already have a lot of messages - the browser may still be
     // mounting them all (render-all mode). Triggering more loads while thousands of DOM
     // nodes are being created freezes the page and shows nothing.
     if (msgs.value.length >= 2000) break
