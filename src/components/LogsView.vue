@@ -686,6 +686,24 @@ function onScroll() {
   })
 }
 
+function onScrollbarTrackPointerDown(ev: PointerEvent) {
+  if (isMobileView.value) return
+  if (ev.button !== 0) return
+  const body = ev.currentTarget as HTMLElement | null
+  if (!body) return
+
+  const rect = body.getBoundingClientRect()
+  const x = ev.clientX - rect.left
+  const gutterWidth = Math.max(14, body.offsetWidth - body.clientWidth)
+  const gutterStart = rect.width - gutterWidth - 2
+  if (x < gutterStart) return
+
+  const y = Math.max(0, Math.min(rect.height, ev.clientY - rect.top))
+  const ratio = rect.height > 0 ? y / rect.height : 0
+  body.scrollTop = ratio * Math.max(0, body.scrollHeight - body.clientHeight)
+  ev.preventDefault()
+}
+
 // No-op: RecycleScroller manages its own virtual window.
 function recalcVirtualWindow() {}
 
@@ -694,12 +712,16 @@ function attachScrollListener() {
   const body = getBody()
   if (!body) return
   body.addEventListener('scroll', onScroll, { passive: true })
+  body.addEventListener('pointerdown', onScrollbarTrackPointerDown)
   scrollListenerAttached = true
 }
 
 function detachScrollListeners() {
   const body = getBody()
-  if (body) body.removeEventListener('scroll', onScroll)
+  if (body) {
+    body.removeEventListener('scroll', onScroll)
+    body.removeEventListener('pointerdown', onScrollbarTrackPointerDown)
+  }
   scrollListenerAttached = false
 }
 
@@ -1187,6 +1209,14 @@ function dayLabelForIndex(idx: number): string | null {
 }
 
 const viewportDayLabel = computed(() => dayLabelForIndex(visibleStartIndex.value))
+const jumpTargetDayLabel = computed(() => {
+  const base = viewportDayLabel.value
+  if (!base) return null
+  const d = parseDayLabel(base)
+  if (!d) return null
+  d.setDate(d.getDate() - 1)
+  return fmtDayFromDate(d)
+})
 
 const tableShellStyle = computed(() => {
   if (isMobileView.value || desktopLogWidth.value === null) return {}
@@ -2063,7 +2093,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               <div>{{ t('logs.col.msg') }}</div>
             </div>
             <div v-if="!isMobileView" class="day-jump-bar">
-              <button class="day-jump-btn" @click="jumpOneDayUp">↑ one day up · {{ viewportDayLabel || '...' }}</button>
+              <button class="day-jump-btn" @click="jumpOneDayUp">↑ jump to {{ jumpTargetDayLabel || '...' }}</button>
             </div>
             <DynamicScroller
               class="logs-tbody"
@@ -2071,7 +2101,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :items="displayItems"
               :min-item-size="28"
               key-field="id"
-              :buffer="10000"
+              :buffer="4000"
               @update="onScrollerUpdate"
             >
           <template #before>
@@ -2389,20 +2419,22 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   padding: 5px 8px;
 }
 .day-jump-btn {
+  width: 100%;
   height: 24px;
   padding: 0 10px;
-  border: 1px solid #2f2f3a;
+  border: 0;
   background: #15151b;
-  color: #a8a8b5;
+  background: #00000000;
   font-size: 11px;
   cursor: pointer;
+
 }
 .day-jump-btn:hover { color: #d2d2df; border-color: #505062; }
 
 .logs-tbody   { overflow-y: auto; flex: 1; position: relative; min-height: 0; }
 .logs-tbody::-webkit-scrollbar { width: 14px; }
 .logs-tbody::-webkit-scrollbar-track { background: rgba(21, 21, 26, 0.92); }
-.logs-tbody::-webkit-scrollbar-thumb { background: rgba(104, 104, 118, 0.88); border-radius: 0; border: none; }
+.logs-tbody::-webkit-scrollbar-thumb { background: rgba(104, 104, 118, 0.88); border-radius: 0; border: none;  border-left: 1px red; }
 
 .event-rail {
   position: absolute;
