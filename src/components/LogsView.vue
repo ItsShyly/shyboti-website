@@ -1835,7 +1835,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           :items="displayItems"
           :min-item-size="28"
           key-field="id"
-          :buffer="1200"
+          :buffer="4000"
           @update="onScrollerUpdate"
         >
           <template #before>
