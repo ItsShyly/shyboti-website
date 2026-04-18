@@ -674,6 +674,22 @@ function startResizeDrag(ev: PointerEvent) {
   window.addEventListener('pointerup', endResizeDrag)
 }
 
+let wheelScrollActive = false
+let wheelIdleTimer: number | null = null
+function scheduleWheelIdleCheck() {
+  if (wheelIdleTimer !== null) window.clearTimeout(wheelIdleTimer)
+  wheelIdleTimer = window.setTimeout(() => {
+    wheelIdleTimer = null
+    wheelScrollActive = false
+    checkPaints()
+  }, 120)
+}
+
+function onWheel() {
+  wheelScrollActive = true
+  scheduleWheelIdleCheck()
+}
+
 function onScroll() {
   if (rafScrollPending) return
   rafScrollPending = true
@@ -682,7 +698,7 @@ function onScroll() {
     const body = getBody()
     if (!body || loadingMore.value || noMore.value) return
     if (body.scrollTop < 120) loadOlder()
-    checkPaints()
+    if (!wheelScrollActive) checkPaints()
   })
 }
 
@@ -712,6 +728,7 @@ function attachScrollListener() {
   const body = getBody()
   if (!body) return
   body.addEventListener('scroll', onScroll, { passive: true })
+  body.addEventListener('wheel', onWheel, { passive: true })
   body.addEventListener('pointerdown', onScrollbarTrackPointerDown)
   scrollListenerAttached = true
 }
@@ -720,8 +737,14 @@ function detachScrollListeners() {
   const body = getBody()
   if (body) {
     body.removeEventListener('scroll', onScroll)
+    body.removeEventListener('wheel', onWheel)
     body.removeEventListener('pointerdown', onScrollbarTrackPointerDown)
   }
+  if (wheelIdleTimer !== null) {
+    window.clearTimeout(wheelIdleTimer)
+    wheelIdleTimer = null
+  }
+  wheelScrollActive = false
   scrollListenerAttached = false
 }
 
@@ -2101,7 +2124,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :items="displayItems"
               :min-item-size="28"
               key-field="id"
-              :buffer="4000"
+              :buffer="2000"
               @update="onScrollerUpdate"
             >
           <template #before>
