@@ -132,6 +132,11 @@ const router = useRouter()
 interface LogMsg {
   id: string; text: string; username: string; displayName: string
   channel: string; timestamp: string; tags?: Record<string, string>
+  // Server pre-rendered fields (present when render=1 is requested)
+  _rowHtml?: string
+  _eventMeta?: { label: string; icon: string; tone: string } | null
+  _isMod?: boolean
+  _hasReply?: boolean
 }
 interface EmoteMap { [name: string]: string }
 interface BadgeChip {
@@ -375,7 +380,7 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
     console.debug(`[logs:fetchDay] cache hit ${ch} ${y}-${mm}-${dd}`)
     return hit.data.slice()
   }
-  const params = new URLSearchParams({ channel: ch, year: String(y), month: mm, day: dd, limit: '10000' })
+  const params = new URLSearchParams({ channel: ch, year: String(y), month: mm, day: dd, limit: '10000', render: '1' })
   if (term) params.set('q', term)
   const _t0 = performance.now()
   const res = await fetch(`${API}/logs/day?${params}`, { signal })
@@ -403,7 +408,7 @@ async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal)
     console.debug(`[logs:fetchMonth] cache hit ${ch} ${y}-${mm} user=${u||'(all)'}`)
     return hit.data.slice()
   }
-  const params = new URLSearchParams({ channel: ch, user: u, year: String(y), month: mm, limit: '100000' })
+  const params = new URLSearchParams({ channel: ch, user: u, year: String(y), month: mm, limit: '100000', render: '1' })
   const _t0 = performance.now()
   const res = await fetch(`${API}/logs/usermonth?${params}`, { signal })
   if (!res.ok) return []
@@ -853,20 +858,69 @@ onUnmounted(() => {
   stopPopupDrag()
   const scrollerEl = getBody()
   if (scrollerEl) detachEmoteObserver(scrollerEl)
+  if (_paintStyleEl) { _paintStyleEl.remove(); _paintStyleEl = null }
 })
 
-// Attach/detach the emote MutationObserver whenever the scroller mounts or unmounts.
-// The scroller is behind v-else-if="searched" so it doesn't exist at onMounted time.
+// Attach/detach the emote MutationObserver + event delegation whenever the scroller mounts.
 watch(scrollerRef, (newVal, oldVal) => {
   if (oldVal) {
     const el = (oldVal as any).$el as HTMLElement | undefined
-    if (el) detachEmoteObserver(el)
+    if (el) { detachEmoteObserver(el); el.removeEventListener('click', onRowClick) }
   }
   if (newVal) {
     const el = (newVal as any).$el as HTMLElement | undefined
-    if (el) attachEmoteObserver(el)
+    if (el) { attachEmoteObserver(el); el.addEventListener('click', onRowClick) }
   }
 })
+
+// >>> Event delegation for server-rendered rows (v-html content has no Vue handlers).
+// Also works for client-rendered rows that share the same CSS classes.
+function onRowClick(e: MouseEvent) {
+  const t = e.target as HTMLElement
+
+  // Username click
+  const userEl = t.closest('.log-user-clickable[data-username]') as HTMLElement | null
+  if (userEl) {
+    e.stopPropagation()
+    openUserPopup(
+      userEl.dataset.username!,
+      userEl.dataset.channel || channel.value,
+      e,
+    )
+    return
+  }
+
+  // Share button click
+  const shareEl = t.closest('.log-share[data-msg-id]') as HTMLElement | null
+  if (shareEl) {
+    e.stopPropagation()
+    const msg = msgs.value.find(m => m.id === shareEl.dataset.msgId)
+    if (msg) shareMsg(msg)
+    return
+  }
+
+  // Reply context click
+  const replyEl = t.closest('.reply-context-link[data-reply-parent-id]') as HTMLElement | null
+  if (replyEl) {
+    e.stopPropagation()
+    jumpToMessage(replyEl.dataset.replyParentId!)
+    return
+  }
+}
+
+// >>> Dynamic paint CSS for server-rendered rows.
+// Paint styles are applied via a <style> sheet instead of per-row inline styles,
+// so all rows (including pre-rendered v-html content) update simultaneously.
+let _paintStyleEl: HTMLStyleElement | null = null
+
+function jsToCssProp(prop: string): string {
+  if (prop.startsWith('--')) return prop
+  if (prop.startsWith('Webkit'))
+    return '-webkit-' + prop.slice(6).replace(/([A-Z])/g, '-$1').toLowerCase()
+  return prop.replace(/([A-Z])/g, '-$1').toLowerCase()
+}
+
+// NOTE: the paint CSS watcher is registered below, after paintStyles is declared.
 
 // >>> Rendering
 function fmtTs(ts: string) {
@@ -1151,6 +1205,40 @@ const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map())
 watch(
   [emoteMap, personalEmoteMaps, paintStyles, twitchBadgeMap, sevenTvBadgeMap, hide7tv, plainUsernames],
   () => { _rowCache.clear() },
+)
+
+// >>> Paint CSS watcher (registered here because paintStyles must be declared first).
+watch(
+  [paintStyles, plainUsernames, hide7tv],
+  () => {
+    if (!_paintStyleEl) {
+      _paintStyleEl = document.createElement('style')
+      _paintStyleEl.id = 'logs-dynamic-paints'
+      document.head.appendChild(_paintStyleEl)
+    }
+
+    if (plainUsernames.value) {
+      _paintStyleEl.textContent =
+        '.logs-tbody [data-paint-user]{color:#ffffff !important;background-image:none !important;-webkit-text-fill-color:#ffffff !important;filter:none !important;--snippet-paint-preview:#ffffff !important;--snippet-fallback-color:#ffffff !important}'
+      return
+    }
+
+    if (hide7tv.value) {
+      _paintStyleEl.textContent = ''
+      return
+    }
+
+    let css = ''
+    for (const [username, style] of paintStyles.value) {
+      const sel = `.logs-tbody [data-paint-user="${CSS.escape(username)}"]`
+      let rules = ''
+      for (const [prop, val] of Object.entries(style)) {
+        rules += `${jsToCssProp(prop)}:${val} !important;`
+      }
+      css += `${sel}{${rules}}\n`
+    }
+    _paintStyleEl.textContent = css
+  },
 )
 
 const PAINT_MAX_CONCURRENT = 16 // higher concurrency — network is the bottleneck, not CPU
@@ -1736,6 +1824,20 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               </div>
             </div>
 
+            <!-- Server pre-rendered row (fast path: single v-html, zero per-row reactive work) -->
+            <div
+              v-else-if="item.msg?._rowHtml"
+              :id="`log-${item.msg.id}`"
+              class="log-row-outer"
+              :class="{
+                highlighted: highlightId === item.msg.id,
+                'log-row-reply': item.msg._hasReply,
+                'log-row-event': !!item.msg._eventMeta,
+              }"
+              v-html="item.msg._rowHtml"
+            ></div>
+
+            <!-- Client-rendered fallback (when server did not pre-render) -->
             <div
               v-else
               :id="`log-${item.msg.id}`"
