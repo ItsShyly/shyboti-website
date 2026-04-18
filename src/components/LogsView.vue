@@ -535,12 +535,6 @@ function prevMonth(ym: { y: number; m: number }): { y: number; m: number } {
 
 async function prependMsgs(newMsgs: LogMsg[]) {
   const body   = getBody()
-  const anchor = body
-    ? Array.from(body.querySelectorAll<HTMLElement>('[id^="day-"], [id^="log-"]'))
-        .find(el => el.offsetTop + el.offsetHeight > body.scrollTop + 1)
-    : null
-  const anchorId = anchor?.id ?? null
-  const anchorOffset = body && anchor ? (anchor.offsetTop - body.scrollTop) : 0
   const prevST = body?.scrollTop ?? 0
   const prevSH = body?.scrollHeight ?? 0
   const existingIds = new Set(msgs.value.map(m => m.id))
@@ -548,21 +542,7 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   if (!deduped.length) return
   msgs.value = [...deduped, ...msgs.value]
   await nextTick()
-  if (!body) return
-
-  // DynamicScroller may settle layout in RAF, so restore after one frame.
-  await new Promise<void>(resolve => requestAnimationFrame(() => resolve()))
-
-  if (anchorId) {
-    const sameRow = document.getElementById(anchorId)
-    if (sameRow) {
-      body.scrollTop = Math.max(0, sameRow.offsetTop - anchorOffset)
-      return
-    }
-  }
-
-  // Fallback path if anchor row is no longer mounted.
-  body.scrollTop = prevST + (body.scrollHeight - prevSH)
+  if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
 
 async function loadOlder() {
