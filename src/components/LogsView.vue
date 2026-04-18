@@ -293,6 +293,11 @@ function setSearchJobPhase(phase: SearchJobPhase) {
 
 const isMobile = () => window.matchMedia('(max-width: 680px)').matches
 
+// Experiment mode: render all rows by oversizing the virtual buffer so
+// RecycleScroller keeps the entire dataset mounted.
+const renderAllMessages = ref(true)
+const scrollerBufferPx = computed(() => renderAllMessages.value ? 2_000_000 : 2_000)
+
 function syncViewportMode() {
   isMobileView.value = isMobile()
   if (isMobileView.value) desktopLogWidth.value = null
@@ -2170,7 +2175,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :items="displayItems"
               :min-item-size="28"
               key-field="id"
-              :buffer="2000"
+              :buffer="scrollerBufferPx"
               @update="onScrollerUpdate"
             >
           <template #before>
