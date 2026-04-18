@@ -362,11 +362,28 @@ async function fetchTwitchBadges(ch: string) {
     twitchBadgeMap.value = m
     // Pre-warm the browser image cache for all badge images so they render
     // instantly when a badge <img> element is mounted into the virtual list.
-    if (typeof requestIdleCallback !== 'undefined') {
-      requestIdleCallback(() => { m.forEach(b => { (new Image()).src = b.imageUrl }) }, { timeout: 2000 })
-    } else {
-      setTimeout(() => { m.forEach(b => { (new Image()).src = b.imageUrl }) }, 100)
+    for (const b of m.values()) (new Image()).src = b.imageUrl
+  } catch {}
+}
+
+/* ── Eager channel-level image preload (emotes + badges) ── */
+let _assetPreloadChannel = ''
+async function preloadChannelAssets(ch: string) {
+  if (_assetPreloadChannel === ch) return   // already warming this channel
+  _assetPreloadChannel = ch
+  try {
+    const r = await fetch(`${API}/logs/assets?channel=${encodeURIComponent(ch)}`)
+    if (!r.ok) return
+    const { urls } = await r.json() as { urls: string[] }
+    let count = 0
+    for (const url of urls) {
+      if (!_preloadedUrls.has(url)) {
+        _preloadedUrls.add(url)
+        ;(new Image()).src = url
+        count++
+      }
     }
+    if (count) console.debug(`[logs:preload] channel ${ch}: warming ${count} asset URLs (${urls.length} total)`)
   } catch {}
 }
 
@@ -625,6 +642,7 @@ async function search() {
   bulkFetchDone = false
   cursorDate = null; cursorMonth = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
+  preloadChannelAssets(ch)
   fetchEmotes(ch)
   fetchTwitchBadges(ch)
   fetchAutomod(ch, dateFrom.value || undefined)
