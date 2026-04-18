@@ -632,6 +632,7 @@ async function loadOlder() {
     const cur = cursorMonth
     if (new Date(cur.y, cur.m - 1, 1) < cutoff) { noMore.value = true; return }
     loadingMore.value = true
+    await nextTick()  // ensure the "Loading older..." spinner renders before the (possibly instant) cache fetch
     try {
       const full = await fetchMonth(ch, cur.y, cur.m, signal)  // instant from cache when paginating
       if (signal.aborted) { loadingMore.value = false; return }
@@ -662,6 +663,7 @@ async function loadOlder() {
     const d = cursorDate
     if (d < cutoff) { noMore.value = true; return }
     loadingMore.value = true
+    await nextTick()  // ensure the "Loading older..." spinner renders before the (possibly instant) cache fetch
     try {
       const full = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)  // instant from cache when paginating
       if (signal.aborted) { loadingMore.value = false; return }
@@ -1048,8 +1050,8 @@ async function search() {
     // >>> If current month empty, walk backwards up to 1 year to find logs
     if (!msgs.value.length && !abortCtrl.signal.aborted) {
       const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 1)
-      while (!msgs.value.length && !abortCtrl.signal.aborted) {
-        const cur = cursorMonth
+      while (!msgs.value.length && cursorMonth && !abortCtrl.signal.aborted) {
+        const cur: { y: number; m: number } = cursorMonth!
         if (new Date(cur.y, cur.m - 1, 1) < cutoff) break
         cursorMonth = prevMonth(cur)  // pre-advance; overridden below if >MSG_CHUNK
         let _wr: LogMsg[] = []
@@ -1085,7 +1087,7 @@ async function search() {
     if (!msgs.value.length && !abortCtrl.signal.aborted) {
       const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 1)
       while (!msgs.value.length && cursorDate && cursorDate > cutoff && !abortCtrl.signal.aborted) {
-        const d = cursorDate
+        const d: Date = cursorDate!
         cursorDate = prevDay(d)  // pre-advance; overridden below if >MSG_CHUNK
         let _wr: LogMsg[] = []
         try { _wr = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal) } catch {}
@@ -1144,42 +1146,7 @@ function scrollToBottom() {
 }
 
 async function jumpToNewest() {
-  // Always reload from newest so cursor and noMore state are clean.
-  // (Fetches are cached so this is instant when data is fresh.)
-  abortCtrl.abort(); abortCtrl = new AbortController()
-  const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
-  msgs.value = []
-  _rowCache.clear()  // ensure badges re-track twitchBadgeMap on the first render
-  noMore.value = false; loadingMore.value = false
-  noNewer.value = true; loadingNewer.value = false
-  isNearBottom.value = true
-  cursorNewerDate = null; cursorNewerMonth = null
-  cursorDayTail = null; cursorMonthTail = null
-  loading.value = true
-  const today = new Date()
-  if (userFilter.value.trim()) {
-    const y = today.getFullYear(), m = today.getMonth() + 1
-    let _raw: LogMsg[] = []
-    try { _raw = await fetchMonth(ch, y, m, abortCtrl.signal) } catch {}
-    if (_raw.length > MSG_CHUNK) {
-      msgs.value = _raw.slice(-MSG_CHUNK); cursorMonth = { y, m }; cursorMonthTail = _raw.length - MSG_CHUNK
-    } else {
-      msgs.value = _raw; cursorMonth = prevMonth({ y, m }); cursorMonthTail = null
-    }
-  } else {
-    let _raw: LogMsg[] = []
-    try { _raw = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal) } catch {}
-    if (_raw.length > MSG_CHUNK) {
-      msgs.value = _raw.slice(-MSG_CHUNK); cursorDate = new Date(today.getFullYear(), today.getMonth(), today.getDate()); cursorDayTail = _raw.length - MSG_CHUNK
-    } else {
-      msgs.value = _raw; cursorDate = prevDay(today); cursorDayTail = null
-    }
-  }
-  loading.value = false
-  await nextTick()
-  scrollToBottom()
-  attachScrollListener()
-  await autoFillIfShort()
+  await search()
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
@@ -1699,12 +1666,19 @@ interface RowData {
 }
 
 const _rowCache = new Map<string, RowData>()
+// Incremented every time the row cache is invalidated (any visual dep changes).
+// getRowData reads this ref so Vue always tracks it — even when every row is a
+// cache-hit and no other reactive dep is accessed during that render pass.
+// Without this, a second render triggered by nameColWidth (post-watcher) loses
+// twitchBadgeMap from the component's dep list and badges never appear on re-search.
+const _rowCacheVersion = ref(0)
 // The watch is registered after paintStyles/personalEmoteMaps are declared (see below).
 
 function getRowData(m: LogMsg): RowData {
+  _rowCacheVersion.value  // track — forces re-render when cache is cleared
   const key = m.id ?? `${m.timestamp}:${m.username}`
   const cached = _rowCache.get(key)
-  if (cached) return cached   // O(1) path — no reactive access, Vue tracks nothing extra
+  if (cached) return cached   // O(1) path — no reactive access beyond _rowCacheVersion
   const d: RowData = {
     html:         renderMsgForMessage(m),
     badges:       buildBadgeChips(m),
@@ -1732,7 +1706,7 @@ const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map())
 // mutated in-place after our fetchEmotes fix) so a shallow watch is sufficient.
 watch(
   [emoteMap, personalEmoteMaps, paintStyles, twitchBadgeMap, sevenTvBadgeMap, hide7tv, plainUsernames],
-  () => { _rowCache.clear() },
+  () => { _rowCache.clear(); _rowCacheVersion.value++ },
 )
 
 // >>> Paint CSS watcher (registered here because paintStyles must be declared first).
@@ -2213,10 +2187,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             <label class="field-lbl">{{ t('logs.field.channel') }}</label>
             <input
               ref="channelInputRef"
-              :value="channel"
               class="field-input"
               placeholder="channelname"
-              @input="channel = ($event.target as HTMLInputElement).value"
               @keydown.enter="search"
               autocomplete="off"
               spellcheck="false"
@@ -2226,10 +2198,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             <label class="field-lbl">{{ t('logs.field.user') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
             <input
               ref="userInputRef"
-              :value="userFilter"
               class="field-input"
               placeholder="username"
-              @input="userFilter = ($event.target as HTMLInputElement).value"
               @keydown.enter="search"
               autocomplete="off"
               spellcheck="false"
@@ -2239,10 +2209,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             <label class="field-lbl">{{ t('logs.field.term') }} <span class="opt">{{ t('logs.field.optional') }}</span></label>
             <input
               ref="termInputRef"
-              :value="termFilter"
               class="field-input"
               placeholder="search term"
-              @input="termFilter = ($event.target as HTMLInputElement).value"
               @keydown.enter="search"
               autocomplete="off"
               spellcheck="false"
