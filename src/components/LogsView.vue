@@ -1065,27 +1065,31 @@ function drainPaintQueue() {
   }
 }
 
-// Applies one user's cosmetic payload into the reactive maps.
-function applyCosmetic(key: string, data: {
-  paint?: any
-  sevenTv?: { badge?: { id?: string; url?: string; tooltip?: string | null } | null }
-  personalEmotes?: Array<{ id: string; name: string; url: string }>
-  twitchUserEmotes?: Array<{ id: string; name: string; url: string }>
-}) {
+// Applies one user's cosmetic payload into plain accumulator maps (no reactive writes).
+// Call commitCosmetics() once after the loop to do a single atomic reactive update.
+function applyCosmetic(
+  key: string,
+  data: {
+    paint?: any
+    sevenTv?: { badge?: { id?: string; url?: string; tooltip?: string | null } | null }
+    personalEmotes?: Array<{ id: string; name: string; url: string }>
+    twitchUserEmotes?: Array<{ id: string; name: string; url: string }>
+  },
+  acc: {
+    paints: Map<string, Record<string, string>>
+    badges: Map<string, { imageUrl: string; title: string }>
+    emotes: Map<string, EmoteMap>
+  }
+) {
   if (data.paint) {
     paintCache.set(key, data.paint)
-    const newMap = new Map(paintStyles.value)
-    newMap.set(key, buildPaintStyle(data.paint, userColorByName(key)))
-    paintStyles.value = newMap
+    acc.paints.set(key, buildPaintStyle(data.paint, userColorByName(key)))
   } else {
-    // Mark as fetched-but-no-paint so we never re-request.
     if (!paintCache.has(key)) paintCache.set(key, null)
   }
   const sevBadgeUrl = String(data.sevenTv?.badge?.url ?? '').trim()
   if (sevBadgeUrl) {
-    const next = new Map(sevenTvBadgeMap.value)
-    next.set(key, { imageUrl: sevBadgeUrl, title: String(data.sevenTv?.badge?.tooltip ?? '7TV Badge') })
-    sevenTvBadgeMap.value = next
+    acc.badges.set(key, { imageUrl: sevBadgeUrl, title: String(data.sevenTv?.badge?.tooltip ?? '7TV Badge') })
   }
   const hasPersonal = Array.isArray(data.personalEmotes) && data.personalEmotes.length > 0
   const hasTwitchUser = Array.isArray(data.twitchUserEmotes) && data.twitchUserEmotes.length > 0
@@ -1093,9 +1097,38 @@ function applyCosmetic(key: string, data: {
     const p: EmoteMap = {}
     for (const e of data.personalEmotes ?? []) { if (e?.name && e?.url) p[e.name] = e.url }
     for (const e of data.twitchUserEmotes ?? []) { if (e?.name && e?.url) p[e.name] = e.url }
-    const next = new Map(personalEmoteMaps.value)
-    next.set(key, p)
-    personalEmoteMaps.value = next
+    acc.emotes.set(key, p)
+  }
+}
+
+// Write accumulated cosmetics to reactive state in one batch → one DOM re-render.
+function commitCosmetics(acc: {
+  paints: Map<string, Record<string, string>>
+  badges: Map<string, { imageUrl: string; title: string }>
+  emotes: Map<string, EmoteMap>
+}) {
+  if (acc.paints.size) {
+    const m = new Map(paintStyles.value)
+    acc.paints.forEach((v, k) => m.set(k, v))
+    paintStyles.value = m
+  }
+  if (acc.badges.size) {
+    const m = new Map(sevenTvBadgeMap.value)
+    acc.badges.forEach((v, k) => m.set(k, v))
+    sevenTvBadgeMap.value = m
+  }
+  if (acc.emotes.size) {
+    const m = new Map(personalEmoteMaps.value)
+    acc.emotes.forEach((v, k) => m.set(k, v))
+    personalEmoteMaps.value = m
+  }
+}
+
+function makeAcc() {
+  return {
+    paints: new Map<string, Record<string, string>>(),
+    badges: new Map<string, { imageUrl: string; title: string }>(),
+    emotes: new Map<string, EmoteMap>(),
   }
 }
 
@@ -1119,9 +1152,12 @@ async function fetchBulkCosmetics(logins: string[], jobId: number) {
       if (!res.ok || jobId !== activeSearchJob.value) continue
       const data = await res.json() as { results: Record<string, any> }
       if (jobId !== activeSearchJob.value) continue
+      // Accumulate all changes, then commit once → single re-render for the whole chunk.
+      const acc = makeAcc()
       for (const [login, cosmetic] of Object.entries(data.results ?? {})) {
-        applyCosmetic(login, cosmetic)
+        applyCosmetic(login, cosmetic, acc)
       }
+      commitCosmetics(acc)
     } catch {
       // Non-fatal: fall back to per-user queue for this chunk
       for (const login of chunk) ensurePaint(login)
@@ -1143,7 +1179,9 @@ async function fetchPaint(key: string, jobId: number) {
       twitchUserEmotes?: Array<{ id: string; name: string; url: string }>
     }
     if (jobId !== activeSearchJob.value) return
-    applyCosmetic(key, data)
+    const acc = makeAcc()
+    applyCosmetic(key, data, acc)
+    commitCosmetics(acc)
   } catch {
     paintCache.delete(key)
   }
@@ -1473,7 +1511,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           :items="displayItems"
           :min-item-size="28"
           key-field="id"
-          :buffer="300"
+          :buffer="1200"
         >
           <template #before>
             <div class="top-loader" v-show="loadingMore">
