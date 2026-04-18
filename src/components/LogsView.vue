@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, shallowRef, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
@@ -63,8 +63,8 @@ interface AutomodMsg {
   _automod: true; _category: string; _status: string
 }
 
-const msgs         = shallowRef<LogMsg[]>([])
-const automodMsgs  = shallowRef<AutomodMsg[]>([])
+const msgs         = ref<LogMsg[]>([])
+const automodMsgs  = ref<AutomodMsg[]>([])
 const showAutomod  = ref(false)   // toggled by user; only shown to broadcaster
 const isBroadcaster = ref(false)  // true when viewing own channel
 const loading     = ref(false)
@@ -1503,7 +1503,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               v-else
               :id="`log-${item.msg.id}`"
               class="log-row-outer"
-              v-memo="[highlightId === item.msg.id, paintStyles.has(item.msg.username?.toLowerCase() ?? ''), personalEmoteMaps.has(item.msg.username?.toLowerCase() ?? ''), sevenTvBadgeMap.has(item.msg.username?.toLowerCase() ?? ''), rowRenderKey]"
               :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'log-row-event': isHighlightedEvent(item.msg) }"
             >
               <div class="log-row">
