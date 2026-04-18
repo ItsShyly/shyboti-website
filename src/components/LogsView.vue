@@ -558,6 +558,9 @@ function nextMonth(ym: { y: number; m: number }): { y: number; m: number } {
 }
 
 async function prependMsgs(newMsgs: LogMsg[]) {
+  const body   = getBody()
+  const prevST = body?.scrollTop ?? 0
+  const prevSH = body?.scrollHeight ?? 0
   const existingIds = new Set(msgs.value.map(m => m.id))
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
   if (!deduped.length) return
@@ -572,7 +575,9 @@ async function prependMsgs(newMsgs: LogMsg[]) {
     noNewer.value = false
   }
   msgs.value = next
-  // Browser scroll anchoring (overflow-anchor: auto) keeps viewport in place automatically
+  await nextTick()
+  // Correct scroll position: content was inserted above → scrollHeight grew by delta
+  if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
 
 async function appendMsgs(newMsgs: LogMsg[]) {
