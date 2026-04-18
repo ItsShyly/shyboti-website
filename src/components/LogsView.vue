@@ -542,19 +542,18 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   const body   = getBody()
   const prevST = body?.scrollTop ?? 0
   const prevSH = body?.scrollHeight ?? 0
-  // When the user is near the top they scrolled there intentionally to load older
-  // content. Leave scrollTop untouched so the new older rows are visible right
-  // where they're looking. overflow-anchor:none on the scroller ensures the
-  // browser doesn't apply its own competing correction.
   const wasNearTop = prevST < 200
   const existingIds = new Set(msgs.value.map(m => m.id))
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
+  console.debug(`[prepend] in=${newMsgs.length} deduped=${deduped.length} prevTotal=${msgs.value.length} prevST=${prevST|0} prevSH=${prevSH|0} wasNearTop=${wasNearTop}`)
   if (!deduped.length) return
   msgs.value = [...deduped, ...msgs.value]
   await nextTick()
-  // Mid-scroll / bottom: anchor-correct so the view doesn't jump.
-  // Near-top: don't touch scrollTop — new older items appear above position 0.
-  if (body && !wasNearTop) body.scrollTop = prevST + (body.scrollHeight - prevSH)
+  const newST = body?.scrollTop ?? 0
+  const newSH = body?.scrollHeight ?? 0
+  const delta = newSH - prevSH
+  console.debug(`[prepend] after nextTick — newST=${newST|0} newSH=${newSH|0} delta=${delta|0} => action=${wasNearTop ? 'leave' : `set ${(prevST+delta)|0}`}`)
+  if (body && !wasNearTop) body.scrollTop = prevST + delta
 }
 
 async function loadOlder() {
@@ -959,11 +958,13 @@ async function autoFillIfShort() {
   if (noMore.value) return
   await nextTick()
   const body = getBody(); if (!body) return
+  console.debug(`[autoFill] scrollHeight=${body.scrollHeight} clientHeight=${body.clientHeight} scrollTop=${body.scrollTop|0}`)
   let safety = 0
   while (body.scrollHeight <= body.clientHeight + 20 && !noMore.value && safety++ < 10) {
     await loadOlder()
     await nextTick()
   }
+  console.debug(`[autoFill] done — safety=${safety} scrollHeight=${body.scrollHeight} clientHeight=${body.clientHeight}`)
 }
 
 function scrollToBottom() {
@@ -972,6 +973,7 @@ function scrollToBottom() {
     if (!b) return
     let i = 0
     const settle = () => {
+      if (i === 0) console.debug(`[scrollToBottom] scrollHeight=${b.scrollHeight} clientHeight=${b.clientHeight} setting scrollTop=${b.scrollHeight}`)
       b.scrollTop = b.scrollHeight
       if (++i < 8) requestAnimationFrame(settle)
     }
