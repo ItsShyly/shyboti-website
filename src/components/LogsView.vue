@@ -15,7 +15,7 @@ import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 //   window.__logsDbg.rowActive  = true
 //   window.__logsDbg.badgeLoad  = true
 //   window.__logsDbg.recycleEvt = true
-const _dbgDefaults = { rowMount: false, rowActive: false, badgeLoad: false, recycleEvt: false }
+const _dbgDefaults = { rowMount: false, rowActive: false, badgeLoad: false, emoteLoad: false, recycleEvt: false }
 if (typeof window !== 'undefined') {
   (window as any).__logsDbg = Object.assign(_dbgDefaults, (window as any).__logsDbg ?? {})
 }
@@ -23,9 +23,11 @@ function dbg(category: keyof typeof _dbgDefaults): boolean {
   return typeof window !== 'undefined' && !!(window as any).__logsDbg?.[category]
 }
 
-// Called by onVnodeMounted / onVnodeUpdated on the row outer div.
-// Records the time from when the item became "active" to when its DOM exists.
-const _rowMountTimes = new Map<string, number>() // id → performance.now() when active flipped
+// Row DOM lifecycle timing.
+// rowMounted  → row first created (pool expansion, not scroll-recycle)
+// rowBeforeUpdate + rowUpdated → row recycled for a new item on scroll (most common case)
+const _rowMountTimes  = new Map<string, number>() // id → t0 from rowBecameActive
+const _rowUpdateT0    = new Map<string, number>() // id → t0 from rowBeforeUpdate
 function rowBecameActive(id: string) {
   _rowMountTimes.set(id, performance.now())
   if (dbg('rowActive')) console.debug(`[scroll:active] ${id}`)
@@ -37,11 +39,21 @@ function rowMounted(el: Element) {
     _rowMountTimes.delete(id)
     if (dbg('rowMount')) console.debug(`[scroll:mount] ${id} +${(performance.now() - t0).toFixed(1)}ms`)
   } else {
-    if (dbg('rowMount')) console.debug(`[scroll:mount] ${id} (no active timestamp)`)
+    if (dbg('rowMount')) console.debug(`[scroll:mount] ${id}`)
   }
 }
+function rowBeforeUpdate(el: Element) {
+  if (!dbg('rowMount')) return
+  _rowUpdateT0.set((el as HTMLElement).id ?? '?', performance.now())
+}
 function rowUpdated(el: Element) {
-  if (dbg('rowMount')) console.debug(`[scroll:update] ${(el as HTMLElement).id ?? '?'}`)
+  if (!dbg('rowMount')) return
+  const id = (el as HTMLElement).id ?? '?'
+  const t0 = _rowUpdateT0.get(id)
+  if (t0 !== undefined) {
+    _rowUpdateT0.delete(id)
+    console.debug(`[scroll:recycle] ${id} +${(performance.now() - t0).toFixed(1)}ms`)
+  }
 }
 
 // Badge / emote image timing.
@@ -68,6 +80,49 @@ function onScrollerUpdate(startIndex: number, endIndex: number, visibleStart: nu
   if (dbg('recycleEvt')) {
     console.debug(`[scroll:range] rendered=${startIndex}-${endIndex} visible=${visibleStart}-${visibleEnd} (${endIndex-startIndex+1} in DOM)`)
   }
+}
+
+// Emote load timing via event delegation on the scroller container.
+// Emotes are injected as v-html so Vue hooks can't reach them directly.
+const _emoteT0 = new Map<string, number>() // src → performance.now() when img was parsed into DOM
+function _onEmoteLoad(ev: Event) {
+  if (!dbg('emoteLoad')) return
+  const img = ev.target as HTMLImageElement
+  if (!img.classList.contains('chat-emote')) return
+  const t0 = _emoteT0.get(img.src)
+  console.debug(`[scroll:emote-load] ${img.alt || img.src.split('/').pop()} +${t0 !== undefined ? (performance.now()-t0).toFixed(1)+'ms' : '?ms'}`)
+  if (t0 !== undefined) _emoteT0.delete(img.src)
+}
+function _onEmoteError(ev: Event) {
+  if (!dbg('emoteLoad')) return
+  const img = ev.target as HTMLImageElement
+  if (!img.classList.contains('chat-emote')) return
+  console.debug(`[scroll:emote-err] ${img.alt || img.src.split('/').pop()}`)
+  _emoteT0.delete(img.src)
+}
+// MutationObserver stamps a start time as soon as each chat-emote img enters the DOM.
+let _emoteMutObs: MutationObserver | null = null
+function attachEmoteObserver(container: Element) {
+  _emoteMutObs = new MutationObserver(mutations => {
+    if (!dbg('emoteLoad')) return
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        const imgs = node instanceof Element
+          ? (node.classList.contains('chat-emote') ? [node as HTMLImageElement] : Array.from(node.querySelectorAll<HTMLImageElement>('img.chat-emote')))
+          : []
+        for (const img of imgs) _emoteT0.set(img.src, performance.now())
+      }
+    }
+  })
+  _emoteMutObs.observe(container, { childList: true, subtree: true })
+  container.addEventListener('load',  _onEmoteLoad,  true)
+  container.addEventListener('error', _onEmoteError, true)
+}
+function detachEmoteObserver(container: Element) {
+  _emoteMutObs?.disconnect()
+  _emoteMutObs = null
+  container.removeEventListener('load',  _onEmoteLoad,  true)
+  container.removeEventListener('error', _onEmoteError, true)
 }
 
 const { session } = useAuth()
@@ -785,6 +840,21 @@ onUnmounted(() => {
   detachScrollListeners()
   document.removeEventListener('click', onDocClickVisuals, true)
   stopPopupDrag()
+  const scrollerEl = getBody()
+  if (scrollerEl) detachEmoteObserver(scrollerEl)
+})
+
+// Attach/detach the emote MutationObserver whenever the scroller mounts or unmounts.
+// The scroller is behind v-else-if="searched" so it doesn't exist at onMounted time.
+watch(scrollerRef, (newVal, oldVal) => {
+  if (oldVal) {
+    const el = (oldVal as any).$el as HTMLElement | undefined
+    if (el) detachEmoteObserver(el)
+  }
+  if (newVal) {
+    const el = (newVal as any).$el as HTMLElement | undefined
+    if (el) attachEmoteObserver(el)
+  }
 })
 
 // >>> Rendering
@@ -1609,6 +1679,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               class="log-row-outer"
               :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'log-row-event': isHighlightedEvent(item.msg) }"
               @vnodeMounted="(vn: VNode) => rowMounted(vn.el as Element)"
+              @vnodeBeforeUpdate="(vn: VNode) => rowBeforeUpdate(vn.el as Element)"
               @vnodeUpdated="(vn: VNode) => rowUpdated(vn.el as Element)"
             >
               <div class="log-row">
@@ -1632,6 +1703,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                       :alt="b.title || b.label"
                       :title="b.title || b.label"
                       @vnodeMounted="() => badgeLoadStart(b.imageUrl!)"
+                      @vnodeBeforeUpdate="() => badgeLoadStart(b.imageUrl!)"
                       @load="badgeLoaded"
                       @error="badgeError"
                     />
