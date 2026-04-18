@@ -1171,6 +1171,38 @@ type DisplayItem =
   | { kind: 'msg';     id: string; msg: LogMsg }
   | { kind: 'automod'; id: string; msg: AutomodMsg }
 
+const measuredItemHeights = ref<Map<string, number>>(new Map())
+
+function fallbackItemHeight(it: DisplayItem): number {
+  if (it.kind === 'day') return 22
+  if (it.kind === 'automod') return 34
+  return 28
+}
+
+function updateMeasuredItemHeight(itemId: string, px: number) {
+  if (!Number.isFinite(px) || px <= 0) return
+  const prev = measuredItemHeights.value.get(itemId)
+  if (prev !== undefined && Math.abs(prev - px) < 1) return
+  const next = new Map(measuredItemHeights.value)
+  next.set(itemId, px)
+  measuredItemHeights.value = next
+}
+
+function domIdForDisplayItem(it: DisplayItem): string {
+  return it.kind === 'day' ? `day-${it.id}` : `log-${it.msg.id}`
+}
+
+function onDisplayItemResize(id: string | number) {
+  const itemId = String(id)
+  requestAnimationFrame(() => {
+    const it = displayItems.value.find(x => x.id === itemId)
+    if (!it) return
+    const el = document.getElementById(domIdForDisplayItem(it))
+    if (!el) return
+    updateMeasuredItemHeight(itemId, el.offsetHeight)
+  })
+}
+
 const displayItems = computed<DisplayItem[]>(() => {
   // Merge regular msgs + automod msgs (if enabled), sort by timestamp
   type AnyMsg = (LogMsg | AutomodMsg) & { _automod?: boolean }
@@ -1250,20 +1282,33 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
   if (isMobileView.value) return []
   const list = displayItems.value
   if (!list.length) return []
-  const denom = Math.max(1, list.length - 1)
-  const out: TimelineMarker[] = []
-
+  const sizeMap = measuredItemHeights.value
+  const heights: number[] = []
+  let totalHeight = 0
   for (let i = 0; i < list.length; i++) {
     const it = list[i]!
-    const topPct = ((i + 0.5) / (denom + 1)) * 100
+    const h = sizeMap.get(it.id) ?? fallbackItemHeight(it)
+    heights.push(h)
+    totalHeight += h
+  }
+  const denomHeight = Math.max(1, totalHeight)
+  const out: TimelineMarker[] = []
+
+  let y = 0
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i]!
+    const h = heights[i]!
+    const topPct = ((y + h * 0.5) / denomHeight) * 100
 
     if (it.kind === 'day') {
       out.push({ key: `day-${i}`, color: '#3a3a3a', topPct, index: i, anchorId: `day-${it.id}`, thin: true, title: `Day: ${it.label}` })
+      y += h
       continue
     }
 
     if (it.kind === 'automod') {
       out.push({ key: `automod-${i}`, color: '#7a7a7a', topPct, index: i, anchorId: `log-${it.msg.id}`, title: 'Ban/timeout (AutoMod)' })
+      y += h
       continue
     }
 
@@ -1277,6 +1322,7 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
     if (isSub) out.push({ key: `sub-${i}`, color: '#755ebc', topPct, index: i, anchorId: `log-${msg.id}`, title: 'Subscription event' })
     else if (isFirst) out.push({ key: `first-${i}`, color: '#c832c8', topPct, index: i, anchorId: `log-${msg.id}`, title: 'First-time chatter' })
     else if (isMod) out.push({ key: `mod-${i}`, color: '#454545', topPct, index: i, anchorId: `log-${msg.id}`, title: 'Ban/timeout message' })
+    y += h
   }
 
   return out
@@ -2135,7 +2181,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           </template>
 
           <template #default="{ item, index, active }">
-            <DynamicScrollerItem :item="item" :active="active" :data-index="index"
+            <DynamicScrollerItem :item="item" :active="active" :data-index="index" :emit-resize="true"
+              @resize="onDisplayItemResize"
               @hook:mounted="() => { if (item.kind === 'msg') rowBecameActive(item.id) }"
             >
             <div v-if="item.kind === 'day'" :id="`day-${item.id}`" class="log-day-sep">{{ item.label }}</div>
