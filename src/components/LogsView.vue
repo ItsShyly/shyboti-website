@@ -360,10 +360,27 @@ async function fetchTwitchBadges(ch: string) {
       })
     }
     twitchBadgeMap.value = m
-    // Pre-warm the browser image cache for all badge images so they render
-    // instantly when a badge <img> element is mounted into the virtual list.
-    for (const b of m.values()) (new Image()).src = b.imageUrl
+    // Pre-warm + decode badge images so they paint instantly in the virtual list.
+    preDecodeUrls(Array.from(m.values(), b => b.imageUrl), 'badges')
   } catch {}
+}
+
+/* ── Image pre-decode helper ── */
+const _preloadedUrls = new Set<string>()
+function preDecodeUrls(urls: string[], label?: string) {
+  const fresh: string[] = []
+  for (const url of urls) {
+    if (_preloadedUrls.has(url)) continue
+    _preloadedUrls.add(url)
+    fresh.push(url)
+  }
+  if (!fresh.length) return
+  if (label) console.debug(`[logs:preload] ${label}: decoding ${fresh.length} images`)
+  for (const url of fresh) {
+    const img = new Image()
+    img.src = url
+    img.decode().catch(() => {}) // pre-decode to raster — instant paint later
+  }
 }
 
 /* ── Eager channel-level image preload (emotes + badges) ── */
@@ -375,38 +392,21 @@ async function preloadChannelAssets(ch: string) {
     const r = await fetch(`${API}/logs/assets?channel=${encodeURIComponent(ch)}`)
     if (!r.ok) return
     const { urls } = await r.json() as { urls: string[] }
-    let count = 0
-    for (const url of urls) {
-      if (!_preloadedUrls.has(url)) {
-        _preloadedUrls.add(url)
-        ;(new Image()).src = url
-        count++
-      }
-    }
-    if (count) console.debug(`[logs:preload] channel ${ch}: warming ${count} asset URLs (${urls.length} total)`)
+    preDecodeUrls(urls, `channel ${ch}`)
   } catch {}
 }
 
 /* ── Pre-load images extracted from server-rendered row HTML ── */
-const _preloadedUrls = new Set<string>()
 const _imgSrcRe = / src="(https:\/\/[^"]+)"/g
 function preloadRowImages(messages: LogMsg[]) {
-  const fresh: string[] = []
+  const urls: string[] = []
   for (const m of messages) {
     if (!m._rowHtml) continue
     _imgSrcRe.lastIndex = 0
     let match: RegExpExecArray | null
-    while ((match = _imgSrcRe.exec(m._rowHtml))) {
-      const url = match[1]!
-      if (!_preloadedUrls.has(url)) {
-        _preloadedUrls.add(url)
-        fresh.push(url)
-      }
-    }
+    while ((match = _imgSrcRe.exec(m._rowHtml))) urls.push(match[1]!)
   }
-  if (!fresh.length) return
-  console.debug(`[logs:preload] warming ${fresh.length} unique image URLs`)
-  for (const url of fresh) (new Image()).src = url
+  preDecodeUrls(urls, 'rows')
 }
 
 async function fetchDay(ch: string, y: number, m: number, d: number, signal: AbortSignal): Promise<LogMsg[]> {
