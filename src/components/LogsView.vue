@@ -77,6 +77,7 @@ function dbg(category: keyof typeof _dbgDefaults): boolean {
 // rowBeforeUpdate + rowUpdated → row recycled for a new item on scroll (most common case)
 const _rowMountTimes  = new Map<string, number>() // id → t0 from rowBecameActive
 const _rowUpdateT0    = new Map<string, number>() // id → t0 from rowBeforeUpdate
+const visibleStartIndex = ref(0)
 function rowBecameActive(id: string) {
   _rowMountTimes.set(id, performance.now())
   if (dbg('rowActive')) console.debug(`[scroll:active] ${id}`)
@@ -126,6 +127,7 @@ function badgeError(ev: Event) {
 
 // DynamicScroller @update event — tells us when the visible range changes.
 function onScrollerUpdate(startIndex: number, endIndex: number, visibleStart: number, visibleEnd: number) {
+  visibleStartIndex.value = visibleStart
   if (dbg('recycleEvt')) {
     console.debug(`[scroll:range] rendered=${startIndex}-${endIndex} visible=${visibleStart}-${visibleEnd} (${endIndex-startIndex+1} in DOM)`)
   }
@@ -249,6 +251,10 @@ const twitchBadgeMap = ref<Map<string, TwitchBadgeAsset>>(new Map())
 const sevenTvBadgeMap = ref<Map<string, SevenTvBadgeAsset>>(new Map())
 const scrollerRef  = ref<{ scrollToItem: (idx: number) => void; $el: HTMLElement; scrollToPosition: (pos: number) => void } | null>(null)
 const visualsBarRef = ref<HTMLElement | null>(null)
+const tableWrapRef = ref<HTMLElement | null>(null)
+const tableShellRef = ref<HTMLElement | null>(null)
+const isMobileView = ref(false)
+const desktopLogWidth = ref<number | null>(null)
 // Returns the RecycleScroller's actual scroll container DOM element.
 function getBody(): HTMLElement | null {
   return (scrollerRef.value as any)?.$el ?? null
@@ -286,6 +292,11 @@ function setSearchJobPhase(phase: SearchJobPhase) {
 }
 
 const isMobile = () => window.matchMedia('(max-width: 680px)').matches
+
+function syncViewportMode() {
+  isMobileView.value = isMobile()
+  if (isMobileView.value) desktopLogWidth.value = null
+}
 
 const hide7tv        = ref(false)
 const plainUsernames  = ref(false)
@@ -597,6 +608,70 @@ async function loadUntilMsg(targetId: string): Promise<boolean> {
   }
 }
 
+async function loadDayForCurrentFilters(ch: string, d: Date): Promise<LogMsg[]> {
+  if (userFilter.value.trim()) {
+    const monthMsgs = await fetchMonth(ch, d.getFullYear(), d.getMonth() + 1, abortCtrl.signal)
+    const dayKey = d.toISOString().slice(0, 10)
+    return monthMsgs.filter(msg => msg.timestamp.startsWith(dayKey))
+  }
+  return fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal)
+}
+
+async function jumpOneDayUp() {
+  if (isMobileView.value) return
+  const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
+  if (!ch) return
+  const baseLabel = viewportDayLabel.value
+  if (!baseLabel) return
+  const base = parseDayLabel(baseLabel)
+  if (!base) return
+
+  const target = new Date(base)
+  target.setDate(target.getDate() - 1)
+  const targetLabel = fmtDayFromDate(target)
+
+  let targetIndex = displayItems.value.findIndex(it => it.kind === 'day' && it.label === targetLabel)
+  if (targetIndex < 0) {
+    const dayMsgs = await loadDayForCurrentFilters(ch, target)
+    if (dayMsgs.length) {
+      await prependMsgs(dayMsgs)
+      await nextTick()
+      targetIndex = displayItems.value.findIndex(it => it.kind === 'day' && it.label === targetLabel)
+    }
+  }
+
+  if (targetIndex >= 0) scrollToDisplayIndex(targetIndex)
+}
+
+let _resizeStartX = 0
+let _resizeStartW = 0
+function onResizeMove(ev: PointerEvent) {
+  const wrap = tableWrapRef.value
+  if (!wrap) return
+  const maxW = Math.max(460, wrap.clientWidth - 18)
+  const minW = 320
+  const next = Math.max(minW, Math.min(maxW, _resizeStartW + (ev.clientX - _resizeStartX)))
+  desktopLogWidth.value = next
+}
+
+function endResizeDrag() {
+  window.removeEventListener('pointermove', onResizeMove)
+  window.removeEventListener('pointerup', endResizeDrag)
+  document.body.style.userSelect = ''
+}
+
+function startResizeDrag(ev: PointerEvent) {
+  if (isMobileView.value) return
+  const shell = tableShellRef.value
+  if (!shell) return
+  _resizeStartX = ev.clientX
+  _resizeStartW = shell.offsetWidth
+  desktopLogWidth.value = shell.offsetWidth
+  document.body.style.userSelect = 'none'
+  window.addEventListener('pointermove', onResizeMove)
+  window.addEventListener('pointerup', endResizeDrag)
+}
+
 function onScroll() {
   if (rafScrollPending) return
   rafScrollPending = true
@@ -818,6 +893,7 @@ async function search() {
   await nextTick()
   attachScrollListener()
   await autoFillIfShort()
+  if (direction.value === 'newest' && !hashId) scrollToBottom()
 }
 
 async function autoFillIfShort() {
@@ -832,7 +908,16 @@ async function autoFillIfShort() {
 }
 
 function scrollToBottom() {
-  nextTick(() => { const b = getBody(); if (b) b.scrollTop = b.scrollHeight })
+  nextTick(() => {
+    const b = getBody()
+    if (!b) return
+    let i = 0
+    const settle = () => {
+      b.scrollTop = b.scrollHeight
+      if (++i < 8) requestAnimationFrame(settle)
+    }
+    settle()
+  })
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
@@ -936,7 +1021,8 @@ onMounted(async () => {
   await nextTick()
   if (dateFromInputRef.value && dateFrom.value) dateFromInputRef.value.value = dateFrom.value
   if (dateUntilInputRef.value && dateUntil.value) dateUntilInputRef.value.value = dateUntil.value
-  window.addEventListener('resize', () => {}) // RecycleScroller handles resize internally
+  syncViewportMode()
+  window.addEventListener('resize', syncViewportMode)
   document.addEventListener('click', onDocClickVisuals, true)
   if (channel.value) await search()
 })
@@ -945,6 +1031,8 @@ onUnmounted(() => {
   document.body.classList.remove('logs-jobs-running')
   abortCtrl.abort()
   detachScrollListeners()
+  endResizeDrag()
+  window.removeEventListener('resize', syncViewportMode)
   document.removeEventListener('click', onDocClickVisuals, true)
   stopPopupDrag()
   const scrollerEl = getBody()
@@ -1060,6 +1148,92 @@ const displayItems = computed<DisplayItem[]>(() => {
   }
   return items
 })
+
+type TimelineMarker = {
+  key: string
+  color: string
+  topPct: number
+  index: number
+  thin?: boolean
+  title: string
+}
+
+function fmtDayFromDate(d: Date): string {
+  const dd = String(d.getDate()).padStart(2, '0')
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const yyyy = String(d.getFullYear())
+  return `${dd}.${mm}.${yyyy}`
+}
+
+function parseDayLabel(label: string): Date | null {
+  const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec(label.trim())
+  if (!m) return null
+  const d = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]))
+  return isNaN(d.getTime()) ? null : d
+}
+
+function dayLabelForIndex(idx: number): string | null {
+  const list = displayItems.value
+  const i0 = Math.max(0, Math.min(idx, list.length - 1))
+  for (let i = i0; i >= 0; i--) {
+    const it = list[i]!
+    if (it.kind === 'day') return it.label
+    return fmtDayLabel(it.msg.timestamp)
+  }
+  return null
+}
+
+const viewportDayLabel = computed(() => dayLabelForIndex(visibleStartIndex.value))
+
+const tableShellStyle = computed(() => {
+  if (isMobileView.value || desktopLogWidth.value === null) return {}
+  return { width: `${desktopLogWidth.value}px` }
+})
+
+const timelineMarkers = computed<TimelineMarker[]>(() => {
+  if (isMobileView.value) return []
+  const list = displayItems.value
+  if (!list.length) return []
+  const denom = Math.max(1, list.length - 1)
+  const out: TimelineMarker[] = []
+
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i]!
+    const topPct = (i / denom) * 100
+
+    if (it.kind === 'day') {
+      out.push({ key: `day-${i}`, color: '#3a3a3a', topPct, index: i, thin: true, title: `Day: ${it.label}` })
+      continue
+    }
+
+    if (it.kind === 'automod') {
+      out.push({ key: `automod-${i}`, color: '#7a7a7a', topPct, index: i, title: 'Ban/timeout (AutoMod)' })
+      continue
+    }
+
+    const msg = it.msg
+    const tags = msg.tags ?? {}
+    const mid = String(tags['msg-id'] ?? '').toLowerCase()
+    const isSub = mid === 'sub' || mid === 'resub' || mid === 'subgift' || mid === 'submysterygift'
+    const isFirst = tags['first-msg'] === '1'
+    const isMod = !!msg._isMod
+
+    if (isSub) out.push({ key: `sub-${i}`, color: '#755ebc', topPct, index: i, title: 'Subscription event' })
+    else if (isFirst) out.push({ key: `first-${i}`, color: '#c832c8', topPct, index: i, title: 'First-time chatter' })
+    else if (isMod) out.push({ key: `mod-${i}`, color: '#8a8a8a', topPct, index: i, title: 'Ban/timeout message' })
+  }
+
+  return out
+})
+
+function scrollToDisplayIndex(idx: number) {
+  if (!scrollerRef.value) return
+  ;(scrollerRef.value as any).scrollToItem(Math.max(0, idx))
+}
+
+function jumpToTimelineMarker(idx: number) {
+  scrollToDisplayIndex(idx)
+}
 
 // Paint loading is background-only — it must NOT block the UI phase or overlay.
 const hasRunningJobs = computed(() => loading.value || loadingMore.value || domSettling.value)
@@ -1873,22 +2047,27 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 
     <div v-else-if="searched" class="logs-results">
       <div class="logs-count">{{ msgs.length.toLocaleString() }} {{ t('logs.count') }}</div>
-      <div class="logs-table" :style="{ '--user-width': nameColWidth + 'px' }">
-        <div class="logs-thead">
-          <div>{{ t('logs.col.time') }}</div>
-          <div>{{ t('logs.col.user') }}</div>
-          <div>{{ t('logs.col.msg') }}</div>
-        </div>
-        <DynamicScroller
-          class="logs-tbody"
-          ref="scrollerRef"
-          :items="displayItems"
-          :min-item-size="28"
-          key-field="id"
-          :buffer="10000"
-          @update="onScrollerUpdate"
-        >
+      <div class="logs-table-wrap" ref="tableWrapRef">
+        <div class="logs-table-shell" ref="tableShellRef" :style="tableShellStyle">
+          <div class="logs-table" :style="{ '--user-width': nameColWidth + 'px' }">
+            <div class="logs-thead">
+              <div>{{ t('logs.col.time') }}</div>
+              <div>{{ t('logs.col.user') }}</div>
+              <div>{{ t('logs.col.msg') }}</div>
+            </div>
+            <DynamicScroller
+              class="logs-tbody"
+              ref="scrollerRef"
+              :items="displayItems"
+              :min-item-size="28"
+              key-field="id"
+              :buffer="10000"
+              @update="onScrollerUpdate"
+            >
           <template #before>
+            <div v-if="!isMobileView" class="day-jump-bar">
+              <button class="day-jump-btn" @click="jumpOneDayUp">↑ one day up · {{ viewportDayLabel || '...' }}</button>
+            </div>
             <div class="top-loader" v-show="loadingMore">
               <span class="spinner">⟳</span> {{ t('logs.load_older') }}
             </div>
@@ -2025,7 +2204,26 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             </div>
             </DynamicScrollerItem>
           </template>
-        </DynamicScroller>
+            </DynamicScroller>
+          </div>
+          <div v-if="!isMobileView" class="event-rail" aria-hidden="true">
+            <button
+              v-for="m in timelineMarkers"
+              :key="m.key"
+              class="event-marker"
+              :class="{ thin: !!m.thin }"
+              :title="m.title"
+              :style="{ top: m.topPct + '%', background: m.color }"
+              @click.stop="jumpToTimelineMarker(m.index)"
+            ></button>
+          </div>
+        </div>
+        <button
+          v-if="!isMobileView"
+          class="logs-resize-handle"
+          title="Drag to resize logs panel"
+          @pointerdown="startResizeDrag"
+        ></button>
       </div>
     </div>
 
@@ -2153,7 +2351,9 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .toast-fade-enter-from, .toast-fade-leave-to { opacity: 0; transform: translateX(-50%) translateY(8px); }
 
 .logs-results { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.logs-table   { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.logs-table-wrap { display: flex; align-items: stretch; gap: 0; flex: 1; min-height: 0; overflow: hidden; }
+.logs-table-shell { position: relative; display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.logs-table   { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
 .logs-thead {
   display: grid;
   grid-template-columns: 120px var(--user-width, 140px) 1fr;
@@ -2171,9 +2371,72 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 }
 
 
+
+.day-jump-bar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: #101015;
+  border-bottom: 1px solid #1e1e24;
+  padding: 5px 8px;
+}
+.day-jump-btn {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #2f2f3a;
+  background: #15151b;
+  color: #a8a8b5;
+  font-size: 11px;
+  cursor: pointer;
+}
+.day-jump-btn:hover { color: #d2d2df; border-color: #505062; }
+
 .logs-tbody   { overflow-y: auto; flex: 1; position: relative; min-height: 0; }
-.logs-tbody::-webkit-scrollbar { width: 3px; }
-.logs-tbody::-webkit-scrollbar-thumb { background: #333; }
+.logs-tbody::-webkit-scrollbar { width: 12px; }
+.logs-tbody::-webkit-scrollbar-track { background: #15151a; }
+.logs-tbody::-webkit-scrollbar-thumb { background: #3b3b45; border-radius: 10px; border: 2px solid #15151a; }
+
+.event-rail {
+  position: absolute;
+  top: 31px;
+  bottom: 0;
+  right: 14px;
+  width: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 3;
+}
+.event-marker {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 5px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  transform: translateY(-50%);
+  border-radius: 4px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.event-marker.thin { height: 2px; border-radius: 2px; }
+
+.logs-resize-handle {
+  width: 14px;
+  border: none;
+  border-left: 1px solid #22222b;
+  background:
+    radial-gradient(circle, #6b6b78 1.2px, transparent 1.3px) center 4px / 6px 6px repeat-y,
+    #121217;
+  cursor: ew-resize;
+  flex-shrink: 0;
+}
+.logs-resize-handle:hover { background:
+    radial-gradient(circle, #9a9aab 1.2px, transparent 1.3px) center 4px / 6px 6px repeat-y,
+    #17171d;
+}
+
 .tbody-selecting { cursor: crosshair !important; user-select: none !important; }
 /* DynamicScroller item wrapper */
 :deep(.vue-recycle-scroller__item-view),
@@ -2230,7 +2493,19 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 :deep(.log-event-label.tone-announce) { background: rgba(93, 171, 255, 0.12); border-color: rgba(93, 171, 255, 0.45); color: #a8d3ff; }
 :deep(.log-time)       { color: #444; font-size: 11px; flex-shrink: 0; }
 :deep(.log-time-short) { display: none; }
-:deep(.log-day-sep)    { display: none; }
+:deep(.log-day-sep) {
+  display: block;
+  padding: 6px 12px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #555;
+  letter-spacing: .05em;
+  border-top: 1px solid #1e1e24;
+  background: #0d0d10;
+  position: sticky;
+  top: 30px;
+  z-index: 2;
+}
 :deep(.log-badges) { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; flex-shrink: 0; }
 :deep(.badge-img) { display: block; width: 18px; height: 18px; }
 :deep(.badge-fallback) { font-size: 10px; color: #888; }
@@ -2490,9 +2765,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .visuals-panel  { display: flex !important; position: static; background: none; border: none; padding: 0; box-shadow: none; flex-direction: row; min-width: 0; }
 
   .logs-results { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .logs-table-wrap { flex: 1; min-height: 0; display: block; }
+  .logs-table-shell { width: 100% !important; min-height: 0; }
   .logs-table   { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .day-jump-bar, .event-rail, .logs-resize-handle { display: none !important; }
   .logs-thead   { display: none !important; }
   .logs-tbody   { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .logs-tbody::-webkit-scrollbar { width: 0; height: 0; }
 
   :deep(.log-day-sep) {
     display: block;
