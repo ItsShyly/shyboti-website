@@ -662,6 +662,8 @@ function endResizeDrag() {
 
 function startResizeDrag(ev: PointerEvent) {
   if (isMobileView.value) return
+  ev.preventDefault()
+  ev.stopPropagation()
   const shell = tableShellRef.value
   if (!shell) return
   _resizeStartX = ev.clientX
@@ -1154,6 +1156,7 @@ type TimelineMarker = {
   color: string
   topPct: number
   index: number
+  anchorId: string
   thin?: boolean
   title: string
 }
@@ -1187,7 +1190,7 @@ const viewportDayLabel = computed(() => dayLabelForIndex(visibleStartIndex.value
 
 const tableShellStyle = computed(() => {
   if (isMobileView.value || desktopLogWidth.value === null) return {}
-  return { width: `${desktopLogWidth.value}px` }
+  return { width: `${desktopLogWidth.value}px`, flex: '0 0 auto' }
 })
 
 const timelineMarkers = computed<TimelineMarker[]>(() => {
@@ -1199,15 +1202,15 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
 
   for (let i = 0; i < list.length; i++) {
     const it = list[i]!
-    const topPct = (i / denom) * 100
+    const topPct = ((i + 0.5) / (denom + 1)) * 100
 
     if (it.kind === 'day') {
-      out.push({ key: `day-${i}`, color: '#3a3a3a', topPct, index: i, thin: true, title: `Day: ${it.label}` })
+      out.push({ key: `day-${i}`, color: '#3a3a3a', topPct, index: i, anchorId: `day-${it.id}`, thin: true, title: `Day: ${it.label}` })
       continue
     }
 
     if (it.kind === 'automod') {
-      out.push({ key: `automod-${i}`, color: '#7a7a7a', topPct, index: i, title: 'Ban/timeout (AutoMod)' })
+      out.push({ key: `automod-${i}`, color: '#7a7a7a', topPct, index: i, anchorId: `log-${it.msg.id}`, title: 'Ban/timeout (AutoMod)' })
       continue
     }
 
@@ -1218,9 +1221,9 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
     const isFirst = tags['first-msg'] === '1'
     const isMod = !!msg._isMod
 
-    if (isSub) out.push({ key: `sub-${i}`, color: '#755ebc', topPct, index: i, title: 'Subscription event' })
-    else if (isFirst) out.push({ key: `first-${i}`, color: '#c832c8', topPct, index: i, title: 'First-time chatter' })
-    else if (isMod) out.push({ key: `mod-${i}`, color: '#454545', topPct, index: i, title: 'Ban/timeout message' })
+    if (isSub) out.push({ key: `sub-${i}`, color: '#755ebc', topPct, index: i, anchorId: `log-${msg.id}`, title: 'Subscription event' })
+    else if (isFirst) out.push({ key: `first-${i}`, color: '#c832c8', topPct, index: i, anchorId: `log-${msg.id}`, title: 'First-time chatter' })
+    else if (isMod) out.push({ key: `mod-${i}`, color: '#454545', topPct, index: i, anchorId: `log-${msg.id}`, title: 'Ban/timeout message' })
   }
 
   return out
@@ -1231,8 +1234,12 @@ function scrollToDisplayIndex(idx: number) {
   ;(scrollerRef.value as any).scrollToItem(Math.max(0, idx))
 }
 
-function jumpToTimelineMarker(idx: number) {
-  scrollToDisplayIndex(idx)
+async function jumpToTimelineMarker(marker: TimelineMarker) {
+  scrollToDisplayIndex(marker.index)
+  await nextTick()
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  const el = document.getElementById(marker.anchorId)
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
 // Paint loading is background-only — it must NOT block the UI phase or overlay.
@@ -2055,6 +2062,9 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               <div>{{ t('logs.col.user') }}</div>
               <div>{{ t('logs.col.msg') }}</div>
             </div>
+            <div v-if="!isMobileView" class="day-jump-bar">
+              <button class="day-jump-btn" @click="jumpOneDayUp">↑ one day up · {{ viewportDayLabel || '...' }}</button>
+            </div>
             <DynamicScroller
               class="logs-tbody"
               ref="scrollerRef"
@@ -2065,9 +2075,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               @update="onScrollerUpdate"
             >
           <template #before>
-            <div v-if="!isMobileView" class="day-jump-bar">
-              <button class="day-jump-btn" @click="jumpOneDayUp">↑ one day up · {{ viewportDayLabel || '...' }}</button>
-            </div>
             <div class="top-loader" v-show="loadingMore">
               <span class="spinner">⟳</span> {{ t('logs.load_older') }}
             </div>
@@ -2078,10 +2085,11 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             <DynamicScrollerItem :item="item" :active="active" :data-index="index"
               @hook:mounted="() => { if (item.kind === 'msg') rowBecameActive(item.id) }"
             >
-            <div v-if="item.kind === 'day'" class="log-day-sep">{{ item.label }}</div>
+            <div v-if="item.kind === 'day'" :id="`day-${item.id}`" class="log-day-sep">{{ item.label }}</div>
 
             <div
               v-else-if="item.kind === 'automod'"
+              :id="`log-${item.msg.id}`"
               class="log-row log-row-automod"
             >
               <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
@@ -2214,7 +2222,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :class="{ thin: !!m.thin }"
               :title="m.title"
               :style="{ top: m.topPct + '%', background: m.color }"
-              @click.stop="jumpToTimelineMarker(m.index)"
+              @click.stop="jumpToTimelineMarker(m)"
             ></button>
           </div>
         </div>
@@ -2392,20 +2400,20 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .day-jump-btn:hover { color: #d2d2df; border-color: #505062; }
 
 .logs-tbody   { overflow-y: auto; flex: 1; position: relative; min-height: 0; }
-.logs-tbody::-webkit-scrollbar { width: 12px; }
-.logs-tbody::-webkit-scrollbar-track { background: #15151a; }
-.logs-tbody::-webkit-scrollbar-thumb { background: #3b3b45; border: 2px solid #15151a; }
+.logs-tbody::-webkit-scrollbar { width: 14px; }
+.logs-tbody::-webkit-scrollbar-track { background: rgba(21, 21, 26, 0.92); }
+.logs-tbody::-webkit-scrollbar-thumb { background: rgba(104, 104, 118, 0.88); border-radius: 0; border: none; }
 
 .event-rail {
   position: absolute;
-  top: 40px;
-  bottom: 5px;
-  right: 14px;
+  top: 0;
+  bottom: 0;
+  right: 2px;
   width: 10px;
   background: rgba(255, 255, 255, 0.04);
-  border-radius: 4px;
+  border-radius: 0;
   pointer-events: none;
-  z-index: 3;
+  z-index: 2;
 }
 .event-marker {
   position: absolute;
@@ -2416,6 +2424,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   padding: 0;
   margin: 0;
   transform: translateY(-50%);
+  border-radius: 0;
   cursor: pointer;
   pointer-events: auto;
 }
@@ -2429,6 +2438,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     radial-gradient(circle, #6b6b78 1.2px, transparent 1.3px) center 4px / 6px 6px repeat-y,
     #121217;
   cursor: ew-resize;
+  touch-action: none;
   flex-shrink: 0;
 }
 .logs-resize-handle:hover { background:
@@ -2502,7 +2512,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   border-top: 1px solid #1e1e24;
   background: #0d0d10;
   position: sticky;
-  top: 30px;
+  top: 0;
   z-index: 2;
 }
 :deep(.log-badges) { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; flex-shrink: 0; }
