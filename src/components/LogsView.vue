@@ -246,7 +246,7 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
   const hit = dayFetchCache.get(cacheKey)
   if (hit && Date.now() - hit.ts < FETCH_CACHE_TTL) {
     console.debug(`[logs:fetchDay] cache hit ${ch} ${y}-${mm}-${dd}`)
-    return hit.data
+    return hit.data.slice()
   }
   const params = new URLSearchParams({ channel: ch, year: String(y), month: mm, day: dd, limit: '10000' })
   if (term) params.set('q', term)
@@ -274,7 +274,7 @@ async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal)
   const hit = monthFetchCache.get(cacheKey)
   if (hit && Date.now() - hit.ts < FETCH_CACHE_TTL) {
     console.debug(`[logs:fetchMonth] cache hit ${ch} ${y}-${mm} user=${u||'(all)'}`)
-    return hit.data
+    return hit.data.slice()
   }
   const params = new URLSearchParams({ channel: ch, user: u, year: String(y), month: mm, limit: '100000' })
   const _t0 = performance.now()
@@ -304,7 +304,10 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   const body   = bodyRef.value
   const prevST = body?.scrollTop ?? 0
   const prevSH = body?.scrollHeight ?? 0
-  msgs.value = [...newMsgs, ...msgs.value]
+  const existingIds = new Set(msgs.value.map(m => m.id))
+  const deduped = newMsgs.filter(m => !existingIds.has(m.id))
+  if (!deduped.length) return
+  msgs.value = [...deduped, ...msgs.value]
   await nextTick()
   if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
