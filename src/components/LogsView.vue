@@ -1104,9 +1104,7 @@ function eventToneClass(m: LogMsg): string {
 // every Vue update pass. We cache the results by message-id and bust the cache
 // only when the underlying data (emotes, badges, paints…) actually changes.
 //
-// rowDataVersion is included in v-memo so Vue skips the subtree diff entirely
-// when neither the message ID nor the data version has changed — this eliminates
-// the repeated 200–300 ms per-row cost during virtual-scroll recycling.
+// This avoids repeating the same expensive derivations during virtual row recycling.
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface RowData {
@@ -1118,7 +1116,6 @@ interface RowData {
   paintPreview: string
 }
 
-const rowDataVersion = ref(0)
 const _rowCache = new Map<string, RowData>()
 // The watch is registered after paintStyles/personalEmoteMaps are declared (see below).
 
@@ -1153,7 +1150,7 @@ const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map())
 // mutated in-place after our fetchEmotes fix) so a shallow watch is sufficient.
 watch(
   [emoteMap, personalEmoteMaps, paintStyles, twitchBadgeMap, sevenTvBadgeMap, hide7tv, plainUsernames],
-  () => { _rowCache.clear(); rowDataVersion.value++ },
+  () => { _rowCache.clear() },
 )
 
 const PAINT_MAX_CONCURRENT = 16 // higher concurrency — network is the bottleneck, not CPU
@@ -1743,7 +1740,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               v-else
               :id="`log-${item.msg.id}`"
               class="log-row-outer"
-              v-memo="[item.msg.id, highlightId === item.msg.id, rowDataVersion]"
               :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'log-row-event': getRowData(item.msg).eventMeta !== null }"
               @vnodeMounted="(vn: VNode) => rowMounted(vn.el as Element)"
               @vnodeBeforeUpdate="(vn: VNode) => rowBeforeUpdate(vn.el as Element)"
