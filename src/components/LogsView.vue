@@ -293,11 +293,6 @@ function setSearchJobPhase(phase: SearchJobPhase) {
 
 const isMobile = () => window.matchMedia('(max-width: 680px)').matches
 
-// Experiment mode: render all rows by oversizing the virtual buffer so
-// RecycleScroller keeps the entire dataset mounted.
-const renderAllMessages = ref(true)
-const scrollerBufferPx = computed(() => renderAllMessages.value ? 2_000_000 : 2_000)
-
 function syncViewportMode() {
   isMobileView.value = isMobile()
   if (isMobileView.value) desktopLogWidth.value = null
@@ -539,13 +534,18 @@ function prevMonth(ym: { y: number; m: number }): { y: number; m: number } {
 }
 
 async function prependMsgs(newMsgs: LogMsg[]) {
+  const body   = getBody()
+  const prevST = body?.scrollTop ?? 0
+  const prevSH = body?.scrollHeight ?? 0
   const existingIds = new Set(msgs.value.map(m => m.id))
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
   if (!deduped.length) return
   msgs.value = [...deduped, ...msgs.value]
+  await nextTick()
+  if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
 
-async function loadOlder(_emptySkip = 0) {
+async function loadOlder() {
   if (loadingMore.value || noMore.value) return
   const ch     = channel.value.trim().toLowerCase().replace(/^#/, '')
   const signal = abortCtrl.signal
@@ -561,8 +561,7 @@ async function loadOlder(_emptySkip = 0) {
       const newMsgs = await fetchMonth(ch, cur.y, cur.m, signal)
       if (signal.aborted) { loadingMore.value = false; return }
       if (newMsgs.length > 0) await prependMsgs(newMsgs)
-      // Skip up to 24 consecutive empty months before yielding back to the scroll handler.
-      else { loadingMore.value = false; if (_emptySkip < 24) return loadOlder(_emptySkip + 1) }
+      else { loadingMore.value = false; return loadOlder() }
     } catch {}
     loadingMore.value = false
   } else {
@@ -575,8 +574,7 @@ async function loadOlder(_emptySkip = 0) {
       const newMsgs = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)
       if (signal.aborted) { loadingMore.value = false; return }
       if (newMsgs.length > 0) await prependMsgs(newMsgs)
-      // Skip up to 60 consecutive empty days before yielding back to the scroll handler.
-      else { loadingMore.value = false; if (_emptySkip < 60) return loadOlder(_emptySkip + 1) }
+      else { loadingMore.value = false; return loadOlder() }
     } catch {}
     loadingMore.value = false
   }
@@ -947,23 +945,12 @@ async function search() {
 
 async function autoFillIfShort() {
   if (noMore.value) return
-  // DynamicScroller needs several render frames to mount items and compute scrollHeight.
-  // Checking too early makes it look like the viewport is empty even when it isn't,
-  // which causes runaway loadOlder() calls that can pile up tens-of-thousands of messages.
   await nextTick()
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   const body = getBody(); if (!body) return
   let safety = 0
   while (body.scrollHeight <= body.clientHeight + 20 && !noMore.value && safety++ < 10) {
-    // Stop auto-filling if we already have a lot of messages - the browser may still be
-    // mounting them all (render-all mode). Triggering more loads while thousands of DOM
-    // nodes are being created freezes the page and shows nothing.
-    if (msgs.value.length >= 2000) break
     await loadOlder()
     await nextTick()
-    // Give the scroller one frame to update its measured height before re-checking.
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   }
 }
 
@@ -2183,7 +2170,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :items="displayItems"
               :min-item-size="28"
               key-field="id"
-              :buffer="scrollerBufferPx"
+              :buffer="2000"
               @update="onScrollerUpdate"
             >
           <template #before>
