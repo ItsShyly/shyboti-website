@@ -6,7 +6,7 @@ import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
-import { RecycleScroller } from 'vue-virtual-scroller'
+import { DynamicScroller, DynamicScrollerItem } from 'vue-virtual-scroller'
 import 'vue-virtual-scroller/dist/vue-virtual-scroller.css'
 
 const { session } = useAuth()
@@ -77,7 +77,7 @@ const searched    = ref(false)
 const emoteMap    = ref<EmoteMap>({})
 const twitchBadgeMap = ref<Map<string, TwitchBadgeAsset>>(new Map())
 const sevenTvBadgeMap = ref<Map<string, SevenTvBadgeAsset>>(new Map())
-const scrollerRef  = ref<{ scrollToItem: (idx: number) => void; $el: HTMLElement } | null>(null)
+const scrollerRef  = ref<{ scrollToItem: (idx: number) => void; $el: HTMLElement; scrollToPosition: (pos: number) => void } | null>(null)
 const visualsBarRef = ref<HTMLElement | null>(null)
 // Returns the RecycleScroller's actual scroll container DOM element.
 function getBody(): HTMLElement | null {
@@ -1415,13 +1415,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           <div>{{ t('logs.col.user') }}</div>
           <div>{{ t('logs.col.msg') }}</div>
         </div>
-        <RecycleScroller
+        <DynamicScroller
           class="logs-tbody"
           ref="scrollerRef"
           :items="displayItems"
-          :item-size="36"
+          :min-item-size="28"
           key-field="id"
-          :buffer="400"
+          :buffer="300"
         >
           <template #before>
             <div class="top-loader" v-show="loadingMore">
@@ -1430,8 +1430,9 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
           </template>
 
-          <template #default="{ item }">
-            <div v-if="item.kind === 'day'" class="log-day-sep log-day-sep-virtual">{{ item.label }}</div>
+          <template #default="{ item, index, active }">
+            <DynamicScrollerItem :item="item" :active="active" :data-index="index">
+            <div v-if="item.kind === 'day'" class="log-day-sep">{{ item.label }}</div>
 
             <div
               v-else-if="item.kind === 'automod'"
@@ -1536,8 +1537,9 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                 </div>
               </div>
             </div>
+            </DynamicScrollerItem>
           </template>
-        </RecycleScroller>
+        </DynamicScroller>
       </div>
     </div>
 
@@ -1687,9 +1689,9 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .logs-tbody::-webkit-scrollbar { width: 3px; }
 .logs-tbody::-webkit-scrollbar-thumb { background: #333; }
 .tbody-selecting { cursor: crosshair !important; user-select: none !important; }
-/* RecycleScroller item wrapper — each recycled row */
-:deep(.vue-recycle-scroller__item-view) { width: 100%; }
-.log-day-sep-virtual { display: block !important; }
+/* DynamicScroller item wrapper */
+:deep(.vue-recycle-scroller__item-view),
+:deep(.dynamic-scroller-item) { width: 100%; }
 
 .top-loader  { text-align: center; font-size: 11px; color: #555; padding: 8px; }
 .top-loader.no-more { color: #333; }
