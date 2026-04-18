@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, shallowRef, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
@@ -63,8 +63,8 @@ interface AutomodMsg {
   _automod: true; _category: string; _status: string
 }
 
-const msgs         = ref<LogMsg[]>([])
-const automodMsgs  = ref<AutomodMsg[]>([])
+const msgs         = shallowRef<LogMsg[]>([])
+const automodMsgs  = shallowRef<AutomodMsg[]>([])
 const showAutomod  = ref(false)   // toggled by user; only shown to broadcaster
 const isBroadcaster = ref(false)  // true when viewing own channel
 const loading     = ref(false)
@@ -87,6 +87,7 @@ let cursorMonth: { y: number; m: number } | null = null
 let abortCtrl = new AbortController()
 let scrollListenerAttached = false
 let windowScrollAttached  = false
+let rafScrollPending = false
 
 const VIRTUAL_THRESHOLD = 500
 const VIRTUAL_OVERSCAN = 80
@@ -98,6 +99,12 @@ const domSettling = ref(false)
 const pendingPaintJobs = ref(0)
 let domSettleToken = 0
 type SearchJobPhase = 'idle' | 'fetch' | 'display' | 'visuals'
+
+// In-memory cache for fetched log days/months so scrolling back up is instant.
+// Keys include all query params that affect the result, TTL prevents stale data.
+const FETCH_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const dayFetchCache   = new Map<string, { data: LogMsg[]; ts: number }>()
+const monthFetchCache = new Map<string, { data: LogMsg[]; ts: number }>()
 const searchJobPhase = ref<SearchJobPhase>('idle')
 const activeSearchJob = ref(0)
 const visualsPhaseActive = ref(false)
@@ -234,8 +241,15 @@ async function fetchTwitchBadges(ch: string) {
 async function fetchDay(ch: string, y: number, m: number, d: number, signal: AbortSignal): Promise<LogMsg[]> {
   const mm  = String(m).padStart(2, '0')
   const dd  = String(d).padStart(2, '0')
+  const term = termFilter.value.trim()
+  const cacheKey = `${ch}:${y}-${mm}-${dd}:${term}`
+  const hit = dayFetchCache.get(cacheKey)
+  if (hit && Date.now() - hit.ts < FETCH_CACHE_TTL) {
+    console.debug(`[logs:fetchDay] cache hit ${ch} ${y}-${mm}-${dd}`)
+    return hit.data
+  }
   const params = new URLSearchParams({ channel: ch, year: String(y), month: mm, day: dd, limit: '10000' })
-  if (termFilter.value.trim()) params.set('q', termFilter.value.trim())
+  if (term) params.set('q', term)
   const _t0 = performance.now()
   const res = await fetch(`${API}/logs/day?${params}`, { signal })
   if (!res.ok) return []
@@ -244,16 +258,24 @@ async function fetchDay(ch: string, y: number, m: number, d: number, signal: Abo
   const data = JSON.parse(raw) as any
   let messages: LogMsg[] = data?.messages ?? []
   console.debug(`[logs:fetchDay] ${ch} ${y}-${mm}-${dd} → ${messages.length} msgs, ${(raw.length/1024)|0}KB, ${_fetchMs}ms`)
-  if (termFilter.value.trim()) {
-    const term = termFilter.value.trim().toLowerCase()
-    messages = messages.filter(m => m.text.toLowerCase().includes(term))
+  if (term) {
+    const termLow = term.toLowerCase()
+    messages = messages.filter(m => m.text.toLowerCase().includes(termLow))
   }
+  dayFetchCache.set(cacheKey, { data: messages, ts: Date.now() })
   return messages
 }
 
 async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal): Promise<LogMsg[]> {
   const mm  = String(m).padStart(2, '0')
   const u   = userFilter.value.trim().toLowerCase()
+  const term = termFilter.value.trim()
+  const cacheKey = `${ch}:${y}-${mm}:${u}:${term}`
+  const hit = monthFetchCache.get(cacheKey)
+  if (hit && Date.now() - hit.ts < FETCH_CACHE_TTL) {
+    console.debug(`[logs:fetchMonth] cache hit ${ch} ${y}-${mm} user=${u||'(all)'}`)
+    return hit.data
+  }
   const params = new URLSearchParams({ channel: ch, user: u, year: String(y), month: mm, limit: '100000' })
   const _t0 = performance.now()
   const res = await fetch(`${API}/logs/usermonth?${params}`, { signal })
@@ -263,10 +285,11 @@ async function fetchMonth(ch: string, y: number, m: number, signal: AbortSignal)
   const data = JSON.parse(raw) as any
   let messages: LogMsg[] = data?.messages ?? []
   console.debug(`[logs:fetchMonth] ${ch} ${y}-${mm} user=${u||'(all)'} → ${messages.length} msgs, ${(raw.length/1024)|0}KB, ${_fetchMs}ms`)
-  if (termFilter.value.trim()) {
-    const term = termFilter.value.trim().toLowerCase()
-    messages = messages.filter(m => m.text.toLowerCase().includes(term))
+  if (term) {
+    const termLow = term.toLowerCase()
+    messages = messages.filter(m => m.text.toLowerCase().includes(termLow))
   }
+  monthFetchCache.set(cacheKey, { data: messages, ts: Date.now() })
   return messages
 }
 
@@ -350,9 +373,14 @@ async function loadUntilMsg(targetId: string): Promise<boolean> {
 }
 
 function onScroll() {
-  recalcVirtualWindow()
-  if (!bodyRef.value || loadingMore.value || noMore.value) return
-  if (bodyRef.value.scrollTop < 120) loadOlder()
+  if (rafScrollPending) return
+  rafScrollPending = true
+  requestAnimationFrame(() => {
+    rafScrollPending = false
+    recalcVirtualWindow()
+    if (!bodyRef.value || loadingMore.value || noMore.value) return
+    if (bodyRef.value.scrollTop < 120) loadOlder()
+  })
 }
 
 function recalcVirtualWindow() {
@@ -964,6 +992,11 @@ let paintConcurrent = 0
 const paintQueue: Array<{ key: string; jobId: number }> = []
 let paintAutoRequested = 0
 
+// Bumped whenever shared rendering state changes (emotes, badges, visibility toggles).
+// Used as a v-memo dependency so rows re-render when global visuals change, while
+// still skipping re-renders during per-user paint/emote loading for other users.
+const rowRenderKey = ref(0)
+
 function intToRgba(c: number): string {
   const r = (c >>> 24) & 0xff
   const g = (c >>> 16) & 0xff
@@ -1167,6 +1200,12 @@ watch(loading, (isLoading) => {
 watch(paintStyles, () => {
   // Avoid retriggering DOM settling for each background paint update.
   if (loading.value || loadingMore.value) markDomSettling()
+}, { flush: 'post' })
+
+// Bump rowRenderKey when shared rendering state changes so v-memo'd rows
+// re-render correctly on badge loads, emote loads, or visibility toggles.
+watch([hide7tv, plainUsernames, twitchBadgeMap, emoteMap], () => {
+  rowRenderKey.value++
 }, { flush: 'post' })
 
 watch(hasRunningJobs, (running) => {
@@ -1461,6 +1500,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               v-else
               :id="`log-${item.msg.id}`"
               class="log-row-outer"
+              v-memo="[highlightId === item.msg.id, paintStyles.has(item.msg.username?.toLowerCase() ?? ''), personalEmoteMaps.has(item.msg.username?.toLowerCase() ?? ''), sevenTvBadgeMap.has(item.msg.username?.toLowerCase() ?? ''), rowRenderKey]"
               :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'log-row-event': isHighlightedEvent(item.msg) }"
             >
               <div class="log-row">
