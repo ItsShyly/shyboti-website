@@ -293,6 +293,11 @@ function setSearchJobPhase(phase: SearchJobPhase) {
 
 const isMobile = () => window.matchMedia('(max-width: 680px)').matches
 
+// Render-all mode: oversizes the virtual scroller buffer so every item stays
+// mounted in the DOM regardless of scroll position (no virtualisation clipping).
+const renderAllMessages = ref(true)
+const scrollerBufferPx = computed(() => renderAllMessages.value ? 2_000_000 : 2_000)
+
 function syncViewportMode() {
   isMobileView.value = isMobile()
   if (isMobileView.value) desktopLogWidth.value = null
@@ -537,12 +542,19 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   const body   = getBody()
   const prevST = body?.scrollTop ?? 0
   const prevSH = body?.scrollHeight ?? 0
+  // When the user is near the top they scrolled there intentionally to load older
+  // content. Leave scrollTop untouched so the new older rows are visible right
+  // where they're looking. overflow-anchor:none on the scroller ensures the
+  // browser doesn't apply its own competing correction.
+  const wasNearTop = prevST < 200
   const existingIds = new Set(msgs.value.map(m => m.id))
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
   if (!deduped.length) return
   msgs.value = [...deduped, ...msgs.value]
   await nextTick()
-  if (body) body.scrollTop = prevST + (body.scrollHeight - prevSH)
+  // Mid-scroll / bottom: anchor-correct so the view doesn't jump.
+  // Near-top: don't touch scrollTop — new older items appear above position 0.
+  if (body && !wasNearTop) body.scrollTop = prevST + (body.scrollHeight - prevSH)
 }
 
 async function loadOlder() {
@@ -2170,7 +2182,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :items="displayItems"
               :min-item-size="28"
               key-field="id"
-              :buffer="2000"
+              :buffer="scrollerBufferPx"
               @update="onScrollerUpdate"
             >
           <template #before>
@@ -2501,7 +2513,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 }
 .day-jump-btn:hover { color: #d2d2df; border-color: #505062; }
 
-.logs-tbody   { overflow-y: auto; flex: 1; position: relative; min-height: 0; }
+.logs-tbody   { overflow-y: auto; flex: 1; position: relative; min-height: 0; overflow-anchor: none; }
 .logs-tbody::-webkit-scrollbar { width: 14px; }
 .logs-tbody::-webkit-scrollbar-track { background: rgba(21, 21, 26, 0.92); }
 .logs-tbody::-webkit-scrollbar-thumb { background: rgba(104, 104, 118, 0.88); border-radius: 0; border: none;  border-left: 1px red; }
