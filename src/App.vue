@@ -1088,20 +1088,20 @@ body.snippet-dragging * {
 }
 
 .sidebar-btn {
-  width: 200px;
+ width: 200px;
   height: 125px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   background: transparent;
   color: #777;
   font-family: inherit;
   font-size: 13px;
   cursor: pointer;
-  transition: color 0.1s, background 0.1s;
-  letter-spacing: 0.01em;
+  transition: color .1s, background .1s;
+  letter-spacing: .01em;
   padding: 11px 20px;
-  border: 1px solid #222222
+  border: 1px solid #222222;
+  justify-content: center;
 }
 
 .sidebar-btn:hover {
@@ -1134,9 +1134,11 @@ body.snippet-dragging * {
   opacity: 0.6;
   margin-left: 0.2em;
   margin-right: 0.2em;
-  color: #888;
   display: inline-flex;
   align-items: center;
+  position: absolute;
+  filter: grayscale(100%);
+
 }
 .lock-big {
   font-size: 2.1em;
@@ -1144,6 +1146,7 @@ body.snippet-dragging * {
   margin-right: 0.5em;
   margin-left: 0;
   opacity: 0.7;
+
 }
 
 .sidebar-divider,
