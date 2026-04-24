@@ -436,27 +436,33 @@ provide('searchOpenTrigger', searchOpenTrigger)
 
         <button class="sidebar-btn" :class="{ active: activeRoute === 'dashboard', locked: !session }"
           @click="nav('dashboard')">
-          {{ t('nav.dashboard') }} <span v-if="!session" class="lock-icon">🔒</span>
+          <span v-if="!session" class="lock-icon lock-big">🔒</span>
+          <span>{{ t('nav.dashboard') }}</span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'commands', locked: !session }"
           @click="nav('commands')">
-          {{ t('nav.commands') }} <span v-if="!session" class="lock-icon">🔒</span>
+          <span v-if="!session" class="lock-icon lock-big">🔒</span>
+          <span>{{ t('nav.commands') }}</span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'moderation', locked: !session }"
           @click="nav('moderation')">
-          {{ t('nav.moderation') }} <span v-if="!session" class="lock-icon">🔒</span>
+          <span v-if="!session" class="lock-icon lock-big">🔒</span>
+          <span>{{ t('nav.moderation') }}</span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'automations', locked: !session }"
           @click="nav('automations')">
-          {{ t('nav.automations') }} <span v-if="!session" class="lock-icon">🔒</span>
+          <span v-if="!session" class="lock-icon lock-big">🔒</span>
+          <span>{{ t('nav.automations') }}</span>
         </button>
         <button v-if="!session || channelRole?.role === 'broadcaster'" class="sidebar-btn"
           :class="{ active: activeRoute === 'roles', locked: !session }" @click="nav('roles')">
-          {{ t('nav.roles') }} <span v-if="!session" class="lock-icon">🔒</span>
+          <span v-if="!session" class="lock-icon lock-big">🔒</span>
+          <span>{{ t('nav.roles') }}</span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'features', locked: !session }"
           @click="nav('features')">
-          Features <span v-if="!session" class="lock-icon">🔒</span>
+          <span v-if="!session" class="lock-icon lock-big">🔒</span>
+          <span>Features</span>
         </button>
 
         <div class="sidebar-divider"></div>
@@ -1067,13 +1073,15 @@ body.snippet-dragging * {
   align-content: center;
   align-items: center;
   gap: 14px;
-  padding: 16px;
+  padding: 8px 20% 8px 20%;
   background: #0e0e12;
   border-bottom: 1px solid #1e1e24;
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
 }
+
+
 
 .sidebar::-webkit-scrollbar {
   display: none;
@@ -1101,6 +1109,11 @@ body.snippet-dragging * {
   background: #16161a;
 }
 
+.sidebar-btn.locked { 
+  opacity: 0.45; 
+  background: rgba(255, 255, 255, 0.044);
+}
+
 .sidebar-btn.active {
   color: #9d6cff;
   font-weight: 700;
@@ -1119,6 +1132,18 @@ body.snippet-dragging * {
 .lock-icon {
   font-size: 10px;
   opacity: 0.6;
+  margin-left: 0.2em;
+  margin-right: 0.2em;
+  color: #888;
+  display: inline-flex;
+  align-items: center;
+}
+.lock-big {
+  font-size: 2.1em;
+  color: #888;
+  margin-right: 0.5em;
+  margin-left: 0;
+  opacity: 0.7;
 }
 
 .sidebar-divider,
