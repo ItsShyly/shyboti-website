@@ -1061,7 +1061,11 @@ body.snippet-dragging * {
 */
 
 .sidebar {
-  height: 50%
+  height: 50%;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  justify-content: center;
 }
 
 .sidebar-btn {
@@ -1078,7 +1082,32 @@ body.snippet-dragging * {
   transition: color 0.1s, background 0.1s;
   letter-spacing: 0.01em;
   padding: 11px 20px; 
-  border: none
+  border: none;
+}
+
+.sidebar-btn:hover {
+  color: #fff;
+  background: #16161a;
+}
+
+.sidebar-btn.active {
+  color: #9d6cff;
+  font-weight: 700;
+  background: rgba(111, 43, 255, .08);
+  border-left: 2px solid #6f2bff;
+}
+
+.sidebar-btn.locked {
+  opacity: 0.45;
+}
+
+.sidebar-btn.locked:hover {
+  opacity: 0.75;
+}
+
+.lock-icon {
+  font-size: 10px;
+  opacity: 0.6;
 }
 
 
