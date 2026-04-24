@@ -425,20 +425,20 @@ provide('searchOpenTrigger', searchOpenTrigger)
             
           <div v-else class="logged-in-message">
             <div class="login-line">
-              <p class="sub-message">Logged in as</p>
+              <span class="managing-label">Logged in as</span>
               <div class="user-identity-chip">
+                <span class="identity-name">{{ session.login }}</span>
+                <span class="identity-sep">|</span>
+                <button class="identity-logout" @click="logout(); router.push('/')" title="Log out">
+                  <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
+                    <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    <path d="M11 11l3-3-3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M14 8H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  </svg>
+                </button>
+              </div>
             </div>
-              <span class="identity-name">{{ session.login }}</span>
-              <span class="identity-sep">|</span>
-              <button class="identity-logout" @click="logout(); router.push('/')" title="Log out">
-                <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
-                  <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                  <path d="M11 11l3-3-3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                  <path d="M14 8H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                </svg>
-              </button>
-            </div>
-            <div class="managing-line" style="margin-top: 14px">
+            <div class="managing-line" style="margin-top: 10px">
               <span class="managing-label">Managing:</span>
               <div class="channel-switcher-inline" v-if="availableChannels.length > 1">
                 <button class="channel-btn-inline" @click="showChannelMenu = !showChannelMenu">
@@ -619,7 +619,8 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 .logged-in-as-line strong {
   color: #ffd569;
 }
-.managing-line .login-line {
+.login-line,
+.managing-line {
   display: flex;
   align-items: center;
   justify-content: center;
