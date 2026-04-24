@@ -1092,7 +1092,7 @@ body.snippet-dragging * {
   height: 125px;
   display: flex;
   align-items: center;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.044);
   color: #777;
   font-family: inherit;
   font-size: 13px;
@@ -1100,7 +1100,7 @@ body.snippet-dragging * {
   transition: color .1s, background .1s;
   letter-spacing: .01em;
   padding: 11px 20px;
-  border: 1px solid #222222;
+  border: 1px solid #803d3d;
   justify-content: center;
 }
 
@@ -1111,7 +1111,7 @@ body.snippet-dragging * {
 
 .sidebar-btn.locked { 
   opacity: 0.45; 
-  background: rgba(255, 255, 255, 0.044);
+  background: rgba(255, 255, 255, 0.022);
 }
 
 .sidebar-btn.active {
@@ -1131,7 +1131,6 @@ body.snippet-dragging * {
 
 .lock-icon {
   font-size: 2.1em;
-  opacity: 0.7;
   margin-left: 0.2em;
   margin-right: 0.2em;
   display: inline-flex;
@@ -1449,6 +1448,8 @@ body.snippet-dragging * {
     height: auto;
     justify-content: space-between;
     padding: 11px 20px;
+    font-size:  1.1em
+
   }
 
   .sidebar-btn.active {
