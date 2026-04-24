@@ -424,8 +424,10 @@ provide('searchOpenTrigger', searchOpenTrigger)
             </div>
             
           <div v-else class="logged-in-message">
-            <p class="sub-message">Logged in as</p>
-            <div class="user-identity-chip">
+            <div class="login-line">
+              <p class="sub-message">Logged in as</p>
+              <div class="user-identity-chip">
+            </div>
               <span class="identity-name">{{ session.login }}</span>
               <span class="identity-sep">|</span>
               <button class="identity-logout" @click="logout(); router.push('/')" title="Log out">
@@ -617,7 +619,7 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 .logged-in-as-line strong {
   color: #ffd569;
 }
-.managing-line {
+.managing-line .login-line {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -625,6 +627,7 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   font-size: 0.85rem;
   color: #888;
 }
+
 .managing-label { color: #555; }
 .channel-name-static {
   color: #9d6cff;
