@@ -324,7 +324,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
       :class="{ visible: !menuOpen }"
       @click="showMenu"
       title="Show menu"
-    >⌄</button>
+    >▾</button>
 
     <!-- ─── Main stage: stacks .navbar-panel on top of .content-panel ─── -->
     <div class="stage">
@@ -409,10 +409,6 @@ provide('searchOpenTrigger', searchOpenTrigger)
             <span v-if="!session" class="lock-icon">🔒</span>
             <span>{{ t('nav.settings') }}</span>
           </button>
-          <button v-if="session && !availableChannels.includes(session.login)"
-            class="menu-btn menu-btn-add" @click="addBot">
-            {{ t('nav.add_channel') }}
-          </button>
         </div>
 
         <div v-if="session && showAddBanner" class="add-banner">
@@ -440,9 +436,27 @@ provide('searchOpenTrigger', searchOpenTrigger)
             <p class="sub-message">Gain access to all features and bot control of your or other channels with access by logging in.
             </p>
             </div>
+            
           <div v-else class="logged-in-message">
-            <p>Welcome back, <strong>{{ session.channel }}</strong>!</p>
-            <p class="sub-message">Use the menu above to navigate.</p>
+            <p class="logged-in-as-line">Logged in as <strong>{{ session.login }}</strong></p>
+            <div class="managing-line">
+              <span class="managing-label">Managing channel:</span>
+              <div class="channel-switcher-inline" v-if="availableChannels.length > 1">
+                <button class="channel-btn-inline" @click="showChannelMenu = !showChannelMenu">
+                  #{{ session.channel }} ▾
+                </button>
+                <div v-if="showChannelMenu" class="channel-menu channel-menu-inline">
+                  <button v-for="ch in availableChannels" :key="ch" class="channel-menu-item"
+                    :class="{ active: ch === session.channel }" @click="selectChannel(ch)">#{{ ch }}</button>
+                </div>
+              </div>
+              <span v-else class="channel-name-static">#{{ session.channel }}</span>
+            </div>
+            <p class="sub-message" style="margin-top: 16px">Use the menu above to navigate.</p>
+            <button v-if="!availableChannels.includes(session.login)"
+              class="add-channel-btn" @click="addBot">
+              {{ t('nav.add_channel') }}
+            </button>
           </div>
         </div>
       </div>
@@ -597,9 +611,46 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   color: #ccc;
   font-size: 1rem;
 }
-.logged-in-message strong {
+.logged-in-as-line {
+  font-size: 0.85rem;
+  color: #888;
+  margin-bottom: 10px;
+}
+.logged-in-as-line strong {
   color: #ffd569;
 }
+.managing-line {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #888;
+}
+.managing-label { color: #555; }
+.channel-name-static {
+  color: #9d6cff;
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.channel-switcher-inline { position: relative; }
+.channel-btn-inline {
+  height: 28px; padding: 0 12px;
+  border: 1px solid #6f2bff55; background: #1e1e26;
+  color: #9d6cff; font-family: inherit; font-size: 0.9rem;
+  font-weight: 700; cursor: pointer;
+}
+.channel-btn-inline:hover { background: #252530; border-color: #9d6cff88; }
+.channel-menu-inline { left: 50%; transform: translateX(-50%); top: calc(100% + 6px); }
+.add-channel-btn {
+  margin-top: 20px;
+  height: 36px; padding: 0 20px;
+  background: #6f2bff22; border: 1px solid #6f2bff66;
+  color: #9d6cff; font-family: inherit; font-size: 0.85rem;
+  font-weight: 600; cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+.add-channel-btn:hover { background: #6f2bff44; border-color: #9d6cffaa; color: #fff; }
 .sub-message {
   font-size: 0.8rem;
   color: #777;
