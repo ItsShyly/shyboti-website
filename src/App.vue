@@ -344,59 +344,10 @@ provide('searchOpenTrigger', searchOpenTrigger)
         </footer>
       </div>
 
-            <!-- ─── Menu-selection panel (upper half when menu open) ─── -->
-      <div class="menu-selection" :class="{ 'menu-open': menuOpen, 'menu-closed': !menuOpen }">
-
-        <button class="menu-btn" :class="{ active: activeRoute === 'dashboard', locked: !session }" @click="nav('dashboard')">
-          <span v-if="!session" class="lock-icon">🔒</span>
-          <span>{{ t('nav.dashboard') }}</span>
-        </button>
-        <button class="menu-btn" :class="{ active: activeRoute === 'commands', locked: !session }" @click="nav('commands')">
-          <span v-if="!session" class="lock-icon">🔒</span>
-          <span>{{ t('nav.commands') }}</span>
-        </button>
-        <button class="menu-btn" :class="{ active: activeRoute === 'moderation', locked: !session }" @click="nav('moderation')">
-          <span v-if="!session" class="lock-icon">🔒</span>
-          <span>{{ t('nav.moderation') }}</span>
-        </button>
-        <button class="menu-btn" :class="{ active: activeRoute === 'automations', locked: !session }" @click="nav('automations')">
-          <span v-if="!session" class="lock-icon">🔒</span>
-          <span>{{ t('nav.automations') }}</span>
-        </button>
-        <button v-if="!session || channelRole?.role === 'broadcaster'"
-          class="menu-btn" :class="{ active: activeRoute === 'roles', locked: !session }" @click="nav('roles')">
-          <span v-if="!session" class="lock-icon">🔒</span>
-          <span>{{ t('nav.roles') }}</span>
-        </button>
-        <button class="menu-btn" :class="{ active: activeRoute === 'features', locked: !session }" @click="nav('features')">
-          <span v-if="!session" class="lock-icon">🔒</span>
-          <span>Features</span>
-        </button>
-        <button class="menu-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
-          {{ t('nav.logs') }}
-        </button>
-        <button class="menu-btn" :class="{ active: activeRoute === 'tools' }" @click="nav('tools')">
-          Tools
-        </button>
-        <button v-if="!session || channelRole?.role === 'broadcaster'"
-          class="menu-btn" :class="{ active: activeRoute === 'settings', locked: !session }" @click="nav('settings')">
-          <span v-if="!session" class="lock-icon">🔒</span>
-          <span>{{ t('nav.settings') }}</span>
-        </button>
-        <button v-if="session && !availableChannels.includes(session.login)"
-          class="menu-btn menu-btn-add" @click="addBot">
-          {{ t('nav.add_channel') }}
-        </button>
-
-      </div>
-      <!-- ─── Navbar panel (lower half when menu open) ─── -->
+      <!-- ─── Navbar panel (upper half when menu open) ─── -->
       <div class="navbar-panel" :class="{ 'menu-open': menuOpen, 'menu-closed': !menuOpen }">
         <div class="topbar">
-          <div class="topbar-brand" @click="showMenu" style="cursor:pointer">
-            <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
-            <span class="brand-name">ShyBoti</span>
-          </div>
-
+          <div class="topbar-brand-placeholder"></div> <!-- empty placeholder for alignment -->
           <div class="topbar-right">
             <div class="lang-switcher">
               <button class="lang-opt" :class="{ active: locale === 'en' }" @click="setLocale('en')">EN</button>
@@ -416,10 +367,52 @@ provide('searchOpenTrigger', searchOpenTrigger)
               <span v-else class="logged-in-as">#{{ session.channel }}</span>
               <button class="auth-btn logout-btn" @click="logout(); router.push('/')">{{ t('nav.logout') }}</button>
             </template>
-            <button v-else class="auth-btn login-btn" :class="{ shake: loginShaking }" @click="login">
-              {{ t('nav.login') }}
-            </button>
+            <!-- login button removed from here, moved to lower half -->
           </div>
+        </div>
+
+        <!-- Menu buttons (previously in .menu-selection) -->
+        <div class="menu-buttons-container">
+          <button class="menu-btn" :class="{ active: activeRoute === 'dashboard', locked: !session }" @click="nav('dashboard')">
+            <span v-if="!session" class="lock-icon">🔒</span>
+            <span>{{ t('nav.dashboard') }}</span>
+          </button>
+          <button class="menu-btn" :class="{ active: activeRoute === 'commands', locked: !session }" @click="nav('commands')">
+            <span v-if="!session" class="lock-icon">🔒</span>
+            <span>{{ t('nav.commands') }}</span>
+          </button>
+          <button class="menu-btn" :class="{ active: activeRoute === 'moderation', locked: !session }" @click="nav('moderation')">
+            <span v-if="!session" class="lock-icon">🔒</span>
+            <span>{{ t('nav.moderation') }}</span>
+          </button>
+          <button class="menu-btn" :class="{ active: activeRoute === 'automations', locked: !session }" @click="nav('automations')">
+            <span v-if="!session" class="lock-icon">🔒</span>
+            <span>{{ t('nav.automations') }}</span>
+          </button>
+          <button v-if="!session || channelRole?.role === 'broadcaster'"
+            class="menu-btn" :class="{ active: activeRoute === 'roles', locked: !session }" @click="nav('roles')">
+            <span v-if="!session" class="lock-icon">🔒</span>
+            <span>{{ t('nav.roles') }}</span>
+          </button>
+          <button class="menu-btn" :class="{ active: activeRoute === 'features', locked: !session }" @click="nav('features')">
+            <span v-if="!session" class="lock-icon">🔒</span>
+            <span>Features</span>
+          </button>
+          <button class="menu-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
+            {{ t('nav.logs') }}
+          </button>
+          <button class="menu-btn" :class="{ active: activeRoute === 'tools' }" @click="nav('tools')">
+            Tools
+          </button>
+          <button v-if="!session || channelRole?.role === 'broadcaster'"
+            class="menu-btn" :class="{ active: activeRoute === 'settings', locked: !session }" @click="nav('settings')">
+            <span v-if="!session" class="lock-icon">🔒</span>
+            <span>{{ t('nav.settings') }}</span>
+          </button>
+          <button v-if="session && !availableChannels.includes(session.login)"
+            class="menu-btn menu-btn-add" @click="addBot">
+            {{ t('nav.add_channel') }}
+          </button>
         </div>
 
         <div v-if="session && showAddBanner" class="add-banner">
@@ -431,7 +424,27 @@ provide('searchOpenTrigger', searchOpenTrigger)
         </div>
       </div>
 
-
+      <!-- ─── Menu-selection panel (lower half) – now with big logo and login button ─── -->
+      <div class="menu-selection" :class="{ 'menu-open': menuOpen, 'menu-closed': !menuOpen }">
+        <div class="lower-half-content" :class="{ 'logged-out': !session }">
+          <div class="big-logo">
+            <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="big-emote" />
+            <span class="big-brand-name">ShyBoti</span>
+          </div>
+          <div v-if="!session" class="login-area">
+            <button class="login-twitch-btn" :class="{ shake: loginShaking }" @click="login">
+              <svg class="twitch-icon" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M11.571 4.714H9.857v4.286h1.714V4.714zm4.286 0H14v4.286h1.857V4.714zm-8.57 10.857l-2.857-2.857V4h14.285v8.714l-2.857 2.857h-2.857l-2.857 2.857V14.57H7.286zM23.143 0v14.286l-5.714 5.714h-4.286L10 23.143h-2.857v-3.143H.857V2.286L2.286 0h20.857z"/>
+              </svg>
+              Log in with Twitch
+            </button>
+          </div>
+          <div v-else class="logged-in-message">
+            <p>Welcome back, <strong>{{ session.channel }}</strong>!</p>
+            <p class="sub-message">Use the menu above to navigate.</p>
+          </div>
+        </div>
+      </div>
 
     </div><!-- /stage -->
 
@@ -496,13 +509,27 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   transform: translateY(0);
   transition: transform 0.45s cubic-bezier(0.77, 0, 0.175, 1),
               opacity   0.35s ease;
+  overflow-y: auto;
+  scrollbar-width: none;
 }
+.navbar-panel::-webkit-scrollbar { display: none; }
 .navbar-panel.menu-closed {
   transform: translateY(-100%);
   pointer-events: none;
 }
 
-/* ─── Menu-selection panel: bottom half, slides out downward ─── */
+/* Menu buttons inside navbar panel */
+.menu-buttons-container {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: flex-start;
+  gap: 14px;
+  padding: 20px 10% 30px;
+  flex: 1;
+}
+
+/* ─── Menu-selection panel (lower half) ─── */
 .menu-selection {
   position: absolute;
   left: 0; right: 0; bottom: 0;
@@ -510,25 +537,88 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   background: #0e0e12;
   border-top: 1px solid #1e1e24;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-content: center;
   align-items: center;
-  gap: 14px;
-  padding: 8px 10%;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-width: none;
+  justify-content: center;
   z-index: 10;
   transform: translateY(0);
   transition: transform 0.45s cubic-bezier(0.77, 0, 0.175, 1),
               opacity   0.35s ease;
 }
-.menu-selection::-webkit-scrollbar { display: none; }
 .menu-selection.menu-closed {
   transform: translateY(100%);
   pointer-events: none;
 }
+
+/* Content inside lower half */
+.lower-half-content {
+  text-align: center;
+  padding: 20px;
+  width: 100%;
+}
+.big-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+.big-emote {
+  width: 80px;
+  height: 80px;
+  image-rendering: pixelated;
+}
+.big-brand-name {
+  font-size: 2.2rem;
+  font-weight: 800;
+  color: #ffd569;
+  letter-spacing: 0.08em;
+}
+.login-twitch-btn {
+  background: #9146ff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.login-twitch-btn:hover {
+  background: #a55bff;
+}
+.twitch-icon {
+  width: 22px;
+  height: 22px;
+}
+.logged-in-message {
+  color: #ccc;
+  font-size: 1rem;
+}
+.logged-in-message strong {
+  color: #ffd569;
+}
+.sub-message {
+  font-size: 0.8rem;
+  color: #777;
+  margin-top: 8px;
+}
+/* Shake animation for login button */
+@keyframes shake {
+  0%   { transform: translateX(0) }
+  15%  { transform: translateX(-5px) }
+  30%  { transform: translateX(5px) }
+  45%  { transform: translateX(-4px) }
+  60%  { transform: translateX(4px) }
+  75%  { transform: translateX(-2px) }
+  90%  { transform: translateX(2px) }
+  100% { transform: translateX(0) }
+}
+.shake { animation: shake 0.6s ease; }
 
 /* ─── Topbar inside navbar panel ─── */
 .topbar {
@@ -538,20 +628,26 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   align-items: center;
   padding: 0 20px;
   gap: 10px;
-  position: relative;
+  border-bottom: 1px solid #1e1e24;
 }
-.topbar-brand {
+.topbar-brand-placeholder {
+  width: 120px; /* same as .topbar-brand would be, for balance */
+}
+.topbar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-shrink: 0;
+  margin-left: auto;
 }
-.brand-emote  { width: 36px; height: 36px; flex-shrink: 0; image-rendering: pixelated; }
-.brand-name   { font-size: 1rem; font-weight: 700; color: #ffd569; letter-spacing: 0.04em; white-space: nowrap; }
-.topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
-.logged-in-as { font-size: 12px; color: #9d6cff; font-weight: 600; white-space: nowrap; }
+.logged-in-as {
+  font-size: 12px;
+  color: #9d6cff;
+  font-weight: 600;
+  white-space: nowrap;
+}
 
-/* ─── Menu buttons ─── */
+/* ─── Menu buttons styling (unchanged) ─── */
 .menu-btn {
   width: 180px;
   height: 110px;
@@ -581,7 +677,6 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 .menu-btn.locked:hover { opacity: 0.7; }
 .menu-btn-add { background: #6f2bff22; border-color: #6f2bff55; color: #9d6cff; }
 .menu-btn-add:hover { background: #6f2bff33; }
-
 .lock-icon {
   font-size: 1.8em;
   filter: grayscale(100%);
@@ -589,7 +684,7 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   opacity: 0.5;
 }
 
-/* ─── Floating search bar ─── */
+/* ─── Floating search bar (unchanged positioning) ─── */
 .float-search {
   position: fixed;
   top: 10px;
@@ -664,10 +759,10 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 .result-label { font-weight: 600; flex-shrink: 0; }
 .result-sub   { font-size: 10px; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 
-/* ─── Show-menu chevron ─── */
+/* ─── Show-menu chevron (unchanged) ─── */
 .show-menu-btn {
   position: fixed;
-  top: 54px; /* just below the search bar */
+  top: 54px;
   left: 50%;
   transform: translateX(-50%) translateY(-8px);
   width: 40px; height: 22px;
@@ -692,14 +787,12 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 }
 .show-menu-btn:hover { color: #9d6cff; border-color: #6f2bff55; }
 
-/* ─── Auth / UI elements ─── */
+/* ─── Auth / UI elements (unchanged except login btn removed) ─── */
 .auth-btn {
   height: 34px; padding: 0 14px; border: none;
   font-family: inherit; font-size: 12px; font-weight: 600;
   cursor: pointer; white-space: nowrap;
 }
-.login-btn  { background: #6f2bff; color: #fff; }
-.login-btn:hover { background: #7f3fff; }
 .logout-btn { background: #2c2c2e; color: #aaa; border: 1px solid #333; }
 .logout-btn:hover { background: #3a3a3e; color: #fff; }
 
@@ -724,18 +817,6 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 .banner-dismiss { background: transparent; border: none; color: #666; font-size: 14px; cursor: pointer; padding: 0 4px; }
 .banner-dismiss:hover { color: #aaa; }
 
-@keyframes shake {
-  0%   { transform: translateX(0) }
-  15%  { transform: translateX(-5px) }
-  30%  { transform: translateX(5px) }
-  45%  { transform: translateX(-4px) }
-  60%  { transform: translateX(4px) }
-  75%  { transform: translateX(-2px) }
-  90%  { transform: translateX(2px) }
-  100% { transform: translateX(0) }
-}
-.shake { animation: shake 0.6s ease; }
-
 .toast { font-size: 11px; color: #23d18b; background: #0e2a1e; border: 1px solid #23d18b44; padding: 4px 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .toast-float { position: fixed; bottom: 16px; right: 16px; z-index: 1001; }
 
@@ -745,10 +826,7 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 .footer-link { color: #555; text-decoration: none; transition: color .15s; }
 .footer-link:hover { color: #9d6cff; }
 
-/* ─── Snippet dragging ─── */
-body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; user-select: none !important; }
-
-/* ─── Responsive ─── */
+/* ─── Responsive adjustments ─── */
 .hide-mobile { display: initial; }
 .show-mobile { display: none; }
 
@@ -757,6 +835,7 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
   .show-menu-btn { top: 50px; }
 
   .menu-btn { width: 130px; height: 80px; font-size: 11px; }
+  .menu-buttons-container { gap: 10px; padding: 12px 5% 20px; }
 
   .content-panel { padding: 14px; padding-bottom: 38px; }
 
@@ -771,6 +850,10 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
   .show-mobile { display: flex !important; }
 
   body.logs-open .content-panel { overflow: hidden !important; }
+  
+  .big-emote { width: 60px; height: 60px; }
+  .big-brand-name { font-size: 1.6rem; }
+  .login-twitch-btn { padding: 8px 18px; font-size: 0.9rem; }
 }
 
 @media (min-width: 681px) and (max-width: 960px) {
