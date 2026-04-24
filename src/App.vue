@@ -365,7 +365,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
                 </div>
               </div>
               <span v-else class="logged-in-as">#{{ session.channel }}</span>
-              <button class="auth-btn logout-btn" @click="logout(); router.push('/')">{{ t('nav.logout') }}</button>
+              <button class="logout-btn" @click="logout(); router.push('/')">{{ t('nav.logout') }}</button>
             </template>
             <!-- login button removed from here, moved to lower half -->
           </div>
@@ -436,6 +436,10 @@ provide('searchOpenTrigger', searchOpenTrigger)
               {{ t('nav.login') }}
             </button>
           </div>
+          <div v-if="!session" class="logged-in-message">
+            <p class="sub-message">Gain access to all features and bot control of your or other channels with access by logging in.
+            </p>
+            </div>
           <div v-else class="logged-in-message">
             <p>Welcome back, <strong>{{ session.channel }}</strong>!</p>
             <p class="sub-message">Use the menu above to navigate.</p>
@@ -570,6 +574,7 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   color: #ffd569;
   letter-spacing: 0.08em;
 }
+
 .login-btn {
   background: #6f2bff;
   color: #aaa; 
@@ -583,7 +588,7 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   gap: 12px;
   cursor: pointer;
 }
-.login-twitch-btn:hover {
+.login-btn:hover {
   background: #3a3a3e; 
   color: #fff;
 }
@@ -828,7 +833,14 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   .show-menu-btn { top: 50px; }
 
   .menu-btn { width: 130px; height: 80px; font-size: 11px; }
-  .menu-buttons-container { gap: 10px; padding: 12px 5% 20px; }
+  .menu-buttons-container {    
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-content: center;
+    gap: 14px;
+    padding: 30px 25% 30px;
+    flex: 1; }
 
   .content-panel { padding: 14px; padding-bottom: 38px; }
 
