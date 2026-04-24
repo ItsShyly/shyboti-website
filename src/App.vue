@@ -1061,18 +1061,16 @@ body.snippet-dragging * {
 
 .sidebar {
   flex: 0 0 50%;
-  display: grid;
-  grid-template-rows: repeat(2, minmax(110px, 1fr));
-  grid-auto-columns: 200px;
-  grid-auto-flow: column;
-  align-items: stretch;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   align-content: center;
-  justify-content: start;
+  align-items: center;
   gap: 14px;
   padding: 16px;
   background: #0e0e12;
   border-bottom: 1px solid #1e1e24;
-  overflow-x: auto;
+  overflow-x: hidden;
   overflow-y: auto;
   scrollbar-width: none;
 }
@@ -1095,7 +1093,7 @@ body.snippet-dragging * {
   transition: color 0.1s, background 0.1s;
   letter-spacing: 0.01em;
   padding: 11px 20px;
-  border: none;
+  border: 1px solid #222222
 }
 
 .sidebar-btn:hover {
@@ -1107,7 +1105,7 @@ body.snippet-dragging * {
   color: #9d6cff;
   font-weight: 700;
   background: rgba(111, 43, 255, .08);
-  border-left: 2px solid #6f2bff;
+  border: 2px solid #6f2bff;
 }
 
 .sidebar-btn.locked {
@@ -1384,12 +1382,11 @@ body.snippet-dragging * {
     width: 240px;
     flex: none;
     height: auto;
-    grid-template-rows: none;
-    grid-auto-columns: auto;
-    grid-auto-flow: row;
+    flex-direction: column;
+    flex-wrap: nowrap;
     align-items: stretch;
-    align-content: start;
-    justify-content: stretch;
+    align-content: stretch;
+    justify-content: flex-start;
     gap: 0;
     padding: 8px 0;
     z-index: 100;
@@ -1469,8 +1466,8 @@ body.snippet-dragging * {
     gap: 8px;
   }
 
-  .sidebar {
-    grid-auto-columns: 170px;
+  .sidebar-btn {
+    width: 170px;
   }
 
   .sidebar-btn {
