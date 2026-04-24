@@ -438,7 +438,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
                 </button>
               </div>
             </div>
-            <div class="managing-line" style="margin-top: 10px">
+            <div class="managing-line">
               <span class="managing-label">Managing:</span>
               <div class="channel-switcher-inline" v-if="availableChannels.length > 1">
                 <button class="channel-btn-inline" @click="showChannelMenu = !showChannelMenu">
@@ -451,7 +451,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
               </div>
               <span v-else class="channel-name-static">#{{ session.channel }}</span>
             </div>
-            <p class="sub-message" style="margin-top: 16px">Use the menu above to navigate.</p>
+            <p class="sub-message">Use the menu above to navigate.</p>
             <button v-if="!availableChannels.includes(session.login)"
               class="add-channel-btn" @click="addBot">
               {{ t('nav.add_channel') }}
@@ -608,38 +608,38 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 }
 
 .logged-in-message {
-  color: #ccc;
-  font-size: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
-.logged-in-as-line {
-  font-size: 0.85rem;
-  color: #888;
-  margin-bottom: 10px;
-}
-.logged-in-as-line strong {
-  color: #ffd569;
-}
+/* Each row: label on the left, value element on the right — both same height */
 .login-line,
 .managing-line {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  font-size: 0.85rem;
-  color: #888;
+  gap: 10px;
+  height: 30px;  /* fixed row height so both rows are identical */
 }
-
-.managing-label { color: #555; }
+.managing-label {
+  font-size: 11px;
+  color: #555;
+  white-space: nowrap;
+  line-height: 30px;
+}
+/* The value side of each row — chip and channel button share these rules */
 .channel-name-static {
-  color: #9d6cff;
-  font-weight: 700;
-  font-size: 0.95rem;
+  height: 30px; line-height: 30px;
+  padding: 0 12px;
+  border: 1px solid #6f2bff55; background: #1e1e26;
+  color: #9d6cff; font-weight: 700; font-size: 12px;
 }
 .channel-switcher-inline { position: relative; }
 .channel-btn-inline {
-  height: 28px; padding: 0 12px;
+  height: 30px; padding: 0 12px;
   border: 1px solid #6f2bff55; background: #1e1e26;
-  color: #9d6cff; font-family: inherit; font-size: 0.9rem;
+  color: #9d6cff; font-family: inherit; font-size: 12px;
   font-weight: 700; cursor: pointer;
 }
 .channel-btn-inline:hover { background: #252530; border-color: #9d6cff88; }
