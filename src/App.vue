@@ -1040,6 +1040,7 @@ body.snippet-dragging * {
   inset: 0;
   background: rgba(0, 0, 0, .6);
   z-index: 99;
+  height: 50%;
 }
 
 /*  Sidebar Old
@@ -1059,7 +1060,27 @@ body.snippet-dragging * {
 .bot-btn.add:hover { background: #7f3fff; }
 */
 
-.sidebar {}
+.sidebar {
+  height: 50%
+}
+
+.sidebar-btn {
+  width: 200px;
+  height: 125px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  color: #777;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.1s, background 0.1s;
+  letter-spacing: 0.01em;
+  padding: 11px 20px; 
+  border: none
+}
+
 
 /* Mobile search in sidebar */
 .sidebar-search {
