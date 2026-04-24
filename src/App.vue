@@ -432,11 +432,8 @@ provide('searchOpenTrigger', searchOpenTrigger)
             <span class="big-brand-name">ShyBoti</span>
           </div>
           <div v-if="!session" class="login-area">
-            <button class="login-twitch-btn" :class="{ shake: loginShaking }" @click="login">
-              <svg class="twitch-icon" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M11.571 4.714H9.857v4.286h1.714V4.714zm4.286 0H14v4.286h1.857V4.714zm-8.57 10.857l-2.857-2.857V4h14.285v8.714l-2.857 2.857h-2.857l-2.857 2.857V14.57H7.286zM23.143 0v14.286l-5.714 5.714h-4.286L10 23.143h-2.857v-3.143H.857V2.286L2.286 0h20.857z"/>
-              </svg>
-              Log in with Twitch
+            <button class="auth-btn login-btn" :class="{ shake: loginShaking }" @click="login">
+              {{ t('nav.login') }}
             </button>
           </div>
           <div v-else class="logged-in-message">
@@ -573,28 +570,24 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   color: #ffd569;
   letter-spacing: 0.08em;
 }
-.login-twitch-btn {
-  background: #9146ff;
-  border: none;
-  border-radius: 8px;
+.login-btn {
+  background: #6f2bff;
+  color: #aaa; 
+  border: 1px solid #333;
   padding: 12px 24px;
   font-family: inherit;
   font-size: 1rem;
   font-weight: 700;
-  color: white;
   display: inline-flex;
   align-items: center;
   gap: 12px;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
 }
 .login-twitch-btn:hover {
-  background: #a55bff;
+  background: #3a3a3e; 
+  color: #fff;
 }
-.twitch-icon {
-  width: 22px;
-  height: 22px;
-}
+
 .logged-in-message {
   color: #ccc;
   font-size: 1rem;
