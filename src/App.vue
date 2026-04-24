@@ -483,13 +483,32 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 }
 .content-panel::-webkit-scrollbar { display: none; }
 
-/* ─── Navbar panel: top half  ─── */
+/* ─── Navbar panel: top half, slides out upward when menu closes ─── */
 .navbar-panel {
   position: absolute;
   left: 0; right: 0; top: 0;
   height: 50%;
   background: #0e0e12;
   border-bottom: 1px solid #1e1e24;
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+  transform: translateY(0);
+  transition: transform 0.45s cubic-bezier(0.77, 0, 0.175, 1),
+              opacity   0.35s ease;
+}
+.navbar-panel.menu-closed {
+  transform: translateY(-100%);
+  pointer-events: none;
+}
+
+/* ─── Menu-selection panel: bottom half, slides out downward ─── */
+.menu-selection {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 50%;
+  background: #0e0e12;
+  border-top: 1px solid #1e1e24;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -507,27 +526,6 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 }
 .menu-selection::-webkit-scrollbar { display: none; }
 .menu-selection.menu-closed {
-  transform: translateY(-100%);
-  pointer-events: none;
-}
-
-/* ─── Navbar panel: bottom half ─── */
-.navbar-panel {
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: 50%;
-  background: #0e0e12;
-  border-top: 1px solid #1e1e24;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  z-index: 10;
-  transform: translateY(0);
-  transition: transform 0.45s cubic-bezier(0.77, 0, 0.175, 1),
-              opacity   0.35s ease;
-}
-.navbar-panel.menu-closed {
   transform: translateY(100%);
   pointer-events: none;
 }
