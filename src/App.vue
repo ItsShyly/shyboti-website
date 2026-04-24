@@ -1061,15 +1061,19 @@ body.snippet-dragging * {
 
 .sidebar {
   flex: 0 0 50%;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
+  display: grid;
+  grid-template-rows: repeat(2, minmax(110px, 1fr));
+  grid-auto-columns: 200px;
+  grid-auto-flow: column;
+  align-items: stretch;
+  align-content: center;
+  justify-content: start;
+  gap: 14px;
+  padding: 16px;
   background: #0e0e12;
   border-bottom: 1px solid #1e1e24;
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
   scrollbar-width: none;
 }
 
@@ -1078,12 +1082,11 @@ body.snippet-dragging * {
 }
 
 .sidebar-btn {
-  width: auto;
-  min-width: max-content;
-  height: 40px;
+  width: 200px;
+  height: 125px;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   background: transparent;
   color: #777;
   font-family: inherit;
@@ -1091,9 +1094,8 @@ body.snippet-dragging * {
   cursor: pointer;
   transition: color 0.1s, background 0.1s;
   letter-spacing: 0.01em;
-  padding: 0 14px;
+  padding: 11px 20px;
   border: none;
-  white-space: nowrap;
 }
 
 .sidebar-btn:hover {
@@ -1105,7 +1107,7 @@ body.snippet-dragging * {
   color: #9d6cff;
   font-weight: 700;
   background: rgba(111, 43, 255, .08);
-  border-bottom: 2px solid #6f2bff;
+  border-left: 2px solid #6f2bff;
 }
 
 .sidebar-btn.locked {
@@ -1127,12 +1129,13 @@ body.snippet-dragging * {
 }
 
 .sidebar-bottom {
-  margin-left: auto;
+  margin-left: 0;
   padding: 0;
   border-top: none;
 }
 
 .bot-btn {
+  width: 100%;
   height: 36px;
   border: none;
   font-family: inherit;
@@ -1381,8 +1384,12 @@ body.snippet-dragging * {
     width: 240px;
     flex: none;
     height: auto;
-    flex-direction: column;
+    grid-template-rows: none;
+    grid-auto-columns: auto;
+    grid-auto-flow: row;
     align-items: stretch;
+    align-content: start;
+    justify-content: stretch;
     gap: 0;
     padding: 8px 0;
     z-index: 100;
@@ -1463,7 +1470,7 @@ body.snippet-dragging * {
   }
 
   .sidebar {
-    width: 170px;
+    grid-auto-columns: 170px;
   }
 
   .sidebar-btn {
