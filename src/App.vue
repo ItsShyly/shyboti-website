@@ -539,7 +539,7 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   justify-content: center;
   align-content: flex-start;
   gap: 14px;
-  padding: 20px 10% 30px;
+  padding: 20px 25% 30px;
   flex: 1;
   align-content: center;
 }
