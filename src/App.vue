@@ -354,20 +354,6 @@ provide('searchOpenTrigger', searchOpenTrigger)
               <span class="lang-sep">|</span>
               <button class="lang-opt" :class="{ active: locale === 'de' }" @click="setLocale('de')">DE</button>
             </div>
-            <template v-if="session">
-              <div class="channel-switcher" v-if="availableChannels.length > 1">
-                <button class="channel-btn" @click="showChannelMenu = !showChannelMenu">
-                  #{{ session.channel }} ▾
-                </button>
-                <div v-if="showChannelMenu" class="channel-menu">
-                  <button v-for="ch in availableChannels" :key="ch" class="channel-menu-item"
-                    :class="{ active: ch === session.channel }" @click="selectChannel(ch)">#{{ ch }}</button>
-                </div>
-              </div>
-              <span v-else class="logged-in-as">#{{ session.channel }}</span>
-              <button class="logout-btn" @click="logout(); router.push('/')">{{ t('nav.logout') }}</button>
-            </template>
-            <!-- login button removed from here, moved to lower half -->
           </div>
         </div>
 
@@ -438,9 +424,20 @@ provide('searchOpenTrigger', searchOpenTrigger)
             </div>
             
           <div v-else class="logged-in-message">
-            <p class="logged-in-as-line">Logged in as <strong>{{ session.login }}</strong></p>
-            <div class="managing-line">
-              <span class="managing-label">Managing channel:</span>
+            <p class="sub-message">Logged in as</p>
+            <div class="user-identity-chip">
+              <span class="identity-name">{{ session.login }}</span>
+              <span class="identity-sep">|</span>
+              <button class="identity-logout" @click="logout(); router.push('/')" title="Log out">
+                <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
+                  <path d="M6 2H3a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                  <path d="M11 11l3-3-3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M14 8H6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <div class="managing-line" style="margin-top: 14px">
+              <span class="managing-label">Managing:</span>
               <div class="channel-switcher-inline" v-if="availableChannels.length > 1">
                 <button class="channel-btn-inline" @click="showChannelMenu = !showChannelMenu">
                   #{{ session.channel }} ▾
@@ -542,6 +539,7 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   gap: 14px;
   padding: 20px 10% 30px;
   flex: 1;
+  align-content: center;
 }
 
 /* ─── Menu-selection panel (lower half) ─── */
@@ -677,10 +675,9 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   align-items: center;
   padding: 0 20px;
   gap: 10px;
-  border-bottom: 1px solid #1e1e24;
 }
 .topbar-brand-placeholder {
-  width: 120px; /* same as .topbar-brand would be, for balance */
+  width: 120px;
 }
 .topbar-right {
   display: flex;
@@ -842,8 +839,30 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
   font-family: inherit; font-size: 12px; font-weight: 600;
   cursor: pointer; white-space: nowrap;
 }
-.logout-btn { background: #2c2c2e; color: #aaa; border: 1px solid #333; }
-.logout-btn:hover { background: #3a3a3e; color: #fff; }
+.user-identity-chip {
+  display: inline-flex; align-items: center;
+  height: 30px;
+  border: 1px solid #333; background: #1e1e26;
+  overflow: hidden;
+}
+.identity-name {
+  padding: 0 10px;
+  font-size: 12px; font-weight: 600;
+  color: #9d6cff; white-space: nowrap;
+  line-height: 30px;
+}
+.identity-sep {
+  color: #2a2a30; font-size: 11px; line-height: 30px;
+}
+.identity-logout {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 30px;
+  background: transparent; border: none; border-left: 1px solid #2a2a30;
+  color: #555; cursor: pointer;
+  transition: background .15s, color .15s;
+  flex-shrink: 0;
+}
+.identity-logout:hover { background: #2c1a1a; color: #ff6b6b; }
 
 .lang-switcher { display: flex; align-items: center; gap: 2px; flex-shrink: 0; border: 1px solid #2a2a30; padding: 0 2px; height: 28px; }
 .lang-sep  { color: #333; font-size: 10px; }
