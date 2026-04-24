@@ -344,49 +344,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
         </footer>
       </div>
 
-      <!-- ─── Navbar panel (top half when menu open) ─── -->
-      <div class="navbar-panel" :class="{ 'menu-open': menuOpen, 'menu-closed': !menuOpen }">
-        <div class="topbar">
-          <div class="topbar-brand" @click="showMenu" style="cursor:pointer">
-            <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
-            <span class="brand-name">ShyBoti</span>
-          </div>
-
-          <div class="topbar-right">
-            <div class="lang-switcher">
-              <button class="lang-opt" :class="{ active: locale === 'en' }" @click="setLocale('en')">EN</button>
-              <span class="lang-sep">|</span>
-              <button class="lang-opt" :class="{ active: locale === 'de' }" @click="setLocale('de')">DE</button>
-            </div>
-            <template v-if="session">
-              <div class="channel-switcher" v-if="availableChannels.length > 1">
-                <button class="channel-btn" @click="showChannelMenu = !showChannelMenu">
-                  #{{ session.channel }} ▾
-                </button>
-                <div v-if="showChannelMenu" class="channel-menu">
-                  <button v-for="ch in availableChannels" :key="ch" class="channel-menu-item"
-                    :class="{ active: ch === session.channel }" @click="selectChannel(ch)">#{{ ch }}</button>
-                </div>
-              </div>
-              <span v-else class="logged-in-as">#{{ session.channel }}</span>
-              <button class="auth-btn logout-btn" @click="logout(); router.push('/')">{{ t('nav.logout') }}</button>
-            </template>
-            <button v-else class="auth-btn login-btn" :class="{ shake: loginShaking }" @click="login">
-              {{ t('nav.login') }}
-            </button>
-          </div>
-        </div>
-
-        <div v-if="session && showAddBanner" class="add-banner">
-          <span>👋 {{ t('banner.welcome') }}</span>
-          <div class="banner-actions">
-            <button class="banner-btn add" @click="addBot">{{ t('banner.add') }}</button>
-            <button class="banner-dismiss" @click="showAddBanner = false">✕</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ─── Menu-selection panel (bottom half when menu open) ─── -->
+            <!-- ─── Menu-selection panel (upper half when menu open) ─── -->
       <div class="menu-selection" :class="{ 'menu-open': menuOpen, 'menu-closed': !menuOpen }">
 
         <button class="menu-btn" :class="{ active: activeRoute === 'dashboard', locked: !session }" @click="nav('dashboard')">
@@ -431,6 +389,49 @@ provide('searchOpenTrigger', searchOpenTrigger)
         </button>
 
       </div>
+      <!-- ─── Navbar panel (lower half when menu open) ─── -->
+      <div class="navbar-panel" :class="{ 'menu-open': menuOpen, 'menu-closed': !menuOpen }">
+        <div class="topbar">
+          <div class="topbar-brand" @click="showMenu" style="cursor:pointer">
+            <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
+            <span class="brand-name">ShyBoti</span>
+          </div>
+
+          <div class="topbar-right">
+            <div class="lang-switcher">
+              <button class="lang-opt" :class="{ active: locale === 'en' }" @click="setLocale('en')">EN</button>
+              <span class="lang-sep">|</span>
+              <button class="lang-opt" :class="{ active: locale === 'de' }" @click="setLocale('de')">DE</button>
+            </div>
+            <template v-if="session">
+              <div class="channel-switcher" v-if="availableChannels.length > 1">
+                <button class="channel-btn" @click="showChannelMenu = !showChannelMenu">
+                  #{{ session.channel }} ▾
+                </button>
+                <div v-if="showChannelMenu" class="channel-menu">
+                  <button v-for="ch in availableChannels" :key="ch" class="channel-menu-item"
+                    :class="{ active: ch === session.channel }" @click="selectChannel(ch)">#{{ ch }}</button>
+                </div>
+              </div>
+              <span v-else class="logged-in-as">#{{ session.channel }}</span>
+              <button class="auth-btn logout-btn" @click="logout(); router.push('/')">{{ t('nav.logout') }}</button>
+            </template>
+            <button v-else class="auth-btn login-btn" :class="{ shake: loginShaking }" @click="login">
+              {{ t('nav.login') }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="session && showAddBanner" class="add-banner">
+          <span>👋 {{ t('banner.welcome') }}</span>
+          <div class="banner-actions">
+            <button class="banner-btn add" @click="addBot">{{ t('banner.add') }}</button>
+            <button class="banner-dismiss" @click="showAddBanner = false">✕</button>
+          </div>
+        </div>
+      </div>
+
+
 
     </div><!-- /stage -->
 
