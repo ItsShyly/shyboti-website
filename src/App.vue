@@ -814,7 +814,7 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 /* ─── Show-menu chevron (unchanged) ─── */
 .show-menu-btn {
   position: fixed;
-  top: 54px;
+  top: 43px;
   left: 50%;
   transform: translateX(-50%) translateY(-8px);
   width: 40px; height: 22px;
