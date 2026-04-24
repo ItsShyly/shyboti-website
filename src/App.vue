@@ -1130,8 +1130,8 @@ body.snippet-dragging * {
 }
 
 .lock-icon {
-  font-size: 10px;
-  opacity: 0.6;
+  font-size: 2.1em;
+  opacity: 0.7;
   margin-left: 0.2em;
   margin-right: 0.2em;
   display: inline-flex;
@@ -1140,14 +1140,7 @@ body.snippet-dragging * {
   filter: grayscale(100%);
 
 }
-.lock-big {
-  font-size: 2.1em;
-  color: #888;
-  margin-right: 0.5em;
-  margin-left: 0;
-  opacity: 0.7;
 
-}
 
 .sidebar-divider,
 .sidebar-spacer {
