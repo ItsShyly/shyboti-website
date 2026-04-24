@@ -530,6 +530,7 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 .navbar-panel.menu-closed {
   transform: translateY(-100%);
   pointer-events: none;
+  visibility: hidden;
 }
 
 /* Menu buttons inside navbar panel */
@@ -562,6 +563,7 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 .menu-selection.menu-closed {
   transform: translateY(100%);
   pointer-events: none;
+  visibility: hidden;
 }
 
 /* Content inside lower half */
