@@ -309,7 +309,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
           <button class="sidebar-logout" @click="logout(); router.push('/'); sidebarOpen = false">{{ t('nav.logout') }}</button>
         </template>
         <template v-else>
-          <button class="sidebar-login-btn" :class="{ shake: loginShaking }" @click="login; sidebarOpen = false">{{ t('nav.login') }}</button>
+          <button class="sidebar-login-btn" :class="{ shake: loginShaking }" @click="login(); sidebarOpen = false">{{ t('nav.login') }}</button>
         </template>
       </div>
 
