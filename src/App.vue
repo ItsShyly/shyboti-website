@@ -20,6 +20,7 @@ function shakeLogin() {
 }
 
 const showChannelMenu = ref(false)
+const sidebarOpen     = ref(false)
 
 // >>> menuOpen: true = 50/50 split , false = menu hidden, content revealed
 const menuOpen = ref(true)
@@ -38,8 +39,8 @@ const activeRoute = computed(() => {
 function nav(to: NavItem) {
   const PUBLIC: NavItem[] = ['logs', 'tools']
   if (!PUBLIC.includes(to) && !session.value) { shakeLogin(); return }
+  sidebarOpen.value = false
   router.push('/' + to)
-  // Reveal content — animate menu away
   menuOpen.value = false
 }
 
@@ -60,6 +61,7 @@ interface SearchResult {
 const searchQuery        = ref('')
 const searchOpen         = ref(false)
 const searchInputRef     = ref<HTMLInputElement | null>(null)
+const searchInputMobile  = ref<HTMLInputElement | null>(null)
 const searchResults      = ref<SearchResult[]>([])
 const searchIndex        = ref(0)
 let   searchDebounce: ReturnType<typeof setTimeout> | null = null
@@ -179,19 +181,20 @@ function onSearchInput() {
 
 function onSearchKeydown(e: KeyboardEvent) {
   if (!searchOpen.value || !searchResults.value.length) {
-    if (e.key === 'Escape') { searchQuery.value = ''; searchOpen.value = false; searchInputRef.value?.blur() }
+    if (e.key === 'Escape') { searchQuery.value = ''; searchOpen.value = false; searchInputRef.value?.blur(); searchInputMobile.value?.blur() }
     return
   }
   if (e.key === 'ArrowDown')  { e.preventDefault(); searchIndex.value = Math.min(searchIndex.value + 1, searchResults.value.length - 1) }
   if (e.key === 'ArrowUp')    { e.preventDefault(); searchIndex.value = Math.max(searchIndex.value - 1, 0) }
   if (e.key === 'Enter')      { e.preventDefault(); selectResult(searchResults.value[searchIndex.value]!) }
-  if (e.key === 'Escape')     { searchQuery.value = ''; searchOpen.value = false; searchInputRef.value?.blur() }
+  if (e.key === 'Escape')     { searchQuery.value = ''; searchOpen.value = false; searchInputRef.value?.blur(); searchInputMobile.value?.blur() }
 }
 
 function selectResult(r: SearchResult) {
   searchQuery.value = ''
   searchOpen.value  = false
   searchInputRef.value?.blur()
+  searchInputMobile.value?.blur()
   searchResults.value = []
   r.action()
 }
@@ -253,7 +256,6 @@ onMounted(async () => {
     showToast(`✓ ShyBoti left #${channel}`)
   }
 
-  // If already on a real route (deep-link), skip menu and show content
   if (route.path !== '/' && route.path !== '') {
     menuOpen.value = false
   }
@@ -280,8 +282,111 @@ provide('searchOpenTrigger', searchOpenTrigger)
 <template>
   <div class="page">
 
-    <!-- ─── Floating search bar — always on top, never moves ─── -->
-    <div class="float-search" :class="{ 'results-open': searchOpen && flatResults.length > 0 }">
+    <!-- ─── MOBILE TOPBAR (only visible on mobile via CSS) ─── -->
+    <div class="mobile-topbar">
+      <div class="topbar-brand" @click="router.push(session ? '/dashboard' : '/')" style="cursor:pointer">
+        <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
+        <span class="brand-name">ShyBoti</span>
+      </div>
+      <div class="mobile-topbar-right">
+        <div class="lang-switcher">
+          <button class="lang-opt" :class="{ active: locale === 'en' }" @click="setLocale('en')">EN</button>
+          <span class="lang-sep">|</span>
+          <button class="lang-opt" :class="{ active: locale === 'de' }" @click="setLocale('de')">DE</button>
+        </div>
+        <button class="hamburger" @click="sidebarOpen = !sidebarOpen" :class="{ open: sidebarOpen }">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── MOBILE SIDEBAR ─── -->
+    <div v-if="sidebarOpen" class="sidebar-overlay" @click="sidebarOpen = false"></div>
+    <aside class="mobile-sidebar" :class="{ 'sidebar-open': sidebarOpen }">
+      <div class="sidebar-mobile-header">
+        <template v-if="session">
+          <span class="sidebar-user">#{{ session.channel }}</span>
+          <button class="sidebar-logout" @click="logout(); router.push('/'); sidebarOpen = false">{{ t('nav.logout') }}</button>
+        </template>
+        <template v-else>
+          <span class="sidebar-user" style="color:#555">Not logged in</span>
+          <button class="sidebar-login-btn" :class="{ shake: loginShaking }" @click="login; sidebarOpen = false">{{ t('nav.login') }}</button>
+        </template>
+      </div>
+
+      <!-- Mobile search -->
+      <div class="sidebar-search" :class="{ open: searchOpen && flatResults.length > 0 }">
+        <svg class="search-icon" viewBox="0 0 16 16" fill="none">
+          <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+        <input
+          ref="searchInputMobile"
+          v-model="searchQuery"
+          class="search-input"
+          placeholder="Search…"
+          @input="onSearchInput"
+          @keydown="onSearchKeydown"
+          @focus="onSearchFocus"
+          @blur="onSearchBlur"
+          autocomplete="off" spellcheck="false"
+        />
+        <button v-if="searchQuery" class="search-clear" @mousedown.prevent="searchQuery = ''; searchResults = []; searchOpen = false">✕</button>
+        <div v-if="searchOpen && flatResults.length > 0" class="search-results">
+          <template v-for="(items, category) in groupedResults" :key="category">
+            <div class="result-group-label">{{ category }}</div>
+            <button v-for="(r, idx) in items" :key="r.label + idx" class="result-item"
+              :class="{ active: flatResults.indexOf(r) === searchIndex }"
+              @mousedown.prevent="selectResult(r); sidebarOpen = false">
+              <span class="result-icon">{{ r.icon }}</span>
+              <span class="result-label">{{ r.label }}</span>
+              <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
+            </button>
+          </template>
+        </div>
+        <div v-else-if="searchOpen && searchQuery.trim() && !flatResults.length" class="search-results search-empty">
+          No results for "{{ searchQuery }}"
+        </div>
+      </div>
+
+      <button class="sidebar-btn" :class="{ active: activeRoute === 'dashboard', locked: !session }" @click="nav('dashboard')">
+        {{ t('nav.dashboard') }} <span v-if="!session" class="lock-icon">🔒</span>
+      </button>
+      <button class="sidebar-btn" :class="{ active: activeRoute === 'commands', locked: !session }" @click="nav('commands')">
+        {{ t('nav.commands') }} <span v-if="!session" class="lock-icon">🔒</span>
+      </button>
+      <button class="sidebar-btn" :class="{ active: activeRoute === 'moderation', locked: !session }" @click="nav('moderation')">
+        {{ t('nav.moderation') }} <span v-if="!session" class="lock-icon">🔒</span>
+      </button>
+      <button class="sidebar-btn" :class="{ active: activeRoute === 'automations', locked: !session }" @click="nav('automations')">
+        {{ t('nav.automations') }} <span v-if="!session" class="lock-icon">🔒</span>
+      </button>
+      <button v-if="!session || channelRole?.role === 'broadcaster'"
+        class="sidebar-btn" :class="{ active: activeRoute === 'roles', locked: !session }" @click="nav('roles')">
+        {{ t('nav.roles') }} <span v-if="!session" class="lock-icon">🔒</span>
+      </button>
+      <button class="sidebar-btn" :class="{ active: activeRoute === 'features', locked: !session }" @click="nav('features')">
+        Features <span v-if="!session" class="lock-icon">🔒</span>
+      </button>
+      <div class="sidebar-divider"></div>
+      <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
+        {{ t('nav.logs') }}
+      </button>
+      <button class="sidebar-btn" :class="{ active: activeRoute === 'tools' }" @click="nav('tools')">
+        Tools
+      </button>
+      <div class="sidebar-spacer"></div>
+      <button v-if="!session || channelRole?.role === 'broadcaster'"
+        class="sidebar-btn" :class="{ active: activeRoute === 'settings', locked: !session }" @click="nav('settings')">
+        {{ t('nav.settings') }} <span v-if="!session" class="lock-icon">🔒</span>
+      </button>
+      <div v-if="session && !availableChannels.includes(session.login)" class="sidebar-bottom">
+        <button class="bot-btn add" @click="addBot">{{ t('nav.add_channel') }}</button>
+      </div>
+    </aside>
+
+    <!-- ─── Floating search bar — desktop only ─── -->
+    <div class="float-search desktop-only" :class="{ 'results-open': searchOpen && flatResults.length > 0 }">
       <svg class="search-icon" viewBox="0 0 16 16" fill="none">
         <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
         <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -295,12 +400,10 @@ provide('searchOpenTrigger', searchOpenTrigger)
         @keydown="onSearchKeydown"
         @focus="onSearchFocus"
         @blur="onSearchBlur"
-        autocomplete="off"
-        spellcheck="false"
+        autocomplete="off" spellcheck="false"
       />
       <kbd v-if="!searchQuery" class="search-kbd">Ctrl+F</kbd>
       <button v-if="searchQuery" class="search-clear" @mousedown.prevent="searchQuery = ''; searchResults = []; searchOpen = false">✕</button>
-
       <div v-if="searchOpen && flatResults.length > 0" class="search-results">
         <template v-for="(items, category) in groupedResults" :key="category">
           <div class="result-group-label">{{ category }}</div>
@@ -318,18 +421,12 @@ provide('searchOpenTrigger', searchOpenTrigger)
       </div>
     </div>
 
-    <!-- ─── Show-menu chevron — visible only when menu is hidden ─── -->
-    <button
-      class="show-menu-btn"
-      :class="{ visible: !menuOpen }"
-      @click="showMenu"
-      title="Show menu"
-    >▾</button>
+    <!-- ─── Show-menu chevron — desktop only ─── -->
+    <button class="show-menu-btn desktop-only" :class="{ visible: !menuOpen }" @click="showMenu" title="Show menu">▾</button>
 
-    <!-- ─── Main stage: stacks .navbar-panel on top of .content-panel ─── -->
+    <!-- ─── Main stage: desktop split-screen ─── -->
     <div class="stage">
 
-      <!-- Content panel: always present behind, revealed when menu closes -->
       <div class="content-panel" ref="mainPanelRef">
         <SnippetOverlay />
         <RouterView v-slot="{ Component }">
@@ -344,10 +441,10 @@ provide('searchOpenTrigger', searchOpenTrigger)
         </footer>
       </div>
 
-      <!-- ─── Navbar panel (upper half when menu open) ─── -->
-      <div class="navbar-panel" :class="{ 'menu-open': menuOpen, 'menu-closed': !menuOpen }">
+      <!-- ─── Navbar panel (upper half, desktop) ─── -->
+      <div class="navbar-panel desktop-only" :class="{ 'menu-open': menuOpen, 'menu-closed': !menuOpen }">
         <div class="topbar">
-          <div class="topbar-brand-placeholder"></div> <!-- empty placeholder for alignment -->
+          <div class="topbar-brand-placeholder"></div>
           <div class="topbar-right">
             <div class="lang-switcher">
               <button class="lang-opt" :class="{ active: locale === 'en' }" @click="setLocale('en')">EN</button>
@@ -357,7 +454,6 @@ provide('searchOpenTrigger', searchOpenTrigger)
           </div>
         </div>
 
-        <!-- Menu buttons (previously in .menu-selection) -->
         <div class="menu-buttons-container">
           <button class="menu-btn" :class="{ active: activeRoute === 'dashboard', locked: !session }" @click="nav('dashboard')">
             <span v-if="!session" class="lock-icon">🔒</span>
@@ -406,8 +502,8 @@ provide('searchOpenTrigger', searchOpenTrigger)
         </div>
       </div>
 
-      <!-- ─── Menu-selection panel (lower half) – now with big logo and login button ─── -->
-      <div class="menu-selection" :class="{ 'menu-open': menuOpen, 'menu-closed': !menuOpen }">
+      <!-- ─── Menu-selection panel (lower half, desktop) ─── -->
+      <div class="menu-selection desktop-only" :class="{ 'menu-open': menuOpen, 'menu-closed': !menuOpen }">
         <div class="lower-half-content" :class="{ 'logged-out': !session }">
           <div class="big-logo">
             <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="big-emote" />
@@ -419,10 +515,8 @@ provide('searchOpenTrigger', searchOpenTrigger)
             </button>
           </div>
           <div v-if="!session" class="logged-in-message">
-            <p class="sub-message">Gain access to all features and bot control of your or other channels with access by logging in.
-            </p>
-            </div>
-            
+            <p class="sub-message">Gain access to all features and bot control of your or other channels with access by logging in.</p>
+          </div>
           <div v-else class="logged-in-message">
             <div class="login-line">
               <span class="managing-label">Logged in as</span>
@@ -452,8 +546,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
               <span v-else class="channel-name-static">#{{ session.channel }}</span>
             </div>
             <p class="sub-message">Use the menu above to navigate.</p>
-            <button v-if="!availableChannels.includes(session.login)"
-              class="add-channel-btn" @click="addBot">
+            <button v-if="!availableChannels.includes(session.login)" class="add-channel-btn" @click="addBot">
               {{ t('nav.add_channel') }}
             </button>
           </div>
@@ -470,170 +563,80 @@ provide('searchOpenTrigger', searchOpenTrigger)
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap');
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; overflow: hidden; }
-body {
-  background: #0e0e12;
-  color: #fff;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 13px;
-}
-body.snippet-dragging,
-body.snippet-dragging * { cursor: crosshair !important; user-select: none !important; }
+body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; user-select: none !important; }
 
 /* ─── Page root ─── */
-.page {
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
-}
+.page { height: 100vh; display: flex; flex-direction: column; overflow: hidden; position: relative; }
 
-/* ─── Stage: fills remaining height, stacks layers ─── */
-.stage {
-  flex: 1;
-  min-height: 0;
-  position: relative;
-  overflow: hidden;
-}
+/* ─── Mobile topbar — hidden on desktop ─── */
+.mobile-topbar { display: none; }
 
-/* ─── Content panel: always fills the stage behind the menu ─── */
+/* ─── Mobile sidebar — hidden on desktop ─── */
+.mobile-sidebar { display: none; }
+.sidebar-overlay { display: none; }
+
+/* ─── desktop-only: shown by default, hidden on mobile ─── */
+.desktop-only { display: flex; }
+
+/* ─── Stage: fills remaining height ─── */
+.stage { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+
+/* ─── Content panel ─── */
 .content-panel {
-  position: absolute;
-  inset: 0;
-  background: #141418;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  scrollbar-width: none;
-  z-index: 0;
+  position: absolute; inset: 0;
+  background: #141418; padding: 20px;
+  display: flex; flex-direction: column;
+  overflow-y: auto; scrollbar-width: none; z-index: 0;
 }
 .content-panel::-webkit-scrollbar { display: none; }
 
-/* ─── Navbar panel: top half, slides out upward when menu closes ─── */
+/* ─── Navbar panel: top half ─── */
 .navbar-panel {
-  position: absolute;
-  left: 0; right: 0; top: 0;
-  height: 50%;
-  background: #0e0e12;
-  border-bottom: 1px solid #1e1e24;
-  display: flex;
-  flex-direction: column;
-  z-index: 10;
+  position: absolute; left: 0; right: 0; top: 0; height: 50%;
+  background: #0e0e12; border-bottom: 1px solid #1e1e24;
+  flex-direction: column; z-index: 10;
   transform: translateY(0);
-  transition: transform 0.45s cubic-bezier(0.77, 0, 0.175, 1),
-              opacity   0.35s ease;
-  overflow-y: auto;
-  scrollbar-width: none;
+  transition: transform 0.45s cubic-bezier(0.77, 0, 0.175, 1), opacity 0.35s ease;
+  overflow-y: auto; scrollbar-width: none;
 }
 .navbar-panel::-webkit-scrollbar { display: none; }
-.navbar-panel.menu-closed {
-  transform: translateY(-100%);
-  pointer-events: none;
-  visibility: hidden;
-}
+.navbar-panel.menu-closed { transform: translateY(-100%); pointer-events: none; visibility: hidden; }
 
-/* Menu buttons inside navbar panel */
 .menu-buttons-container {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-content: flex-start;
-  gap: 14px;
-  padding: 20px 25% 30px;
-  flex: 1;
-  align-content: center;
+  display: flex; flex-wrap: wrap; justify-content: center;
+  align-content: center; gap: 14px; padding: 20px 25% 30px; flex: 1;
 }
 
-/* ─── Menu-selection panel (lower half) ─── */
+/* ─── Menu-selection panel: lower half ─── */
 .menu-selection {
-  position: absolute;
-  left: 0; right: 0; bottom: 0;
-  height: 50%;
-  background: #0e0e12;
-  border-top: 1px solid #1e1e24;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
+  position: absolute; left: 0; right: 0; bottom: 0; height: 50%;
+  background: #0e0e12; border-top: 1px solid #1e1e24;
+  align-items: center; justify-content: center; z-index: 10;
   transform: translateY(0);
-  transition: transform 0.45s cubic-bezier(0.77, 0, 0.175, 1),
-              opacity   0.35s ease;
+  transition: transform 0.45s cubic-bezier(0.77, 0, 0.175, 1), opacity 0.35s ease;
 }
-.menu-selection.menu-closed {
-  transform: translateY(100%);
-  pointer-events: none;
-  visibility: hidden;
-}
+.menu-selection.menu-closed { transform: translateY(100%); pointer-events: none; visibility: hidden; }
 
-/* Content inside lower half */
-.lower-half-content {
-  text-align: center;
-  padding: 20px;
-  width: 100%;
-}
-.big-logo {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 32px;
-}
-.big-emote {
-  width: 80px;
-  height: 80px;
-  image-rendering: pixelated;
-}
-.big-brand-name {
-  font-size: 2.2rem;
-  font-weight: 800;
-  color: #ffd569;
-  letter-spacing: 0.08em;
-}
+.lower-half-content { text-align: center; padding: 20px; width: 100%; }
+.big-logo { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 32px; }
+.big-emote { width: 80px; height: 80px; image-rendering: pixelated; }
+.big-brand-name { font-size: 2.2rem; font-weight: 800; color: #ffd569; letter-spacing: 0.08em; }
 
 .login-btn {
-  background: #6f2bff;
-  color: #aaa; 
-  border: 1px solid #333;
-  padding: 12px 24px;
-  font-family: inherit;
-  font-size: 1rem;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  cursor: pointer;
+  background: #6f2bff; color: #aaa; border: 1px solid #333;
+  padding: 12px 24px; font-family: inherit; font-size: 1rem; font-weight: 700;
+  display: inline-flex; align-items: center; gap: 12px; cursor: pointer;
 }
-.login-btn:hover {
-  background: #3a3a3e; 
-  color: #fff;
-}
+.login-btn:hover { background: #3a3a3e; color: #fff; }
 
-.logged-in-message {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+.logged-in-message { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.login-line, .managing-line {
+  display: flex; align-items: center; justify-content: center; gap: 10px; height: 30px;
 }
-/* Each row: label on the left, value element on the right — both same height */
-.login-line,
-.managing-line {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  height: 30px;  /* fixed row height so both rows are identical */
-}
-.managing-label {
-  font-size: 11px;
-  color: #555;
-  white-space: nowrap;
-  line-height: 30px;
-}
-/* The value side of each row — chip and channel button share these rules */
+.managing-label { font-size: 11px; color: #555; white-space: nowrap; line-height: 30px; }
 .channel-name-static {
-  height: 30px; line-height: 30px;
-  padding: 0 12px;
+  height: 30px; line-height: 30px; padding: 0 12px;
   border: 1px solid #6f2bff55; background: #1e1e26;
   color: #9d6cff; font-weight: 700; font-size: 12px;
 }
@@ -641,233 +644,99 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 .channel-btn-inline {
   height: 30px; padding: 0 12px;
   border: 1px solid #6f2bff55; background: #1e1e26;
-  color: #9d6cff; font-family: inherit; font-size: 12px;
-  font-weight: 700; cursor: pointer;
+  color: #9d6cff; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
 }
 .channel-btn-inline:hover { background: #252530; border-color: #9d6cff88; }
 .channel-menu-inline { left: 50%; transform: translateX(-50%); top: calc(100% + 6px); }
 .add-channel-btn {
-  margin-top: 20px;
-  height: 36px; padding: 0 20px;
+  margin-top: 20px; height: 36px; padding: 0 20px;
   background: #6f2bff22; border: 1px solid #6f2bff66;
-  color: #9d6cff; font-family: inherit; font-size: 0.85rem;
-  font-weight: 600; cursor: pointer;
+  color: #9d6cff; font-family: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
   transition: background .15s, border-color .15s;
 }
 .add-channel-btn:hover { background: #6f2bff44; border-color: #9d6cffaa; color: #fff; }
-.sub-message {
-  font-size: 0.8rem;
-  color: #777;
-  margin-top: 8px;
-}
-/* Shake animation for login button */
+.sub-message { font-size: 0.8rem; color: #777; margin-top: 8px; }
+
 @keyframes shake {
-  0%   { transform: translateX(0) }
-  15%  { transform: translateX(-5px) }
-  30%  { transform: translateX(5px) }
-  45%  { transform: translateX(-4px) }
-  60%  { transform: translateX(4px) }
-  75%  { transform: translateX(-2px) }
-  90%  { transform: translateX(2px) }
-  100% { transform: translateX(0) }
+  0%   { transform: translateX(0) }  15%  { transform: translateX(-5px) }
+  30%  { transform: translateX(5px) } 45%  { transform: translateX(-4px) }
+  60%  { transform: translateX(4px) } 75%  { transform: translateX(-2px) }
+  90%  { transform: translateX(2px) } 100% { transform: translateX(0) }
 }
 .shake { animation: shake 0.6s ease; }
 
-/* ─── Topbar inside navbar panel ─── */
-.topbar {
-  height: 52px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  padding: 0 20px;
-  gap: 10px;
-}
-.topbar-brand-placeholder {
-  width: 120px;
-}
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-.logged-in-as {
-  font-size: 12px;
-  color: #9d6cff;
-  font-weight: 600;
-  white-space: nowrap;
-}
+/* ─── Topbar inside desktop navbar panel ─── */
+.topbar { height: 52px; flex-shrink: 0; display: flex; align-items: center; padding: 0 20px; gap: 10px; }
+.topbar-brand-placeholder { width: 120px; }
+.topbar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
 
-/* ─── Menu buttons styling (unchanged) ─── */
+/* ─── Menu buttons ─── */
 .menu-btn {
-  width: 180px;
-  height: 110px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: rgba(255,255,255,0.04);
-  color: #777;
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  letter-spacing: .01em;
-  padding: 11px 20px;
+  width: 180px; height: 110px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: rgba(255,255,255,0.04); color: #777;
+  font-family: inherit; font-size: 13px; cursor: pointer;
+  letter-spacing: .01em; padding: 11px 20px;
   border: 1px solid #222;
-  transition: color .1s, background .1s, border-color .15s;
-  position: relative;
+  transition: color .1s, background .1s, border-color .15s; position: relative;
 }
 .menu-btn:hover { color: #fff; background: #16161a; border-color: #333; }
-.menu-btn.active {
-  color: #9d6cff;
-  font-weight: 700;
-  background: rgba(111,43,255,.08);
-  border: 2px solid #6f2bff;
-}
+.menu-btn.active { color: #9d6cff; font-weight: 700; background: rgba(111,43,255,.08); border: 2px solid #6f2bff; }
 .menu-btn.locked { opacity: 0.4; background: rgba(255,255,255,0.02); }
 .menu-btn.locked:hover { opacity: 0.7; }
-.menu-btn-add { background: #6f2bff22; border-color: #6f2bff55; color: #9d6cff; }
-.menu-btn-add:hover { background: #6f2bff33; }
-.lock-icon {
-  font-size: 1.8em;
-  filter: grayscale(100%);
-  position: absolute;
-  opacity: 0.5;
-}
+.lock-icon { font-size: 1.8em; filter: grayscale(100%); position: absolute; opacity: 0.5; }
 
-/* ─── Floating search bar (unchanged positioning) ─── */
+/* ─── Floating search bar ─── */
 .float-search {
-  position: fixed;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(440px, 90vw);
-  height: 36px;
-  background: #111217;
-  border: 1px solid #2a2a30;
-  display: flex;
-  align-items: center;
-  z-index: 1000;
-  transition: border-color .15s;
-  box-shadow: 0 4px 24px rgba(0,0,0,.5);
+  position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+  width: min(440px, 90vw); height: 36px;
+  background: #111217; border: 1px solid #2a2a30;
+  align-items: center; z-index: 1000;
+  transition: border-color .15s; box-shadow: 0 4px 24px rgba(0,0,0,.5);
 }
 .float-search:focus-within { border-color: #6f2bff66; }
-.float-search .search-icon {
-  position: absolute;
-  left: 10px;
-  width: 14px; height: 14px;
-  color: #555;
-  pointer-events: none;
-}
-.float-search .search-input {
-  flex: 1; height: 100%;
-  background: transparent; border: none; outline: none;
-  color: #e0e0e0; font-family: inherit; font-size: 12px;
-  padding: 0 8px 0 32px; min-width: 0;
-}
+.float-search .search-icon { position: absolute; left: 10px; width: 14px; height: 14px; color: #555; pointer-events: none; }
+.float-search .search-input { flex: 1; height: 100%; background: transparent; border: none; outline: none; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 0 8px 0 32px; min-width: 0; }
 .float-search .search-input::placeholder { color: #444; }
-.float-search .search-kbd {
-  font-size: 9px; color: #333; border: 1px solid #2a2a30;
-  padding: 1px 5px; margin-right: 6px; flex-shrink: 0;
-  pointer-events: none; background: #0e0e12;
-}
-.float-search .search-clear {
-  background: transparent; border: none; color: #555;
-  font-size: 11px; cursor: pointer; padding: 0 10px; height: 100%;
-}
+.float-search .search-kbd { font-size: 9px; color: #333; border: 1px solid #2a2a30; padding: 1px 5px; margin-right: 6px; flex-shrink: 0; pointer-events: none; background: #0e0e12; }
+.float-search .search-clear { background: transparent; border: none; color: #555; font-size: 11px; cursor: pointer; padding: 0 10px; height: 100%; }
 .float-search .search-clear:hover { color: #e0e0e0; }
 
 .search-results {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: -1px; right: -1px;
-  background: #1a1a1e;
-  border: 1px solid #2a2a30;
-  z-index: 9999;
-  max-height: 400px;
-  overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0,0,0,.7);
-  scrollbar-width: none;
+  position: absolute; top: calc(100% + 4px); left: -1px; right: -1px;
+  background: #1a1a1e; border: 1px solid #2a2a30; z-index: 9999;
+  max-height: 400px; overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,.7); scrollbar-width: none;
 }
 .search-results::-webkit-scrollbar { display: none; }
 .search-empty { padding: 14px 16px; color: #555; font-size: 12px; }
-.result-group-label {
-  padding: 6px 12px 3px;
-  font-size: 9px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: .08em; color: #555;
-  border-top: 1px solid #1e1e24;
-}
+.result-group-label { padding: 6px 12px 3px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #555; border-top: 1px solid #1e1e24; }
 .result-group-label:first-child { border-top: none; }
-.result-item {
-  display: flex; align-items: center; gap: 8px;
-  width: 100%; padding: 7px 12px; border: none;
-  background: transparent; color: #ccc;
-  font-family: inherit; font-size: 12px;
-  text-align: left; cursor: pointer; transition: background .1s;
-}
+.result-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 12px; border: none; background: transparent; color: #ccc; font-family: inherit; font-size: 12px; text-align: left; cursor: pointer; transition: background .1s; }
 .result-item:hover, .result-item.active { background: #6f2bff18; color: #e0e0e0; }
 .result-icon  { width: 16px; flex-shrink: 0; text-align: center; font-size: 11px; color: #9d6cff; }
 .result-label { font-weight: 600; flex-shrink: 0; }
 .result-sub   { font-size: 10px; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 
-/* ─── Show-menu chevron (unchanged) ─── */
+/* ─── Show-menu chevron ─── */
 .show-menu-btn {
-  position: fixed;
-  top: 43px;
-  left: 50%;
+  position: fixed; top: 43px; left: 50%;
   transform: translateX(-50%) translateY(-8px);
-  width: 40px; height: 22px;
-  background: #111217;
-  border: 1px solid #2a2a30;
-  color: #555;
-  font-size: 16px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 999;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.25s ease, transform 0.25s ease, color 0.15s;
-  line-height: 1;
+  width: 40px; height: 22px; background: #111217; border: 1px solid #2a2a30;
+  color: #555; font-size: 16px; cursor: pointer;
+  align-items: center; justify-content: center;
+  z-index: 999; opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease, color 0.15s; line-height: 1;
 }
-.show-menu-btn.visible {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(-50%) translateY(0);
-}
+.show-menu-btn.visible { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
 .show-menu-btn:hover { color: #9d6cff; border-color: #6f2bff55; }
 
-/* ─── Auth / UI elements (unchanged except login btn removed) ─── */
-.auth-btn {
-  height: 34px; padding: 0 14px; border: none;
-  font-family: inherit; font-size: 12px; font-weight: 600;
-  cursor: pointer; white-space: nowrap;
-}
-.user-identity-chip {
-  display: inline-flex; align-items: center;
-  height: 30px;
-  border: 1px solid #333; background: #1e1e26;
-  overflow: hidden;
-}
-.identity-name {
-  padding: 0 10px;
-  font-size: 12px; font-weight: 600;
-  color: #9d6cff; white-space: nowrap;
-  line-height: 30px;
-}
-.identity-sep {
-  color: #2a2a30; font-size: 11px; line-height: 30px;
-}
-.identity-logout {
-  display: flex; align-items: center; justify-content: center;
-  width: 32px; height: 30px;
-  background: transparent; border: none; border-left: 1px solid #2a2a30;
-  color: #555; cursor: pointer;
-  transition: background .15s, color .15s;
-  flex-shrink: 0;
-}
+/* ─── Auth / shared UI ─── */
+.auth-btn { height: 34px; padding: 0 14px; border: none; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.user-identity-chip { display: inline-flex; align-items: center; height: 30px; border: 1px solid #333; background: #1e1e26; overflow: hidden; }
+.identity-name { padding: 0 10px; font-size: 12px; font-weight: 600; color: #9d6cff; white-space: nowrap; line-height: 30px; }
+.identity-sep { color: #2a2a30; font-size: 11px; line-height: 30px; }
+.identity-logout { display: flex; align-items: center; justify-content: center; width: 32px; height: 30px; background: transparent; border: none; border-left: 1px solid #2a2a30; color: #555; cursor: pointer; transition: background .15s, color .15s; flex-shrink: 0; }
 .identity-logout:hover { background: #2c1a1a; color: #ff6b6b; }
 
 .lang-switcher { display: flex; align-items: center; gap: 2px; flex-shrink: 0; border: 1px solid #2a2a30; padding: 0 2px; height: 28px; }
@@ -900,41 +769,99 @@ body.snippet-dragging * { cursor: crosshair !important; user-select: none !impor
 .footer-link { color: #555; text-decoration: none; transition: color .15s; }
 .footer-link:hover { color: #9d6cff; }
 
-/* ─── Responsive adjustments ─── */
-.hide-mobile { display: initial; }
-.show-mobile { display: none; }
-
+/* ═══════════════════════════════════════════════
+   MOBILE  ≤ 680px  —  sidebar + hamburger layout
+   ═══════════════════════════════════════════════ */
 @media (max-width: 680px) {
-  .float-search { top: 6px; width: calc(100vw - 80px); }
-  .show-menu-btn { top: 50px; }
+  html, body { overflow: auto; }
+  .page { height: auto; min-height: 100vh; overflow: visible; }
 
-  .menu-btn { width: 130px; height: 80px; font-size: 11px; }
-  .menu-buttons-container {    
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    align-content: center;
-    gap: 14px;
-    padding: 30px 25% 30px;
-    flex: 1; }
+  /* Hide all desktop-only elements */
+  .desktop-only { display: none !important; }
 
-  .content-panel { padding: 14px; padding-bottom: 38px; }
+  /* Show mobile topbar */
+  .mobile-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 52px; flex-shrink: 0;
+    background: #0e0e12; padding: 0 12px; gap: 8px;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .topbar-brand { display: flex; align-items: center; gap: 8px; }
+  .brand-emote  { width: 32px; height: 32px; image-rendering: pixelated; }
+  .brand-name   { font-size: 13px; font-weight: 700; color: #ffd569; letter-spacing: 0.04em; }
+  .mobile-topbar-right { display: flex; align-items: center; gap: 8px; }
 
-  .site-footer {
-    position: fixed; bottom: 0; left: 0; right: 0;
-    padding: 6px 14px; background: #141418;
-    border-top: 1px solid #1e1e24;
-    justify-content: center; z-index: 50; margin-top: 0;
+  /* Hamburger */
+  .hamburger { display: flex; flex-direction: column; justify-content: center; gap: 5px; width: 36px; height: 36px; padding: 0 6px; background: transparent; border: 1px solid #2a2a30; cursor: pointer; flex-shrink: 0; }
+  .hamburger span { display: block; height: 2px; background: #888; transition: transform .2s, opacity .2s; }
+  .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); background: #9d6cff; }
+  .hamburger.open span:nth-child(2) { opacity: 0; }
+  .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); background: #9d6cff; }
+
+  /* Sidebar overlay */
+  .sidebar-overlay { display: block; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 99; }
+
+  /* Sidebar */
+  .mobile-sidebar {
+    display: flex; flex-direction: column;
+    position: fixed; top: 52px; right: 0; bottom: 0; width: 240px;
+    background: #0e0e12; z-index: 100;
+    border-left: 1px solid #2a2a30;
+    box-shadow: -4px 0 24px #00000066;
+    transform: translateX(100%);
+    transition: transform .25s ease;
+    overflow-y: auto; scrollbar-width: none;
+  }
+  .mobile-sidebar::-webkit-scrollbar { display: none; }
+  .mobile-sidebar.sidebar-open { transform: translateX(0); }
+
+  .sidebar-mobile-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 8px; border-bottom: 1px solid #1e1e24; margin-bottom: 4px; flex-shrink: 0; }
+  .sidebar-user { font-size: 12px; color: #9d6cff; font-weight: 600; }
+  .sidebar-logout { background: transparent; border: 1px solid #333; color: #888; font-family: inherit; font-size: 11px; padding: 4px 10px; cursor: pointer; }
+  .sidebar-logout:hover { color: #fff; border-color: #555; }
+  .sidebar-login-btn { height: 28px; padding: 0 12px; background: #6f2bff; border: none; color: #fff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+
+  /* Sidebar search */
+  .sidebar-search {
+    display: flex; position: relative; margin: 8px 12px 4px; height: 36px;
+    background: #111217; border: 1px solid #2a2a30; align-items: center; flex-shrink: 0;
+  }
+  .sidebar-search:focus-within { border-color: #6f2bff66; }
+  .sidebar-search .search-icon { position: absolute; left: 9px; width: 13px; height: 13px; color: #555; pointer-events: none; }
+  .sidebar-search .search-input { flex: 1; height: 100%; background: transparent; border: none; outline: none; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 0 8px 0 28px; }
+  .sidebar-search .search-input::placeholder { color: #444; }
+  .sidebar-search .search-clear { background: transparent; border: none; color: #555; font-size: 11px; cursor: pointer; padding: 0 8px; height: 100%; }
+  .sidebar-search .search-results { position: absolute; top: calc(100% + 2px); left: -1px; right: -1px; background: #1a1a1e; border: 1px solid #2a2a30; z-index: 9999; max-height: 320px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,.6); scrollbar-width: none; }
+  .sidebar-search .search-results::-webkit-scrollbar { display: none; }
+
+  /* Sidebar nav buttons */
+  .sidebar-btn { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 11px 20px; border: none; background: transparent; color: #777; text-align: left; font-family: inherit; font-size: 13px; cursor: pointer; transition: color .1s, background .1s; letter-spacing: .01em; }
+  .sidebar-btn:hover { color: #fff; background: #16161a; }
+  .sidebar-btn.active { color: #9d6cff; font-weight: 700; background: rgba(111,43,255,.08); border-left: 2px solid #6f2bff; }
+  .sidebar-btn.locked { opacity: 0.45; }
+  .sidebar-divider { height: 1px; background: #1e1e24; margin: 6px 14px; flex-shrink: 0; }
+  .sidebar-spacer { flex: 1; }
+  .sidebar-bottom { padding: 12px 16px; border-top: 1px solid #1e1e24; }
+  .bot-btn { width: 100%; height: 32px; border: none; font-family: inherit; font-size: 12px; cursor: pointer; }
+  .bot-btn.add { background: #6f2bff; color: #fff; }
+  .bot-btn.add:hover { background: #7f3fff; }
+
+  /* Main panel fills screen below topbar */
+  .stage { display: block; height: auto; position: static; overflow: visible; }
+  .content-panel {
+    position: static; inset: auto;
+    min-height: calc(100dvh - 52px);
+    padding: 14px; padding-bottom: 38px;
+    overflow-y: visible;
   }
 
-  .hide-mobile { display: none !important; }
-  .show-mobile { display: flex !important; }
+  /* Footer pinned */
+  .site-footer { position: fixed; bottom: 0; left: 0; right: 0; padding: 6px 14px; background: #141418; border-top: 1px solid #1e1e24; justify-content: center; z-index: 50; margin-top: 0; }
 
-  body.logs-open .content-panel { overflow: hidden !important; }
-  
-  .big-emote { width: 60px; height: 60px; }
-  .big-brand-name { font-size: 1.6rem; }
-  .login-twitch-btn { padding: 8px 18px; font-size: 0.9rem; }
+  body.logs-open { overflow: hidden !important; height: 100dvh !important; }
+  body.logs-open .page { overflow: hidden !important; height: 100dvh !important; min-height: 0 !important; }
+  body.logs-open .stage { height: calc(100dvh - 52px) !important; display: flex; flex-direction: column; }
+  body.logs-open .content-panel { position: absolute !important; inset: 0 !important; overflow: hidden !important; padding-bottom: 0 !important; min-height: 0 !important; }
 }
 
 @media (min-width: 681px) and (max-width: 960px) {
