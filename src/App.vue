@@ -779,6 +779,8 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
   /* Hide all desktop-only elements */
   .desktop-only { display: none !important; }
 
+  .lock-icon {  margin-left: 170px; }
+
   /* Show mobile topbar */
   .mobile-topbar {
     display: flex; align-items: center; justify-content: space-between;
