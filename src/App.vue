@@ -257,6 +257,7 @@ const flatResults = computed(() => searchResults.value)
 // === Rest of App ===
 
 const showAddBanner = ref(false)
+const reAuthUrl    = ref<string | null>(null)
 const toast = ref('')
 function showToast(msg: string) {
   toast.value = msg
