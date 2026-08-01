@@ -83,7 +83,6 @@ function rowBecameActive(id: string) {
 }
 function rowMounted(el: Element) {
   const h = el as HTMLElement
-  if (vRO && h.dataset?.vitId) vRO.observe(h)
   const id = h.id ?? '?'
   const t0 = _rowMountTimes.get(id)
   if (t0 !== undefined) {
@@ -126,22 +125,11 @@ function badgeError(ev: Event) {
   _badgeT0.delete(src)
 }
 
-// DynamicScroller @update event - removed; visibleStartIndex now computed from scroll position in onScroll.
-function updateVisibleStartIndex() {
-  const body = getBody()
-  if (!body) return
-  const scrollTop = body.scrollTop
-  const children  = body.children
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i] as HTMLElement
-    if (child.offsetTop + child.offsetHeight > scrollTop) {
-      visibleStartIndex.value = i
-      break
-    }
-  }
-  // Update virtual window on every scroll
-  vUpdateWindow()
-}
+// visibleStartIndex is now computed inside vUpdateWindow() from the same
+// prefix-sum pass used for the render window - this replaced a DOM-child-index
+// walk that silently went out of sync with displayItems under virtualization
+// (DOM children include spacers/loaders and only ever contain the windowed
+// slice, not the full list, so a raw child index never matched a data index).
 
 // Emote load timing via event delegation on the scroller container.
 // Emotes are injected as v-html so Vue hooks can't reach them directly.
@@ -263,6 +251,7 @@ const vWinStart     = ref(0)
 const vWinEnd       = ref(150)
 const vHeightCache  = new Map<string, number>()  // item.id → measured px
 let   vRO: ResizeObserver | null = null
+let   vMutObs: MutationObserver | null = null
 let   vRafPending   = false
 
 function vSumHeights(items: { id: string }[], from: number, to: number): number {
@@ -272,49 +261,60 @@ function vSumHeights(items: { id: string }[], from: number, to: number): number 
   return h
 }
 
+// Single O(n) prefix-sum pass + O(log n) binary searches to find both the render
+// window (start/end, padded with overscan) and the true first-visible index (no
+// overscan) in one go. Replaces the old double linear scan and the separate,
+// DOM-child-index-based updateVisibleStartIndex (which silently drifted out of
+// sync with displayItems because virtualization means DOM children != data items).
 function vUpdateWindow() {
-  const body  = getBody()
+  const body = getBody()
   if (!body) return
-  const items      = displayItems.value
-  const total      = items.length
-  if (!total) { vWinStart.value = 0; vWinEnd.value = 0; return }
+  const items = displayItems.value
+  const total = items.length
+  if (!total) {
+    vWinStart.value = 0
+    vWinEnd.value = 0
+    visibleStartIndex.value = 0
+    return
+  }
+
   const scrollTop  = body.scrollTop
   const viewH      = body.clientHeight
   const overscanPx = VIRT_OVERSCAN * VIRT_EST_H
-  const targetTop  = scrollTop - overscanPx
-  const targetBot  = scrollTop + viewH + overscanPx
 
-  // Binary search for start: find first item whose cumulative bottom >= targetTop
-  let lo = 0, hi = total - 1, start = 0
-  {
-    let cum = 0
-    // Build prefix sums only if cache is warm enough (fall back to linear otherwise)
-    // For the common case where most heights are estimated, linear is fine.
-    // With a warm cache this loop exits early via the binary-search shortcut below.
-    for (let i = 0; i < total; i++) {
-      cum += vHeightCache.get(items[i]!.id) ?? VIRT_EST_H
-      if (cum >= targetTop) { start = i; break }
-      if (i === total - 1) start = total
+  const prefix = new Array<number>(total + 1)
+  prefix[0] = 0
+  for (let i = 0; i < total; i++) {
+    prefix[i + 1] = prefix[i]! + (vHeightCache.get(items[i]!.id) ?? VIRT_EST_H)
+  }
+  const totalHeight = prefix[total]!
+
+  const findIndex = (target: number): number => {
+    let lo = 0, hi = total - 1
+    const clamped = Math.max(0, Math.min(target, totalHeight))
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (prefix[mid + 1]! > clamped) hi = mid
+      else lo = mid + 1
     }
+    return lo
   }
 
-  // Find end: continue from start
-  let end = total
-  {
-    let cum = 0
-    for (let i = 0; i < start; i++) cum += vHeightCache.get(items[i]!.id) ?? VIRT_EST_H
-    for (let i = start; i < total; i++) {
-      cum += vHeightCache.get(items[i]!.id) ?? VIRT_EST_H
-      if (cum > targetBot) { end = i + 1; break }
-    }
-  }
+  const targetTop = scrollTop - overscanPx
+  const targetBot = scrollTop + viewH + overscanPx
 
-  vWinStart.value = Math.max(0, start)
-  vWinEnd.value   = Math.min(total, end)
+  vWinStart.value         = findIndex(targetTop)
+  vWinEnd.value           = Math.min(total, findIndex(targetBot) + 1)
+  visibleStartIndex.value = findIndex(scrollTop)
+}
+
+// Registers ResizeObserver measurement for a row element (any kind).
+function vRegisterRow(el: HTMLElement) {
+  if (vRO && el.dataset?.vitId) vRO.observe(el)
 }
 
 function vAttachObserver(el: HTMLElement) {
-  if (vRO) { vRO.disconnect(); vRO = null }
+  vDetachObserver()
   vRO = new ResizeObserver((entries) => {
     let changed = false
     for (const entry of entries) {
@@ -332,10 +332,33 @@ function vAttachObserver(el: HTMLElement) {
       requestAnimationFrame(() => { vRafPending = false; vUpdateWindow() })
     }
   })
-  for (const child of Array.from(el.children)) {
-    const id = (child as HTMLElement).dataset?.vitId
-    if (id) vRO.observe(child as HTMLElement)
-  }
+
+  // Rows already present at attach time.
+  for (const child of Array.from(el.children)) vRegisterRow(child as HTMLElement)
+
+  // Every row kind (day separator / automod / server-rendered v-cached-html /
+  // client-rendered fallback) shares the same data-vit-id attribute. A single
+  // MutationObserver on the scroller container keeps ALL of them measured as
+  // they're added or removed by Vue's v-for - previously only the client-rendered
+  // fallback branch had a per-row mount hook, so server-rendered rows (the common
+  // "fast path") were never measured and silently assumed to be VIRT_EST_H tall,
+  // which is what made the window (and therefore scroll position) drift.
+  vMutObs = new MutationObserver((mutations) => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes) {
+        if (node instanceof HTMLElement && node.dataset?.vitId) vRO!.observe(node)
+      }
+      for (const node of m.removedNodes) {
+        if (node instanceof HTMLElement && node.dataset?.vitId) vRO!.unobserve(node)
+      }
+    }
+  })
+  vMutObs.observe(el, { childList: true })
+}
+
+function vDetachObserver() {
+  vRO?.disconnect(); vRO = null
+  vMutObs?.disconnect(); vMutObs = null
 }
 
 const virtualSlice  = computed(() => displayItems.value.slice(vWinStart.value, vWinEnd.value))
@@ -665,60 +688,103 @@ function nextMonth(ym: { y: number; m: number }): { y: number; m: number } {
 
 async function prependMsgs(newMsgs: LogMsg[]) {
   const body = getBody()
-  // Find the first row element that is at or past the top of the viewport.
-  // We track its ID so we can use scrollIntoView after the prepend - this is
-  // more reliable than computing a scroll delta because the browser's own
-  // overflow-anchor and line-height rounding can fight a manual scrollTop correction.
-  let anchorId: string | null = null
-  if (body) {
-    const scrollTop = body.scrollTop
-    const rows = body.querySelectorAll<HTMLElement>('[id^="log-"],[id^="day-"]')
-    for (const el of rows) {
-      if (el.offsetTop + el.offsetHeight > scrollTop) {
-        anchorId = el.id
-        break
-      }
-    }
-  }
-
   const existingIds = new Set(msgs.value.map(m => m.id))
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
   if (!deduped.length) return
+
+  // Snapshot scroll metrics before the DOM grows above the viewport. Since a
+  // prepend inserts content only ABOVE whatever the user is currently looking at,
+  // the exact scrollHeight delta tells us precisely how far to push scrollTop down
+  // to keep the same content visually anchored in place.
+  const preScrollTop    = body?.scrollTop ?? 0
+  const preScrollHeight = body?.scrollHeight ?? 0
+
   let next = [...deduped, ...msgs.value]
-  // Trim the newest end to stay within the sliding window
   if (next.length > MSG_MAX_SHOWN) {
     const firstTrimmed = next[MSG_MAX_SHOWN]!
     const ts = new Date(firstTrimmed.timestamp)
     cursorNewerDate  = new Date(ts.getFullYear(), ts.getMonth(), ts.getDate())
     cursorNewerMonth = { y: ts.getFullYear(), m: ts.getMonth() + 1 }
+    // Evict cached heights for messages falling off the newest end so the map
+    // doesn't grow unbounded across a long scroll-back session.
+    for (const m of next.slice(MSG_MAX_SHOWN)) vHeightCache.delete(m.id)
     next = next.slice(0, MSG_MAX_SHOWN)
     noNewer.value = false
   }
+
+  // Shift the render window by the number of newly inserted items *before* the
+  // reactive update lands, so the very first render pass after this mutation
+  // still points at the same underlying messages the user was looking at. Without
+  // this, vWinStart/vWinEnd keep their old numeric values, which after the array
+  // grows at the front now resolve to a completely different (shifted) slice of
+  // items - that one-frame mismatch is what caused the "jumps to the middle of
+  // the list" symptom.
+  const shift = deduped.length
+  vWinStart.value += shift
+  vWinEnd.value   += shift
+
   msgs.value = next
   await nextTick()
-  if (!body || !anchorId) return
-  // Scroll so the previously-visible top row is back at the top of the viewport.
-  const anchor = document.getElementById(anchorId)
-  if (anchor) anchor.scrollIntoView({ block: 'start' })
+  if (!body) return
+
+  const postScrollHeight = body.scrollHeight
+  const delta = postScrollHeight - preScrollHeight
+  if (delta !== 0) body.scrollTop = preScrollTop + delta
+
+  // Re-snap the window to the corrected scroll position - heals any small drift
+  // from the approximate index shift above (e.g. an inserted day separator).
+  vUpdateWindow()
+  updateCustomScrollbar()
 }
 
 async function appendMsgs(newMsgs: LogMsg[]) {
+  const body = getBody()
   const existingIds = new Set(msgs.value.map(m => m.id))
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
   if (!deduped.length) return
+
+  const preScrollTop = body?.scrollTop ?? 0
+
   let next = [...msgs.value, ...deduped]
-  // Trim the oldest end to stay within the sliding window
+  let trimCount = 0
+  let removedHeight = 0
   if (next.length > MSG_MAX_SHOWN) {
-    const trimCount  = next.length - MSG_MAX_SHOWN
+    trimCount = next.length - MSG_MAX_SHOWN
     const lastTrimmed = next[trimCount - 1]!
     const ts = new Date(lastTrimmed.timestamp)
     cursorDate  = new Date(ts.getFullYear(), ts.getMonth(), ts.getDate())
     cursorMonth = { y: ts.getFullYear(), m: ts.getMonth() + 1 }
+    // Height of the region being trimmed off the *oldest* (top) end - this is
+    // exactly how far scrollTop needs to move up, since that content currently
+    // sits above wherever the user is scrolled to. New content appended at the
+    // bottom never needs this correction (it doesn't affect anything above the
+    // viewport), so we compute the trim-region height separately rather than
+    // using a whole-list scrollHeight delta, which would conflate the two.
+    for (let i = 0; i < trimCount; i++) {
+      const m = next[i]!
+      removedHeight += vHeightCache.get(m.id) ?? VIRT_EST_H
+      vHeightCache.delete(m.id)
+    }
     next = next.slice(trimCount)
     noMore.value = false
   }
+
+  if (trimCount > 0) {
+    vWinStart.value = Math.max(0, vWinStart.value - trimCount)
+    vWinEnd.value   = Math.max(vWinStart.value, vWinEnd.value - trimCount)
+  }
+
   msgs.value = next
-  // Browser scroll anchoring keeps viewport in place automatically
+  await nextTick()
+  if (!body) return
+
+  if (trimCount > 0 && removedHeight !== 0) {
+    body.scrollTop = Math.max(0, preScrollTop - removedHeight)
+  }
+
+  vUpdateWindow()
+  updateCustomScrollbar()
+  // Browser scroll anchoring keeps viewport in place automatically for pure appends
 }
 
 async function loadOlder() {
@@ -950,7 +1016,7 @@ function onScroll() {
     isNearBottom.value = distFromBottom < 200
     if (!loadingMore.value && !noMore.value && body.scrollTop < 120) loadOlder()
     if (!loadingNewer.value && !noNewer.value && distFromBottom < 120) loadNewer()
-    updateVisibleStartIndex()
+    vUpdateWindow()
     updateCustomScrollbar()
     if (!wheelScrollActive) checkPaints()
   })
@@ -1020,9 +1086,6 @@ function onThumbDragEnd() {
   window.removeEventListener('pointermove', onThumbDragMove)
 }
 // --- /Custom scrollbar ---
-
-// No-op: kept for any callers that reference it.
-function recalcVirtualWindow() {}
 
 function attachScrollListener() {
   if (scrollListenerAttached) return
@@ -1107,6 +1170,9 @@ async function search() {
   msgs.value = []; noMore.value = false; loadingMore.value = false; highlightId.value = null
   noNewer.value = true; loadingNewer.value = false; isNearBottom.value = true
   _rowCache.clear()  // ensure badges re-track twitchBadgeMap on the first render
+  vHeightCache.clear()
+  vWinStart.value = 0
+  vWinEnd.value = 150
   paintQueue.length = 0
   pendingPaintJobs.value = 0
   paintConcurrent = 0
@@ -1296,10 +1362,16 @@ async function jumpToNewest() {
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
+  // Under virtualization the target row may exist in `msgs` but not currently be
+  // rendered (outside vWinStart..vWinEnd). Widen the window to include it before
+  // trying to find it in the DOM, otherwise this silently does nothing.
+  const idx = displayItems.value.findIndex(it => it.kind !== 'day' && (it as any).msg?.id === id)
+  if (idx >= 0) await ensureIndexRendered(idx)
   await nextTick()
   const el = document.getElementById(`log-${id}`)
   if (!el) return
   el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  vUpdateWindow()
   if (highlight) {
     highlightId.value = id
     setTimeout(() => { if (highlightId.value === id) highlightId.value = null }, 3000)
@@ -1310,31 +1382,13 @@ function hasMsg(id: string): boolean {
   return msgs.value.some(m => m.id === id)
 }
 
-function jumpToLoadedMessageNow(id: string): boolean {
-  const el = document.getElementById(`log-${id}`)
-  if (!el) return false
-  el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  highlightId.value = id
-  setTimeout(() => { if (highlightId.value === id) highlightId.value = null }, 3000)
-  return true
-}
-
 async function jumpToMessage(id: string): Promise<void> {
   const targetId = (id || '').trim()
   if (!targetId) return
 
   pushHash(targetId)
 
-  // Fast path: already rendered in DOM
-  if (jumpToLoadedMessageNow(targetId)) return
-
-  // Fast path: already in loaded data; wait one render cycle and jump.
-  if (hasMsg(targetId)) {
-    await nextTick()
-    if (jumpToLoadedMessageNow(targetId)) return
-    await scrollToMsg(targetId, true)
-    return
-  }
+  if (hasMsg(targetId)) { await scrollToMsg(targetId, true); return }
 
   // If the target is not loaded yet, keep loading older chunks until found or exhausted.
   let safety = 0
@@ -1392,6 +1446,7 @@ onUnmounted(() => {
   stopPopupDrag()
   const scrollerEl = getBody()
   if (scrollerEl) detachEmoteObserver(scrollerEl)
+  vDetachObserver()
   if (_paintStyleEl) { _paintStyleEl.remove(); _paintStyleEl = null }
   _rowDomCache.clear()
 })
@@ -1401,6 +1456,7 @@ watch(scrollerRef, (newVal, oldVal) => {
   if (oldVal) {
     const el = oldVal as HTMLElement | null
     if (el) { detachEmoteObserver(el); el.removeEventListener('click', onRowClick) }
+    vDetachObserver()
   }
   if (newVal) {
     const el = newVal as HTMLElement | null
@@ -1599,6 +1655,18 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
   return out
 })
 
+// Widens the render window so a given displayItems index is guaranteed to be
+// mounted in the DOM. Used by deep-linking / jump-to-day / timeline-marker jumps,
+// where the target data is loaded but may currently be virtualized out of view.
+async function ensureIndexRendered(targetIndex: number, pad = 20) {
+  const total = displayItems.value.length
+  if (targetIndex < 0 || targetIndex >= total) return
+  if (targetIndex >= vWinStart.value && targetIndex < vWinEnd.value) return
+  vWinStart.value = Math.max(0, targetIndex - pad)
+  vWinEnd.value   = Math.min(total, targetIndex + pad + 1)
+  await nextTick()
+}
+
 function scrollToDisplayIndex(idx: number) {
   const item = displayItems.value[idx]
   if (!item) return
@@ -1607,9 +1675,15 @@ function scrollToDisplayIndex(idx: number) {
   if (el) el.scrollIntoView({ block: 'start' })
 }
 
-async function jumpToTimelineMarker(marker: TimelineMarker) {
-  scrollToDisplayIndex(marker.index)
+async function scrollToDisplayIndexAsync(idx: number) {
+  await ensureIndexRendered(idx)
   await nextTick()
+  scrollToDisplayIndex(idx)
+  vUpdateWindow()
+}
+
+async function jumpToTimelineMarker(marker: TimelineMarker) {
+  await scrollToDisplayIndexAsync(marker.index)
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   const el = document.getElementById(marker.anchorId)
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
