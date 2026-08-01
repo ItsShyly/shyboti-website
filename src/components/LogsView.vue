@@ -82,7 +82,9 @@ function rowBecameActive(id: string) {
   if (dbg('rowActive')) console.debug(`[scroll:active] ${id}`)
 }
 function rowMounted(el: Element) {
-  const id = (el as HTMLElement).id ?? '?'
+  const h = el as HTMLElement
+  if (vRO && h.dataset?.vitId) vRO.observe(h)
+  const id = h.id ?? '?'
   const t0 = _rowMountTimes.get(id)
   if (t0 !== undefined) {
     _rowMountTimes.delete(id)
@@ -129,15 +131,16 @@ function updateVisibleStartIndex() {
   const body = getBody()
   if (!body) return
   const scrollTop = body.scrollTop
-  // Walk children to find the first row whose bottom is past scrollTop
-  const children = body.children
+  const children  = body.children
   for (let i = 0; i < children.length; i++) {
     const child = children[i] as HTMLElement
     if (child.offsetTop + child.offsetHeight > scrollTop) {
       visibleStartIndex.value = i
-      return
+      break
     }
   }
+  // Update virtual window on every scroll
+  vUpdateWindow()
 }
 
 // Emote load timing via event delegation on the scroller container.
@@ -249,6 +252,95 @@ interface AutomodMsg {
 // buffer/minItemSize rows, ~360 with buffer=10000 and minItemSize=28).
 const MSG_MAX_SHOWN = 2000
 const MSG_CHUNK     = 1000  // messages fetched / shown per load step
+
+// ─── Virtual scroller ────────────────────────────────────────────────────
+// Only rows within [vWinStart, vWinEnd) of displayItems are rendered.
+// Spacer divs above/below maintain correct scrollHeight.
+// Heights are measured by ResizeObserver and cached per item id.
+const VIRT_OVERSCAN = 40          // extra rows above/below viewport
+const VIRT_EST_H    = 28          // estimated px per row before measurement
+const vWinStart     = ref(0)
+const vWinEnd       = ref(150)
+const vHeightCache  = new Map<string, number>()  // item.id → measured px
+let   vRO: ResizeObserver | null = null
+let   vRafPending   = false
+
+function vSumHeights(items: { id: string }[], from: number, to: number): number {
+  let h = 0
+  for (let i = from; i < to && i < items.length; i++)
+    h += vHeightCache.get(items[i]!.id) ?? VIRT_EST_H
+  return h
+}
+
+function vUpdateWindow() {
+  const body  = getBody()
+  if (!body) return
+  const items      = displayItems.value
+  const total      = items.length
+  if (!total) { vWinStart.value = 0; vWinEnd.value = 0; return }
+  const scrollTop  = body.scrollTop
+  const viewH      = body.clientHeight
+  const overscanPx = VIRT_OVERSCAN * VIRT_EST_H
+  const targetTop  = scrollTop - overscanPx
+  const targetBot  = scrollTop + viewH + overscanPx
+
+  // Binary search for start: find first item whose cumulative bottom >= targetTop
+  let lo = 0, hi = total - 1, start = 0
+  {
+    let cum = 0
+    // Build prefix sums only if cache is warm enough (fall back to linear otherwise)
+    // For the common case where most heights are estimated, linear is fine.
+    // With a warm cache this loop exits early via the binary-search shortcut below.
+    for (let i = 0; i < total; i++) {
+      cum += vHeightCache.get(items[i]!.id) ?? VIRT_EST_H
+      if (cum >= targetTop) { start = i; break }
+      if (i === total - 1) start = total
+    }
+  }
+
+  // Find end: continue from start
+  let end = total
+  {
+    let cum = 0
+    for (let i = 0; i < start; i++) cum += vHeightCache.get(items[i]!.id) ?? VIRT_EST_H
+    for (let i = start; i < total; i++) {
+      cum += vHeightCache.get(items[i]!.id) ?? VIRT_EST_H
+      if (cum > targetBot) { end = i + 1; break }
+    }
+  }
+
+  vWinStart.value = Math.max(0, start)
+  vWinEnd.value   = Math.min(total, end)
+}
+
+function vAttachObserver(el: HTMLElement) {
+  if (vRO) { vRO.disconnect(); vRO = null }
+  vRO = new ResizeObserver((entries) => {
+    let changed = false
+    for (const entry of entries) {
+      const target = entry.target as HTMLElement
+      const id = target.dataset.vitId
+      if (!id) continue
+      const h = entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height
+      if (h > 0 && vHeightCache.get(id) !== h) {
+        vHeightCache.set(id, h)
+        changed = true
+      }
+    }
+    if (changed && !vRafPending) {
+      vRafPending = true
+      requestAnimationFrame(() => { vRafPending = false; vUpdateWindow() })
+    }
+  })
+  for (const child of Array.from(el.children)) {
+    const id = (child as HTMLElement).dataset?.vitId
+    if (id) vRO.observe(child as HTMLElement)
+  }
+}
+
+const virtualSlice  = computed(() => displayItems.value.slice(vWinStart.value, vWinEnd.value))
+const vSpacerTop    = computed(() => vSumHeights(displayItems.value, 0, vWinStart.value))
+const vSpacerBottom = computed(() => vSumHeights(displayItems.value, vWinEnd.value, displayItems.value.length))
 
 const msgs         = ref<LogMsg[]>([])
 const automodMsgs  = ref<AutomodMsg[]>([])
@@ -1312,7 +1404,12 @@ watch(scrollerRef, (newVal, oldVal) => {
   }
   if (newVal) {
     const el = newVal as HTMLElement | null
-    if (el) { attachEmoteObserver(el); el.addEventListener('click', onRowClick) }
+    if (el) {
+      attachEmoteObserver(el)
+      el.addEventListener('click', onRowClick)
+      vAttachObserver(el)
+      nextTick(() => vUpdateWindow())
+    }
   }
 })
 
@@ -2072,6 +2169,7 @@ function checkPaints(bulk = false) {
 }
 
 watch(displayItems, async () => {
+  await nextTick(); vUpdateWindow()
   await nextTick()
   console.debug(`[logs:displayItems] items=${displayItems.value.length}`)
   markDomSettling()
@@ -2352,12 +2450,21 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
           </div>
           <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
 
-          <template v-for="item in displayItems" :key="item.id">
-            <div v-if="item.kind === 'day'" :id="`day-${item.id}`" class="log-day-sep">{{ item.label }}</div>
+          <!-- Virtual scroll: spacer for items above rendered slice -->
+          <div :style="{ height: vSpacerTop + 'px', flexShrink: 0 }" aria-hidden="true"></div>
+
+          <template v-for="item in virtualSlice" :key="item.id">
+            <div
+              v-if="item.kind === 'day'"
+              :id="`day-${item.id}`"
+              :data-vit-id="item.id"
+              class="log-day-sep"
+            >{{ item.label }}</div>
 
             <div
               v-else-if="item.kind === 'automod'"
               :id="`log-${item.msg.id}`"
+              :data-vit-id="item.id"
               class="log-row log-row-automod"
             >
               <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
@@ -2375,6 +2482,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             <div
               v-else-if="item.msg?._rowHtml"
               :id="`log-${item.msg.id}`"
+              :data-vit-id="item.id"
               class="log-row-outer"
               :class="{
                 highlighted: highlightId === item.msg.id,
@@ -2388,6 +2496,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             <div
               v-else
               :id="`log-${item.msg.id}`"
+              :data-vit-id="item.id"
               class="log-row-outer"
               :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'log-row-event': getRowData(item.msg).eventMeta !== null }"
               @vnodeMounted="(vn: VNode) => rowMounted(vn.el as Element)"
@@ -2479,6 +2588,9 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               </div>
             </div>
           </template>
+
+          <!-- Virtual scroll: spacer for items below rendered slice -->
+          <div :style="{ height: vSpacerBottom + 'px', flexShrink: 0 }" aria-hidden="true"></div>
 
           <div class="top-loader" v-show="loadingNewer">
             <span class="spinner">⟳</span> {{ t('logs.load_newer') }}
