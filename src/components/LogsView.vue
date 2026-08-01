@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
+import { useLogsSearch } from '../composables/useLogsSearch'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 // vue-virtual-scroller removed - all items rendered in plain DOM for instant scroll
@@ -208,8 +209,6 @@ interface SevenTvBadgeAsset { imageUrl: string; title: string }
 const channelInputRef    = ref<HTMLInputElement | null>(null)
 const userInputRef       = ref<HTMLInputElement | null>(null)
 const termInputRef       = ref<HTMLInputElement | null>(null)
-const dateFromInputRef   = ref<HTMLInputElement | null>(null)
-const dateUntilInputRef  = ref<HTMLInputElement | null>(null)
 
 // These are only updated when a search actually runs (for URL sync and summary bar)
 const channel    = ref('')
@@ -223,9 +222,8 @@ function readInputs() {
   channel.value    = channelInputRef.value?.value.trim().toLowerCase().replace(/^#/, '') ?? channel.value
   userFilter.value = userInputRef.value?.value.trim() ?? userFilter.value
   termFilter.value = termInputRef.value?.value.trim() ?? termFilter.value
-  dateFrom.value   = dateFromInputRef.value?.value ?? dateFrom.value
-  dateUntil.value  = dateUntilInputRef.value?.value ?? dateUntil.value
-  // Backwards compat: if only "from" is set, dateFilter = single day
+  // Date comes from the single VueDatePicker (dateSingle computed), which
+  // writes straight into dateFrom/dateUntil on selection - nothing to read here.
   dateFilter.value = dateFrom.value
 }
 
@@ -336,7 +334,16 @@ function vAttachObserver(el: HTMLElement) {
     }
     if (changed && !vRafPending) {
       vRafPending = true
-      requestAnimationFrame(() => { vRafPending = false; vUpdateWindow() })
+      requestAnimationFrame(() => {
+        vRafPending = false
+        vUpdateWindow()
+        // Rows (images, badges, paints) can finish loading and change height
+        // *after* the initial scrollToBottom() already ran. If the user was
+        // already pinned to the bottom at that point, keep them pinned instead
+        // of leaving them stranded a few rows short of the true bottom.
+        const body = getBody()
+        if (body && isNearBottom.value) body.scrollTop = body.scrollHeight
+      })
     }
   })
 
@@ -448,26 +455,26 @@ const hide7tv        = ref(false)
 const plainUsernames  = ref(false)
 const visualsOpen     = ref(false)
 
-function formatDateRange(dates: Date[] | null): string {
-  if (!dates || !dates[0]) return ''
-  const fmt = (d: Date) => d.toISOString().slice(0, 10)
-  return dates[1] && dates[1].getTime() !== dates[0].getTime()
-    ? `${fmt(dates[0])} → ${fmt(dates[1])}`
-    : fmt(dates[0])
+function formatDateSingle(d: Date | null): string {
+  if (!d) return ''
+  return d.toISOString().slice(0, 10)
 }
 
-const dateRange = computed({
-  get: (): Date[] | null => {
+// Single-date picker: one date is what people actually need day-to-day
+// ("what happened yesterday", "find that message from the 12th"). A real
+// multi-day range is rare enough that it's not worth the extra UI weight -
+// dateUntil is just kept in sync with dateFrom under the hood so the
+// existing range-capable search()/fetch logic keeps working unchanged.
+const dateSingle = computed({
+  get: (): Date | null => {
     if (!dateFrom.value) return null
-    const from = new Date(dateFrom.value + 'T00:00:00')
-    const until = dateUntil.value ? new Date(dateUntil.value + 'T00:00:00') : from
-    return [from, until]
+    return new Date(dateFrom.value + 'T00:00:00')
   },
-  set: (val: Date[] | null) => {
-    if (val && val[0]) {
+  set: (val: Date | null) => {
+    if (val) {
       const fmt = (d: Date) => d.toISOString().slice(0, 10)
-      dateFrom.value = fmt(val[0])
-      dateUntil.value = val[1] ? fmt(val[1]) : fmt(val[0])
+      dateFrom.value  = fmt(val)
+      dateUntil.value = fmt(val)
     } else {
       dateFrom.value = ''
       dateUntil.value = ''
@@ -482,16 +489,24 @@ function onDocClickVisuals(e: MouseEvent) {
 }
 
 // >>> URL state sync
+// /logs/<channel>/<user> instead of ?channel=&user= - shorter and shareable.
+// term/from/until stay as query params since they're optional refinements,
+// not identity of "what page is this".
 function buildUrl(msgId: string | null = null) {
+  const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
+  const u  = userFilter.value.trim()
+  let path = '/logs'
+  if (ch) {
+    path += `/${encodeURIComponent(ch)}`
+    if (u) path += `/${encodeURIComponent(u)}`
+  }
   const p = new URLSearchParams()
-  if (channel.value.trim())    p.set('channel', channel.value.trim().toLowerCase().replace(/^#/, ''))
-  if (userFilter.value.trim()) p.set('user',    userFilter.value.trim())
-  if (termFilter.value.trim()) p.set('term',    termFilter.value.trim())
-  if (dateFrom.value)          p.set('from',    dateFrom.value)
-  if (dateUntil.value)         p.set('until',   dateUntil.value)
+  if (termFilter.value.trim()) p.set('term', termFilter.value.trim())
+  if (dateFrom.value)          p.set('from', dateFrom.value)
+  if (dateUntil.value && dateUntil.value !== dateFrom.value) p.set('until', dateUntil.value)
   const qs   = p.toString() ? '?' + p.toString() : ''
   const hash = msgId ? `#msg-${msgId}` : ''
-  return window.location.pathname + qs + hash
+  return path + qs + hash
 }
 
 function pushSearchUrl() {
@@ -503,14 +518,23 @@ function pushHash(msgId: string) {
 }
 
 function readUrlState() {
+  // New path-based format: /logs/channel/user
+  const segments = window.location.pathname.split('/').filter(Boolean)
+  if (segments[0] === 'logs') {
+    if (segments[1]) channel.value    = decodeURIComponent(segments[1])
+    if (segments[2]) userFilter.value = decodeURIComponent(segments[2])
+  }
+
   const p = new URLSearchParams(window.location.search)
-  if (p.get('channel')) channel.value    = p.get('channel')!
-  if (p.get('user'))    userFilter.value = p.get('user')!
+  // Legacy support: old ?channel=&user= links still work.
+  if (!channel.value && p.get('channel'))    channel.value    = p.get('channel')!
+  if (!userFilter.value && p.get('user'))    userFilter.value = p.get('user')!
   if (p.get('term'))    termFilter.value = p.get('term')!
   // Support legacy ?date= and new ?from=&until=
-  if (p.get('from'))    dateFrom.value   = p.get('from')!
+  if (p.get('from'))      dateFrom.value = p.get('from')!
   else if (p.get('date')) dateFrom.value = p.get('date')!
-  if (p.get('until'))   dateUntil.value  = p.get('until')!
+  if (p.get('until'))  dateUntil.value = p.get('until')!
+  else if (dateFrom.value) dateUntil.value = dateFrom.value  // single-date is now the default
   dateFilter.value = dateFrom.value
 }
 
@@ -955,21 +979,45 @@ async function jumpOneDayUp() {
   const base = parseDayLabel(baseLabel)
   if (!base) return
 
-  const target = new Date(base)
+  let target = new Date(base)
   target.setDate(target.getDate() - 1)
-  const targetLabel = fmtDayFromDate(target)
+  let targetLabel = fmtDayFromDate(target)
 
   let targetIndex = displayItems.value.findIndex(it => it.kind === 'day' && it.label === targetLabel)
   if (targetIndex < 0) {
-    const dayMsgs = await loadDayForCurrentFilters(ch, target)
-    if (dayMsgs.length) {
-      await prependMsgs(dayMsgs)
-      await nextTick()
+    // Walk backward through days with zero chat activity until one with actual
+    // messages turns up (or we hit the same 2-year lookback bound used
+    // elsewhere) - otherwise the button silently did nothing on a quiet day,
+    // which was the reported bug.
+    const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 2)
+    let safety = 0
+    while (targetIndex < 0 && target >= cutoff && safety++ < 400) {
+      const dayMsgs = await loadDayForCurrentFilters(ch, target)
+      if (dayMsgs.length) {
+        await prependMsgs(dayMsgs)
+        await nextTick()
+        targetIndex = displayItems.value.findIndex(it => it.kind === 'day' && it.label === targetLabel)
+        // Keep the regular scroll-triggered loadOlder() cursor in sync with
+        // whatever this jump just walked past, so scrolling further back
+        // continues seamlessly instead of re-fetching the same empty days.
+        if (!userFilter.value.trim()) {
+          const dayBefore = new Date(target); dayBefore.setDate(dayBefore.getDate() - 1)
+          if (!cursorDate || dayBefore < cursorDate) cursorDate = dayBefore
+        }
+        break
+      }
+      target = prevDay(target)
+      targetLabel = fmtDayFromDate(target)
       targetIndex = displayItems.value.findIndex(it => it.kind === 'day' && it.label === targetLabel)
     }
   }
 
-  if (targetIndex >= 0) scrollToDisplayIndex(targetIndex)
+  // Bug fix: after a prepend, the virtual-scroll window is shifted to keep
+  // pointing at the same messages the user was already looking at - which
+  // means the newly-prepended target day is *not* inside [vWinStart, vWinEnd)
+  // yet, so its DOM element doesn't exist and a plain scrollToDisplayIndex()
+  // silently does nothing. ensureIndexRendered() widens the window first.
+  if (targetIndex >= 0) await scrollToDisplayIndexAsync(targetIndex)
 }
 
 let _resizeStartX = 0
@@ -1237,6 +1285,14 @@ async function search() {
       msgs.value = results.flat()
     } catch {}
     loading.value = false; noMore.value = true
+    await nextTick()
+    // Without this, the scroll listener never gets attached for a date search,
+    // so the virtual-scroll window, custom scrollbar and jump-to-newest state
+    // never update once the user actually scrolls - this was the root cause
+    // of the logs view looking "stuck" right after a date-scoped search.
+    attachScrollListener()
+    vUpdateWindow()
+    updateCustomScrollbar()
     if (hashId) await scrollToMsg(hashId, true); else scrollToBottom()
     return
   }
@@ -1269,8 +1325,12 @@ async function search() {
       cursorDate = nextDay(d)
     }
     loading.value = false
+    await nextTick()
+    attachScrollListener()
+    vUpdateWindow()
+    updateCustomScrollbar()
     // Oldest-first: scroll to top (earliest messages)
-    nextTick(() => { const b = getBody(); if (b) b.scrollTop = 0 })
+    nextTick(() => { const b = getBody(); if (b) b.scrollTop = 0; vUpdateWindow() })
     return
   }
 
@@ -1434,10 +1494,6 @@ onMounted(async () => {
     await nextTick()
     if (channelInputRef.value) channelInputRef.value.value = channel.value
   }
-  // Populate date inputs from URL state
-  await nextTick()
-  if (dateFromInputRef.value && dateFrom.value) dateFromInputRef.value.value = dateFrom.value
-  if (dateUntilInputRef.value && dateUntil.value) dateUntilInputRef.value.value = dateUntil.value
   syncViewportMode()
   window.addEventListener('resize', syncViewportMode)
   document.addEventListener('click', onDocClickVisuals, true)
@@ -1447,6 +1503,7 @@ onUnmounted(() => {
   document.body.classList.remove('logs-open')
   document.body.classList.remove('logs-jobs-running')
   abortCtrl.abort()
+  if (searchJumpDebounce !== null) { window.clearTimeout(searchJumpDebounce); searchJumpDebounce = null }
   detachScrollListeners()
   endResizeDrag()
   window.removeEventListener('resize', syncViewportMode)
@@ -2312,6 +2369,92 @@ watch(hasRunningJobs, (running) => {
   if (!running) setSearchJobPhase('idle')
 }, { immediate: true })
 
+// ─── In-page search (Discord-style "find in loaded messages") ───────────────
+// Driven by the shared useLogsSearch composable so the global nav search bar
+// (App.vue) can act as a scoped find-in-page tool while on this view. Matching
+// runs entirely over the already-fetched `msgs` array - no network request per
+// keystroke - and highlights every match plus jumps to the nearest one.
+const logsSearch = useLogsSearch()
+
+const searchMatchIds = computed<string[]>(() => {
+  const q = logsSearch.query.value.trim().toLowerCase()
+  if (!q) return []
+  const out: string[] = []
+  for (const it of displayItems.value) {
+    if (it.kind !== 'msg') continue
+    const m = it.msg
+    const hay = `${m.text ?? ''} ${m.displayName ?? ''} ${m.username ?? ''}`.toLowerCase()
+    if (hay.includes(q)) out.push(m.id)
+  }
+  return out
+})
+const searchMatchSet  = computed(() => new Set(searchMatchIds.value))
+const searchMatchPos  = ref(-1) // index into searchMatchIds.value, -1 = no active match
+const searchCurrentId = computed<string | null>(() =>
+  searchMatchPos.value >= 0 ? (searchMatchIds.value[searchMatchPos.value] ?? null) : null
+)
+
+// Picks the match closest to whatever's currently on screen, so jumping to
+// "the best match" means the nearest one rather than always the oldest/newest.
+function nearestSearchMatchPos(ids: string[]): number {
+  if (!ids.length) return -1
+  const idxMap = new Map<string, number>()
+  const list = displayItems.value
+  for (let i = 0; i < list.length; i++) {
+    const it = list[i]!
+    if (it.kind === 'msg') idxMap.set(it.msg.id, i)
+  }
+  const anchor = visibleStartIndex.value
+  let bestPos = ids.length - 1
+  let bestDist = Infinity
+  for (let pos = 0; pos < ids.length; pos++) {
+    const idx = idxMap.get(ids[pos]!)
+    if (idx === undefined) continue
+    const dist = Math.abs(idx - anchor)
+    if (dist < bestDist) { bestDist = dist; bestPos = pos }
+  }
+  return bestPos
+}
+
+async function jumpToSearchMatch(pos: number) {
+  const id = searchMatchIds.value[pos]
+  if (!id) return
+  searchMatchPos.value = pos
+  logsSearch.matchIndex.value = pos + 1
+  await scrollToMsg(id, false)
+}
+
+let searchJumpDebounce: number | null = null
+watch(searchMatchIds, (ids) => {
+  logsSearch.matchCount.value = ids.length
+  if (searchJumpDebounce !== null) { window.clearTimeout(searchJumpDebounce); searchJumpDebounce = null }
+  if (!ids.length) {
+    searchMatchPos.value = -1
+    logsSearch.matchIndex.value = 0
+    return
+  }
+  const pos = nearestSearchMatchPos(ids)
+  searchMatchPos.value = pos
+  logsSearch.matchIndex.value = pos + 1
+  // Debounced so a jump doesn't fire on every keystroke while still typing.
+  searchJumpDebounce = window.setTimeout(() => {
+    searchJumpDebounce = null
+    jumpToSearchMatch(pos)
+  }, 220)
+})
+
+// Enter / Shift+Enter (or explicit next/previous) from the nav search bar.
+watch(() => logsSearch.jumpToken.value, () => {
+  const ids = searchMatchIds.value
+  if (!ids.length) return
+  const dir  = logsSearch.jumpDirection.value
+  const base = searchMatchPos.value < 0 ? 0 : searchMatchPos.value
+  let next = base + dir
+  if (next < 0) next = ids.length - 1
+  if (next >= ids.length) next = 0
+  jumpToSearchMatch(next)
+})
+
 // >>> User popup
 interface TwitchUser {
   login: string; displayName: string; avatar: string
@@ -2477,36 +2620,36 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             />
           </div>
           <div class="field-wrap">
-            <label class="field-lbl">Date range <span class="opt">{{ t('logs.field.optional') }}</span></label>
+            <label class="field-lbl">Date <span class="opt">{{ t('logs.field.optional') }}</span></label>
             <VueDatePicker
-              v-model="dateRange"
-              range
+              v-model="dateSingle"
               no-time-picker
-              :multi-calendars="false"
               dark
               auto-apply
-              :format="formatDateRange"
-              placeholder="Pick a date range"
-              class="dp-logs"
+              :format="formatDateSingle"
+              placeholder="Any date"
+              class="dp-logs dp-logs-single"
               :teleport="true"
             />
           </div>
-          <div class="field-wrap">
-            <label class="field-lbl">Direction</label>
-            <div class="dir-toggle">
-              <button class="dir-btn" :class="{ active: direction === 'newest' }" @click="direction = 'newest'">↓ Newest</button>
-              <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="direction = 'oldest'">↑ Oldest</button>
-            </div>
-          </div>
-              <!-- Visuals bar -->
+              <!-- Options: sort direction + cosmetic visuals, merged into one dropdown so -->
+              <!-- the bar doesn't sprawl into a wall of separate controls. -->
           <div class="field-wrap visuals-bar" ref="visualsBarRef">
-            <label class="field-lbl hide-mobile">Visuals</label>
+            <label class="field-lbl hide-mobile">Options</label>
             <button class="visuals-toggle hide-mobile" :class="{ open: visualsOpen }" @click.stop="visualsOpen = !visualsOpen">
-              Visuals {{ visualsOpen ? '▲' : '▼' }}
+              Options {{ visualsOpen ? '▲' : '▼' }}
             </button>
             <div class="visuals-panel" :class="{ 'visuals-panel-open': visualsOpen }" @click.stop>
-              <button class="dir-btn" :class="{ active: !hide7tv }" @click="hide7tv = !hide7tv" title="Toggle 7TV paints & badges">7TV</button>
-              <button class="dir-btn" :class="{ active: plainUsernames }" @click="plainUsernames = !plainUsernames" title="Show all usernames in white">White names</button>
+              <div class="options-group">
+                <span class="options-group-lbl show-mobile">Sort</span>
+                <button class="dir-btn" :class="{ active: direction === 'newest' }" @click="direction = 'newest'">↓ Newest</button>
+                <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="direction = 'oldest'">↑ Oldest</button>
+              </div>
+              <div class="options-group">
+                <span class="options-group-lbl show-mobile">Visuals</span>
+                <button class="dir-btn" :class="{ active: !hide7tv }" @click="hide7tv = !hide7tv" title="Toggle 7TV paints & badges">7TV</button>
+                <button class="dir-btn" :class="{ active: plainUsernames }" @click="plainUsernames = !plainUsernames" title="Show all usernames in white">White names</button>
+              </div>
             </div>
           </div>
           <button class="search-btn" @click="search" :disabled="loading">
@@ -2596,6 +2739,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                 highlighted: highlightId === item.msg.id,
                 'log-row-reply': item.msg._hasReply,
                 'log-row-event': !!item.msg._eventMeta,
+                'search-match': searchMatchSet.has(item.msg.id),
+                'search-current': searchCurrentId === item.msg.id,
               }"
               v-cached-html="{ id: item.msg.id, html: item.msg._rowHtml }"
             ></div>
@@ -2606,7 +2751,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               :id="`log-${item.msg.id}`"
               :data-vit-id="item.id"
               class="log-row-outer"
-              :class="{ highlighted: highlightId === item.msg.id, 'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'], 'log-row-event': getRowData(item.msg).eventMeta !== null }"
+              :class="{
+                highlighted: highlightId === item.msg.id,
+                'log-row-reply': !!item.msg.tags?.['reply-parent-msg-body'],
+                'log-row-event': getRowData(item.msg).eventMeta !== null,
+                'search-match': searchMatchSet.has(item.msg.id),
+                'search-current': searchCurrentId === item.msg.id,
+              }"
               @vnodeMounted="(vn: VNode) => rowMounted(vn.el as Element)"
               @vnodeBeforeUpdate="(vn: VNode) => rowBeforeUpdate(vn.el as Element)"
               @vnodeUpdated="(vn: VNode) => rowUpdated(vn.el as Element)"
@@ -2855,9 +3006,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .opt         { font-size: 9px; color: #383838; font-weight: 400; text-transform: none; }
 .field-input { background: #0d0d10; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 7px 10px; outline: none; width: 160px; transition: border-color .15s; }
 .field-input:focus { border-color: #6f2bff55; }
-.date-input  { width: 140px; color-scheme: dark; }
-.date-range-wrap { display: flex; align-items: center; gap: 6px; }
-.date-range-sep  { color: #555; font-size: 12px; flex-shrink: 0; }
 .search-btn  { height: 34px; padding: 0 20px; background: #6f2bff; border: none; color: #fff; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; align-self: flex-end; transition: background .15s; }
 .search-btn:hover:not(:disabled) { background: #7f3fff; }
 .search-btn:disabled { opacity: .4; cursor: default; }
@@ -2906,16 +3054,17 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 }
 .day-jump-btn {
   width: 100%;
-  height: 24px;
+  height: 26px;
   padding: 0 10px;
-  border: 0;
-  background: #15151b;
-  background: #00000000;
+  border: 1px solid #22222a;
+  background: transparent;
+  color: #8a8aa0;
   font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
-
+  transition: color .15s, border-color .15s, background .15s;
 }
-.day-jump-btn:hover { color: #d2d2df; border-color: #505062; }
+.day-jump-btn:hover { color: #d2d2df; border-color: #505062; background: rgba(157,108,255,.06); }
 
 .logs-tbody-wrap { display: flex; flex: 1; min-height: 0; }
 .logs-tbody   { overflow-y: scroll; overflow-anchor: auto; flex: 1; position: relative; min-height: 0; scrollbar-width: none; }
@@ -3032,6 +3181,18 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   0%   { background: rgba(111,43,255,.25); }
   100% { background: transparent; }
 }
+
+/* In-page search: every match gets a subtle tint, the active one is stronger. */
+.log-row-outer.search-match {
+  background: rgba(255, 214, 10, 0.05);
+  border-left: 2px solid rgba(255, 214, 10, 0.32);
+}
+.log-row-outer.search-match:hover { background: rgba(255, 214, 10, 0.09); }
+.log-row-outer.search-current {
+  background: rgba(255, 214, 10, 0.16) !important;
+  border-left-color: #ffd60a !important;
+}
+.log-row-outer.search-current:hover { background: rgba(255, 214, 10, 0.2) !important; }
 
 :deep(.log-row) {
   display: flex; align-items: baseline; gap: 0;
@@ -3231,6 +3392,9 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 }
 .visuals-panel .dir-btn { border-right: 1px solid #2a2a30 !important; }
 .visuals-panel-open { display: flex !important; }
+.options-group { display: flex; flex-direction: row; gap: 0; flex-wrap: wrap; }
+.options-group + .options-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid #2a2a30; }
+.options-group-lbl { font-size: 9px; font-weight: 700; color: #444; text-transform: uppercase; letter-spacing: .06em; padding: 0 4px 2px; width: 100%; }
 
 /* VueDatePicker dark theme overrides */
 .dp__theme_dark {
@@ -3259,6 +3423,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   padding: 7px 10px; height: auto; border-radius: 0;
   min-width: 200px;
 }
+.dp-logs-single .dp__input { min-width: 140px; }
 .dp-logs .dp__input:focus { border-color: #6f2bff55; outline: none; }
 .dp-logs .dp__input_icon { display: none; }
 .dp-logs .dp__input_icon_pad { padding-left: 10px; }
@@ -3323,7 +3488,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .search-bar-content { flex-direction: column; align-items: stretch; gap: 8px; }
   .search-bar-collapsed { max-height: 0 !important; padding: 0 14px !important; }
   .field-input { width: 100% !important; }
-  .date-input  { width: 100% !important; }
   .dp-logs .dp__input { min-width: 0; width: 100%; }
   .search-btn  { width: 100%; }
   .snippet-info { display: none !important; }

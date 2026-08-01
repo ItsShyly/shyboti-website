@@ -5,6 +5,7 @@ import { API } from './api'
 import { useAuth } from './auth'
 import { useI18n, useLocale, type Locale } from './i18n'
 import SnippetOverlay from './components/SnippetOverlay.vue'
+import { useLogsSearch } from './composables/useLogsSearch'
 
 const { session, availableChannels, channelRole, restoreSession, switchChannel, logout, login } = useAuth()
 const router = useRouter()
@@ -56,6 +57,34 @@ const searchOpen         = ref(false)
 const searchInputDesktop = ref<HTMLInputElement | null>(null)
 const searchInputMobile  = ref<HTMLInputElement | null>(null)
 const searchResults      = ref<SearchResult[]>([])
+
+// === Logs in-page search scope ===
+// While on /logs, the nav search bar defaults to searching the messages
+// already loaded on that page (Discord-style scope chip) instead of the
+// universal site search. The chip's ✕ switches back to universal search
+// for the rest of the visit to that page.
+const {
+  query: logsQuery, matchCount: logsMatchCount, matchIndex: logsMatchIndex,
+  requestJump: logsRequestJump, reset: logsSearchReset,
+} = useLogsSearch()
+const onLogsPage        = computed(() => route.path.startsWith('/logs'))
+const logsScopeDismissed = ref(false)
+const showLogsChip      = computed(() => onLogsPage.value && !logsScopeDismissed.value)
+
+function dismissLogsChip() {
+  logsScopeDismissed.value = true
+  logsSearchReset()
+  if (searchQuery.value.trim()) runSearch(searchQuery.value)
+}
+
+watch(onLogsPage, (isLogs, wasLogs) => {
+  if (isLogs === wasLogs) return
+  logsScopeDismissed.value = false
+  logsSearchReset()
+  searchQuery.value    = ''
+  searchResults.value  = []
+  searchOpen.value     = false
+})
 
 // >>> Focus whichever search bar is currently visible
 function focusSearch() {
@@ -199,12 +228,25 @@ async function runSearch(q: string) {
 }
 
 function onSearchInput() {
+  if (showLogsChip.value) {
+    // Scoped to logs: drive LogsView's in-page search instead of the
+    // universal index - no fetch, just filters/highlights loaded messages.
+    logsQuery.value = searchQuery.value
+    searchOpen.value = false
+    searchResults.value = []
+    return
+  }
   searchOpen.value = true
   if (searchDebounce) clearTimeout(searchDebounce)
   searchDebounce = setTimeout(() => runSearch(searchQuery.value), 120)
 }
 
 function onSearchKeydown(e: KeyboardEvent) {
+  if (showLogsChip.value) {
+    if (e.key === 'Enter')       { e.preventDefault(); logsRequestJump(e.shiftKey ? -1 : 1) }
+    else if (e.key === 'Escape') { searchQuery.value = ''; logsQuery.value = ''; searchInputDesktop.value?.blur(); searchInputMobile.value?.blur() }
+    return
+  }
   if (!searchOpen.value || !searchResults.value.length) {
     if (e.key === 'Escape') { searchQuery.value = ''; searchOpen.value = false; searchInputDesktop.value?.blur(); searchInputMobile.value?.blur() }
     return
@@ -224,7 +266,11 @@ function selectResult(r: SearchResult) {
   r.action()
 }
 
-function onSearchFocus() { searchOpen.value = true; if (searchQuery.value) runSearch(searchQuery.value) }
+function onSearchFocus() {
+  if (showLogsChip.value) return
+  searchOpen.value = true
+  if (searchQuery.value) runSearch(searchQuery.value)
+}
 function onSearchBlur()  { setTimeout(() => { searchOpen.value = false }, 150) }
 
 // >>> Ctrl+F to focus search bar
@@ -323,16 +369,20 @@ provide('searchOpenTrigger', searchOpenTrigger)
       </div>
 
       <!-- Universal search bar - desktop only -->
-      <div class="search-wrap hide-mobile" :class="{ open: searchOpen && searchResults.length > 0 }">
-        <svg class="search-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <div class="search-wrap hide-mobile" :class="{ open: searchOpen && searchResults.length > 0, 'has-chip': showLogsChip }">
+        <svg v-if="!showLogsChip" class="search-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
           <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
           <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
         </svg>
+        <span v-if="showLogsChip" class="search-scope-chip">
+          in logs
+          <button class="chip-x" @mousedown.prevent="dismissLogsChip" title="Search everywhere instead">✕</button>
+        </span>
         <input
           ref="searchInputDesktop"
           v-model="searchQuery"
           class="search-input"
-          placeholder="Search… (Ctrl+F)"
+          :placeholder="showLogsChip ? 'Find in loaded messages…' : 'Search… (Ctrl+F)'"
           @input="onSearchInput"
           @keydown="onSearchKeydown"
           @focus="onSearchFocus"
@@ -340,11 +390,16 @@ provide('searchOpenTrigger', searchOpenTrigger)
           autocomplete="off"
           spellcheck="false"
         />
-        <kbd v-if="!searchQuery" class="search-kbd">Ctrl+F</kbd>
-        <button v-if="searchQuery" class="search-clear" @mousedown.prevent="searchQuery = ''; searchResults = []; searchOpen = false">✕</button>
+        <span v-if="showLogsChip && logsQuery" class="search-match-nav">
+          <span class="search-match-count">{{ logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : '0 matches' }}</span>
+          <button v-if="logsMatchCount" class="search-match-step" title="Previous match (Shift+Enter)" @mousedown.prevent="logsRequestJump(-1)">▲</button>
+          <button v-if="logsMatchCount" class="search-match-step" title="Next match (Enter)" @mousedown.prevent="logsRequestJump(1)">▼</button>
+        </span>
+        <kbd v-if="!searchQuery && !showLogsChip" class="search-kbd">Ctrl+F</kbd>
+        <button v-if="searchQuery" class="search-clear" @mousedown.prevent="searchQuery = ''; logsQuery = ''; searchResults = []; searchOpen = false">✕</button>
 
         <!-- Results dropdown -->
-        <div v-if="searchOpen && flatResults.length > 0" class="search-results">
+        <div v-if="!showLogsChip && searchOpen && flatResults.length > 0" class="search-results">
           <template v-for="(items, category) in groupedResults" :key="category">
             <div class="result-group-label">{{ category }}</div>
             <button
@@ -360,7 +415,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
             </button>
           </template>
         </div>
-        <div v-else-if="searchOpen && searchQuery.trim() && !flatResults.length" class="search-results search-empty">
+        <div v-else-if="!showLogsChip && searchOpen && searchQuery.trim() && !flatResults.length" class="search-results search-empty">
           No results for "{{ searchQuery }}"
         </div>
       </div>
@@ -415,16 +470,20 @@ provide('searchOpenTrigger', searchOpenTrigger)
         </div>
 
         <!-- Search bar inside sidebar - mobile only -->
-        <div class="sidebar-search show-mobile" :class="{ open: searchOpen && searchResults.length > 0 }">
-          <svg class="search-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <div class="sidebar-search show-mobile" :class="{ open: searchOpen && searchResults.length > 0, 'has-chip': showLogsChip }">
+          <svg v-if="!showLogsChip" class="search-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
             <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/>
             <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
+          <span v-if="showLogsChip" class="search-scope-chip">
+            in logs
+            <button class="chip-x" @mousedown.prevent="dismissLogsChip" title="Search everywhere instead">✕</button>
+          </span>
           <input
             ref="searchInputMobile"
             v-model="searchQuery"
             class="search-input"
-            placeholder="Search…"
+            :placeholder="showLogsChip ? 'Find in loaded messages…' : 'Search…'"
             @input="onSearchInput"
             @keydown="onSearchKeydown"
             @focus="onSearchFocus"
@@ -432,9 +491,14 @@ provide('searchOpenTrigger', searchOpenTrigger)
             autocomplete="off"
             spellcheck="false"
           />
-          <button v-if="searchQuery" class="search-clear" @mousedown.prevent="searchQuery = ''; searchResults = []; searchOpen = false">✕</button>
+          <span v-if="showLogsChip && logsQuery" class="search-match-nav">
+            <span class="search-match-count">{{ logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : '0' }}</span>
+            <button v-if="logsMatchCount" class="search-match-step" title="Previous match" @mousedown.prevent="logsRequestJump(-1)">▲</button>
+            <button v-if="logsMatchCount" class="search-match-step" title="Next match" @mousedown.prevent="logsRequestJump(1)">▼</button>
+          </span>
+          <button v-if="searchQuery" class="search-clear" @mousedown.prevent="searchQuery = ''; logsQuery = ''; searchResults = []; searchOpen = false">✕</button>
           <!-- Results dropdown -->
-          <div v-if="searchOpen && flatResults.length > 0" class="search-results">
+          <div v-if="!showLogsChip && searchOpen && flatResults.length > 0" class="search-results">
             <template v-for="(items, category) in groupedResults" :key="category">
               <div class="result-group-label">{{ category }}</div>
               <button
@@ -450,7 +514,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
               </button>
             </template>
           </div>
-          <div v-else-if="searchOpen && searchQuery.trim() && !flatResults.length" class="search-results search-empty">
+          <div v-else-if="!showLogsChip && searchOpen && searchQuery.trim() && !flatResults.length" class="search-results search-empty">
             No results for "{{ searchQuery }}"
           </div>
         </div>
@@ -558,6 +622,25 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .search-clear { background: transparent; border: none; color: #555; font-size: 11px; cursor: pointer; padding: 0 8px; height: 100%; flex-shrink: 0; }
 .search-clear:hover { color: #e0e0e0; }
 
+/* Logs in-page search scope chip*/
+.search-wrap.has-chip .search-input { padding-left: 8px; }
+.search-scope-chip {
+  display: flex; align-items: center; gap: 5px; height: 21px; padding: 0 6px 0 9px;
+  background: rgba(157,108,255,.16); border: 1px solid #9d6cff66; color: #c9aaff;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  margin-left: 8px; flex-shrink: 0; white-space: nowrap;
+}
+.chip-x { background: transparent; border: none; color: #c9aaff; cursor: pointer; font-size: 10px; padding: 0 2px; line-height: 1; }
+.chip-x:hover { color: #fff; }
+.search-match-nav   { display: flex; align-items: center; gap: 2px; margin-right: 4px; flex-shrink: 0; }
+.search-match-count { font-size: 10px; color: #666; white-space: nowrap; }
+.search-match-step {
+  display: flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; padding: 0; border: none; background: transparent;
+  color: #666; font-size: 8px; cursor: pointer; line-height: 1;
+}
+.search-match-step:hover { color: #c9aaff; }
+
 .search-results {
   position: absolute; top: calc(100% + 4px); left: -1px; right: -1px;
   background: #1a1a1e; border: 1px solid #2a2a30;
@@ -654,6 +737,8 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .sidebar-search:focus-within { border-color: #6f2bff66; }
 .sidebar-search .search-icon { position: absolute; left: 9px; width: 13px; height: 13px; color: #555; pointer-events: none; }
 .sidebar-search .search-input { flex: 1; height: 100%; background: transparent; border: none; outline: none; color: #e0e0e0; font-family: inherit; font-size: 12px; padding: 0 8px 0 28px; }
+.sidebar-search.has-chip .search-input { padding-left: 8px; }
+.sidebar-search .search-scope-chip { margin-left: 6px; }
 .sidebar-search .search-input::placeholder { color: #444; }
 .sidebar-search .search-clear { background: transparent; border: none; color: #555; font-size: 11px; cursor: pointer; padding: 0 8px; height: 100%; }
 .sidebar-search .search-clear:hover { color: #e0e0e0; }

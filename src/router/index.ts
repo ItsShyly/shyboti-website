@@ -16,7 +16,11 @@ const router = createRouter({
     { path: '/home',        redirect: '/' },
     { path: '/dashboard',   component: DashboardView },
     { path: '/commands',    component: CommandsView },
-    { path: '/logs',        component: LogsView },
+    // channel/user are now path segments (/logs/channel/user) instead of
+    // query params - shorter, easier to share/type. Both optional so /logs
+    // alone still works. Legacy ?channel=&user= links are still read by
+    // LogsView for backwards compatibility.
+    { path: '/logs/:channel?/:user?', component: LogsView },
     { path: '/tools',       component: ToolsView },
     { path: '/features',    component: () => import('../components/FeaturesView.vue') },
     { path: '/more',        redirect: '/tools' },
