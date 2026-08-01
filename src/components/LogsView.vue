@@ -235,11 +235,13 @@ interface AutomodMsg {
   _automod: true; _category: string; _status: string
 }
 
-// Sliding window: max messages kept in the DOM at once.
-// Enough to cover fast scrollbar dragging without blank space (buffer pre-renders
-// buffer/minItemSize rows, ~360 with buffer=10000 and minItemSize=28).
-const MSG_MAX_SHOWN = 2000
-const MSG_CHUNK     = 1000  // messages fetched / shown per load step
+// Sliding window: max messages kept in memory/DOM-virtualized at once. Since only
+// the visible slice is ever actually mounted in the DOM (see virtual scroller
+// below), raising this doesn't cost render performance - it just bounds how much
+// history an extremely long scroll-back session keeps in memory. We now load a
+// full day per step (see loadOlder) instead of 1000-message chunks, so this is
+// sized generously - a few busy days' worth - rather than tightly.
+const MSG_MAX_SHOWN = 6000
 
 // ─── Virtual scroller ────────────────────────────────────────────────────
 // Only rows within [vWinStart, vWinEnd) of displayItems are rendered.
@@ -254,61 +256,66 @@ let   vRO: ResizeObserver | null = null
 let   vMutObs: MutationObserver | null = null
 let   vRafPending   = false
 
-function vSumHeights(items: { id: string }[], from: number, to: number): number {
-  let h = 0
-  for (let i = from; i < to && i < items.length; i++)
-    h += vHeightCache.get(items[i]!.id) ?? VIRT_EST_H
-  return h
+// ─── Memoised prefix sums ────────────────────────────────────────────────
+// Computed once per displayItems change, not per scroll.
+const prefixSums = computed(() => {
+  const items = displayItems.value
+  const total = items.length
+  const pref = new Float64Array(total + 1)
+  pref[0] = 0
+  for (let i = 0; i < total; i++) {
+    pref[i + 1] = pref[i]! + (vHeightCache.get(items[i]!.id) ?? VIRT_EST_H)
+  }
+  return pref
+})
+
+// O(log n) binary search on prefix sums.
+function findIndexFromOffset(target: number): number {
+  const pref = prefixSums.value
+  const total = displayItems.value.length
+  if (total === 0) return 0
+  const clamped = Math.max(0, Math.min(target, pref[total]!))
+  let lo = 0, hi = total - 1
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1
+    if (pref[mid + 1]! > clamped) hi = mid
+    else lo = mid + 1
+  }
+  return lo
 }
 
-// Single O(n) prefix-sum pass + O(log n) binary searches to find both the render
-// window (start/end, padded with overscan) and the true first-visible index (no
-// overscan) in one go. Replaces the old double linear scan and the separate,
-// DOM-child-index-based updateVisibleStartIndex (which silently drifted out of
-// sync with displayItems because virtualization means DOM children != data items).
+// Now vUpdateWindow is cheap.
 function vUpdateWindow() {
   const body = getBody()
   if (!body) return
   const items = displayItems.value
-  const total = items.length
-  if (!total) {
-    vWinStart.value = 0
-    vWinEnd.value = 0
-    visibleStartIndex.value = 0
+  if (!items.length) {
+    vWinStart.value = 0; vWinEnd.value = 0; visibleStartIndex.value = 0
     return
   }
 
-  const scrollTop  = body.scrollTop
-  const viewH      = body.clientHeight
+  const scrollTop = body.scrollTop
+  const viewH = body.clientHeight
   const overscanPx = VIRT_OVERSCAN * VIRT_EST_H
 
-  const prefix = new Array<number>(total + 1)
-  prefix[0] = 0
-  for (let i = 0; i < total; i++) {
-    prefix[i + 1] = prefix[i]! + (vHeightCache.get(items[i]!.id) ?? VIRT_EST_H)
-  }
-  const totalHeight = prefix[total]!
+  const startIdx = findIndexFromOffset(scrollTop - overscanPx)
+  const endIdx = Math.min(items.length, findIndexFromOffset(scrollTop + viewH + overscanPx) + 1)
 
-  const findIndex = (target: number): number => {
-    let lo = 0, hi = total - 1
-    const clamped = Math.max(0, Math.min(target, totalHeight))
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1
-      if (prefix[mid + 1]! > clamped) hi = mid
-      else lo = mid + 1
-    }
-    return lo
-  }
-
-  const targetTop = scrollTop - overscanPx
-  const targetBot = scrollTop + viewH + overscanPx
-
-  vWinStart.value         = findIndex(targetTop)
-  vWinEnd.value           = Math.min(total, findIndex(targetBot) + 1)
-  visibleStartIndex.value = findIndex(scrollTop)
+  vWinStart.value = startIdx
+  vWinEnd.value = endIdx
+  visibleStartIndex.value = findIndexFromOffset(scrollTop)
 }
 
-// Registers ResizeObserver measurement for a row element (any kind).
+const vSpacerTop = computed(() => {
+  const pref = prefixSums.value
+  return pref[vWinStart.value] ?? 0
+})
+const vSpacerBottom = computed(() => {
+  const pref = prefixSums.value
+  const total = displayItems.value.length
+  return (pref[total] ?? 0) - (pref[vWinEnd.value] ?? 0)
+})
+
 function vRegisterRow(el: HTMLElement) {
   if (vRO && el.dataset?.vitId) vRO.observe(el)
 }
@@ -362,8 +369,6 @@ function vDetachObserver() {
 }
 
 const virtualSlice  = computed(() => displayItems.value.slice(vWinStart.value, vWinEnd.value))
-const vSpacerTop    = computed(() => vSumHeights(displayItems.value, 0, vWinStart.value))
-const vSpacerBottom = computed(() => vSumHeights(displayItems.value, vWinEnd.value, displayItems.value.length))
 
 const msgs         = ref<LogMsg[]>([])
 const automodMsgs  = ref<AutomodMsg[]>([])
@@ -404,11 +409,6 @@ const direction   = ref<'newest' | 'oldest'>('newest')  // sort direction
 
 let cursorDate:  Date | null = null
 let cursorMonth: { y: number; m: number } | null = null
-// When the cached day/month has more than MSG_CHUNK messages, these track how many
-// messages at the head of the cache haven't been shown yet.  loadOlder consumes
-// them in MSG_CHUNK steps before advancing to the previous day/month.
-let cursorDayTail:   number | null = null
-let cursorMonthTail: number | null = null
 // Cursors for loading newer (re-fetching trimmed content going forward in time)
 let cursorNewerDate:  Date | null = null
 let cursorNewerMonth: { y: number; m: number } | null = null
@@ -842,27 +842,15 @@ async function loadOlder() {
     loadingMore.value = true
     await nextTick()  // ensure the "Loading older..." spinner renders before the (possibly instant) cache fetch
     try {
+      // Load the WHOLE cached month in one prepend rather than 1000-message chunks.
+      // fetchMonth already fetched (and cached) the full month regardless, and the
+      // virtual scroller only ever mounts the visible slice, so showing the whole
+      // thing costs no extra render work - it just means far fewer chunk-boundary
+      // transitions (each one was a place the scroll-anchor bug could show up).
       const full = await fetchMonth(ch, cur.y, cur.m, signal)  // instant from cache when paginating
       if (signal.aborted) { loadingMore.value = false; return }
-      let newMsgs: LogMsg[]
-      if (cursorMonthTail !== null) {
-        // Still consuming the head of the cached month - deliver the next chunk
-        const end = cursorMonthTail
-        const start = Math.max(0, end - MSG_CHUNK)
-        newMsgs = full.slice(start, end)
-        if (start === 0) { cursorMonthTail = null; cursorMonth = prevMonth(cur) }
-        else             { cursorMonthTail = start }
-      } else {
-        // First time touching this month
-        if (full.length > MSG_CHUNK) {
-          cursorMonthTail = full.length - MSG_CHUNK  // stay on cur until tail is consumed
-          newMsgs = full.slice(-MSG_CHUNK)
-        } else {
-          cursorMonth = prevMonth(cur)
-          newMsgs = full
-        }
-      }
-      if (newMsgs.length > 0) await prependMsgs(newMsgs)
+      cursorMonth = prevMonth(cur)
+      if (full.length > 0) await prependMsgs(full)
       else { loadingMore.value = false; return loadOlder() }
     } catch {}
     loadingMore.value = false
@@ -873,27 +861,11 @@ async function loadOlder() {
     loadingMore.value = true
     await nextTick()  // ensure the "Loading older..." spinner renders before the (possibly instant) cache fetch
     try {
+      // Load the WHOLE cached day in one prepend - see comment above.
       const full = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)  // instant from cache when paginating
       if (signal.aborted) { loadingMore.value = false; return }
-      let newMsgs: LogMsg[]
-      if (cursorDayTail !== null) {
-        // Still consuming the head of the cached day - deliver the next chunk
-        const end = cursorDayTail
-        const start = Math.max(0, end - MSG_CHUNK)
-        newMsgs = full.slice(start, end)
-        if (start === 0) { cursorDayTail = null; cursorDate = prevDay(d) }
-        else             { cursorDayTail = start }
-      } else {
-        // First time touching this day
-        if (full.length > MSG_CHUNK) {
-          cursorDayTail = full.length - MSG_CHUNK  // stay on d until tail is consumed
-          newMsgs = full.slice(-MSG_CHUNK)
-        } else {
-          cursorDate = prevDay(d)
-          newMsgs = full
-        }
-      }
-      if (newMsgs.length > 0) await prependMsgs(newMsgs)
+      cursorDate = prevDay(d)
+      if (full.length > 0) await prependMsgs(full)
       else { loadingMore.value = false; return loadOlder() }
     } catch {}
     loadingMore.value = false
@@ -1221,7 +1193,6 @@ async function search() {
   paintAutoRequested = 0
   bulkFetchDone = false
   cursorDate = null; cursorMonth = null; cursorNewerDate = null; cursorNewerMonth = null
-  cursorDayTail = null; cursorMonthTail = null
   const ch = channel.value.trim().toLowerCase().replace(/^#/, '')
   preloadChannelAssets(ch)
   fetchEmotes(ch)
@@ -1307,25 +1278,17 @@ async function search() {
     const y = today.getFullYear(), m = today.getMonth() + 1
     let _raw: LogMsg[] = []
     try { _raw = await fetchMonth(ch, y, m, abortCtrl.signal) } catch {}
-    if (_raw.length > MSG_CHUNK) {
-      msgs.value = _raw.slice(-MSG_CHUNK); cursorMonth = { y, m }; cursorMonthTail = _raw.length - MSG_CHUNK
-    } else {
-      msgs.value = _raw; cursorMonth = prevMonth({ y, m }); cursorMonthTail = null
-    }
+    msgs.value = _raw; cursorMonth = prevMonth({ y, m })
     // >>> If current month empty, walk backwards up to 1 year to find logs
     if (!msgs.value.length && !abortCtrl.signal.aborted) {
       const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 1)
       while (!msgs.value.length && cursorMonth && !abortCtrl.signal.aborted) {
         const cur: { y: number; m: number } = cursorMonth!
         if (new Date(cur.y, cur.m - 1, 1) < cutoff) break
-        cursorMonth = prevMonth(cur)  // pre-advance; overridden below if >MSG_CHUNK
+        cursorMonth = prevMonth(cur)
         let _wr: LogMsg[] = []
         try { _wr = await fetchMonth(ch, cur.y, cur.m, abortCtrl.signal) } catch {}
-        if (_wr.length > MSG_CHUNK) {
-          msgs.value = _wr.slice(-MSG_CHUNK); cursorMonth = cur; cursorMonthTail = _wr.length - MSG_CHUNK
-        } else {
-          msgs.value = _wr; cursorMonthTail = null
-        }
+        msgs.value = _wr
       }
     }
     loading.value = false
@@ -1343,24 +1306,16 @@ async function search() {
   } else {
     let _raw: LogMsg[] = []
     try { _raw = await fetchDay(ch, today.getFullYear(), today.getMonth() + 1, today.getDate(), abortCtrl.signal) } catch {}
-    if (_raw.length > MSG_CHUNK) {
-      msgs.value = _raw.slice(-MSG_CHUNK); cursorDate = new Date(today.getFullYear(), today.getMonth(), today.getDate()); cursorDayTail = _raw.length - MSG_CHUNK
-    } else {
-      msgs.value = _raw; cursorDate = prevDay(today); cursorDayTail = null
-    }
+    msgs.value = _raw; cursorDate = prevDay(today)
     // >>> If today empty, walk backwards up to 1 year to find logs
     if (!msgs.value.length && !abortCtrl.signal.aborted) {
       const cutoff = new Date(); cutoff.setFullYear(cutoff.getFullYear() - 1)
       while (!msgs.value.length && cursorDate && cursorDate > cutoff && !abortCtrl.signal.aborted) {
         const d: Date = cursorDate!
-        cursorDate = prevDay(d)  // pre-advance; overridden below if >MSG_CHUNK
+        cursorDate = prevDay(d)
         let _wr: LogMsg[] = []
         try { _wr = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal) } catch {}
-        if (_wr.length > MSG_CHUNK) {
-          msgs.value = _wr.slice(-MSG_CHUNK); cursorDate = d; cursorDayTail = _wr.length - MSG_CHUNK
-        } else {
-          msgs.value = _wr; cursorDayTail = null
-        }
+        msgs.value = _wr
       }
     }
     loading.value = false
@@ -1597,29 +1552,48 @@ function domIdForDisplayItem(it: DisplayItem): string {
   return it.kind === 'day' ? `day-${it.id}` : `log-${it.msg.id}`
 }
 
-const displayItems = computed<DisplayItem[]>(() => {
-  // Merge regular msgs + automod msgs (if enabled), sort by timestamp
-  type AnyMsg = (LogMsg | AutomodMsg) & { _automod?: boolean }
-  let all: AnyMsg[] = [...msgs.value]
-  if (showAutomod.value && isBroadcaster.value) {
-    all = [...all, ...automodMsgs.value as any[]]
-    all.sort((a, b) => a.timestamp < b.timestamp ? -1 : a.timestamp > b.timestamp ? 1 : 0)
-  }
+// Optimised displayItems: merge sorted arrays, avoid full sort.
+function buildItems(messages: (LogMsg | AutomodMsg)[], _: any[]): DisplayItem[] {
   const items: DisplayItem[] = []
   let lastDay = ''
-  // Deduplicate by message ID to prevent the same event appearing multiple times
-  // when consecutive day fetches overlap (e.g. moderation events near midnight).
   const seenIds = new Set<string>()
-  for (const m of all) {
+  for (const m of messages) {
     const msgId = m.id || `${m.timestamp}:${m.username}`
     if (seenIds.has(msgId)) continue
     seenIds.add(msgId)
     const day = fmtDayLabel(m.timestamp)
-    if (day !== lastDay) { items.push({ kind: 'day', id: `day-${day}`, label: day }); lastDay = day }
-    if ((m as any)._automod) items.push({ kind: 'automod', id: msgId, msg: m as AutomodMsg })
-    else                     items.push({ kind: 'msg',     id: msgId, msg: m as LogMsg })
+    if (day !== lastDay) {
+      items.push({ kind: 'day', id: `day-${day}`, label: day })
+      lastDay = day
+    }
+    if ((m as any)._automod) {
+      items.push({ kind: 'automod', id: msgId, msg: m as AutomodMsg })
+    } else {
+      items.push({ kind: 'msg', id: msgId, msg: m as LogMsg })
+    }
   }
   return items
+}
+
+const displayItems = computed<DisplayItem[]>(() => {
+  const regular = msgs.value
+  const automod = automodMsgs.value
+  if (!showAutomod.value || !isBroadcaster.value) {
+    return buildItems(regular, [])
+  }
+  // Merge two sorted arrays by timestamp.
+  const merged: (LogMsg | AutomodMsg)[] = []
+  let i = 0, j = 0
+  while (i < regular.length && j < automod.length) {
+    if (regular[i]!.timestamp <= automod[j]!.timestamp) {
+      merged.push(regular[i++]!)   // <-- added !
+    } else {
+      merged.push(automod[j++]!)   // <-- added !
+    }
+  }
+  while (i < regular.length) merged.push(regular[i++]!)
+  while (j < automod.length) merged.push(automod[j++]!)
+  return buildItems(merged, [])
 })
 
 type TimelineMarker = {
@@ -1800,7 +1774,10 @@ function renderMsgWithMap(text: string, em: EmoteMap): string {
   if (!Object.keys(em).length) return esc(text)
   return text.split(' ').map(word => {
     const url = em[word]
-    return url ? `<img class="chat-emote" src="${url}" alt="${esc(word)}" title="${esc(word)}">` : esc(word)
+    // fetchpriority="high": these render inside the currently-visible virtual
+    // window, so they must win contention over the background preload queue
+    // (see preDecodeUrls) that's warming up off-screen emote/badge images.
+    return url ? `<img class="chat-emote" src="${url}" alt="${esc(word)}" title="${esc(word)}" fetchpriority="high">` : esc(word)
   }).join(' ')
 }
 
@@ -2295,11 +2272,15 @@ function checkPaints(bulk = false) {
   }
 }
 
-watch(displayItems, async () => {
-  await nextTick(); vUpdateWindow()
-  await nextTick()
-  console.debug(`[logs:displayItems] items=${displayItems.value.length}`)
-  markDomSettling()
+// Debounced displayItems watcher.
+let displayItemsTimer: number | null = null
+watch(displayItems, () => {
+  if (displayItemsTimer) clearTimeout(displayItemsTimer)
+  displayItemsTimer = window.setTimeout(() => {
+    displayItemsTimer = null
+    vUpdateWindow()
+    if (!loading.value && !loadingMore.value) markDomSettling()
+  }, 16)
 }, { flush: 'post' })
 
 watch(loading, (isLoading) => {
@@ -2647,6 +2628,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
                     <img
                       v-if="b.imageUrl"
                       class="badge-img"
+                      fetchpriority="high"
                       :src="b.imageUrl"
                       :alt="b.title || b.label"
                       :title="b.title || b.label"
@@ -2880,7 +2862,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .search-btn:hover:not(:disabled) { background: #7f3fff; }
 .search-btn:disabled { opacity: .4; cursor: default; }
 
-.logs-error  { color: #f14949; font-size: 12px; padding: 8px 14px; background: rgba(241,73,73,.08); border-left: 2px solid #f14949; flex-shrink: 0; }
+.logs-error  { color: #f14949; font-size: 12px; padding: 8px 14px; background: rgba(241,73,49,.08); border-left: 2px solid #f14949; flex-shrink: 0; }
 .logs-empty  { color: #444; font-size: 13px; padding: 40px; text-align: center; }
 .logs-count  { font-size: 11px; color: #555; padding: 0 2px 4px; flex-shrink: 0; }
 
