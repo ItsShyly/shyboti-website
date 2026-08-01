@@ -4,34 +4,55 @@ import { ref } from 'vue'
 //
 // Lets the global nav search bar (App.vue) act, while on the Logs page, as an
 // in-page "find in loaded messages" tool - Discord-style: a removable scope
-// chip appears in the search box, and typing highlights every match already
-// loaded in LogsView (no new network request) and jumps to the nearest one.
-// Enter / Shift+Enter (or explicit next/previous) step through matches, same
-// as the universal search dropdown's arrow-key navigation.
+// chip appears in the search box, typing shows a dropdown of matching
+// messages already loaded in LogsView (no new network request), and the view
+// only actually scrolls/jumps when the person presses Enter or clicks one of
+// the results - never automatically while typing.
 //
 // LogsView owns the actual matching + scrolling logic (it has the loaded
 // messages); this composable is just the shared channel between it and the
-// nav bar: the query flows in, match position/count flow back out, and jump
-// requests flow in.
+// nav bar: the query flows in, the result list + active (keyboard-highlighted)
+// index flow back out, and jump requests (id of the message to scroll to) flow in.
 
-const query      = ref('')   // current search text while scoped to logs (bound to the nav input)
-const matchCount = ref(0)    // total matches in the currently loaded logs - written by LogsView
-const matchIndex = ref(0)    // 1-based position of the active match, 0 = no match - written by LogsView
+export interface LogSearchResult {
+  id:    string  // message id, used to scroll/highlight
+  label: string  // username / display name
+  sub:   string  // message snippet around the match
+}
 
-const jumpToken     = ref(0)          // bumped to ask LogsView to move to another match
-const jumpDirection = ref<1 | -1>(1)  // direction of the pending jump
+const query       = ref('')                     // current search text while scoped to logs
+const results     = ref<LogSearchResult[]>([])   // written by LogsView, best match first
+const activeIndex = ref(0)                       // keyboard-highlighted row within `results`
+const matchCount  = ref(0)                       // number of matching messages currently available
+const matchIndex  = ref(0)                       // currently active match number (1-based) for the UI
 
-function requestJump(direction: 1 | -1 = 1) {
-  jumpDirection.value = direction
+const jumpToken   = ref(0)                      // bumped whenever a jump should actually happen
+const jumpId      = ref<string | null>(null)    // id of the message to jump to
+const jumpDirection = ref(1)                    // direction for next/previous navigation
+
+// Called on Enter (jump to the currently highlighted result) or when a
+// result is clicked directly (jump to that specific id).
+function requestJump(target: number | string) {
+  if (typeof target === 'number') {
+    jumpDirection.value = target
+    jumpId.value = null
+  } else {
+    jumpId.value = target
+    jumpDirection.value = 1
+  }
   jumpToken.value++
 }
 
 function reset() {
-  query.value      = ''
+  query.value = ''
+  results.value = []
+  activeIndex.value = 0
   matchCount.value = 0
   matchIndex.value = 0
+  jumpDirection.value = 1
+  jumpId.value = null
 }
 
 export function useLogsSearch() {
-  return { query, matchCount, matchIndex, jumpToken, jumpDirection, requestJump, reset }
+  return { query, results, activeIndex, matchCount, matchIndex, jumpToken, jumpId, jumpDirection, requestJump, reset }
 }

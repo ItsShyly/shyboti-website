@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
-import { useLogsSearch } from '../composables/useLogsSearch'
+import { useLogsSearch, type LogSearchResult } from '../composables/useLogsSearch'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
 // vue-virtual-scroller removed - all items rendered in plain DOM for instant scroll
@@ -1503,7 +1503,6 @@ onUnmounted(() => {
   document.body.classList.remove('logs-open')
   document.body.classList.remove('logs-jobs-running')
   abortCtrl.abort()
-  if (searchJumpDebounce !== null) { window.clearTimeout(searchJumpDebounce); searchJumpDebounce = null }
   detachScrollListeners()
   endResizeDrag()
   window.removeEventListener('resize', syncViewportMode)
@@ -2373,86 +2372,78 @@ watch(hasRunningJobs, (running) => {
 // Driven by the shared useLogsSearch composable so the global nav search bar
 // (App.vue) can act as a scoped find-in-page tool while on this view. Matching
 // runs entirely over the already-fetched `msgs` array - no network request per
-// keystroke - and highlights every match plus jumps to the nearest one.
+// keystroke - and highlights every match, while the actual jump happens only
+// when the user explicitly presses Enter or chooses a result from the dropdown.
 const logsSearch = useLogsSearch()
 
-const searchMatchIds = computed<string[]>(() => {
+const searchMatchResults = computed<LogSearchResult[]>(() => {
   const q = logsSearch.query.value.trim().toLowerCase()
   if (!q) return []
-  const out: string[] = []
+  const out: LogSearchResult[] = []
   for (const it of displayItems.value) {
     if (it.kind !== 'msg') continue
     const m = it.msg
     const hay = `${m.text ?? ''} ${m.displayName ?? ''} ${m.username ?? ''}`.toLowerCase()
-    if (hay.includes(q)) out.push(m.id)
+    if (!hay.includes(q)) continue
+    const text = (m.text || '').replace(/\s+/g, ' ').trim()
+    const snippet = text ? (text.length > 120 ? text.slice(0, 120) + '…' : text) : '(no text)'
+    out.push({ id: m.id, label: m.displayName || m.username || m.channel, sub: snippet })
   }
   return out
 })
-const searchMatchSet  = computed(() => new Set(searchMatchIds.value))
-const searchMatchPos  = ref(-1) // index into searchMatchIds.value, -1 = no active match
-const searchCurrentId = computed<string | null>(() =>
-  searchMatchPos.value >= 0 ? (searchMatchIds.value[searchMatchPos.value] ?? null) : null
-)
+const searchMatchIds = computed<string[]>(() => searchMatchResults.value.map((item) => item.id))
+const searchMatchSet = computed(() => new Set(searchMatchIds.value))
+const searchCurrentId = computed<string | null>(() => {
+  const idx = logsSearch.activeIndex.value
+  const ids = searchMatchIds.value
+  return idx >= 0 && idx < ids.length ? ids[idx] ?? null : null
+})
 
-// Picks the match closest to whatever's currently on screen, so jumping to
-// "the best match" means the nearest one rather than always the oldest/newest.
-function nearestSearchMatchPos(ids: string[]): number {
-  if (!ids.length) return -1
-  const idxMap = new Map<string, number>()
-  const list = displayItems.value
-  for (let i = 0; i < list.length; i++) {
-    const it = list[i]!
-    if (it.kind === 'msg') idxMap.set(it.msg.id, i)
-  }
-  const anchor = visibleStartIndex.value
-  let bestPos = ids.length - 1
-  let bestDist = Infinity
-  for (let pos = 0; pos < ids.length; pos++) {
-    const idx = idxMap.get(ids[pos]!)
-    if (idx === undefined) continue
-    const dist = Math.abs(idx - anchor)
-    if (dist < bestDist) { bestDist = dist; bestPos = pos }
-  }
-  return bestPos
-}
-
-async function jumpToSearchMatch(pos: number) {
-  const id = searchMatchIds.value[pos]
+async function jumpToSearchMatch(id: string | null) {
   if (!id) return
-  searchMatchPos.value = pos
-  logsSearch.matchIndex.value = pos + 1
+  logsSearch.matchIndex.value = searchMatchIds.value.indexOf(id) + 1
   await scrollToMsg(id, false)
 }
 
-let searchJumpDebounce: number | null = null
-watch(searchMatchIds, (ids) => {
-  logsSearch.matchCount.value = ids.length
-  if (searchJumpDebounce !== null) { window.clearTimeout(searchJumpDebounce); searchJumpDebounce = null }
-  if (!ids.length) {
-    searchMatchPos.value = -1
+watch(searchMatchResults, (results) => {
+  logsSearch.results.value = results
+  logsSearch.matchCount.value = results.length
+  logsSearch.activeIndex.value = 0
+  logsSearch.matchIndex.value = 0
+}, { flush: 'post' })
+
+watch(() => logsSearch.query.value, (q) => {
+  if (!q.trim()) {
+    logsSearch.results.value = []
+    logsSearch.matchCount.value = 0
+    logsSearch.activeIndex.value = 0
     logsSearch.matchIndex.value = 0
-    return
   }
-  const pos = nearestSearchMatchPos(ids)
-  searchMatchPos.value = pos
-  logsSearch.matchIndex.value = pos + 1
-  // Debounced so a jump doesn't fire on every keystroke while still typing.
-  searchJumpDebounce = window.setTimeout(() => {
-    searchJumpDebounce = null
-    jumpToSearchMatch(pos)
-  }, 220)
-})
+}, { flush: 'post' })
 
 // Enter / Shift+Enter (or explicit next/previous) from the nav search bar.
 watch(() => logsSearch.jumpToken.value, () => {
   const ids = searchMatchIds.value
   if (!ids.length) return
-  const dir  = logsSearch.jumpDirection.value
-  const base = searchMatchPos.value < 0 ? 0 : searchMatchPos.value
+
+  const requestedId = logsSearch.jumpId.value
+  if (requestedId) {
+    const idx = ids.indexOf(requestedId)
+    if (idx >= 0) {
+      logsSearch.activeIndex.value = idx
+      void jumpToSearchMatch(requestedId)
+      return
+    }
+  }
+
+  const dir = logsSearch.jumpDirection.value
+  const base = logsSearch.activeIndex.value < 0 ? 0 : logsSearch.activeIndex.value
   let next = base + dir
   if (next < 0) next = ids.length - 1
   if (next >= ids.length) next = 0
-  jumpToSearchMatch(next)
+  logsSearch.activeIndex.value = next
+  logsSearch.matchIndex.value = next + 1
+  void jumpToSearchMatch(ids[next] ?? null)
 })
 
 // >>> User popup

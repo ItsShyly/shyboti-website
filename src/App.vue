@@ -64,7 +64,8 @@ const searchResults      = ref<SearchResult[]>([])
 // universal site search. The chip's ✕ switches back to universal search
 // for the rest of the visit to that page.
 const {
-  query: logsQuery, matchCount: logsMatchCount, matchIndex: logsMatchIndex,
+  query: logsQuery, results: logsSearchResults, activeIndex: logsActiveIndex,
+  matchCount: logsMatchCount, matchIndex: logsMatchIndex,
   requestJump: logsRequestJump, reset: logsSearchReset,
 } = useLogsSearch()
 const onLogsPage        = computed(() => route.path.startsWith('/logs'))
@@ -232,7 +233,7 @@ function onSearchInput() {
     // Scoped to logs: drive LogsView's in-page search instead of the
     // universal index - no fetch, just filters/highlights loaded messages.
     logsQuery.value = searchQuery.value
-    searchOpen.value = false
+    searchOpen.value = true
     searchResults.value = []
     return
   }
@@ -243,8 +244,24 @@ function onSearchInput() {
 
 function onSearchKeydown(e: KeyboardEvent) {
   if (showLogsChip.value) {
-    if (e.key === 'Enter')       { e.preventDefault(); logsRequestJump(e.shiftKey ? -1 : 1) }
-    else if (e.key === 'Escape') { searchQuery.value = ''; logsQuery.value = ''; searchInputDesktop.value?.blur(); searchInputMobile.value?.blur() }
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (!logsSearchResults.value.length) return
+      logsActiveIndex.value = Math.min(logsActiveIndex.value + 1, logsSearchResults.value.length - 1)
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (!logsSearchResults.value.length) return
+      logsActiveIndex.value = Math.max(logsActiveIndex.value - 1, 0)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      const target = logsSearchResults.value[logsActiveIndex.value]
+      if (target) logsRequestJump(target.id)
+    } else if (e.key === 'Escape') {
+      searchQuery.value = ''
+      logsQuery.value = ''
+      searchInputDesktop.value?.blur()
+      searchInputMobile.value?.blur()
+    }
     return
   }
   if (!searchOpen.value || !searchResults.value.length) {
@@ -264,6 +281,13 @@ function selectResult(r: SearchResult) {
   searchInputMobile.value?.blur()
   searchResults.value = []
   r.action()
+}
+
+function selectLogsResult(r: { id: string; label: string; sub: string }) {
+  logsRequestJump(r.id)
+  searchOpen.value = false
+  searchInputDesktop.value?.blur()
+  searchInputMobile.value?.blur()
 }
 
 function onSearchFocus() {
@@ -399,7 +423,23 @@ provide('searchOpenTrigger', searchOpenTrigger)
         <button v-if="searchQuery" class="search-clear" @mousedown.prevent="searchQuery = ''; logsQuery = ''; searchResults = []; searchOpen = false">✕</button>
 
         <!-- Results dropdown -->
-        <div v-if="!showLogsChip && searchOpen && flatResults.length > 0" class="search-results">
+        <div v-if="showLogsChip && searchOpen && logsSearchResults.length > 0" class="search-results">
+          <div class="result-group-label">Messages</div>
+          <button
+            v-for="(r, idx) in logsSearchResults"
+            :key="r.id"
+            class="result-item"
+            :class="{ active: logsActiveIndex === idx }"
+            @mousedown.prevent="selectLogsResult(r)"
+          >
+            <span class="result-label">{{ r.label }}</span>
+            <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
+          </button>
+        </div>
+        <div v-else-if="showLogsChip && searchOpen && searchQuery.trim() && !logsSearchResults.length" class="search-results search-empty">
+          No matching messages in the loaded logs
+        </div>
+        <div v-else-if="!showLogsChip && searchOpen && flatResults.length > 0" class="search-results">
           <template v-for="(items, category) in groupedResults" :key="category">
             <div class="result-group-label">{{ category }}</div>
             <button
@@ -498,7 +538,23 @@ provide('searchOpenTrigger', searchOpenTrigger)
           </span>
           <button v-if="searchQuery" class="search-clear" @mousedown.prevent="searchQuery = ''; logsQuery = ''; searchResults = []; searchOpen = false">✕</button>
           <!-- Results dropdown -->
-          <div v-if="!showLogsChip && searchOpen && flatResults.length > 0" class="search-results">
+          <div v-if="showLogsChip && searchOpen && logsSearchResults.length > 0" class="search-results">
+            <div class="result-group-label">Messages</div>
+            <button
+              v-for="(r, idx) in logsSearchResults"
+              :key="r.id"
+              class="result-item"
+              :class="{ active: logsActiveIndex === idx }"
+              @mousedown.prevent="selectLogsResult(r); sidebarOpen = false"
+            >
+              <span class="result-label">{{ r.label }}</span>
+              <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
+            </button>
+          </div>
+          <div v-else-if="showLogsChip && searchOpen && searchQuery.trim() && !logsSearchResults.length" class="search-results search-empty">
+            No matching messages in the loaded logs
+          </div>
+          <div v-else-if="!showLogsChip && searchOpen && flatResults.length > 0" class="search-results">
             <template v-for="(items, category) in groupedResults" :key="category">
               <div class="result-group-label">{{ category }}</div>
               <button
