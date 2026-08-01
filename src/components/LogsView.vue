@@ -692,10 +692,33 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   const deduped = newMsgs.filter(m => !existingIds.has(m.id))
   if (!deduped.length) return
 
-  // Snapshot scroll metrics before the DOM grows above the viewport. Since a
-  // prepend inserts content only ABOVE whatever the user is currently looking at,
-  // the exact scrollHeight delta tells us precisely how far to push scrollTop down
-  // to keep the same content visually anchored in place.
+  // Snapshot a stable anchor: the id + in-viewport pixel offset of the first
+  // (partially) visible row. We use this - not a scrollHeight delta - to restore
+  // position after the prepend. A scrollHeight-delta correction is only accurate
+  // if newly-inserted rows already have their TRUE height reflected in the DOM,
+  // but far rows are spacer-estimated at VIRT_EST_H (28px) until ResizeObserver
+  // measures them later. Real rows (multi-line, badges, emotes) are often taller,
+  // so the delta under-corrects and scrollTop lands too high - which then
+  // re-triggers loadOlder() immediately (scrollTop < 120) → "stuck at top,
+  // keeps loading the previous day" bug. Re-measuring the exact same DOM row
+  // before/after is immune to this because it doesn't depend on estimates at all.
+  let anchorId: string | null = null
+  let anchorOffset = 0
+  if (body) {
+    const containerTop = body.getBoundingClientRect().top
+    const rows = body.querySelectorAll<HTMLElement>('[data-vit-id]')
+    for (const el of rows) {
+      const r = el.getBoundingClientRect()
+      if (r.bottom > containerTop) {   // first row still (at least partially) visible
+        anchorId = el.id
+        anchorOffset = r.top - containerTop
+        break
+      }
+    }
+  }
+
+  // Fallback metrics, used only if the anchor row can't be found again after insert
+  // (e.g. it happened to be one of the trimmed-off newest messages).
   const preScrollTop    = body?.scrollTop ?? 0
   const preScrollHeight = body?.scrollHeight ?? 0
 
@@ -727,9 +750,28 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   await nextTick()
   if (!body) return
 
-  const postScrollHeight = body.scrollHeight
-  const delta = postScrollHeight - preScrollHeight
-  if (delta !== 0) body.scrollTop = preScrollTop + delta
+  // Make sure the anchor row is actually mounted in the DOM before re-measuring
+  // it - the approximate `shift` above can be off by one or two items whenever
+  // a day separator got inserted, so the render window might not include it yet.
+  if (anchorId) {
+    const idx = displayItems.value.findIndex(it => domIdForDisplayItem(it) === anchorId)
+    if (idx >= 0) await ensureIndexRendered(idx, 20)
+  }
+
+  const anchorEl = anchorId ? document.getElementById(anchorId) : null
+  if (anchorEl) {
+    // Precise correction: put the exact same row back at the exact same
+    // on-screen offset it had before, regardless of estimated vs. real heights.
+    const containerTop = body.getBoundingClientRect().top
+    const newOffset = anchorEl.getBoundingClientRect().top - containerTop
+    body.scrollTop += (newOffset - anchorOffset)
+  } else {
+    // Fallback: classic scrollHeight-delta correction (only reached if the
+    // anchor row itself got trimmed off, which is rare).
+    const postScrollHeight = body.scrollHeight
+    const delta = postScrollHeight - preScrollHeight
+    if (delta !== 0) body.scrollTop = preScrollTop + delta
+  }
 
   // Re-snap the window to the corrected scroll position - heals any small drift
   // from the approximate index shift above (e.g. an inserted day separator).
@@ -1199,18 +1241,29 @@ async function search() {
     if (diffDays > maxRange) { error.value = `Date range too large (max ${maxRange} days).`; loading.value = false; return }
 
     try {
-      const allMsgs: LogMsg[] = []
-      const d = new Date(startDate)
-      while (d <= endDate) {
-        if (abortCtrl.signal.aborted) break
-        const dayMsgs = isUser
-          ? await fetchMonth(ch, d.getFullYear(), d.getMonth() + 1, abortCtrl.signal)
-              .then(ms => ms.filter(msg => msg.timestamp.startsWith(d.toISOString().slice(0, 10))))
-          : await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal)
-        allMsgs.push(...dayMsgs)
-        d.setDate(d.getDate() + 1)
+      // Fetch every day in the range concurrently (capped) instead of one-at-a-time.
+      // Each fetchDay/fetchMonth call already hits its own day/month cache key, so
+      // this is safe to parallelize - a multi-day search used to take N sequential
+      // round-trips; now it's ceil(N / CONCURRENCY).
+      const RANGE_FETCH_CONCURRENCY = 6
+      const days: Date[] = []
+      for (const d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) days.push(new Date(d))
+
+      const results: LogMsg[][] = new Array(days.length)
+      let cursor = 0
+      async function worker() {
+        while (cursor < days.length) {
+          const i = cursor++
+          if (abortCtrl.signal.aborted) return
+          const d = days[i]!
+          results[i] = isUser
+            ? await fetchMonth(ch, d.getFullYear(), d.getMonth() + 1, abortCtrl.signal)
+                .then(ms => ms.filter(msg => msg.timestamp.startsWith(d.toISOString().slice(0, 10))))
+            : await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), abortCtrl.signal)
+        }
       }
-      msgs.value = allMsgs
+      await Promise.all(Array.from({ length: Math.min(RANGE_FETCH_CONCURRENCY, days.length) }, worker))
+      msgs.value = results.flat()
     } catch {}
     loading.value = false; noMore.value = true
     if (hashId) await scrollToMsg(hashId, true); else scrollToBottom()
