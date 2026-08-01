@@ -188,7 +188,8 @@ interface LogMsg {
   _isMod?: boolean
   _hasReply?: boolean
 }
-interface EmoteMap { [name: string]: string }
+interface EmoteEntry { url: string; overlay: boolean }
+interface EmoteMap { [name: string]: EmoteEntry }
 interface BadgeChip {
   key: string
   label: string
@@ -565,7 +566,7 @@ async function fetchEmotes(ch: string) {
   for (const path of [`/emotes/${ch}`, `/emotes/twitch/${ch}`]) {
     try {
       const r = await fetch(`${API}${path}`)
-      if (r.ok) { const d = await r.json() as any; for (const e of d.emotes ?? []) next[e.name] = e.url }
+      if (r.ok) { const d = await r.json() as any; for (const e of d.emotes ?? []) next[e.name] = { url: e.url, overlay: !!e.overlay } }
     } catch {}
   }
   emoteMap.value = next
@@ -1817,24 +1818,72 @@ function userColorByName(username: string): string {
 }
 
 function renderMsg(text: string): string {
-  const em = emoteMap.value
-  if (!Object.keys(em).length) return esc(text)
-  return text.split(' ').map(word => {
-    const url = em[word]
-    // No loading="lazy" - virtual scroller only mounts rows when visible, eager is correct here.
-    return url ? `<img class="chat-emote" src="${url}" alt="${esc(word)}" title="${esc(word)}">` : esc(word)
-  }).join(' ')
+  return renderMsgWithMap(text, emoteMap.value)
 }
 
+// Render a message with emote substitution and zero-width/overlay stacking.
+// Zero-width emotes (overlay: true) are positioned absolutely over the
+// previous base emote using a .emote-stack wrapper span.
+// e.g. "LULW BTTV_RainbowPls" where RainbowPls is overlay:
+//   → <span class="emote-stack"><img LULW><img class="emote-overlay" RainbowPls></span>
+// Multiple consecutive overlays all stack on the same base:
+//   "A B B B" where B is overlay → one stack with 1 base + 3 overlays
 function renderMsgWithMap(text: string, em: EmoteMap): string {
   if (!Object.keys(em).length) return esc(text)
-  return text.split(' ').map(word => {
-    const url = em[word]
-    // fetchpriority="high": these render inside the currently-visible virtual
-    // window, so they must win contention over the background preload queue
-    // (see preDecodeUrls) that's warming up off-screen emote/badge images.
-    return url ? `<img class="chat-emote" src="${url}" alt="${esc(word)}" title="${esc(word)}" fetchpriority="high">` : esc(word)
-  }).join(' ')
+
+  // Tokenise: each token is either a word or whitespace run
+  // We need to preserve spaces so the output looks natural
+  const tokens = text.split(/( +)/)
+
+  // Build a list of rendered pieces first, then assemble stacks
+  type Piece = { html: string; isOverlay: boolean; isEmote: boolean }
+  const pieces: Piece[] = []
+
+  for (const tok of tokens) {
+    if (!tok) continue
+    // Whitespace token — keep as-is, not an emote
+    if (/^ +$/.test(tok)) {
+      pieces.push({ html: tok, isOverlay: false, isEmote: false })
+      continue
+    }
+    const entry = em[tok]
+    if (!entry) {
+      pieces.push({ html: esc(tok), isOverlay: false, isEmote: false })
+      continue
+    }
+    const cls = entry.overlay ? 'chat-emote emote-overlay' : 'chat-emote'
+    const img = `<img class="${cls}" src="${entry.url}" alt="${esc(tok)}" title="${esc(tok)}" fetchpriority="high">`
+    pieces.push({ html: img, isOverlay: entry.overlay, isEmote: true })
+  }
+
+  // Now merge: overlay emotes immediately following a base emote (ignoring
+  // whitespace between them) get wrapped together into .emote-stack.
+  // Whitespace between a base and its overlays is consumed (not rendered).
+  let out = ''
+  let i = 0
+  while (i < pieces.length) {
+    const p = pieces[i]!
+    // If this is a base emote, look ahead for overlay emotes
+    if (p.isEmote && !p.isOverlay) {
+      // Collect any overlays that follow (skip whitespace-only gaps)
+      let j = i + 1
+      const overlays: string[] = []
+      while (j < pieces.length) {
+        const next = pieces[j]!
+        if (!next.isEmote && /^ +$/.test(next.html)) { j++; continue } // skip whitespace
+        if (next.isEmote && next.isOverlay) { overlays.push(next.html); j++; continue }
+        break
+      }
+      if (overlays.length) {
+        out += `<span class="emote-stack">${p.html}${overlays.join('')}</span>`
+        i = j
+        continue
+      }
+    }
+    out += p.html
+    i++
+  }
+  return out
 }
 
 function escapeRegExp(s: string): string {
@@ -2161,8 +2210,8 @@ function applyCosmetic(
   data: {
     paint?: any
     sevenTv?: { badge?: { id?: string; url?: string; tooltip?: string | null } | null }
-    personalEmotes?: Array<{ id: string; name: string; url: string }>
-    twitchUserEmotes?: Array<{ id: string; name: string; url: string }>
+    personalEmotes?: Array<{ id: string; name: string; url: string; overlay?: boolean }>
+    twitchUserEmotes?: Array<{ id: string; name: string; url: string; overlay?: boolean }>
   },
   acc: {
     paints: Map<string, Record<string, string>>
@@ -2184,8 +2233,8 @@ function applyCosmetic(
   const hasTwitchUser = Array.isArray(data.twitchUserEmotes) && data.twitchUserEmotes.length > 0
   if (hasPersonal || hasTwitchUser) {
     const p: EmoteMap = {}
-    for (const e of data.personalEmotes ?? []) { if (e?.name && e?.url) p[e.name] = e.url }
-    for (const e of data.twitchUserEmotes ?? []) { if (e?.name && e?.url) p[e.name] = e.url }
+    for (const e of data.personalEmotes ?? []) { if (e?.name && e?.url) p[e.name] = { url: e.url, overlay: !!e.overlay } }
+    for (const e of data.twitchUserEmotes ?? []) { if (e?.name && e?.url) p[e.name] = { url: e.url, overlay: false } }
     acc.emotes.set(key, p)
   }
 }
@@ -2270,8 +2319,8 @@ async function fetchPaint(key: string, jobId: number) {
     const data = await res.json() as {
       paint?: any
       sevenTv?: { badge?: { id?: string; url?: string; tooltip?: string | null } | null }
-      personalEmotes?: Array<{ id: string; name: string; url: string }>
-      twitchUserEmotes?: Array<{ id: string; name: string; url: string }>
+      personalEmotes?: Array<{ id: string; name: string; url: string; overlay?: boolean }>
+      twitchUserEmotes?: Array<{ id: string; name: string; url: string; overlay?: boolean }>
     }
     if (jobId !== activeSearchJob.value) return
     const acc = makeAcc()
@@ -3265,7 +3314,34 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 :deep(.log-user-clickable) { cursor: pointer; }
 :deep(.log-user-clickable):hover { opacity: 0.8; text-decoration: underline dotted; }
 
-:deep(.chat-emote) { height: 28px; vertical-align: middle; display: inline-block; margin: 0 1px; }
+:deep(.chat-emote) {
+  height: 28px; vertical-align: middle; display: inline-block; margin: 0 1px;
+  /* Prevent broken-image flicker while src is fetching */
+  color: transparent;
+}
+
+/* Zero-width / overlay emote stacking */
+:deep(.emote-stack) {
+  display: inline-block;
+  position: relative;
+  /* width is set by the base emote naturally */
+  vertical-align: middle;
+  margin: 0 1px;
+}
+:deep(.emote-stack .chat-emote) {
+  margin: 0;
+  display: block;
+}
+:deep(.emote-stack .emote-overlay) {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  /* Overlay is same height as base; center it exactly */
+  height: 28px;
+  pointer-events: none;
+  margin: 0;
+}
 
 /* User popup */
 .user-popup {
