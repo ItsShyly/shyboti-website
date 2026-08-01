@@ -40,6 +40,9 @@ interface SavedNote {
 const notes    = ref<SavedNote[]>([])
 const listLoad = ref(false)
 const deleteId = ref<string | null>(null)
+const recreateId     = ref<string | null>(null)   // note being restored
+const recreateExpiry = ref<'1h'|'1d'|'7d'|'30d'|'forever'>('7d')
+const recreating     = ref<string | null>(null)    // id currently in-flight
 
 // >>> Derived <<<
 const isGuest  = computed(() => !session.value)
@@ -118,6 +121,29 @@ async function deleteNote(id: string) {
   } catch {}
 }
 
+async function recreateNote(id: string) {
+  recreating.value = id
+  try {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (session.value) headers['Authorization'] = `Bearer ${session.value.token}`
+    const res = await fetch(`${API}/notes/recreate/${id}`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ expiry: recreateExpiry.value }),
+    })
+    if (!res.ok) throw new Error()
+    const data = await res.json() as { id: string }
+    // Replace the old note in the list with the new id and updated expiry
+    const expiryMs: Record<string, number> = { '1h': 3_600_000, '1d': 86_400_000, '7d': 604_800_000, '30d': 2_592_000_000 }
+    const now = Date.now()
+    notes.value = notes.value.map(n => n.id === id
+      ? { ...n, id: data.id, expires_at: recreateExpiry.value === 'forever' ? null : now + expiryMs[recreateExpiry.value]!, created_at: now }
+      : n
+    )
+    recreateId.value = null
+  } catch { /* leave panel open so user can retry */ }
+  recreating.value = null
+}
+
 function fmtDate(ts: number) {
   return new Date(ts).toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' })
 }
@@ -151,10 +177,14 @@ function switchView(v: 'write' | 'list') {
       <div v-if="listLoad" class="list-empty">{{ t('notes.loading') }}</div>
       <div v-else-if="!notes.length" class="list-empty">{{ t('notes.empty') }}</div>
       <div v-else class="notes-list">
-        <div v-for="note in notes" :key="note.id" class="note-item">
-          <a :href="noteUrl(note.id)" target="_blank" rel="noopener" class="note-preview">
+        <div v-for="note in notes" :key="note.id" class="note-item" :class="{ 'is-expired': note.expires_at && note.expires_at < Date.now() }">
+          <!-- Preview: link if active, plain text if expired -->
+          <a v-if="!note.expires_at || note.expires_at >= Date.now()"
+            :href="noteUrl(note.id)" target="_blank" rel="noopener" class="note-preview">
             {{ note.preview }}
           </a>
+          <span v-else class="note-preview note-preview-expired">{{ note.preview }}</span>
+
           <div class="note-meta">
             <span class="note-size">{{ note.size }} {{ t('notes.chars') }}</span>
             <span class="note-dot">·</span>
@@ -164,14 +194,44 @@ function switchView(v: 'write' | 'list') {
               {{ fmtExpiry(note.expires_at) }}
             </span>
           </div>
+
           <div class="note-actions">
-            <code class="note-link-code">n.shyboti.de/{{ note.id }}</code>
-            <button class="copy-btn-sm" @click="copyLink(noteUrl(note.id))">{{ t('notes.copy') }}</button>
+            <!-- Link: show URL if active, dash if expired -->
+            <code v-if="!note.expires_at || note.expires_at >= Date.now()" class="note-link-code">n.shyboti.de/{{ note.id }}</code>
+            <span v-else class="note-link-expired">-</span>
+
+            <template v-if="!note.expires_at || note.expires_at >= Date.now()">
+              <button class="copy-btn-sm" @click="copyLink(noteUrl(note.id))">{{ t('notes.copy') }}</button>
+            </template>
+
+            <!-- Restore button for expired notes -->
+            <button
+              v-if="note.expires_at && note.expires_at < Date.now()"
+              class="restore-btn-sm"
+              @click="recreateId = recreateId === note.id ? null : note.id"
+            >Restore</button>
+
             <button
               class="delete-btn-sm"
               :class="{ confirm: deleteId === note.id }"
               @click="deleteNote(note.id)"
             >{{ deleteId === note.id ? '?' : '✕' }}</button>
+          </div>
+
+          <!-- Restore panel: expiry picker + confirm -->
+          <div v-if="recreateId === note.id" class="restore-panel">
+            <span class="restore-label">New expiry:</span>
+            <select v-model="recreateExpiry" class="expiry-select">
+              <option value="1h">1 hour</option>
+              <option value="1d">1 day</option>
+              <option value="7d">7 days</option>
+              <option value="30d">30 days</option>
+              <option value="forever">Forever</option>
+            </select>
+            <button class="restore-confirm-btn" :disabled="recreating === note.id" @click="recreateNote(note.id)">
+              {{ recreating === note.id ? '…' : 'Confirm' }}
+            </button>
+            <button class="restore-cancel-btn" @click="recreateId = null">Cancel</button>
           </div>
         </div>
       </div>
@@ -384,4 +444,38 @@ function switchView(v: 'write' | 'list') {
 }
 .delete-btn-sm:hover { background: rgba(241,73,73,.12); }
 .delete-btn-sm.confirm { border-color: #f14949; background: rgba(241,73,73,.2); font-weight: 700; }
+
+/* Expired note styles */
+.note-item.is-expired { opacity: 0.7; }
+.note-preview-expired { color: #555; cursor: default; font-family: 'Consolas','Fira Mono',monospace; font-size: 12px; display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.note-link-expired { font-family: 'Consolas','Fira Mono',monospace; font-size: 12px; color: #333; flex: 1; }
+
+.restore-btn-sm {
+  height: 20px; padding: 0 8px; border: 1px solid #9d6cff44;
+  background: transparent; color: #9d6cff; font-family: inherit; font-size: 9px;
+  cursor: pointer; flex-shrink: 0; transition: background .15s;
+}
+.restore-btn-sm:hover { background: #6f2bff18; }
+
+.restore-panel {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 6px; padding: 8px 10px;
+  background: #0d0d10; border: 1px solid #2a2a30;
+  animation: fadeIn .15s ease;
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: none } }
+.restore-label { font-size: 10px; color: #666; flex-shrink: 0; }
+.restore-confirm-btn {
+  height: 24px; padding: 0 12px; border: none;
+  background: #6f2bff; color: #fff; font-family: inherit; font-size: 10px;
+  cursor: pointer; flex-shrink: 0;
+}
+.restore-confirm-btn:disabled { opacity: .5; cursor: not-allowed; }
+.restore-confirm-btn:not(:disabled):hover { background: #7f3fff; }
+.restore-cancel-btn {
+  height: 24px; padding: 0 10px; border: 1px solid #2a2a30;
+  background: transparent; color: #555; font-family: inherit; font-size: 10px;
+  cursor: pointer; flex-shrink: 0;
+}
+.restore-cancel-btn:hover { color: #aaa; border-color: #444; }
 </style>

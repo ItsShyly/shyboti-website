@@ -3,7 +3,7 @@ import { API } from '../api'
 import { useAuth } from '../auth'
 import { toCanvas } from 'html-to-image'
 
-// Shared reactive state – single instance across the whole app
+// Shared reactive state - single instance across the whole app
 const screenshotDrag   = ref(false)
 const screenshotRect   = ref<{ x: number; y: number; w: number; h: number } | null>(null)
 const screenshotAnchor = ref<{ x: number; y: number } | null>(null)
@@ -19,7 +19,7 @@ let   suppressContextMenuUntil = 0
 let   activeUploadController: AbortController | null = null
 let   activeSnippetRunId = 0
 
-// rAF throttle flag – one pending frame max
+// rAF throttle flag - one pending frame max
 let rafPending = false
 const SNIPPET_CAPTURE_DELAY_MS = 0
 const SNIPPET_DEBUG = true
@@ -89,7 +89,7 @@ export function useSnippet() {
     e.preventDefault()
   }
 
-  /** Attach to window mousemove – rAF throttled so no lag */
+  /** Attach to window mousemove - rAF throttled so no lag */
   function onWindowMouseMove(e: MouseEvent, containerEl: HTMLElement | null) {
     if (!screenshotDrag.value || !screenshotAnchor.value || !containerEl) return
     if (rafPending) return
@@ -253,7 +253,7 @@ export function useSnippet() {
       try {
         // Force html-to-image to render the FULL scrollable content of the inner
         // scroller by overriding overflow/height on the cloned node.  This way
-        // scroll position is irrelevant — all rows are physically laid out and
+        // scroll position is irrelevant - all rows are physically laid out and
         // content-space coordinates map 1:1 to canvas pixels.
         const contentH = captureRoot.scrollHeight
         const contentW = captureRoot.scrollWidth

@@ -14,7 +14,7 @@ const {
   onSnippetImgLoad,
 } = useSnippet()
 
-// Injected from App.vue – the .main-panel element ref
+// Injected from App.vue - the .main-panel element ref
 const mainPanelRef = inject<Ref<HTMLElement | null>>('mainPanelRef')
 const route = useRoute()
 
@@ -147,7 +147,7 @@ function fixedRect() {
 </template>
 
 <style>
-/* Unscoped – Teleport children live outside the component tree */
+/* Unscoped - Teleport children live outside the component tree */
 .snippet-global-rect {
   position: fixed;
   pointer-events: none;

@@ -298,7 +298,7 @@ const KEEP_ALIVE_ROUTES = ['DashboardView', 'CommandsView', 'AutomationsView']
 // >>> Expose nextActiveTab and searchOpenEdit for CommandsView via provide
 provide('nextActiveTab', nextActiveTab)
 
-// >>> mainPanelRef – provided to SnippetOverlay so it knows which element to capture
+// >>> mainPanelRef - provided to SnippetOverlay so it knows which element to capture
 const mainPanelRef = ref<HTMLElement | null>(null)
 provide('mainPanelRef', mainPanelRef)
 

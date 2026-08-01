@@ -6,13 +6,13 @@ import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
 import { VueDatePicker } from '@vuepic/vue-datepicker'
 import '@vuepic/vue-datepicker/dist/main.css'
-// vue-virtual-scroller removed — all items rendered in plain DOM for instant scroll
+// vue-virtual-scroller removed - all items rendered in plain DOM for instant scroll
 
 // ─── DOM-cache directive for server-rendered rows ────────────────────────────
 // The virtual scroller recycles DOM elements on scroll. With v-html, every
 // recycle destroys and recreates all <img> elements, triggering re-decode even
 // when the images are already in cache. This directive caches the actual DOM
-// subtree by message ID and re-attaches it on recycle — images stay loaded.
+// subtree by message ID and re-attaches it on recycle - images stay loaded.
 const _rowDomCache = new Map<string, Element>()
 const _ROW_CACHE_MAX = 600
 
@@ -124,7 +124,7 @@ function badgeError(ev: Event) {
   _badgeT0.delete(src)
 }
 
-// DynamicScroller @update event — removed; visibleStartIndex now computed from scroll position in onScroll.
+// DynamicScroller @update event - removed; visibleStartIndex now computed from scroll position in onScroll.
 function updateVisibleStartIndex() {
   const body = getBody()
   if (!body) return
@@ -471,7 +471,7 @@ function preDecodeUrls(urls: string[], label?: string) {
   for (const url of fresh) {
     const img = new Image()
     img.src = url
-    img.decode().catch(() => {}) // pre-decode to raster — instant paint later
+    img.decode().catch(() => {}) // pre-decode to raster - instant paint later
   }
 }
 
@@ -574,7 +574,7 @@ function nextMonth(ym: { y: number; m: number }): { y: number; m: number } {
 async function prependMsgs(newMsgs: LogMsg[]) {
   const body = getBody()
   // Find the first row element that is at or past the top of the viewport.
-  // We track its ID so we can use scrollIntoView after the prepend — this is
+  // We track its ID so we can use scrollIntoView after the prepend - this is
   // more reliable than computing a scroll delta because the browser's own
   // overflow-anchor and line-height rounding can fight a manual scrollTop correction.
   let anchorId: string | null = null
@@ -646,7 +646,7 @@ async function loadOlder() {
       if (signal.aborted) { loadingMore.value = false; return }
       let newMsgs: LogMsg[]
       if (cursorMonthTail !== null) {
-        // Still consuming the head of the cached month — deliver the next chunk
+        // Still consuming the head of the cached month - deliver the next chunk
         const end = cursorMonthTail
         const start = Math.max(0, end - MSG_CHUNK)
         newMsgs = full.slice(start, end)
@@ -677,7 +677,7 @@ async function loadOlder() {
       if (signal.aborted) { loadingMore.value = false; return }
       let newMsgs: LogMsg[]
       if (cursorDayTail !== null) {
-        // Still consuming the head of the cached day — deliver the next chunk
+        // Still consuming the head of the cached day - deliver the next chunk
         const end = cursorDayTail
         const start = Math.max(0, end - MSG_CHUNK)
         newMsgs = full.slice(start, end)
@@ -887,7 +887,7 @@ function onCustomScrollbarTrackPointerDown(ev: PointerEvent) {
   const trackH  = rect.height
   const thumbH  = customThumbH.value
   const clickY  = ev.clientY - rect.top
-  // If clicking on the thumb itself, don't jump — let onThumbDragStart handle it
+  // If clicking on the thumb itself, don't jump - let onThumbDragStart handle it
   if (clickY >= customThumbTop.value && clickY <= customThumbTop.value + thumbH) return
   // Center thumb on the click position
   const newTop    = Math.max(0, Math.min(trackH - thumbH, clickY - thumbH / 2))
@@ -1167,7 +1167,7 @@ async function search() {
   }
 
   const _dbgTDone = performance.now()
-  console.debug(`[logs:search] done — ${msgs.value.length} msgs, total=${_dbgTDone - _dbgT0 | 0}ms`)
+  console.debug(`[logs:search] done - ${msgs.value.length} msgs, total=${_dbgTDone - _dbgT0 | 0}ms`)
 
   await nextTick()
   attachScrollListener()
@@ -1518,7 +1518,7 @@ async function jumpToTimelineMarker(marker: TimelineMarker) {
   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
 
-// Paint loading is background-only — it must NOT block the UI phase or overlay.
+// Paint loading is background-only - it must NOT block the UI phase or overlay.
 const hasRunningJobs = computed(() => loading.value || loadingMore.value || domSettling.value)
 const showFloatingFetch = computed(() => hasRunningJobs.value)
 let floatingFetchStartedAt: number | null = null
@@ -1567,7 +1567,7 @@ function renderMsg(text: string): string {
   if (!Object.keys(em).length) return esc(text)
   return text.split(' ').map(word => {
     const url = em[word]
-    // No loading="lazy" — virtual scroller only mounts rows when visible, eager is correct here.
+    // No loading="lazy" - virtual scroller only mounts rows when visible, eager is correct here.
     return url ? `<img class="chat-emote" src="${url}" alt="${esc(word)}" title="${esc(word)}">` : esc(word)
   }).join(' ')
 }
@@ -1721,7 +1721,7 @@ interface RowData {
 
 const _rowCache = new Map<string, RowData>()
 // Incremented every time the row cache is invalidated (any visual dep changes).
-// getRowData reads this ref so Vue always tracks it — even when every row is a
+// getRowData reads this ref so Vue always tracks it - even when every row is a
 // cache-hit and no other reactive dep is accessed during that render pass.
 // Without this, a second render triggered by nameColWidth (post-watcher) loses
 // twitchBadgeMap from the component's dep list and badges never appear on re-search.
@@ -1729,10 +1729,10 @@ const _rowCacheVersion = ref(0)
 // The watch is registered after paintStyles/personalEmoteMaps are declared (see below).
 
 function getRowData(m: LogMsg): RowData {
-  _rowCacheVersion.value  // track — forces re-render when cache is cleared
+  _rowCacheVersion.value  // track - forces re-render when cache is cleared
   const key = m.id ?? `${m.timestamp}:${m.username}`
   const cached = _rowCache.get(key)
-  if (cached) return cached   // O(1) path — no reactive access beyond _rowCacheVersion
+  if (cached) return cached   // O(1) path - no reactive access beyond _rowCacheVersion
   const d: RowData = {
     html:         renderMsgForMessage(m),
     badges:       buildBadgeChips(m),
@@ -1797,7 +1797,7 @@ watch(
   },
 )
 
-const PAINT_MAX_CONCURRENT = 16 // higher concurrency — network is the bottleneck, not CPU
+const PAINT_MAX_CONCURRENT = 16 // higher concurrency - network is the bottleneck, not CPU
 const PAINT_AUTO_LIMIT = 80   // cover a large viewport's worth of unique users
 let paintConcurrent = 0
 const paintQueue: Array<{ key: string; jobId: number }> = []
@@ -2991,7 +2991,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .dir-btn:hover { color: #aaa; }
 .dir-btn.active { background: #1a1a24; color: #9d6cff; border-color: #6f2bff55; }
 
-/* Visuals bar — desktop dropdown */
+/* Visuals bar - desktop dropdown */
 .visuals-bar { position: relative; flex-shrink: 0; flex-direction: column; gap: 4px; }
 .visuals-toggle {
   height: 34px; padding: 0 14px; border: 1px solid #9d6cff44;
