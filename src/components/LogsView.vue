@@ -3096,7 +3096,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   width: 100%;
   height: 100%;
   padding: 0 10px;
-  background: transparent;
+  background: #0d0d10;
+  border: 0;
   color: #555;;
   font-size: 11px;
   font-weight: 600;
