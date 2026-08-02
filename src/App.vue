@@ -28,15 +28,15 @@ function selectChannel(ch: string) {
   showChannelMenu.value = false
 }
 
-type NavItem = 'dashboard' | 'commands' | 'logs' | 'moderation' | 'roles' | 'automations' | 'tools' | 'features' | 'settings'
+type NavItem = 'dashboard' | 'commands' | 'logs' | 'moderation' | 'roles' | 'automations' | 'uploads' | 'tools' | 'settings'
 const activeRoute = computed(() => {
   const p = route.path.replace('/', '') || 'dashboard'
-  // >>> treat /more as /tools (backwards compat)
-  return p === 'more' ? 'tools' : p
+  // >>> treat /more as /uploads (backwards compat)
+  return p === 'more' ? 'uploads' : p
 })
 
 function nav(to: NavItem) {
-  const PUBLIC: NavItem[] = ['logs', 'tools']
+  const PUBLIC: NavItem[] = ['logs', 'uploads']
   if (!PUBLIC.includes(to) && !session.value) { shakeLogin(); return }
   sidebarOpen.value = false
   router.push('/' + to)
@@ -114,14 +114,14 @@ function buildStaticIndex(): SearchResult[] {
     { label: 'Countdowns',      category: 'Page',     icon: '◈', action: () => router.push('/automations?tab=countdowns'), sub: 'Automations → Countdowns' },
     { label: 'Roles',           category: 'Page',     icon: '◈', action: () => router.push('/roles') },
     { label: 'Logs',            category: 'Page',     icon: '◈', action: () => router.push('/logs') },
-    { label: 'Uploads',         category: 'Page',     icon: '◈', action: () => router.push('/tools') },
-    { label: 'Tools',           category: 'Page',     icon: '◈', action: () => router.push('/features') },
+    { label: 'Uploads',         category: 'Page',     icon: '◈', action: () => router.push('/uploads') },
+    { label: 'Tools',           category: 'Page',     icon: '◈', action: () => router.push('/tools') },
     { label: 'Settings',        category: 'Page',     icon: '◈', action: () => router.push('/settings') },
     // >>> Sub-pages
     { label: 'Images',          category: 'Uploads',  icon: '🖼', action: () => router.push('/images'), sub: 'Upload and host images' },
     { label: 'Notes',           category: 'Uploads',  icon: '📄', action: () => router.push('/notes'),  sub: 'Create and share text snippets' },
     { label: 'OBS Widgets',     category: 'Tools',    icon: '📺', action: () => router.push('/obs-widgets'), sub: 'Live browser sources for OBS' },
-    { label: 'Variables & Counters', category: 'Tools', icon: '⚙', action: () => router.push('/features'), sub: 'View and edit $counter and $var values' },
+    { label: 'Variables & Counters', category: 'Tools', icon: '⚙', action: () => router.push('/tools'), sub: 'View and edit $counter and $var values' },
     // >>> Settings sub-sections
     { label: 'Command Prefix',  category: 'Settings', icon: '⚙', action: () => router.push('/settings'), sub: 'Change the bot command prefix' },
     { label: 'Logs Opt-Out',    category: 'Settings', icon: '⚙', action: () => router.push('/settings'), sub: 'Control chat log visibility' },
@@ -596,8 +596,8 @@ provide('searchOpenTrigger', searchOpenTrigger)
           @click="nav('roles')">
           {{ t('nav.roles') }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <button class="sidebar-btn" :class="{ active: activeRoute === 'features', locked: !session }"
-          @click="nav('features')">
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'tools', locked: !session }"
+          @click="nav('tools')">
           Tools <span v-if="!session" class="lock-icon">🔒</span>
         </button>
 
@@ -606,7 +606,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
         <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
           {{ t('nav.logs') }}
         </button>
-        <button class="sidebar-btn" :class="{ active: activeRoute === 'tools' }" @click="nav('tools')">
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'uploads' }" @click="nav('uploads')">
           Uploads
         </button>
 

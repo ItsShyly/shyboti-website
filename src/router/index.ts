@@ -21,9 +21,9 @@ const router = createRouter({
     // alone still works. Legacy ?channel=&user= links are still read by
     // LogsView for backwards compatibility.
     { path: '/logs/:channel?/:user?', component: LogsView },
-    { path: '/tools',       component: ToolsView },
-    { path: '/features',    component: () => import('../components/FeaturesView.vue') },
-    { path: '/more',        redirect: '/tools' },
+    { path: '/uploads',     component: ToolsView },
+    { path: '/tools',       component: () => import('../components/FeaturesView.vue') },
+    { path: '/more',        redirect: '/uploads' },
     { path: '/images',      component: () => import('../components/ImagesView.vue') },
     { path: '/obs-widgets', component: () => import('../components/ObsView.vue') },
     { path: '/notes',       component: () => import('../components/NotesView.vue') },
