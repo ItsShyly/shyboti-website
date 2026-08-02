@@ -1631,14 +1631,18 @@ function buildItems(messages: (LogMsg | AutomodMsg)[], _: any[]): DisplayItem[] 
   const items: DisplayItem[] = []
   let lastDay = ''
   const seenIds = new Set<string>()
+  const seenDays = new Set<string>()  // guard against duplicate separators if msgs aren't perfectly sorted
   for (const m of messages) {
     const msgId = m.id || `${m.timestamp}:${m.username}`
     if (seenIds.has(msgId)) continue
     seenIds.add(msgId)
     const day = fmtDayLabel(m.timestamp)
     if (day !== lastDay) {
-      items.push({ kind: 'day', id: `day-${day}`, label: day })
       lastDay = day
+      if (!seenDays.has(day)) {
+        seenDays.add(day)
+        items.push({ kind: 'day', id: `day-${day}`, label: day })
+      }
     }
     if ((m as any)._automod) {
       items.push({ kind: 'automod', id: msgId, msg: m as AutomodMsg })
@@ -3216,8 +3220,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     #17171d;
 }
 
-.top-loader  { text-align: center; font-size: 11px; color: #555; padding: 8px; }
-.top-loader.no-more { color: #333; }
+.top-loader  {
+  position: sticky; top: 0; z-index: 4;
+  text-align: center; font-size: 11px; color: #9d6cff;
+  padding: 8px; background: #101015;
+  border-bottom: 1px solid #1e1e24;
+}
+.top-loader.no-more { color: #333; background: transparent; border-bottom: none; position: static; }
 .spinner     { display: inline-block; animation: spin 1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
