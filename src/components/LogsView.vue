@@ -3089,7 +3089,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   top: 0;
   z-index: 4;
   background: #101015;
-  border-bottom: 1px solid #1e1e24;
+  border-bottom: 0;
 }
 .day-jump-btn {
   width: 100%;
