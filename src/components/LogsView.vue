@@ -1841,7 +1841,7 @@ function renderMsgWithMap(text: string, em: EmoteMap): string {
 
   for (const tok of tokens) {
     if (!tok) continue
-    // Whitespace token — keep as-is, not an emote
+    // Whitespace token - keep as-is, not an emote
     if (/^ +$/.test(tok)) {
       pieces.push({ html: tok, isOverlay: false, isEmote: false })
       continue

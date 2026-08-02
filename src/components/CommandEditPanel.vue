@@ -1039,7 +1039,7 @@ function removeArgVariant(i: number) {
           <!-- Name field with rename support -->
           <div v-if="!isBuiltIn" class="field-group">
             <label class="field-label">Command name
-              <span class="field-hint">Rename by changing this — saves with new name</span>
+              <span class="field-hint">Rename by changing this - saves with new name</span>
             </label>
             <div class="name-input-wrap">
               <span class="name-prefix">{{ prefix || '+' }}</span>
