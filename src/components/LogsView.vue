@@ -3095,7 +3095,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   width: 100%;
   height: 100%;
   padding: 10px 0;
-  background: #555;
+  background: #505062;
   border: 0;
   color: #555;;
   font-size: 11px;
@@ -3103,7 +3103,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   cursor: pointer;
   transition: color .15s, border-color .15s, background .15s;
 }
-.day-jump-btn:hover { color: #d2d2df; border-color: #505062; background: rgba(157,108,255,.06); }
+.day-jump-btn:hover { color: #d2d2df;  background: rgba(152, 101, 255, 0.473)};
 
 .logs-tbody-wrap { display: flex; flex: 1; min-height: 0; }
 .logs-tbody   { overflow-y: scroll; overflow-anchor: auto; flex: 1; position: relative; min-height: 0; scrollbar-width: none; }
