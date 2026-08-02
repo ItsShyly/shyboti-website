@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, type VNode, type Directive } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
@@ -220,11 +220,9 @@ const dateFrom   = ref('')
 const dateUntil  = ref('')
 
 function readInputs() {
-  channel.value    = channelInputRef.value?.value.trim().toLowerCase().replace(/^#/, '') ?? channel.value
-  userFilter.value = userInputRef.value?.value.trim() ?? userFilter.value
-  termFilter.value = termInputRef.value?.value.trim() ?? termFilter.value
-  // Date comes from the single VueDatePicker (dateSingle computed), which
-  // writes straight into dateFrom/dateUntil on selection - nothing to read here.
+  channel.value    = channelInputRef.value?.value.trim().toLowerCase().replace(/^#/, '') || channel.value
+  userFilter.value = userInputRef.value?.value.trim() || userFilter.value
+  termFilter.value = termInputRef.value?.value.trim() || termFilter.value
   dateFilter.value = dateFrom.value
 }
 
@@ -299,10 +297,14 @@ function vUpdateWindow() {
 
   const startIdx = findIndexFromOffset(scrollTop - overscanPx)
   const endIdx = Math.min(items.length, findIndexFromOffset(scrollTop + viewH + overscanPx) + 1)
+  const visIdx  = findIndexFromOffset(scrollTop)
 
-  vWinStart.value = startIdx
-  vWinEnd.value = endIdx
-  visibleStartIndex.value = findIndexFromOffset(scrollTop)
+  // Only update if changed - avoids the spacer oscillation loop where a
+  // 1-item window shift changes scrollHeight which triggers another scroll
+  // event which shifts the window back, causing 583px ↔ 611px flicker.
+  if (startIdx !== vWinStart.value) vWinStart.value = startIdx
+  if (endIdx   !== vWinEnd.value)   vWinEnd.value   = endIdx
+  if (visIdx   !== visibleStartIndex.value) visibleStartIndex.value = visIdx
 }
 
 const vSpacerTop = computed(() => {
@@ -452,8 +454,13 @@ function syncViewportMode() {
   if (isMobileView.value) desktopLogWidth.value = null
 }
 
-const hide7tv        = ref(false)
-const plainUsernames  = ref(false)
+// Single-select: showing 7TV paints/badges and forcing plain white names are
+// mutually exclusive display modes, not two independent toggles - having both
+// buttons "on" at once didn't make sense (white always wins visually) and was
+// just confusing to look at.
+const nameVisual     = ref<'7tv' | 'white'>('7tv')
+const hide7tv        = computed(() => nameVisual.value === 'white')
+const plainUsernames = computed(() => nameVisual.value === 'white')
 const visualsOpen     = ref(false)
 
 function formatDateSingle(d: Date | null): string {
@@ -865,14 +872,9 @@ async function loadOlder() {
     const cur = cursorMonth
     if (new Date(cur.y, cur.m - 1, 1) < cutoff) { noMore.value = true; return }
     loadingMore.value = true
-    await nextTick()  // ensure the "Loading older..." spinner renders before the (possibly instant) cache fetch
+    await nextTick()
     try {
-      // Load the WHOLE cached month in one prepend rather than 1000-message chunks.
-      // fetchMonth already fetched (and cached) the full month regardless, and the
-      // virtual scroller only ever mounts the visible slice, so showing the whole
-      // thing costs no extra render work - it just means far fewer chunk-boundary
-      // transitions (each one was a place the scroll-anchor bug could show up).
-      const full = await fetchMonth(ch, cur.y, cur.m, signal)  // instant from cache when paginating
+      const full = await fetchMonth(ch, cur.y, cur.m, signal)
       if (signal.aborted) { loadingMore.value = false; return }
       cursorMonth = prevMonth(cur)
       if (full.length > 0) await prependMsgs(full)
@@ -884,10 +886,9 @@ async function loadOlder() {
     const d = cursorDate
     if (d < cutoff) { noMore.value = true; return }
     loadingMore.value = true
-    await nextTick()  // ensure the "Loading older..." spinner renders before the (possibly instant) cache fetch
+    await nextTick()
     try {
-      // Load the WHOLE cached day in one prepend - see comment above.
-      const full = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)  // instant from cache when paginating
+      const full = await fetchDay(ch, d.getFullYear(), d.getMonth() + 1, d.getDate(), signal)
       if (signal.aborted) { loadingMore.value = false; return }
       cursorDate = prevDay(d)
       if (full.length > 0) await prependMsgs(full)
@@ -895,6 +896,11 @@ async function loadOlder() {
     } catch {}
     loadingMore.value = false
   }
+  // Guard: after prepend + scroll correction, ensure scrollTop is well past
+  // the trigger threshold so mobile doesn't immediately re-fire loadOlder.
+  await nextTick()
+  const body = getBody()
+  if (body && body.scrollTop < 180) body.scrollTop = 180
 }
 
 async function loadNewer() {
@@ -1490,11 +1496,22 @@ onMounted(async () => {
   const preload = new Image()
   preload.src = loadingOverlayLogoUrl
   readUrlState()
-  if (!channel.value && session.value?.channel) {
-    channel.value = session.value.channel
-    await nextTick()
-    if (channelInputRef.value) channelInputRef.value.value = channel.value
-  }
+  if (!channel.value && session.value?.channel) channel.value = session.value.channel
+  // The channel/user/term inputs are read directly from the DOM (not v-model,
+  // to avoid a re-render on every keystroke - see readInputs()), so whatever
+  // readUrlState()/session fallback just put into the *data* refs above also
+  // has to be written into the actual <input> elements here. Without this,
+  // the inputs stay empty on a fresh page load even though channel.value is
+  // set, and the first search() call's readInputs() then reads that empty
+  // DOM value back OVER channel.value (readInputs only falls back to the
+  // existing value on null/undefined, and an empty string from an untouched
+  // input is neither) - producing "Channel is required." despite the URL
+  // (or session) clearly having it. Same for direct /logs/<channel>/<user>
+  // links and the legacy ?channel=&user= query params.
+  await nextTick()
+  if (channelInputRef.value) channelInputRef.value.value = channel.value
+  if (userInputRef.value)    userInputRef.value.value    = userFilter.value
+  if (termInputRef.value)    termInputRef.value.value    = termFilter.value
   syncViewportMode()
   window.addEventListener('resize', syncViewportMode)
   document.addEventListener('click', onDocClickVisuals, true)
@@ -1680,11 +1697,14 @@ function parseDayLabel(label: string): Date | null {
 function dayLabelForIndex(idx: number): string | null {
   const list = displayItems.value
   const i0 = Math.max(0, Math.min(idx, list.length - 1))
+  // Scan backward until we find a day separator; if none, derive from the message timestamp
   for (let i = i0; i >= 0; i--) {
     const it = list[i]!
     if (it.kind === 'day') return it.label
-    return fmtDayLabel(it.msg.timestamp)
   }
+  // No day separator found above - use the timestamp of the item at idx
+  const fallback = list[i0]
+  if (fallback && fallback.kind !== 'day' && fallback.msg) return fmtDayLabel(fallback.msg.timestamp)
   return null
 }
 
@@ -2687,8 +2707,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               </div>
               <div class="options-group">
                 <span class="options-group-lbl show-mobile">Visuals</span>
-                <button class="dir-btn" :class="{ active: !hide7tv }" @click="hide7tv = !hide7tv" title="Toggle 7TV paints & badges">7TV</button>
-                <button class="dir-btn" :class="{ active: plainUsernames }" @click="plainUsernames = !plainUsernames" title="Show all usernames in white">White names</button>
+                <button class="dir-btn" :class="{ active: nameVisual === '7tv' }" @click="nameVisual = '7tv'" title="Show 7TV paints & badges">7TV</button>
+                <button class="dir-btn" :class="{ active: nameVisual === 'white' }" @click="nameVisual = 'white'" title="Show all usernames in white">White names</button>
               </div>
             </div>
           </div>
@@ -2732,6 +2752,15 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               <button class="day-jump-btn" @click="jumpOneDayUp">↑ jump to {{ jumpTargetDayLabel || '...' }}</button>
             </div>
             <div class="logs-tbody-wrap">
+            <!-- Pinned day header: rendered independently of the virtual-scroll window
+                 (unlike the in-flow .log-day-sep rows below, which only exist in the DOM
+                 while their index is inside [vWinStart, vWinEnd)). Relying on the in-flow
+                 rows' own `position: sticky` to stay pinned meant it only worked when the
+                 actual separator for the current day happened to still be rendered - once
+                 scrolled far enough that it fell outside the render window, there was
+                 nothing left to stick and the header disappeared. This one always reflects
+                 viewportDayLabel, which is derived from whatever's actually visible. -->
+            <div v-if="viewportDayLabel" class="pinned-day-header">{{ viewportDayLabel }}</div>
             <div
               class="logs-tbody"
               ref="scrollerRef"
@@ -3105,7 +3134,20 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 }
 .day-jump-btn:hover { color: #d2d2df;  background: rgba(152, 101, 255, 0.473);}
 
-.logs-tbody-wrap { display: flex; flex: 1; min-height: 0; }
+.logs-tbody-wrap { display: flex; flex: 1; min-height: 0; position: relative; }
+.pinned-day-header {
+  position: absolute;
+  top: 0; left: 0; right: 14px; /* 14px = width of the custom scrollbar track */
+  padding: 6px 12px 3px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #555;
+  letter-spacing: .05em;
+  background: #101015;
+  border-bottom: 1px solid #1e1e24;
+  z-index: 5;
+  pointer-events: none;
+}
 .logs-tbody   { overflow-y: scroll; overflow-anchor: auto; flex: 1; position: relative; min-height: 0; scrollbar-width: none; }
 .logs-tbody::-webkit-scrollbar { width: 0; height: 0; }
 .logs-custom-scrollbar {
@@ -3269,9 +3311,6 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   letter-spacing: .05em;
   border-top: 1px solid #1e1e24;
   background: #0d0d10;
-  position: sticky;
-  top: 0;
-  z-index: 2;
 }
 :deep(.log-badges) { display: inline-flex; align-items: center; gap: 4px; margin-right: 6px; flex-shrink: 0; }
 :deep(.badge-img) { display: block; width: 18px; height: 18px; }
@@ -3431,8 +3470,9 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 /* Direction toggle */
 .dir-toggle { display: flex; gap: 0; }
 .dir-btn {
-  height: 34px; padding: 0 12px; border: 1px solid #2a2a30; background: #0d0d10;
+  height: 34px; width: 96px; padding: 0 8px; border: 1px solid #2a2a30; background: #0d0d10;
   color: #555; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+  text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   transition: color .15s, background .15s;
 }
 .dir-btn:first-child { border-right: none; }
@@ -3559,7 +3599,10 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   .snippet-info { display: none !important; }
   /* Visuals: always show inline on mobile, no dropdown */
   .visuals-toggle { display: none !important; }
-  .visuals-panel  { display: flex !important; position: static; background: none; border: none; padding: 0; box-shadow: none; flex-direction: row; min-width: 0; }
+  .visuals-panel  { display: flex !important; position: static; background: none; border: none; padding: 0; box-shadow: none; flex-direction: row; min-width: 0; flex-wrap: wrap; gap: 6px; }
+  /* Bigger touch targets on mobile */
+  .dir-btn { height: 40px; width: auto !important; min-width: 72px; padding: 0 14px; font-size: 13px; }
+  .options-group { gap: 6px; }
 
   .logs-results { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .logs-table-wrap { flex: 1; min-height: 0; display: block; }
@@ -3576,8 +3619,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
     color: #555; letter-spacing: .05em;
     border-top: 1px solid #1e1e24;
     background: #0d0d10;
-    position: sticky; top: -2px; z-index: 1;
   }
+  .pinned-day-header { right: 0; }
 
   :deep(.log-row) {
     display: flex !important;
