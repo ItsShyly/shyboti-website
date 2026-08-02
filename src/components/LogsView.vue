@@ -3072,7 +3072,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   align-items: baseline;
   padding: 7px 0  14px;
   background: #0d0d10;
-  border: 1px solid #1e1e24;
+  border: 0;
   font-size: 10px;
   color: #555;
   text-transform: uppercase;
@@ -3095,7 +3095,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   width: 100%;
   height: 100%;
   padding: 10px 0;
-  background: #0d0d10;
+  background: #555;
   border: 0;
   color: #555;;
   font-size: 11px;
