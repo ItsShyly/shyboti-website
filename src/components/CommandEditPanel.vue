@@ -4,7 +4,9 @@ import { API } from '../api'
 import { useAuth } from '../auth'
 import { highlightScript } from '../composables/scriptHighlight'
 import { mockEval, resetMockState, seedMockState, DEFAULT_MOCK, type MockContext } from '../composables/scriptMockEval'
-import { REF_GROUPS, renderRefToken } from '../composables/scriptReference'
+import { useOverlayClose } from '../composables/useOverlayClose'
+import EditableNameHeader from './shared/EditableNameHeader.vue'
+import RefPanel from './shared/RefPanel.vue'
 import { useI18n } from '../i18n'
 
 export interface CustomCommand {
@@ -21,26 +23,13 @@ const props = defineProps<Props>()
 const emit  = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
 const { session } = useAuth()
 const { t } = useI18n()
+const overlay = useOverlayClose()
 
 const loading       = ref(true)
 const saving        = ref(false)
 const saved         = ref(false)
 const deleting      = ref(false)
 const deleteConfirm = ref(false)
-
-// >>> Clickable inline rename - click the command name in the panel header to edit it,
-// >>> replacing the old separate "Command name" field + hint text further down the form.
-const editingName  = ref(false)
-const nameInputEl  = ref<HTMLInputElement | null>(null)
-function startEditingName() {
-  if (props.isBuiltIn) return
-  editingName.value = true
-  nextTick(() => { nameInputEl.value?.focus(); nameInputEl.value?.select() })
-}
-function stopEditingName() {
-  editingName.value = false
-  if (!form.value.name.trim()) form.value.name = props.cmdName // don't allow blanking the name
-}
 
 const form = ref<CustomCommand>({
   name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
@@ -455,7 +444,7 @@ function syncResponseFromChip(chipIdx: number, newUsage: string) {
   updatePreview()
 }
 
-watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; editingName.value = false } })
+watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false } })
 onMounted(() => { if (props.open) load() })
 
 watch(() => form.value.response, (src) => {
@@ -550,139 +539,6 @@ const COMPLETIONS = [
   '$cooldown.set()', '$cooldown.user()',
   '$index', '$last_error',
 ]
-
-const REF_GROUPS = [
-  { label: 'Control Flow', items: [
-    { token: '$if(condition)', desc: 'Conditional block', example: '$if($user.is(mod))' },
-    { token: '$else', desc: 'Else branch', example: '' },
-    { token: '$end', desc: 'End block', example: '' },
-    { token: '$foreach(item in list)', desc: 'Loop over list', example: '$foreach(q in $list.quotes)' },
-    { token: '$repeat(n)', desc: 'Repeat n times', example: '$repeat(3)' },
-    { token: '$define name(params)', desc: 'Define a macro', example: '$define greet(user)' },
-    { token: '$index', desc: 'Current loop index (0-based)', example: '' },
-  ]},
-  { label: 'Counters', items: [
-    { token: '$counter.name', desc: 'Increment +1, return value', example: '$counter.wins' },
-    { token: '$counter.name.get', desc: 'Read without changing', example: '$counter.wins.get' },
-    { token: '$counter.name.set(n)', desc: 'Set to value', example: '$counter.wins.set(10)' },
-    { token: '$counter.name.add(n)', desc: 'Add value', example: '$counter.wins.add(5)' },
-    { token: '$counter.name.reset', desc: 'Reset to 0', example: '$counter.wins.reset' },
-    { token: '$ucounter.name', desc: 'Per-user counter', example: '$ucounter.hugs' },
-  ]},
-  { label: 'Variables', items: [
-    { token: '$var.name', desc: 'Read variable', example: '$var.lastSong' },
-    { token: '$var.name.set(value)', desc: 'Set variable', example: '$var.lastSong.set($args)' },
-    { token: '$var.name.delete', desc: 'Delete variable', example: '$var.lastSong.delete' },
-    { token: '$uvar.name', desc: 'Per-user variable', example: '$uvar.points' },
-  ]},
-  { label: 'Lists', items: [
-    { token: '$list.name', desc: 'Random item from list', example: '$list.quotes' },
-    { token: '$list.name.add(value)', desc: 'Add to list', example: '$list.quotes.add($args)' },
-    { token: '$list.name.remove(value)', desc: 'Remove value', example: '$list.quotes.remove($args)' },
-    { token: '$list.name.get(index)', desc: 'Get by index', example: '$list.quotes.get(0)' },
-    { token: '$list.name.size', desc: 'Number of items', example: '$list.quotes.size' },
-    { token: '$list.name.random', desc: 'Random item', example: '$list.quotes.random' },
-    { token: '$list.name.clear', desc: 'Clear list', example: '$list.quotes.clear' },
-  ]},
-  { label: 'User', items: [
-    { token: '$user.name', desc: 'Login name', example: 'coolstreamer' },
-    { token: '$user.display', desc: 'Display name', example: 'CoolStreamer' },
-    { token: '$user.mention', desc: '@DisplayName', example: '@CoolStreamer' },
-    { token: '$user.followage', desc: 'How long following', example: '2 years, 3 months' },
-    { token: '$user.is(mod)', desc: 'true/false', example: 'false' },
-    { token: '$user.is(sub)', desc: 'true/false', example: 'true' },
-    { token: '$user.is(vip)', desc: 'true/false', example: 'false' },
-    { token: '$user.is(broadcaster)', desc: 'true/false', example: 'false' },
-    { token: '$target.name', desc: 'First argument as user', example: 'coolstreamer (the @mention arg)' },
-    { token: '$target.mention', desc: '@target', example: '@coolstreamer' },
-  ]},
-  { label: 'Channel', items: [
-    { token: '$channel.name', desc: 'Channel login', example: 'mystream' },
-    { token: '$channel.title', desc: 'Stream title', example: 'Playing some games!' },
-    { token: '$channel.game', desc: 'Current game', example: 'Just Chatting' },
-    { token: '$channel.viewers', desc: 'Viewer count', example: '42' },
-    { token: '$channel.isLive', desc: 'true/false', example: 'true' },
-    { token: '$channel.uptime', desc: 'Stream uptime', example: '1h 23m' },
-  ]},
-  { label: 'Arguments', items: [
-    { token: '$args', desc: 'All arguments', example: 'hello world' },
-    { token: '$args.count', desc: 'Number of args', example: '2' },
-    { token: '$1 $2 $3', desc: 'Individual args', example: '$1 → hello, $2 → world' },
-    { token: '$query', desc: 'Alias for $args', example: 'hello world' },
-  ]},
-  { label: 'Random', items: [
-    { token: '$random.int(min,max)', desc: 'Random integer', example: '$random.int(1,100) → 42' },
-    { token: '$random.pick(a,b,c)', desc: 'Random from list', example: '$random.pick(yes,no,maybe) → maybe' },
-    { token: '$random.chance(pct)', desc: 'true with pct% chance', example: '$random.chance(30) → true' },
-  ]},
-  { label: 'Text', items: [
-    { token: '$text.upper(text)', desc: 'Uppercase', example: '$text.upper($user.name) → COOLSTREAMER' },
-    { token: '$text.lower(text)', desc: 'Lowercase', example: '$text.lower(Hello) → hello' },
-    { token: '$text.replace(text,from,to)', desc: 'Replace', example: '$text.replace($args,bad,***)' },
-    { token: '$text.contains(text,val)', desc: 'true/false', example: '$text.contains($args,hello) → true' },
-    { token: '$text.len(text)', desc: 'String length', example: '$text.len($args) → 11' },
-    { token: '$text.trim(text)', desc: 'Trim whitespace', example: '$text.trim( hello ) → hello' },
-    { token: '$calc(expr)', desc: 'Math expression', example: '$calc(2 + 3) → 5' },
-  ]},
-  { label: 'Time', items: [
-    { token: '$time.now', desc: 'Current ISO timestamp', example: '2025-01-01T12:00:00Z' },
-    { token: '$time.unix', desc: 'Unix timestamp (seconds)', example: '1735732800' },
-    { token: '$time.ago(ts)', desc: 'Human time since ts', example: '$time.ago($var.lastSeen) → 3 hours ago' },
-    { token: '$time.format(ts,fmt)', desc: 'Format timestamp', example: '$time.format($time.now,HH:mm) → 12:00' },
-  ]},
-  { label: 'HTTP', items: [
-    { token: '$http.get(url)', desc: 'GET request, returns text', example: '$http.get(https://api.example.com/joke)' },
-    { token: '$http.post(url,body)', desc: 'POST request', example: '$http.post(https://api.example.com/log,$args)' },
-    { token: '$http.json(url,path)', desc: 'GET + extract JSON path', example: '$http.json(https://api.example.com/data,$.name)' },
-  ]},
-  { label: 'Twitch', items: [
-    { token: '$twitch.uptime', desc: 'Stream uptime', example: '1h 23m' },
-    { token: '$twitch.game', desc: 'Current game', example: 'Just Chatting' },
-    { token: '$twitch.title', desc: 'Stream title', example: 'Playing games!' },
-    { token: '$twitch.followers(user)', desc: 'Follower count', example: '$twitch.followers($user.name) → 1234' },
-  ]},
-  { label: 'Emotes', items: [
-    { token: '$emote.has(7tv,code)', desc: 'Check if emote exists', example: '$emote.has(7tv,KEKW) → true' },
-    { token: '$emote.count(7tv)', desc: 'Count emotes', example: '42' },
-  ]},
-  { label: 'Command', items: [
-    { token: '$command.output', desc: 'Built-in command output', example: 'Now playing: Never Gonna Give You Up' },
-    { token: '$command.uses', desc: 'Times command was used', example: '17' },
-    { token: '$command.name', desc: 'Command name', example: '!song' },
-  ]},
-  { label: 'Moderation', items: [
-    { token: '$mod.timeout(user,seconds)', desc: 'Timeout user', example: '$mod.timeout($target.name,60)' },
-    { token: '$mod.ban(user)', desc: 'Ban user', example: '$mod.ban($target.name)' },
-    { token: '$mod.delete(msg_id)', desc: 'Delete message', example: '$mod.delete($message.id)' },
-    { token: '$mod.purge(user)', desc: 'Purge user messages', example: '$mod.purge($target.name)' },
-  ]},
-]
-
-function renderRefToken(token: string): string {
-  let result = token
-  const namePrefixes = ['$counter.', '$ucounter.', '$var.', '$uvar.', '$list.']
-  for (const prefix of namePrefixes) {
-    if (result.startsWith(prefix)) {
-      const rest = result.slice(prefix.length)
-      const m = rest.match(/^(\w+)(.*)/s)
-      if (m) {
-        result = prefix + `<span class="ref-token-name">${m[1]}</span>` + (m[2] ?? '')
-      }
-      break
-    }
-  }
-  result = result.replace(/\(([^)]+)\)/g, (_, inner: string) => {
-    const colored = inner.split(',').map(part => {
-      const trimmed = part.trim()
-      if (/^[a-zA-Z_]\w*$/.test(trimmed)) {
-        return `<span class="ref-token-name">${trimmed}</span>`
-      }
-      return part
-    }).join(',')
-    return `(${colored})`
-  })
-  return result
-}
 
 function updatePreview() {
   try {
@@ -878,6 +734,22 @@ function acceptCurrentGhost() {
   ghostSuggestion.value = ''; ghostMatches.value = []; ghostMatchIdx.value = 0; _lastGhostPartial = ''
 }
 
+// >>> Reference panel click-to-insert - inserts at the response editor's cursor,
+// >>> using the same caret-preserving helpers as the ghost autocomplete above.
+function insertRefToken(token: string) {
+  const el = normalEditorRef.value; if (!el) return
+  removeGhostSpan()
+  el.focus()
+  const text   = form.value.response || ''
+  const offset = getTextOffset(el)
+  const newText = text.slice(0, offset) + token + text.slice(offset)
+  form.value.response = newText
+  el.innerText = newText
+  applyNormalHighlight(el, newText)
+  nextTick(() => restoreTextOffset(el, offset + token.length))
+  updatePreview()
+}
+
 function onNormalKeydown(e: KeyboardEvent) {
   if (props.isBuiltIn) {
     const el = normalEditorRef.value; if (!el) return
@@ -952,45 +824,28 @@ function removeArgVariant(i: number) {
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="panel-overlay" @click.self="emit('close')">
-      <div class="panel">
+    <div v-if="open" class="ep-overlay" v-bind="overlay.handlers(() => emit('close'))">
+      <div class="ep-panel">
 
-        <div class="panel-header">
+        <div class="ep-panel-header">
           <div>
-            <div class="panel-title">
+            <div class="ep-panel-title">
               Edit
-              <span v-if="!editingName"
-                class="panel-cmd"
-                :class="{ 'panel-cmd-editable': !isBuiltIn }"
-                :title="isBuiltIn ? undefined : 'Click to rename'"
-                @click="startEditingName"
-              >+{{ form.name || cmdName }}<span v-if="!isBuiltIn" class="panel-cmd-edit-icon">✎</span></span>
-              <span v-else class="panel-cmd-rename-wrap">
-                <span class="name-prefix">{{ prefix || '+' }}</span>
-                <input
-                  ref="nameInputEl"
-                  v-model="form.name"
-                  class="panel-cmd-rename-input"
-                  placeholder="commandname"
-                  @blur="stopEditingName"
-                  @keydown.enter="stopEditingName"
-                  @keydown.esc="stopEditingName"
-                />
-              </span>
+              <EditableNameHeader v-model="form.name" :orig-name="cmdName" :prefix="prefix || '+'" placeholder="commandname" :disabled="!!isBuiltIn" />
             </div>
-            <div class="panel-sub">Rule builder for #{{ channel }}</div>
+            <div class="ep-panel-sub">Rule builder for #{{ channel }}</div>
           </div>
-          <button class="panel-close" @click="emit('close')">✕</button>
+          <button class="ep-panel-close" @click="emit('close')">✕</button>
         </div>
 
-        <div v-if="loading" class="panel-loading">{{ t('edit.saving').replace('…','…') || 'Loading…' }}</div>
-        <div v-else class="panel-body">
+        <div v-if="loading" class="ep-panel-loading">{{ t('edit.saving').replace('…','…') || 'Loading…' }}</div>
+        <div v-else class="ep-panel-body">
 
           <!--  Response / Script editor  -->
-          <div class="field-group">
-            <label class="field-label">
+          <div class="ep-field-group">
+            <label class="ep-field-label">
               {{ t('edit.response') }}
-              <span class="field-hint">{{ t('edit.response_hint') }}</span>
+              <span class="ep-field-hint">{{ t('edit.response_hint') }}</span>
             </label>
 
             <!-- locked $command.output prefix for built-in commands -->
@@ -1042,8 +897,8 @@ function removeArgVariant(i: number) {
               <summary class="mock-ctx-summary">{{ t('edit.mock_values') }}</summary>
               <div class="mock-ctx-body">
                 <div class="mock-ctx-grid">
-                  <label>user</label><input v-model="mockCtx.user" class="field-input mock-input" @input="mockCtx.display = mockCtx.user" />
-                  <label>message</label><input v-model="mockCtx.messageText" class="field-input mock-input" @input="() => { const w = mockCtx.messageText.split(' '); mockCtx.args = w.slice(1).join(' '); mockCtx.argList = w.slice(1) }" placeholder="message without command" />
+                  <label>user</label><input v-model="mockCtx.user" class="ep-field-input mock-input" @input="mockCtx.display = mockCtx.user" />
+                  <label>message</label><input v-model="mockCtx.messageText" class="ep-field-input mock-input" @input="() => { const w = mockCtx.messageText.split(' '); mockCtx.args = w.slice(1).join(' '); mockCtx.argList = w.slice(1) }" placeholder="message without command" />
                 </div>
                 <div class="mock-role-row">
                   <span class="mock-role-hint">Role:</span>
@@ -1056,43 +911,31 @@ function removeArgVariant(i: number) {
             </details>
 
             <!-- Variable reference -->
-            <details class="ref-panel">
-              <summary class="ref-summary">{{ t('edit.var_ref') }}</summary>
-              <div class="ref-content">
-                <div class="ref-group" v-for="g in REF_GROUPS" :key="g.label">
-                  <div class="ref-group-label">{{ g.label }}</div>
-                  <div class="ref-row" v-for="r in g.items" :key="r.token" :class="{ 'has-example': !!r.example }">
-                    <code class="ref-token" v-html="renderRefToken(r.token)"></code>
-                    <span class="ref-desc">{{ r.desc }}</span>
-                    <span v-if="r.example" class="ref-example">{{ r.example }}</span>
-                  </div>
-                </div>
-              </div>
-            </details>
+            <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
           </div>
 
           <!-- Description field -->
-          <div class="field-group">
-            <label class="field-label">
+          <div class="ep-field-group">
+            <label class="ep-field-label">
               {{ t('edit.description') }}
-              <span v-if="isBuiltIn" class="field-hint">{{ t('edit.desc_hint_builtin') }}</span>
-              <span v-else class="field-hint">{{ t('edit.desc_hint_custom') }}</span>
+              <span v-if="isBuiltIn" class="ep-field-hint">{{ t('edit.desc_hint_builtin') }}</span>
+              <span v-else class="ep-field-hint">{{ t('edit.desc_hint_custom') }}</span>
             </label>
             <div v-if="isBuiltIn" class="desc-readonly">{{ form.description || '-' }}</div>
             <input
               v-else
               v-model="form.description"
-              class="field-input"
+              class="ep-field-input"
               :placeholder="t('edit.desc_placeholder')"
               maxlength="120"
             />
           </div>
 
           <!-- Arg variants editor (custom commands only) -->
-          <div v-if="!isBuiltIn" class="field-group">
+          <div v-if="!isBuiltIn" class="ep-field-group">
             <div class="arg-descs-header">
-              <label class="field-label">Argument Variants
-                <span class="field-hint">Auto-detected from response - edit chips to update the response</span>
+              <label class="ep-field-label">Argument Variants
+                <span class="ep-field-hint">Auto-detected from response - edit chips to update the response</span>
               </label>
               <button class="arg-add-btn" @click="addArgVariant" type="button">+ Arg</button>
             </div>
@@ -1104,13 +947,13 @@ function removeArgVariant(i: number) {
                 <span class="arg-desc-prefix">{{ prefix || '+' }}{{ form.name }}</span>
                 <input
                   :value="form.arg_descs[i]?.usage ?? ''"
-                  class="field-input arg-usage-input"
+                  class="ep-field-input arg-usage-input"
                   placeholder="<value>"
                   @change="(e) => { const val = (e.target as HTMLInputElement).value; if (form.arg_descs[i]) { form.arg_descs[i].usage = val; syncResponseFromChip(i, val) } }"
                 />
                 <input
                   :value="form.arg_descs[i]?.desc ?? ''"
-                  class="field-input arg-desc-input"
+                  class="ep-field-input arg-desc-input"
                   placeholder="What this variant does…"
                   @change="(e) => { if (form.arg_descs[i]) form.arg_descs[i].desc = (e.target as HTMLInputElement).value }"
                 />
@@ -1119,47 +962,47 @@ function removeArgVariant(i: number) {
             </div>
           </div>
 
-          <div class="cond-row">
-            <div class="field-group sm">
-              <label class="field-label">{{ t('edit.active_when') }}</label>
-              <select v-model="form.enabled_when" class="field-select">
+          <div class="ep-row-3">
+            <div class="ep-field-group ep-sm">
+              <label class="ep-field-label">{{ t('edit.active_when') }}</label>
+              <select v-model="form.enabled_when" class="ep-field-select">
                 <option value="always">{{ t('edit.when.always') }}</option>
                 <option value="online">{{ t('edit.when.online') }}</option>
                 <option value="offline">{{ t('edit.when.offline') }}</option>
               </select>
             </div>
-            <div class="field-group sm">
-              <label class="field-label">{{ t('edit.required_game') }} <span class="field-hint">{{ t('edit.optional') }}</span></label>
-              <input v-model="form.required_game" class="field-input" placeholder="Fortnite" />
+            <div class="ep-field-group ep-sm">
+              <label class="ep-field-label">{{ t('edit.required_game') }} <span class="ep-field-hint">{{ t('edit.optional') }}</span></label>
+              <input v-model="form.required_game" class="ep-field-input" placeholder="Fortnite" />
             </div>
-            <div class="field-group sm">
-              <label class="field-label">{{ t('edit.alias') }} <span class="field-hint">{{ t('edit.optional') }}</span></label>
-              <input v-model="form.alias" class="field-input" placeholder="shortname" />
+            <div class="ep-field-group ep-sm">
+              <label class="ep-field-label">{{ t('edit.alias') }} <span class="ep-field-hint">{{ t('edit.optional') }}</span></label>
+              <input v-model="form.alias" class="ep-field-input" placeholder="shortname" />
             </div>
           </div>
 
-          <div class="cond-row">
-            <div class="field-group sm">
-              <label class="field-label">{{ t('edit.global_cd') }} <span class="field-hint">{{ t('edit.seconds_short') }}</span></label>
-              <input v-model.number="form.cooldown" type="number" min="0" class="field-input" />
+          <div class="ep-row-3">
+            <div class="ep-field-group ep-sm">
+              <label class="ep-field-label">{{ t('edit.global_cd') }} <span class="ep-field-hint">{{ t('edit.seconds_short') }}</span></label>
+              <input v-model.number="form.cooldown" type="number" min="0" class="ep-field-input" />
             </div>
-            <div class="field-group sm">
-              <label class="field-label">{{ t('edit.user_cd') }} <span class="field-hint">{{ t('edit.seconds_short') }}</span></label>
-              <input v-model.number="form.userCooldown" type="number" min="0" class="field-input" />
+            <div class="ep-field-group ep-sm">
+              <label class="ep-field-label">{{ t('edit.user_cd') }} <span class="ep-field-hint">{{ t('edit.seconds_short') }}</span></label>
+              <input v-model.number="form.userCooldown" type="number" min="0" class="ep-field-input" />
             </div>
           </div>
 
         </div>
 
         <!-- Footer pinned outside scroll area -->
-        <div class="panel-footer">
-          <button v-if="!isBuiltIn" class="btn-delete" :class="{ confirm: deleteConfirm }" :disabled="deleting" @click="deleteCmd">
+        <div class="ep-panel-footer">
+          <button v-if="!isBuiltIn" class="ep-btn-delete" :class="{ confirm: deleteConfirm }" :disabled="deleting" @click="deleteCmd">
             {{ deleting ? t('edit.deleting') : deleteConfirm ? t('edit.confirm_delete') : t('edit.delete') }}
           </button>
           <div v-else></div>
-          <div class="footer-right">
-            <button class="btn-cancel" @click="emit('close')">{{ t('edit.cancel') }}</button>
-            <button class="btn-save"
+          <div class="ep-footer-right">
+            <button class="ep-btn-cancel" @click="emit('close')">{{ t('edit.cancel') }}</button>
+            <button class="ep-btn-save"
               :disabled="saving"
               @click="save"
             >{{ saved ? t('edit.saved') : saving ? t('edit.saving') : t('edit.save') }}</button>
@@ -1172,53 +1015,8 @@ function removeArgVariant(i: number) {
 </template>
 
 <style scoped>
-.panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: flex-start; justify-content: flex-end; z-index: 1000; }
-.panel { width: 720px; max-width: 100vw; height: 100vh; background: #1a1a1e; border-left: 1px solid #2a2a30; display: flex; flex-direction: column; overflow: hidden; animation: slideIn .2s ease; }
-@keyframes slideIn { from { transform: translateX(40px); opacity: 0 } to { transform: none; opacity: 1 } }
-.panel-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #222; flex-shrink: 0; }
-.panel-title { font-size: 16px; font-weight: 700; color: #e0e0e0; }
-.panel-cmd   { color: #9d6cff; }
-.panel-cmd-editable { cursor: pointer; border-radius: 4px; padding: 1px 4px; margin: -1px -4px; transition: background .12s; }
-.panel-cmd-editable:hover { background: #2a2440; }
-.panel-cmd-edit-icon { font-size: 11px; opacity: .5; margin-left: 4px; }
-.panel-cmd-rename-wrap { display: inline-flex; align-items: center; border: 1px solid #9d6cff; border-radius: 4px; background: #0d0d10; vertical-align: middle; }
-.panel-cmd-rename-wrap .name-prefix { color: #9d6cff; font-weight: 700; font-size: 13px; padding-left: 8px; }
-.panel-cmd-rename-input { border: none; background: transparent; color: #e0e0e0; font-size: 13px; font-weight: 700; padding: 4px 8px 4px 2px; outline: none; width: 160px; }
-.panel-sub   { font-size: 11px; color: #555; margin-top: 3px; }
-.panel-close { width: 28px; height: 28px; border: none; background: transparent; color: #555; font-size: 14px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-.panel-close:hover { color: #e0e0e0; }
-.panel-loading { padding: 40px; text-align: center; color: #555; font-size: 13px; }
-.panel-body { flex: 1; overflow-y: scroll; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; scrollbar-width: none; }
-.panel-body::-webkit-scrollbar { display: none; }
-
-.field-group { display: flex; flex-direction: column; gap: 5px; }
-.field-group.sm { flex: 1; min-width: 0; }
-.field-label { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; }
-.field-hint  { font-size: 10px; color: #555; font-weight: 400; text-transform: none; letter-spacing: 0; }
-.hint-code   { font-family: 'Consolas','Fira Mono',monospace; color: #4ec9b0; font-style: normal; font-size: 10px; background: rgba(78,201,176,.1); padding: 1px 4px; border-radius: 2px; }
-.field-input, .field-textarea, .field-select { background: #111217; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 13px; padding: 7px 10px; outline: none; transition: border-color .15s; }
-.field-input:focus, .field-textarea:focus, .field-select:focus { border-color: #6f2bff55; }
-.field-textarea { resize: vertical; min-height: 52px; }
-.field-select   { appearance: none; cursor: pointer; }
-
-.cond-row { display: flex; gap: 10px; }
-.panel-footer { display: flex; align-items: center; justify-content: space-between; padding: 12px 24px; border-top: 1px solid #222; flex-shrink: 0; background: #1a1a1e; }
-.footer-right { display: flex; gap: 8px; }
-.btn-save { height: 34px; padding: 0 20px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s; }
-.btn-save:hover:not(:disabled) { background: #7f3fff; }
-.btn-save:disabled { opacity: .4; cursor: not-allowed; }
-.btn-save.saved   { background: #1a3d2a; color: #23d18b; }
-.btn-cancel { height: 34px; padding: 0 16px; border: 1px solid #333; background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer; }
-.btn-cancel:hover { border-color: #555; color: #e0e0e0; }
-.btn-delete { height: 34px; padding: 0 14px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 12px; cursor: pointer; transition: background .15s, border-color .15s; }
-.btn-delete:hover:not(:disabled) { background: #f1494911; }
-.btn-delete:disabled { opacity: .4; cursor: not-allowed; }
-.btn-delete.confirm { border-color: #f14949aa; background: #f1494922; font-weight: 700; }
 .desc-readonly { font-size: 12px; color: #555; background: #0d0d10; border: 1px solid #1e1e22; padding: 7px 10px; font-style: italic; }
-
-.name-input-wrap { display: flex; align-items: center; border: 1px solid #2a2a30; background: #0d0d10; }
-.name-prefix { padding: 0 6px 0 10px; color: #9d6cff; font-weight: 700; font-size: 13px; flex-shrink: 0; }
-.name-input  { border: none !important; background: transparent !important; flex: 1; padding-left: 0 !important; }
+.hint-code   { font-family: 'Consolas','Fira Mono',monospace; color: #4ec9b0; font-style: normal; font-size: 10px; background: rgba(78,201,176,.1); padding: 1px 4px; border-radius: 2px; }
 
 /* Arg variants editor */
 .arg-descs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
@@ -1346,7 +1144,6 @@ function removeArgVariant(i: number) {
 .validation-pill.cond_invalid  { color: #f9a84d; background: rgba(249,168,77,.10);  border: 1px solid rgba(249,168,77,.3);  }
 .validation-pill.body_missing  { color: #4ec9b0; background: rgba(78,201,176,.10);  border: 1px solid rgba(78,201,176,.3);  }
 
-.ghost-overlay { display: none; }
 .normal-hint { font-size: 10px; color: #383838; }
 .normal-hint code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; }
 
@@ -1362,13 +1159,13 @@ function removeArgVariant(i: number) {
 }
 
 /*  Mock context  */
-.mock-ctx-details, .ref-panel { border: 1px solid #1e1e22; }
-.mock-ctx-summary, .ref-summary {
+.mock-ctx-details { border: 1px solid #1e1e22; }
+.mock-ctx-summary {
   padding: 6px 10px; font-size: 10px; font-weight: 600; color: #555;
   text-transform: uppercase; letter-spacing: .05em;
   cursor: pointer; user-select: none; list-style: none;
 }
-.mock-ctx-summary:hover, .ref-summary:hover { color: #888; }
+.mock-ctx-summary:hover { color: #888; }
 .mock-ctx-grid {
   display: grid; grid-template-columns: 60px 1fr; gap: 4px 8px;
   padding: 8px 10px; align-items: center;
@@ -1380,58 +1177,19 @@ function removeArgVariant(i: number) {
 .mock-role-hint { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
 .mock-check-label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #666; cursor: pointer; }
 .mock-check-label input { accent-color: #6f2bff; }
-
-/*  Reference panel  */
-.ref-content { max-height: 320px; overflow-y: scroll; padding: 8px 10px; display: flex; flex-direction: column; gap: 10px; scrollbar-width: none; }
-.ref-content::-webkit-scrollbar { display: none; }
-.ref-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9d6cff; margin-bottom: 3px; }
-.ref-row { display: flex; align-items: baseline; gap: 8px; padding: 1px 0; }
-.ref-token { font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; color: #4ec9b0; background: rgba(78,201,176,.08); padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
-:deep(.ref-token-name) { color: #7cb8ea; font-style: italic; }
-.ref-desc { font-size: 10px; color: #484848; flex: 1; }
-.ref-row { position: relative; }
-.ref-example {
-  display: none; position: absolute; right: 0; top: 50%; transform: translateY(-50%);
-  font-family: 'Consolas','Fira Mono',monospace; font-size: 10px;
-  color: #23d18b; background: #0d1a13; border: 1px solid rgba(35,209,139,.3);
-  padding: 2px 7px; white-space: nowrap; pointer-events: none; z-index: 10;
-  box-shadow: 0 2px 8px rgba(0,0,0,.5);
-}
-.ref-row.has-example:hover .ref-example { display: block; }
-.ref-row.has-example:hover .ref-desc { opacity: 0.4; }
 </style>
 
 <style>
-/* ── $if coloring ─────────────────────────────────────────────────────────── */
-
-/* $if keyword - just color, no background */
+/* ── $if coloring (unique to this rich editor) ────────────────────────────── */
 .sh-if-kw { font-weight: 600; }
-
-/* condition ( ... ) - subtle dashed underline shows it's a fillable slot */
 .sh-if-cond { }
 .sh-if-cond-empty   { background: rgba(126,200,227,.10); border-radius: 2px; outline: 1px dashed rgba(126,200,227,.4); }
 .sh-if-cond-invalid { background: rgba(249,168,77,.08);  border-radius: 2px; outline: 1px dashed rgba(249,168,77,.4);  }
-
-/* body { ... } - very faint tint to indicate it's a container */
 .sh-if-body { }
 .sh-if-body-empty { background: rgba(78,201,176,.06); border-radius: 2px; outline: 1px dashed rgba(78,201,176,.3); }
-
-/* parens/braces that belong to $if - inherit keyword color, bold */
 .sh-if-paren { font-weight: 600; }
 
-/* ── Standard token colors ────────────────────────────────────────────────── */
-.sh-kw      { color: #569cd6; font-weight: 600; }   /* other keywords (no background) */
-.sh-end     { font-size: 0.82em; opacity: 0.4; vertical-align: middle; }
-.sh-builtin { color: #9d6cff; }
-.sh-locked  { color: #9d6cff; border-bottom: 1px solid rgba(111,43,255,.4); cursor: not-allowed; }
-.sh-op      { color: #c792ea; }
-.sh-string  { color: #ce9178; }
-.sh-number  { color: #b5cea8; }
-.sh-custom  { color: #4fc1e9; }
-.sh-unknown { color: #d1c023; }
-.sh-error   { color: #f14949; text-decoration: underline wavy #f1494966; }
-
-/* Ghost autocomplete suffix */
+/* Ghost autocomplete suffix (unique to this editor's inline ghost span) */
 .ghost-inline {
   color: #3a3a50;
   pointer-events: none;

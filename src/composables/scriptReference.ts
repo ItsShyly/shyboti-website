@@ -142,7 +142,7 @@ export function renderRefToken(token: string): string {
       const rest = result.slice(prefix.length)
       const m = rest.match(/^(\w+)(.*)/s)
       if (m) {
-        result = prefix + `<span class="ref-token-name">${m[1]}</span>` + (m[2] ?? '')
+        result = prefix + `<span class="ep-ref-token-name">${m[1]}</span>` + (m[2] ?? '')
       }
       break
     }
@@ -151,7 +151,7 @@ export function renderRefToken(token: string): string {
     const colored = inner.split(',').map((part: string) => {
       const trimmed = part.trim()
       if (/^[a-zA-Z_]\w*$/.test(trimmed)) {
-        return `<span class="ref-token-name">${trimmed}</span>`
+        return `<span class="ep-ref-token-name">${trimmed}</span>`
       }
       return part
     }).join(',')

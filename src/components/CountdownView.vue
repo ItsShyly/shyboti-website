@@ -3,7 +3,10 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
-import { highlightScript } from '../composables/scriptHighlight'
+import { applyScriptHighlight, insertTokenAtCursor } from '../composables/useContentEditableScript'
+import { useOverlayClose } from '../composables/useOverlayClose'
+import EditableNameHeader from './shared/EditableNameHeader.vue'
+import RefPanel from './shared/RefPanel.vue'
 
 const { session, channelRole } = useAuth()
 const { t } = useI18n()
@@ -11,51 +14,6 @@ const { t } = useI18n()
 const canToggle = computed(() => channelRole.value?.permissions.automations_toggle ?? false)
 const canEdit   = computed(() => channelRole.value?.permissions.automations_edit   ?? false)
 const canDelete = computed(() => channelRole.value?.permissions.automations_delete ?? false)
-
-// >>> Variable reference for countdown scripts <<<
-const REF_GROUPS = [
-  { label: 'Countdown', items: [
-    { token: '$countdown.name.remaining', desc: 'Seconds remaining (use your countdown name)' },
-    { token: '$countdown.name.total',     desc: 'Total duration in seconds' },
-    { token: '$countdown.name.elapsed',   desc: 'Seconds elapsed' },
-    { token: '$countdown.name.percent',   desc: 'Percent complete (0-100)' },
-  ]},
-  { label: 'Channel', items: [
-    { token: '$channel.name',    desc: 'Channel login name' },
-    { token: '$channel.game',    desc: 'Current game' },
-    { token: '$channel.title',   desc: 'Stream title' },
-    { token: '$channel.viewers', desc: 'Viewer count' },
-    { token: '$channel.isLive',  desc: 'true/false' },
-    { token: '$channel.uptime',  desc: 'Stream uptime e.g. 1h 23m' },
-  ]},
-  { label: 'Variables', items: [
-    { token: '$var.name',              desc: 'Read channel variable' },
-    { token: '$var.name.set(value)',   desc: 'Set channel variable' },
-  ]},
-  { label: 'Counters', items: [
-    { token: '$counter.name',          desc: 'Increment +1, return value' },
-    { token: '$counter.name.get',      desc: 'Read without changing' },
-    { token: '$counter.name.set(n)',   desc: 'Set to value' },
-    { token: '$counter.name.add(n)',   desc: 'Add value' },
-    { token: '$counter.name.reset',    desc: 'Reset to 0' },
-  ]},
-  { label: 'Lists', items: [
-    { token: '$list.name',             desc: 'Random item from list' },
-    { token: '$list.name.size',        desc: 'Number of items' },
-    { token: '$list.name.random',      desc: 'Random item' },
-  ]},
-  { label: 'Random / Math', items: [
-    { token: '$random.int(min,max)',    desc: 'Random integer' },
-    { token: '$random.pick(a,b,c)',     desc: 'Pick from list' },
-    { token: '$calc(expr)',             desc: 'Math expression' },
-    { token: '$text.upper(text)',       desc: 'Uppercase' },
-    { token: '$http.get(url)',          desc: 'GET request, returns body' },
-  ]},
-  { label: 'Logic', items: [
-    { token: '$if($channel.isLive){ }',       desc: 'Only when live' },
-    { token: '$if($channel.viewers > 10){ }', desc: 'Viewer threshold' },
-  ]},
-]
 
 interface Countdown {
   id: number
@@ -82,7 +40,7 @@ const success     = ref('')
 const editOpen = ref(false)
 const isNew    = ref(false)
 const editOrigName = ref('')  // name before any in-progress rename, used to know which row to PUT/DELETE
-const overlayMousedown = ref(false)
+const overlay  = useOverlayClose()
 const editCountdown = ref<Partial<Countdown> & { name: string }>({
   name: '', duration_sec: 60, msg_start: '', msg_tick: '',
   tick_every_sec: 10, msg_end: '', enabled_when: 'always',
@@ -92,6 +50,10 @@ const editCountdown = ref<Partial<Countdown> & { name: string }>({
 const startEditorRef = ref<HTMLDivElement | null>(null)
 const tickEditorRef  = ref<HTMLDivElement | null>(null)
 const endEditorRef   = ref<HTMLDivElement | null>(null)
+// >>> Reference panel inserts into whichever of the 3 message editors was last
+// >>> focused - defaults to "start" if none has been focused yet this session.
+const activeField = ref<'msg_start' | 'msg_tick' | 'msg_end'>('msg_start')
+const FIELD_REFS = { msg_start: startEditorRef, msg_tick: tickEditorRef, msg_end: endEditorRef }
 
 function showSuccess(msg: string) { success.value = msg; setTimeout(() => success.value = '', 3000) }
 
@@ -165,6 +127,7 @@ function openNew() {
     condition: '', is_active: 1,
   }
   editOpen.value = true
+  activeField.value = 'msg_start'
   setTimeout(() => { initEditors() }, 50)
 }
 
@@ -173,19 +136,8 @@ function openEdit(cd: Countdown) {
   editOrigName.value = cd.name
   editCountdown.value = { ...cd }
   editOpen.value = true
+  activeField.value = 'msg_start'
   setTimeout(() => { initEditors() }, 50)
-}
-
-// >>> Clickable inline rename - click the countdown name in the panel header to edit it.
-const editingName = ref(false)
-const nameInputEl = ref<HTMLInputElement | null>(null)
-function startEditingName() {
-  editingName.value = true
-  nextTick(() => { nameInputEl.value?.focus(); nameInputEl.value?.select() })
-}
-function stopEditingName() {
-  editingName.value = false
-  if (!editCountdown.value.name?.trim()) editCountdown.value.name = editOrigName.value
 }
 
 function initEditors() {
@@ -197,39 +149,23 @@ function initEditors() {
     if (ref_) {
       const val = String(editCountdown.value[field] ?? '')
       ref_.innerText = val
-      applyHL(ref_)
+      applyScriptHighlight(ref_)
     }
   }
-}
-
-function applyHL(el: HTMLDivElement) {
-  const sel = window.getSelection(); let offset = 0
-  if (sel?.rangeCount && el.contains(sel.getRangeAt(0).startContainer)) {
-    const r = sel.getRangeAt(0); const pre = r.cloneRange()
-    pre.selectNodeContents(el); pre.setEnd(r.startContainer, r.startOffset)
-    offset = pre.toString().length
-  }
-  el.innerHTML = highlightScript(el.innerText.replace(/\n$/, ''))
-  let rem = offset, placed = false
-  function walk(node: Node) {
-    if (placed) return
-    if (node.nodeType === 3) {
-      const len = node.textContent?.length ?? 0
-      if (rem <= len) {
-        const r = document.createRange(); r.setStart(node, rem); r.collapse(true)
-        sel?.removeAllRanges(); sel?.addRange(r); placed = true; return
-      }
-      rem -= len; return
-    }
-    for (const c of Array.from(node.childNodes)) walk(c)
-  }
-  walk(el)
 }
 
 function onEditorInput(el: HTMLDivElement | null, field: 'msg_start' | 'msg_tick' | 'msg_end') {
   if (!el) return
   editCountdown.value[field] = el.innerText.replace(/\n$/, '')
-  applyHL(el)
+  applyScriptHighlight(el)
+}
+
+// >>> Reference panel click-to-insert - inserts into whichever message editor
+// >>> (start/tick/end) was last focused.
+function insertRefToken(token: string) {
+  const el = FIELD_REFS[activeField.value].value
+  if (!el) return
+  editCountdown.value[activeField.value] = insertTokenAtCursor(el, token)
 }
 
 const isBroadcaster = computed(() => channelRole.value?.role === 'broadcaster')
@@ -308,25 +244,25 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
 </script>
 
 <template>
-  <div class="view">
-    <div class="view-header">
+  <div class="ep-view">
+    <div class="ep-view-header">
       <div>
-        <div class="view-title">{{ t('countdown.title') }}</div>
-        <div class="view-sub">{{ t('countdown.sub') }} #{{ session?.channel }}</div>
+        <div class="ep-view-title">{{ t('countdown.title') }}</div>
+        <div class="ep-view-sub">{{ t('countdown.sub') }} #{{ session?.channel }}</div>
       </div>
-      <button class="btn-new" @click="(canEdit || isBroadcaster) && openNew()" :disabled="!canEdit && !isBroadcaster" :class="{ 'btn-new-disabled': !canEdit && !isBroadcaster }">
+      <button class="ep-btn-new" @click="(canEdit || isBroadcaster) && openNew()" :disabled="!canEdit && !isBroadcaster">
         {{ t('countdown.new') }}
       </button>
     </div>
 
-    <div v-if="success" class="toast success">{{ success }}</div>
-    <div v-if="error"   class="toast error">{{ error }}</div>
+    <div v-if="success" class="ep-toast success">{{ success }}</div>
+    <div v-if="error"   class="ep-toast error">{{ error }}</div>
 
-    <div v-if="loading" class="empty">{{ t('countdown.loading') }}</div>
-    <div v-else-if="!countdowns.length" class="empty">{{ t('countdown.empty') }}</div>
+    <div v-if="loading" class="ep-empty">{{ t('countdown.loading') }}</div>
+    <div v-else-if="!countdowns.length" class="ep-empty">{{ t('countdown.empty') }}</div>
 
-    <div v-else class="countdown-list">
-      <div v-for="cd in countdowns" :key="cd.id" class="countdown-row" :class="{ inactive: !cd.is_active }">
+    <div v-else class="ep-row-list">
+      <div v-for="cd in countdowns" :key="cd.id" class="ep-list-row countdown-row" :class="{ inactive: !cd.is_active }">
 
           <!-- Status indicator -->
           <div class="cd-status-dot" :class="cd.status ?? 'idle'"></div>
@@ -335,10 +271,10 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
           <div class="cd-info" @click="openEdit(cd)">
             <div class="cd-name">{{ cd.name }}</div>
             <div class="cd-meta">
-              <span class="meta-pill dur">⏱ {{ fmtDuration(cd.duration_sec) }}</span>
-              <span v-if="cd.tick_every_sec" class="meta-pill tick">↻ {{ t('countdown.field.tick_every') }} {{ cd.tick_every_sec }}s</span>
-              <span v-if="cd.enabled_when !== 'always'" class="meta-pill when">{{ cd.enabled_when }}</span>
-              <span v-if="cd.condition" class="meta-pill cond">if …</span>
+              <span class="ep-meta-pill dur">⏱ {{ fmtDuration(cd.duration_sec) }}</span>
+              <span v-if="cd.tick_every_sec" class="ep-meta-pill tick">↻ {{ t('countdown.field.tick_every') }} {{ cd.tick_every_sec }}s</span>
+              <span v-if="cd.enabled_when !== 'always'" class="ep-meta-pill when">{{ cd.enabled_when }}</span>
+              <span v-if="cd.condition" class="ep-meta-pill cond">if …</span>
             </div>
             <!-- Running countdown: show live remaining -->
             <div v-if="cd.status === 'running'" class="cd-remaining">
@@ -370,149 +306,123 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
           </div>
 
           <!-- Edit / Delete -->
-          <div class="row-actions">
-            <button class="btn-action edit" @click.stop="canEdit && openEdit(cd)" :class="{ 'btn-action-disabled': !canEdit }">
+          <div class="ep-row-actions">
+            <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(cd)" :class="{ disabled: !canEdit }">
               {{ canEdit ? t('countdown.edit') : t('countdown.view') }}
             </button>
-            <button v-if="canDelete" class="btn-action del" @click.stop="deleteCountdown(cd.name)" :disabled="saving === cd.name">✕</button>
+            <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteCountdown(cd.name)" :disabled="saving === cd.name">✕</button>
           </div>
         </div>
     </div>
 
     <!-- >>> Edit panel <<< -->
     <Teleport to="body">
-      <div v-if="editOpen" class="panel-overlay"
-        @mousedown.self="overlayMousedown = true"
-        @mouseup.self="if(overlayMousedown) editOpen = false; overlayMousedown = false"
-        @mouseleave="overlayMousedown = false">
-        <div class="panel">
-          <div class="panel-header">
+      <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => editOpen = false)">
+        <div class="ep-panel">
+          <div class="ep-panel-header">
             <div>
-              <div class="panel-title">
+              <div class="ep-panel-title">
                 <template v-if="isNew">{{ t('countdown.edit_new') }}</template>
                 <template v-else>
                   {{ t('countdown.edit_title') }}
-                  <span v-if="!editingName"
-                    class="panel-name-editable"
-                    title="Click to rename"
-                    @click="startEditingName"
-                  >{{ editCountdown.name }}<span class="panel-name-edit-icon">✎</span></span>
-                  <span v-else class="panel-name-rename-wrap">
-                    <input
-                      ref="nameInputEl"
-                      v-model="editCountdown.name"
-                      class="panel-name-rename-input"
-                      placeholder="hype"
-                      @blur="stopEditingName"
-                      @keydown.enter="stopEditingName"
-                      @keydown.esc="stopEditingName"
-                    />
-                  </span>
+                  <EditableNameHeader v-model="editCountdown.name" :orig-name="editOrigName" placeholder="hype" />
                 </template>
               </div>
-              <div class="panel-sub">#{{ session?.channel }}</div>
+              <div class="ep-panel-sub">#{{ session?.channel }}</div>
             </div>
-            <button class="panel-close" @click="editOpen = false">✕</button>
+            <button class="ep-panel-close" @click="editOpen = false">✕</button>
           </div>
 
-          <div class="panel-body">
+          <div class="ep-panel-body">
 
             <!-- Name (new only - existing countdowns are renamed via the clickable header title above) + Duration -->
-            <div class="row-2">
-              <div v-if="isNew" class="field-group">
-                <label class="field-label">{{ t('countdown.field.name') }} <span class="field-hint">{{ t('countdown.field.name_hint') }}</span></label>
-                <input v-model="editCountdown.name" class="field-input" placeholder="hype" />
+            <div class="ep-row-2">
+              <div v-if="isNew" class="ep-field-group">
+                <label class="ep-field-label">{{ t('countdown.field.name') }} <span class="ep-field-hint">{{ t('countdown.field.name_hint') }}</span></label>
+                <input v-model="editCountdown.name" class="ep-field-input" placeholder="hype" />
               </div>
-              <div class="field-group">
-                <label class="field-label">{{ t('countdown.field.seconds') }} <span class="field-hint">{{ t('countdown.field.secs_hint') }}</span></label>
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t('countdown.field.seconds') }} <span class="ep-field-hint">{{ t('countdown.field.secs_hint') }}</span></label>
                 <div class="dur-row">
-                  <input v-model.number="editCountdown.duration_sec" type="number" min="1" class="field-input" />
-                  <span class="field-hint">= {{ fmtDuration(editCountdown.duration_sec ?? 60) }}</span>
+                  <input v-model.number="editCountdown.duration_sec" type="number" min="1" class="ep-field-input" />
+                  <span class="ep-field-hint">= {{ fmtDuration(editCountdown.duration_sec ?? 60) }}</span>
                 </div>
               </div>
             </div>
 
             <!-- On start message -->
-            <div class="field-group">
-              <label class="field-label">{{ t('countdown.field.msg_start') }} <span class="field-hint">{{ t('countdown.field.resp_hint') }}</span></label>
+            <div class="ep-field-group">
+              <label class="ep-field-label">{{ t('countdown.field.msg_start') }} <span class="ep-field-hint">{{ t('countdown.field.resp_hint') }}</span></label>
               <div
                 ref="startEditorRef"
-                class="script-editor"
+                class="ep-script-editor"
                 contenteditable="true"
                 spellcheck="false"
                 data-placeholder="Countdown gestartet! $countdown.hype.remaining Sekunden verbleiben."
+                @focus="activeField = 'msg_start'"
                 @input="onEditorInput(startEditorRef, 'msg_start')"
               ></div>
             </div>
 
             <!-- Tick -->
-            <div class="row-2">
-              <div class="field-group">
-                <label class="field-label">{{ t('countdown.field.msg_tick') }} <span class="field-hint">{{ t('countdown.field.tick_hint') }}</span></label>
+            <div class="ep-row-2">
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t('countdown.field.msg_tick') }} <span class="ep-field-hint">{{ t('countdown.field.tick_hint') }}</span></label>
                 <div
                   ref="tickEditorRef"
-                  class="script-editor"
+                  class="ep-script-editor"
                   contenteditable="true"
                   spellcheck="false"
                   data-placeholder="Noch $countdown.hype.remaining Sekunden!"
+                  @focus="activeField = 'msg_tick'"
                   @input="onEditorInput(tickEditorRef, 'msg_tick')"
                 ></div>
               </div>
-              <div class="field-group sm">
-                <label class="field-label">{{ t('countdown.field.tick_every') }} <span class="field-hint">s</span></label>
-                <input v-model.number="editCountdown.tick_every_sec" type="number" min="1" class="field-input" />
+              <div class="ep-field-group ep-sm">
+                <label class="ep-field-label">{{ t('countdown.field.tick_every') }} <span class="ep-field-hint">s</span></label>
+                <input v-model.number="editCountdown.tick_every_sec" type="number" min="1" class="ep-field-input" />
               </div>
             </div>
 
             <!-- On finish message -->
-            <div class="field-group">
-              <label class="field-label">{{ t('countdown.field.msg_end') }} <span class="field-hint">{{ t('countdown.field.resp_hint') }}</span></label>
+            <div class="ep-field-group">
+              <label class="ep-field-label">{{ t('countdown.field.msg_end') }} <span class="ep-field-hint">{{ t('countdown.field.resp_hint') }}</span></label>
               <div
                 ref="endEditorRef"
-                class="script-editor"
+                class="ep-script-editor"
                 contenteditable="true"
                 spellcheck="false"
                 data-placeholder="Zeit ist abgelaufen! PogChamp"
+                @focus="activeField = 'msg_end'"
                 @input="onEditorInput(endEditorRef, 'msg_end')"
               ></div>
             </div>
 
-            <!-- Variable reference -->
-            <details class="ref-panel">
-              <summary class="ref-summary">{{ t('edit.var_ref') }}</summary>
-              <div class="ref-content">
-                <div v-for="g in REF_GROUPS" :key="g.label" class="ref-group">
-                  <div class="ref-group-label">{{ g.label }}</div>
-                  <div v-for="r in g.items" :key="r.token" class="ref-row">
-                    <code class="ref-token">{{ r.token }}</code>
-                    <span class="ref-desc">{{ r.desc }}</span>
-                  </div>
-                </div>
-              </div>
-            </details>
+            <!-- Variable reference - inserts into whichever message field was last focused -->
+            <RefPanel :title="`${t('edit.var_ref')} · → ${activeField.replace('msg_', '')}`" @insert="insertRefToken" />
 
             <!-- Conditions -->
-            <div class="row-2">
-              <div class="field-group">
-                <label class="field-label">{{ t('countdown.field.active_when') }}</label>
-                <select v-model="editCountdown.enabled_when" class="field-select">
+            <div class="ep-row-2">
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t('countdown.field.active_when') }}</label>
+                <select v-model="editCountdown.enabled_when" class="ep-field-select">
                   <option value="always">{{ t('countdown.when.always') }}</option>
                   <option value="online">{{ t('countdown.when.online') }}</option>
                   <option value="offline">{{ t('countdown.when.offline') }}</option>
                 </select>
               </div>
-              <div class="field-group">
-                <label class="field-label">{{ t('countdown.field.condition') }} <span class="field-hint">{{ t('countdown.field.cond_hint') }}</span></label>
-                <input v-model="editCountdown.condition" class="field-input mono" placeholder="$channel.viewers > 10" />
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t('countdown.field.condition') }} <span class="ep-field-hint">{{ t('countdown.field.cond_hint') }}</span></label>
+                <input v-model="editCountdown.condition" class="ep-field-input ep-mono" placeholder="$channel.viewers > 10" />
               </div>
             </div>
 
-            <div class="panel-footer">
-              <button v-if="!isNew && canDelete" class="btn-delete" @click="deleteCountdown(editOrigName); editOpen = false">{{ t('countdown.delete') }}</button>
+            <div class="ep-panel-footer">
+              <button v-if="!isNew && canDelete" class="ep-btn-delete" @click="deleteCountdown(editOrigName); editOpen = false">{{ t('countdown.delete') }}</button>
               <div v-else></div>
-              <div class="footer-right">
-                <button class="btn-cancel" @click="editOpen = false">{{ t('countdown.cancel') }}</button>
-                <button class="btn-save" @click="saveCountdown" :disabled="!!saving || !editCountdown.name">
+              <div class="ep-footer-right">
+                <button class="ep-btn-cancel" @click="editOpen = false">{{ t('countdown.cancel') }}</button>
+                <button class="ep-btn-save" @click="saveCountdown" :disabled="!!saving || !editCountdown.name">
                   {{ saving ? t('countdown.saving') : t('countdown.save') }}
                 </button>
               </div>
@@ -525,32 +435,6 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
 </template>
 
 <style scoped>
-.view { display: flex; flex-direction: column; gap: 16px; height: 100%; }
-.view-header { display: flex; align-items: flex-start; justify-content: space-between; }
-.view-title  { font-size: 18px; font-weight: 700; color: #e0e0e0; margin-bottom: 4px; }
-.view-sub    { font-size: 12px; color: #555; }
-
-.btn-new { height: 32px; padding: 0 14px; border: 1px solid #6f2bff66; background: #6f2bff15; color: #9d6cff; font-family: inherit; font-size: 12px; cursor: pointer; }
-.btn-new:hover { background: #6f2bff30; }
-.btn-new-disabled { opacity: .35; cursor: not-allowed; }
-.btn-action-disabled { opacity: .35; cursor: not-allowed; }
-
-.toast { padding: 10px 18px; font-size: 15px; margin-bottom: 4px; }
-.toast.success { background: rgba(35,209,139,.1); border: 1px solid rgba(35,209,139,.3); color: #23d18b; }
-.toast.error   { background: rgba(241,73,73,.1);  border: 1px solid rgba(241,73,73,.3);  color: #f14949; }
-.empty { color: #444; font-size: 13px; padding: 40px; text-align: center; }
-
-/* >>> Countdown list <<< */
-.countdown-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; }
-.countdown-row  {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px; background: #141418; border-bottom: 1px solid #1e1e1e;
-  transition: background .1s;
-}
-.countdown-row:hover { background: #1c1c20; }
-.countdown-row.inactive { opacity: .45; }
-
-/* Status dot */
 .cd-status-dot {
   width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
   background: #333; transition: background .3s;
@@ -567,13 +451,11 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
 .cd-remaining.finished { color: #f14949; }
 .cd-remaining.idle     { color: #444; }
 
-.meta-pill    { font-size: 10px; padding: 1px 6px; border: 1px solid; }
-.meta-pill.dur  { color: #9d6cff; border-color: #9d6cff44; background: #9d6cff11; }
-.meta-pill.tick { color: #4ec9b0; border-color: #4ec9b044; background: #4ec9b011; }
-.meta-pill.when { color: #e5c07b; border-color: #e5c07b44; background: #e5c07b11; }
-.meta-pill.cond { color: #c792ea; border-color: #c792ea44; background: #c792ea11; }
+.ep-meta-pill.dur  { color: #9d6cff; border-color: #9d6cff44; background: #9d6cff11; }
+.ep-meta-pill.tick { color: #4ec9b0; border-color: #4ec9b044; background: #4ec9b011; }
+.ep-meta-pill.when { color: #e5c07b; border-color: #e5c07b44; background: #e5c07b11; }
+.ep-meta-pill.cond { color: #c792ea; border-color: #c792ea44; background: #c792ea11; }
 
-/* Controls */
 .cd-controls { display: flex; gap: 5px; flex-shrink: 0; }
 .ctrl-btn {
   height: 28px; padding: 0 10px; border: 1px solid #2a2a30;
@@ -587,89 +469,11 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
 .ctrl-btn.reset       { border-color: #e5c07b33; color: #888; }
 .ctrl-btn.reset:hover { border-color: #e5c07b66; color: #e5c07b; background: rgba(229,192,123,.08); }
 
-.row-actions { display: flex; gap: 6px; flex-shrink: 0; }
-.btn-action { height: 30px; padding: 0 10px; border: 1px solid; background: transparent; font-family: inherit; font-size: 11px; cursor: pointer; transition: background .15s; white-space: nowrap; }
-.btn-action.edit { border-color: #6f2bff66; color: #9d6cff; }
-.btn-action.edit:hover { background: #6f2bff22; }
-.btn-action.del { border-color: #f1494944; color: #f14949; }
-.btn-action.del:hover { background: #f1494911; }
-.btn-action:disabled { opacity: .4; cursor: not-allowed; }
-
-/* >>> Panel <<< */
-.panel-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.65); display: flex; align-items: flex-start; justify-content: flex-end; z-index: 1000; }
-.panel { width: 580px; max-width: 100vw; height: 100vh; background: #1a1a1e; border-left: 1px solid #2a2a30; display: flex; flex-direction: column; overflow: hidden; animation: slideIn .2s ease; }
-@keyframes slideIn { from { transform: translateX(40px); opacity: 0 } to { transform: none; opacity: 1 } }
-.panel-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #222; flex-shrink: 0; }
-.panel-title  { font-size: 16px; font-weight: 700; color: #e0e0e0; }
-.panel-name-editable { cursor: pointer; border-radius: 4px; padding: 1px 4px; margin: -1px -4px; transition: background .12s; color: #9d6cff; }
-.panel-name-editable:hover { background: #2a2440; }
-.panel-name-edit-icon { font-size: 11px; opacity: .5; margin-left: 4px; }
-.panel-name-rename-wrap { display: inline-flex; align-items: center; border: 1px solid #9d6cff; border-radius: 4px; background: #0d0d10; vertical-align: middle; }
-.panel-name-rename-input { border: none; background: transparent; color: #e0e0e0; font-size: 13px; font-weight: 700; padding: 4px 8px; outline: none; width: 140px; }
-.panel-sub    { font-size: 11px; color: #555; margin-top: 3px; }
-.panel-close  { width: 28px; height: 28px; border: none; background: transparent; color: #555; font-size: 14px; cursor: pointer; }
-.panel-close:hover { color: #e0e0e0; }
-.panel-body   { flex: 1; overflow-y: auto; padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: none; }
-.panel-body::-webkit-scrollbar { display: none; }
-
-.field-group  { display: flex; flex-direction: column; gap: 5px; }
-.field-group.sm { width: 120px; flex-shrink: 0; }
-.field-label  { font-size: 11px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; }
-.field-hint   { font-size: 10px; color: #555; font-weight: 400; text-transform: none; letter-spacing: 0; }
-.field-input, .field-select { background: #111217; border: 1px solid #2a2a30; color: #e0e0e0; font-family: inherit; font-size: 13px; padding: 7px 10px; outline: none; transition: border-color .15s; }
-.field-input:focus, .field-select:focus { border-color: #6f2bff55; }
-.field-input.mono { font-family: 'Consolas','Fira Mono',monospace; }
-.field-select { appearance: none; cursor: pointer; }
 .dur-row { display: flex; align-items: center; gap: 8px; }
-.dur-row .field-input { flex: 1; }
-.row-2 { display: flex; gap: 12px; }
-.row-2 > * { flex: 1; min-width: 0; }
-
-.script-editor {
-  min-height: 60px; max-height: 140px; overflow-y: auto;
-  background: #0d0d10; border: 1px solid #2a2a30;
-  padding: 8px 10px; font-family: 'Consolas','Fira Mono',monospace;
-  font-size: 13px; line-height: 1.7; color: #c0c0c0;
-  outline: none; white-space: pre-wrap; word-break: break-word;
-}
-.script-editor:focus { border-color: #6f2bff55; }
-.script-editor:empty::before { content: attr(data-placeholder); color: #2a2a35; pointer-events: none; }
-
-.ref-panel { border: 1px solid #1e1e22; }
-.ref-summary { padding: 5px 10px; font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; user-select: none; list-style: none; }
-.ref-summary:hover { color: #888; }
-.ref-content { max-height: 200px; overflow-y: auto; padding: 6px 10px; display: flex; flex-direction: column; gap: 8px; scrollbar-width: none; }
-.ref-content::-webkit-scrollbar { display: none; }
-.ref-group-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #9d6cff; margin-bottom: 2px; }
-.ref-row { display: flex; align-items: baseline; gap: 8px; padding: 1px 0; }
-.ref-token { font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; color: #4ec9b0; background: rgba(78,201,176,.08); padding: 1px 5px; white-space: nowrap; flex-shrink: 0; }
-.ref-desc { font-size: 10px; color: #484848; }
-
-.panel-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 16px; border-top: 1px solid #222; margin-top: 4px; }
-.footer-right { display: flex; gap: 8px; }
-.btn-save   { height: 34px; padding: 0 20px; border: none; background: #6f2bff; color: #fff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
-.btn-save:hover:not(:disabled) { background: #7f3fff; }
-.btn-save:disabled { opacity: .4; cursor: not-allowed; }
-.btn-cancel { height: 34px; padding: 0 16px; border: 1px solid #333; background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer; }
-.btn-cancel:hover { border-color: #555; color: #e0e0e0; }
-.btn-delete { height: 34px; padding: 0 14px; border: 1px solid #f1494944; background: transparent; color: #f14949; font-family: inherit; font-size: 12px; cursor: pointer; }
-.btn-delete:hover { background: #f1494911; }
+.dur-row .ep-field-input { flex: 1; }
 
 @media (max-width: 680px) {
-  .panel { width: 100vw !important; }
-  .row-2 { flex-direction: column; gap: 8px; }
   .countdown-row { flex-wrap: wrap; gap: 8px; }
   .cd-controls { gap: 4px; }
 }
-</style>
-
-<style>
-.sh-kw      { color: #569cd6; }
-.sh-builtin { color: #9d6cff; }
-.sh-custom  { color: #4fc1e9; }
-.sh-op      { color: #c792ea; }
-.sh-string  { color: #ce9178; }
-.sh-number  { color: #b5cea8; }
-.sh-paren   { color: #888; }
-.sh-error   { color: #f14949; text-decoration: underline wavy #f1494966; }
 </style>
