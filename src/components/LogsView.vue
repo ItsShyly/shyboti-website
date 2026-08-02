@@ -3167,10 +3167,11 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   text-transform: uppercase;
   letter-spacing: 0.06em;
   flex-shrink: 0;
+  justify-items: center;
 }
 
 .logs-thead > :nth-child(3) {
-  text-align: center;
+  align-self: center;
 }
 
 
