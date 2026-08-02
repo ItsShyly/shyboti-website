@@ -15,7 +15,7 @@ const canDelete = computed(() => channelRole.value?.permissions.automations_dele
 // >>> Variable reference for countdown scripts <<<
 const REF_GROUPS = [
   { label: 'Countdown', items: [
-    { token: '$countdown.name.remaining', desc: 'Seconds remaining' },
+    { token: '$countdown.name.remaining', desc: 'Seconds remaining (use your countdown name)' },
     { token: '$countdown.name.total',     desc: 'Total duration in seconds' },
     { token: '$countdown.name.elapsed',   desc: 'Seconds elapsed' },
     { token: '$countdown.name.percent',   desc: 'Percent complete (0-100)' },
@@ -23,16 +23,37 @@ const REF_GROUPS = [
   { label: 'Channel', items: [
     { token: '$channel.name',    desc: 'Channel login name' },
     { token: '$channel.game',    desc: 'Current game' },
+    { token: '$channel.title',   desc: 'Stream title' },
     { token: '$channel.viewers', desc: 'Viewer count' },
+    { token: '$channel.isLive',  desc: 'true/false' },
+    { token: '$channel.uptime',  desc: 'Stream uptime e.g. 1h 23m' },
   ]},
   { label: 'Variables', items: [
-    { token: '$var.name',            desc: 'Read variable' },
-    { token: '$var.name.set(value)', desc: 'Set variable' },
-    { token: '$counter.name.get',    desc: 'Read counter' },
+    { token: '$var.name',              desc: 'Read channel variable' },
+    { token: '$var.name.set(value)',   desc: 'Set channel variable' },
   ]},
-  { label: 'Random / Text', items: [
-    { token: '$random.int(min,max)', desc: 'Random integer' },
-    { token: '$calc(expr)',          desc: 'Math expression' },
+  { label: 'Counters', items: [
+    { token: '$counter.name',          desc: 'Increment +1, return value' },
+    { token: '$counter.name.get',      desc: 'Read without changing' },
+    { token: '$counter.name.set(n)',   desc: 'Set to value' },
+    { token: '$counter.name.add(n)',   desc: 'Add value' },
+    { token: '$counter.name.reset',    desc: 'Reset to 0' },
+  ]},
+  { label: 'Lists', items: [
+    { token: '$list.name',             desc: 'Random item from list' },
+    { token: '$list.name.size',        desc: 'Number of items' },
+    { token: '$list.name.random',      desc: 'Random item' },
+  ]},
+  { label: 'Random / Math', items: [
+    { token: '$random.int(min,max)',    desc: 'Random integer' },
+    { token: '$random.pick(a,b,c)',     desc: 'Pick from list' },
+    { token: '$calc(expr)',             desc: 'Math expression' },
+    { token: '$text.upper(text)',       desc: 'Uppercase' },
+    { token: '$http.get(url)',          desc: 'GET request, returns body' },
+  ]},
+  { label: 'Logic', items: [
+    { token: '$if($channel.isLive){ }',       desc: 'Only when live' },
+    { token: '$if($channel.viewers > 10){ }', desc: 'Viewer threshold' },
   ]},
 ]
 
@@ -60,6 +81,7 @@ const success     = ref('')
 // >>> Edit panel <<<
 const editOpen = ref(false)
 const isNew    = ref(false)
+const overlayMousedown = ref(false)
 const editCountdown = ref<Partial<Countdown> & { name: string }>({
   name: '', duration_sec: 60, msg_start: '', msg_tick: '',
   tick_every_sec: 10, msg_end: '', enabled_when: 'always',
@@ -316,7 +338,10 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
 
     <!-- >>> Edit panel <<< -->
     <Teleport to="body">
-      <div v-if="editOpen" class="panel-overlay" @click.self="editOpen = false">
+      <div v-if="editOpen" class="panel-overlay"
+        @mousedown.self="overlayMousedown = true"
+        @mouseup.self="if(overlayMousedown) editOpen = false; overlayMousedown = false"
+        @mouseleave="overlayMousedown = false">
         <div class="panel">
           <div class="panel-header">
             <div>

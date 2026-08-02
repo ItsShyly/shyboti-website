@@ -32,36 +32,44 @@ const REF_GROUPS = computed(() => [
     { token: '$channel.uptime',  desc: 'Stream uptime e.g. 1h 23m' },
   ]},
   { label: 'Counters', items: [
-    { token: '$counter.name',         desc: 'Increment +1, return value' },
+    { token: '$counter.name',          desc: 'Increment +1, return value' },
     { token: '$counter.name.get',      desc: 'Read without changing' },
     { token: '$counter.name.set(n)',   desc: 'Set to value' },
     { token: '$counter.name.add(n)',   desc: 'Add value' },
     { token: '$counter.name.reset',    desc: 'Reset to 0' },
   ]},
   { label: 'Variables', items: [
-    { token: '$var.name',           desc: 'Read variable' },
-    { token: '$var.name.set(value)', desc: 'Set variable' },
+    { token: '$var.name',              desc: 'Read channel variable' },
+    { token: '$var.name.set(value)',   desc: 'Set channel variable' },
   ]},
   { label: 'Lists', items: [
-    { token: '$list.name',        desc: 'Random item from list' },
-    { token: '$list.name.size',   desc: 'Number of items' },
-    { token: '$list.name.random', desc: 'Random item' },
+    { token: '$list.name',             desc: 'Random item from list' },
+    { token: '$list.name.size',        desc: 'Number of items' },
+    { token: '$list.name.random',      desc: 'Random item' },
+    { token: '$list.name.add(value)',  desc: 'Add item' },
+    { token: '$list.name.remove(val)', desc: 'Remove item' },
   ]},
   { label: 'Random', items: [
-    { token: '$random.int(min,max)',  desc: 'Random integer' },
-    { token: '$random.pick(a,b,c)',  desc: 'Pick randomly from list' },
-    { token: '$random.chance(pct)',  desc: 'true with pct% probability' },
+    { token: '$random.int(min,max)',    desc: 'Random integer' },
+    { token: '$random.pick(a,b,c)',     desc: 'Pick randomly from list' },
+    { token: '$random.chance(pct)',     desc: 'true with pct% probability' },
   ]},
   { label: 'Time', items: [
-    { token: '$time.now',          desc: 'Current ISO timestamp' },
-    { token: '$time.unix',         desc: 'Unix timestamp (seconds)' },
-    { token: '$time.format(ts,fmt)',desc: 'Format a timestamp' },
+    { token: '$time.now',               desc: 'Current ISO timestamp' },
+    { token: '$time.unix',              desc: 'Unix timestamp (seconds)' },
+    { token: '$time.format(ts,fmt)',    desc: 'Format a timestamp' },
   ]},
   { label: 'Text / Calc', items: [
-    { token: '$text.upper(text)',  desc: 'Uppercase' },
-    { token: '$text.lower(text)',  desc: 'Lowercase' },
-    { token: '$calc(expr)',        desc: 'Math expression e.g. $calc(2+2)' },
-    { token: '$http.get(url)',     desc: 'GET request, returns text' },
+    { token: '$text.upper(text)',       desc: 'Uppercase' },
+    { token: '$text.lower(text)',       desc: 'Lowercase' },
+    { token: '$text.length(text)',      desc: 'Character count' },
+    { token: '$text.trim(text)',        desc: 'Strip whitespace' },
+    { token: '$calc(expr)',             desc: 'Math expression e.g. $calc(2+2)' },
+    { token: '$http.get(url)',          desc: 'GET request, returns text' },
+  ]},
+  { label: 'Logic', items: [
+    { token: '$if($channel.isLive){ }', desc: 'Only send when live' },
+    { token: '$if($channel.viewers > 10){ }', desc: 'Viewer threshold condition' },
   ]},
 ])
 
@@ -98,6 +106,7 @@ function fmtNextFire(timer: Timer): string {
 
 // >>> Edit panel
 const editOpen = ref(false)
+const overlayMousedown = ref(false)
 const editTimer = ref<Partial<Timer> & { name: string }>({
   name: '', response: '', interval_sec: 300, min_messages: 0,
   enabled_when: 'always', required_game: '', condition: '', is_active: 1,
@@ -378,7 +387,10 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
 
     <!-- Edit panel -->
     <Teleport to="body">
-      <div v-if="editOpen" class="panel-overlay" @click.self="editOpen = false">
+      <div v-if="editOpen" class="panel-overlay"
+        @mousedown.self="overlayMousedown = true"
+        @mouseup.self="if(overlayMousedown) editOpen = false; overlayMousedown = false"
+        @mouseleave="overlayMousedown = false">
         <div class="panel">
           <div class="panel-header">
             <div>

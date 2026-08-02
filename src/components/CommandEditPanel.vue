@@ -454,14 +454,29 @@ async function save() {
   if (!session.value) return
   saving.value = true
   try {
-    await fetch(`${API}/custom-commands/${props.channel}/${props.cmdName}`, {
+    const newName = form.value.name?.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
+    const oldName = props.cmdName
+    const renamed = !props.isBuiltIn && newName && newName !== oldName
+
+    // PUT the data under the new name
+    const targetName = renamed ? newName : oldName
+    await fetch(`${API}/custom-commands/${props.channel}/${targetName}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
       body: JSON.stringify({
         ...form.value,
+        name: targetName,
         ...Object.fromEntries(userParams.value.map(p => [p.key, p.value]))
       }),
     })
+
+    // If renamed, delete the old name
+    if (renamed) {
+      await fetch(`${API}/custom-commands/${props.channel}/${oldName}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
+      })
+    }
+
     saved.value = true; setTimeout(() => { saved.value = false }, 2000); emit('saved')
   } catch {}
   saving.value = false
@@ -1021,6 +1036,17 @@ function removeArgVariant(i: number) {
             </details>
           </div>
 
+          <!-- Name field with rename support -->
+          <div v-if="!isBuiltIn" class="field-group">
+            <label class="field-label">Command name
+              <span class="field-hint">Rename by changing this — saves with new name</span>
+            </label>
+            <div class="name-input-wrap">
+              <span class="name-prefix">{{ prefix || '+' }}</span>
+              <input v-model="form.name" class="field-input name-input" placeholder="commandname" />
+            </div>
+          </div>
+
           <!-- Description field -->
           <div class="field-group">
             <label class="field-label">
@@ -1159,6 +1185,10 @@ function removeArgVariant(i: number) {
 .btn-delete:disabled { opacity: .4; cursor: not-allowed; }
 .btn-delete.confirm { border-color: #f14949aa; background: #f1494922; font-weight: 700; }
 .desc-readonly { font-size: 12px; color: #555; background: #0d0d10; border: 1px solid #1e1e22; padding: 7px 10px; font-style: italic; }
+
+.name-input-wrap { display: flex; align-items: center; border: 1px solid #2a2a30; background: #0d0d10; }
+.name-prefix { padding: 0 6px 0 10px; color: #9d6cff; font-weight: 700; font-size: 13px; flex-shrink: 0; }
+.name-input  { border: none !important; background: transparent !important; flex: 1; padding-left: 0 !important; }
 
 /* Arg variants editor */
 .arg-descs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }

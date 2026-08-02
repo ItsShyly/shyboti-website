@@ -719,6 +719,12 @@ onUnmounted(() => { _sseSource?.close() })
               >▾</button>
             </div>
 
+            <!-- toggle - matches default command column 2 -->
+            <div>
+              <div class="square" :class="[cmd.isActive ? 'on' : 'off', { disabled: !canToggle }]"
+                @click="cmd.isActive = !cmd.isActive; updateCustomActive(cmd)"></div>
+            </div>
+
             <div class="cmd-name-col">
               <div class="cmd-name">
                 <span class="cmd-cat-dot" style="background:#9d6cff"></span>
@@ -751,8 +757,6 @@ onUnmounted(() => { _sseSource?.close() })
             </div>
 
             <div class="custom-actions">
-              <div class="toggle-inline" :class="cmd.isActive ? 'on' : 'off'"
-                @click="cmd.isActive = !cmd.isActive; updateCustomActive(cmd)"></div>
               <button class="edit-btn" :class="{ blocked: !canEdit }" @click="canEdit && openEdit(cmd.name, false)">{{ canEdit ? t('cmd.edit') : t('cmd.view') }}</button>
               <button class="share-btn" @click="openShare(cmd.name)" title="Copy to another channel">↪</button>
               <button v-if="canDelete"
@@ -858,7 +862,7 @@ onUnmounted(() => { _sseSource?.close() })
 
 /* Custom commands use wider last column for 3 action buttons */
 .custom-table-header,
-.custom-row { grid-template-columns: 28px 1fr 110px 90px 90px 180px; }
+.custom-row { grid-template-columns: 28px 32px 1fr 110px 90px 90px 150px; }
 
 .sort-col { cursor: pointer; user-select: none; }
 .sort-col:hover { color: #aaa; }

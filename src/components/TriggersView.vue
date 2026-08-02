@@ -24,17 +24,29 @@ const canDelete = computed(() => channelRole.value?.permissions.automations_dele
 
 const REF_GROUPS = [
   { label: 'User', items: [
-    { token: '$user.name',    desc: 'Sender login name' },
-    { token: '$user.display', desc: 'Sender display name' },
-    { token: '$user.mention', desc: '@DisplayName' },
-    { token: '$user.is(mod)', desc: 'true/false' },
-    { token: '$user.is(sub)', desc: 'true/false' },
+    { token: '$user.name',        desc: 'Sender login name' },
+    { token: '$user.display',     desc: 'Sender display name' },
+    { token: '$user.mention',     desc: '@DisplayName' },
+    { token: '$user.id',          desc: 'Twitch user ID' },
+    { token: '$user.followage',   desc: 'How long they have followed' },
+    { token: '$user.created',     desc: 'Account creation date' },
+    { token: '$user.is(mod)',      desc: 'true/false' },
+    { token: '$user.is(sub)',      desc: 'true/false' },
+    { token: '$user.is(vip)',      desc: 'true/false' },
+    { token: '$user.is(broadcaster)', desc: 'true/false' },
   ]},
-  { label: 'Message', items: [
+  { label: 'Target', items: [
+    { token: '$target.name',    desc: 'First @mention in message' },
+    { token: '$target.mention', desc: '@DisplayName of target' },
+    { token: '$target.id',      desc: 'Twitch ID of target' },
+  ]},
+  { label: 'Message / Args', items: [
     { token: '$message.text',   desc: 'Full message text' },
     { token: '$args',           desc: 'Text after trigger pattern' },
-    { token: '$1', desc: 'First word of args' },
-    { token: '$2', desc: 'Second word of args' },
+    { token: '$1',              desc: 'First word of args' },
+    { token: '$2',              desc: 'Second word of args' },
+    { token: '$3',              desc: 'Third word of args' },
+    { token: '$query',          desc: 'All args as a string' },
   ]},
   { label: 'Channel', items: [
     { token: '$channel.name',    desc: 'Channel login' },
@@ -42,19 +54,51 @@ const REF_GROUPS = [
     { token: '$channel.title',   desc: 'Stream title' },
     { token: '$channel.viewers', desc: 'Viewer count' },
     { token: '$channel.isLive',  desc: 'true/false' },
+    { token: '$channel.uptime',  desc: 'Stream uptime e.g. 1h 23m' },
   ]},
-  { label: 'Variables / Counters', items: [
-    { token: '$var.name',           desc: 'Read variable' },
-    { token: '$var.name.set(value)', desc: 'Set variable' },
-    { token: '$counter.name',       desc: 'Increment +1' },
-    { token: '$counter.name.get',    desc: 'Read counter' },
+  { label: 'Variables', items: [
+    { token: '$var.name',              desc: 'Read channel variable' },
+    { token: '$var.name.set(value)',   desc: 'Set channel variable' },
+    { token: '$uvar.name',             desc: 'Read user-scoped variable' },
+    { token: '$uvar.name.set(value)',  desc: 'Set for this user' },
   ]},
-  { label: 'Random / Text', items: [
-    { token: '$random.int(min,max)', desc: 'Random integer' },
-    { token: '$random.pick(a,b,c)', desc: 'Pick from list' },
-    { token: '$text.upper(text)',    desc: 'Uppercase' },
-    { token: '$calc(expr)',          desc: 'Math expression' },
-    { token: '$http.get(url)',       desc: 'GET request' },
+  { label: 'Counters', items: [
+    { token: '$counter.name',          desc: 'Increment +1, return value' },
+    { token: '$counter.name.get',      desc: 'Read without changing' },
+    { token: '$counter.name.set(n)',   desc: 'Set to value' },
+    { token: '$counter.name.add(n)',   desc: 'Add value' },
+    { token: '$counter.name.reset',    desc: 'Reset to 0' },
+    { token: '$ucounter.name',         desc: 'Per-user counter (increment)' },
+    { token: '$ucounter.name.get',     desc: 'Per-user counter (read)' },
+  ]},
+  { label: 'Lists', items: [
+    { token: '$list.name',             desc: 'Random item from list' },
+    { token: '$list.name.size',        desc: 'Number of items' },
+    { token: '$list.name.random',      desc: 'Random item' },
+    { token: '$list.name.add(value)',  desc: 'Add item' },
+    { token: '$list.name.remove(val)', desc: 'Remove item' },
+  ]},
+  { label: 'Random', items: [
+    { token: '$random.int(min,max)',    desc: 'Random integer' },
+    { token: '$random.pick(a,b,c)',     desc: 'Pick randomly from list' },
+    { token: '$random.chance(pct)',     desc: 'true with pct% probability' },
+  ]},
+  { label: 'Text / Math', items: [
+    { token: '$text.upper(text)',       desc: 'Uppercase' },
+    { token: '$text.lower(text)',       desc: 'Lowercase' },
+    { token: '$text.length(text)',      desc: 'Character count' },
+    { token: '$text.trim(text)',        desc: 'Strip whitespace' },
+    { token: '$calc(expr)',             desc: 'Math expression e.g. $calc(2+2)' },
+    { token: '$http.get(url)',          desc: 'GET request, returns body' },
+  ]},
+  { label: 'Time', items: [
+    { token: '$time.now',               desc: 'Current ISO timestamp' },
+    { token: '$time.unix',              desc: 'Unix timestamp (seconds)' },
+    { token: '$time.format(ts,fmt)',    desc: 'Format a timestamp' },
+  ]},
+  { label: 'Logic', items: [
+    { token: '$if($1 = test){ } ',      desc: 'Conditional block' },
+    { token: '$if($user.is(mod)){ } ', desc: 'Conditional on mod status' },
   ]},
 ]
 
@@ -74,6 +118,7 @@ const success  = ref('')
 
 const editOpen    = ref(false)
 const isNew       = ref(false)
+const overlayMousedown = ref(false)
 const editorRef   = ref<HTMLDivElement | null>(null)
 const editTrigger = ref<Partial<Trigger> & { name: string }>({
   name: '', event_type: 'message', match_pattern: '', match_type: 'contains',
@@ -374,7 +419,10 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
     </div>
 
     <Teleport to="body">
-      <div v-if="editOpen" class="panel-overlay" @click.self="editOpen = false">
+      <div v-if="editOpen" class="panel-overlay"
+        @mousedown.self="overlayMousedown = true"
+        @mouseup.self="if(overlayMousedown) editOpen = false; overlayMousedown = false"
+        @mouseleave="overlayMousedown = false">
         <div class="panel">
           <div class="panel-header">
             <div>
