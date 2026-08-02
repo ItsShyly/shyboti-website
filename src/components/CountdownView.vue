@@ -101,6 +101,7 @@ function fmtDuration(s: number) {
 }
 
 function fmtRemaining(cd: Countdown): string {
+  void tick.value  // subscribe to tick so Vue re-runs this on every second
   if (cd.status !== 'running' || !cd.started_at) return fmtDuration(cd.duration_sec)
   const elapsed = Math.floor((Date.now() - cd.started_at) / 1000)
   const rem = Math.max(0, cd.duration_sec - elapsed)
@@ -280,9 +281,7 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
     <div v-else-if="!countdowns.length" class="empty">{{ t('countdown.empty') }}</div>
 
     <div v-else class="countdown-list">
-      <!-- >>> Force recompute of remaining time each tick via tick ref <<< -->
-      <template :key="tick">
-        <div v-for="cd in countdowns" :key="cd.id" class="countdown-row" :class="{ inactive: !cd.is_active }">
+      <div v-for="cd in countdowns" :key="cd.id" class="countdown-row" :class="{ inactive: !cd.is_active }">
 
           <!-- Status indicator -->
           <div class="cd-status-dot" :class="cd.status ?? 'idle'"></div>
@@ -333,7 +332,6 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
             <button v-if="canDelete" class="btn-action del" @click.stop="deleteCountdown(cd.name)" :disabled="saving === cd.name">✕</button>
           </div>
         </div>
-      </template>
     </div>
 
     <!-- >>> Edit panel <<< -->
