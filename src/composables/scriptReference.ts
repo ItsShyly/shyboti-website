@@ -7,7 +7,7 @@
 // old per-component copies did (the countdown/command control tokens below
 // were missing entirely from the old CommandEditPanel-only copy of this list).
 
-export interface RefItem { token: string; desc: string; example: string }
+export interface RefItem { token: string; desc: string; example: string; only?: 'countdown' }
 export interface RefGroup { label: string; items: RefItem[] }
 
 export const REF_GROUPS: RefGroup[] = [
@@ -114,11 +114,11 @@ export const REF_GROUPS: RefGroup[] = [
     { token: '$command.name.create(text)', desc: 'Create/update another command', example: '$command.hype.create(LETS GO!)' },
   ]},
   { label: 'Countdown', items: [
-    { token: '$countdown.remaining', desc: "Seconds left (inside this countdown's own message)", example: '$countdown.remaining' },
-    { token: '$countdown.total', desc: 'Total duration in seconds', example: '$countdown.total' },
-    { token: '$countdown.elapsed', desc: 'Seconds elapsed', example: '$countdown.elapsed' },
-    { token: '$countdown.percent', desc: 'Percent complete (0-100)', example: '$countdown.percent' },
-    { token: '$countdown.running', desc: 'true/false', example: '$countdown.running' },
+    { token: '$countdown.remaining', desc: "Seconds left (inside this countdown's own message)", example: '$countdown.remaining', only: 'countdown' },
+    { token: '$countdown.total', desc: 'Total duration in seconds', example: '$countdown.total', only: 'countdown' },
+    { token: '$countdown.elapsed', desc: 'Seconds elapsed', example: '$countdown.elapsed', only: 'countdown' },
+    { token: '$countdown.percent', desc: 'Percent complete (0-100)', example: '$countdown.percent', only: 'countdown' },
+    { token: '$countdown.running', desc: 'true/false', example: '$countdown.running', only: 'countdown' },
     { token: '$countdown.name.remaining', desc: 'Read any named countdown, from anywhere', example: '$countdown.hype.remaining' },
     { token: '$countdown.name.start', desc: 'Start a countdown from a command/trigger/timer', example: '$countdown.hype.start' },
     { token: '$countdown.name.stop', desc: 'Stop a countdown', example: '$countdown.hype.stop' },
@@ -131,6 +131,19 @@ export const REF_GROUPS: RefGroup[] = [
     { token: '$mod.purge(user)', desc: 'Purge user messages', example: '$mod.purge($target.name)' },
   ]},
 ]
+
+// >>> Returns the reference groups for a given editor context. Items marked
+// >>> `only: 'countdown'` (the bare $countdown.remaining/total/elapsed/percent/
+// >>> running tokens) only resolve to a real value inside that countdown's own
+// >>> msg_start/msg_tick/msg_end, so they're hidden everywhere else - unlike
+// >>> $countdown.name.<x>, which names a specific countdown and therefore works
+// >>> (and stays listed) in every editor: commands, timers, triggers, and other
+// >>> countdowns alike.
+export function getRefGroups(context?: 'countdown'): RefGroup[] {
+  return REF_GROUPS
+    .map(g => ({ ...g, items: g.items.filter(item => !item.only || item.only === context) }))
+    .filter(g => g.items.length > 0)
+}
 
 // >>> Renders a $token with the "name" portion (e.g. counter/list/countdown/command
 // >>> name, and bracketed args) styled distinctly, for display in the reference list.

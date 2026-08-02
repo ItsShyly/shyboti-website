@@ -7,12 +7,13 @@
 // Click any row to insert its token - previously only OBS widgets supported
 // click-to-insert, everywhere else the reference list was read-only.
 import { onMounted } from 'vue'
-import { REF_GROUPS, renderRefToken } from '../../composables/scriptReference'
+import { getRefGroups, renderRefToken } from '../../composables/scriptReference'
 import { useVarRefs } from '../../composables/useVarRefs'
 
-withDefaults(defineProps<{ title?: string }>(), { title: 'Variable Reference' })
+const props = withDefaults(defineProps<{ title?: string; context?: 'countdown' }>(), { title: 'Variable Reference' })
 defineEmits<{ (e: 'insert', token: string): void }>()
 
+const refGroups = getRefGroups(props.context)
 const { varRefs, load } = useVarRefs()
 onMounted(load)
 </script>
@@ -29,7 +30,7 @@ onMounted(load)
           <span class="ep-ref-example">{{ v.expr }}</span>
         </div>
       </div>
-      <div v-for="g in REF_GROUPS" :key="g.label" class="ep-ref-group">
+      <div v-for="g in refGroups" :key="g.label" class="ep-ref-group">
         <div class="ep-ref-group-label">{{ g.label }}</div>
         <div v-for="r in g.items" :key="r.token" class="ep-ref-row ep-ref-clickable" :class="{ 'has-example': !!r.example }"
           @click="$emit('insert', r.token)">

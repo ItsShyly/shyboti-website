@@ -399,7 +399,7 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
             </div>
 
             <!-- Variable reference - inserts into whichever message field was last focused -->
-            <RefPanel :title="`${t('edit.var_ref')} · → ${activeField.replace('msg_', '')}`" @insert="insertRefToken" />
+            <RefPanel :title="`${t('edit.var_ref')} · → ${activeField.replace('msg_', '')}`" context="countdown" @insert="insertRefToken" />
 
             <!-- Conditions -->
             <div class="ep-row-2">
