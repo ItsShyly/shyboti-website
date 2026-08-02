@@ -1085,6 +1085,11 @@ function onScroll() {
     isNearBottom.value = distFromBottom < 200
     if (!loadingMore.value && !noMore.value && body.scrollTop < 120) loadOlder()
     if (!loadingNewer.value && !noNewer.value && distFromBottom < 120) loadNewer()
+    // In oldest-first mode the list is reversed: reaching the bottom means going further back in time
+    if (direction.value === 'oldest') {
+      if (!loadingNewer.value && !noNewer.value && body.scrollTop < 120) loadNewer()
+      if (!loadingMore.value && !noMore.value && distFromBottom < 120) loadOlder()
+    }
     vUpdateWindow()
     updateCustomScrollbar()
     if (!wheelScrollActive) checkPaints()
@@ -1300,7 +1305,7 @@ async function search() {
     attachScrollListener()
     vUpdateWindow()
     updateCustomScrollbar()
-    if (hashId) await scrollToMsg(hashId, true); else scrollToBottom()
+    if (hashId) await jumpToMessage(hashId); else scrollToBottom()
     return
   }
 
@@ -1362,10 +1367,10 @@ async function search() {
     if (hashId) {
       if (!msgs.value.some(msg => msg.id === hashId)) {
         const found = await loadUntilMsg(hashId)
-        if (found) await scrollToMsg(hashId, true)
+        if (found) await jumpToMessage(hashId)
         else { scrollToBottom(); error.value = 'Could not find linked message.' }
       } else {
-        await scrollToMsg(hashId, true)
+        await jumpToMessage(hashId)
       }
     } else {
       scrollToBottom()
@@ -1389,10 +1394,10 @@ async function search() {
     if (hashId) {
       if (!msgs.value.some(msg => msg.id === hashId)) {
         const found = await loadUntilMsg(hashId)
-        if (found) await scrollToMsg(hashId, true)
+        if (found) await jumpToMessage(hashId)
         else { scrollToBottom(); error.value = 'Could not find linked message.' }
       } else {
-        await scrollToMsg(hashId, true)
+        await jumpToMessage(hashId)
       }
     } else {
       scrollToBottom()
@@ -1654,7 +1659,9 @@ function buildItems(messages: (LogMsg | AutomodMsg)[], _: any[]): DisplayItem[] 
 }
 
 const displayItems = computed<DisplayItem[]>(() => {
-  const regular = msgs.value
+  let regular = msgs.value
+  // In oldest-first mode, reverse so newest messages appear at the top.
+  if (direction.value === 'oldest') regular = [...regular].reverse()
   const automod = automodMsgs.value
   if (!showAutomod.value || !isBroadcaster.value) {
     return buildItems(regular, [])
@@ -2769,7 +2776,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
               class="logs-tbody"
               ref="scrollerRef"
             >
-          <div class="top-loader" v-show="loadingMore">
+          <div v-if="loadingMore" class="top-loader">
             <span class="spinner">⟳</span> {{ t('logs.load_older') }}
           </div>
           <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">{{ t('logs.no_older') }}</div>
@@ -3223,7 +3230,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
 .top-loader  {
   position: sticky; top: 0; z-index: 4;
   text-align: center; font-size: 11px; color: #9d6cff;
-  padding: 8px; background: #101015;
+  padding: 8px 12px; background: #0e0e12;
   border-bottom: 1px solid #1e1e24;
 }
 .top-loader.no-more { color: #333; background: transparent; border-bottom: none; position: static; }
