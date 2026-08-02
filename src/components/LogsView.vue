@@ -1434,16 +1434,18 @@ async function setDirection(d: 'newest' | 'oldest') {
     return
   }
   direction.value = d
-  // After the computed reversal re-renders, scroll to the top
-  // (newest messages are now at top in oldest mode, oldest at top in newest mode)
+  // Heights are per-item-id and still valid after reversal, but the virtual
+  // window needs a full reset since cumulative positions have changed.
+  vHeightCache.clear()
+  vWinStart.value = 0
+  vWinEnd.value   = Math.min(150, displayItems.value.length)
   await nextTick()
-  vUpdateWindow()
   const body = getBody()
   if (body) {
     if (d === 'oldest') {
-      body.scrollTop = 0  // newest messages now at top
+      body.scrollTop = 0
     } else {
-      body.scrollTop = body.scrollHeight  // newest messages back at bottom
+      body.scrollTop = body.scrollHeight
     }
   }
   await nextTick()
