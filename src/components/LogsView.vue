@@ -3103,7 +3103,7 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   cursor: pointer;
   transition: color .15s, border-color .15s, background .15s;
 }
-.day-jump-btn:hover { color: #d2d2df;  background: rgba(152, 101, 255, 0.473)};
+.day-jump-btn:hover { color: #d2d2df;  background: rgba(152, 101, 255, 0.473);}
 
 .logs-tbody-wrap { display: flex; flex: 1; min-height: 0; }
 .logs-tbody   { overflow-y: scroll; overflow-anchor: auto; flex: 1; position: relative; min-height: 0; scrollbar-width: none; }
