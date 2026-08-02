@@ -1424,8 +1424,20 @@ async function autoFillIfShort() {
   }
 }
 
-// Toggle direction without refetching — just reverse the display and fix scroll.
-// Only fetches if msgs haven't been loaded yet for this direction.
+// Toggle direction without refetching when possible — just reverse the display
+// and fix scroll. This is only correct when the messages already in memory
+// represent the true end of history in the direction we're switching to:
+//   - switching to 'oldest': noMore.value must be true (no older data left to
+//     fetch) - otherwise the "oldest" message shown would just be the oldest
+//     of whatever partial window happens to be loaded, not the channel's
+//     actual oldest message.
+//   - switching to 'newest': noNewer.value must be true (already caught up to
+//     the present) - same reasoning in the other direction.
+// A date range or a narrow term search naturally sets noMore.value = true as
+// soon as the whole relevant range is fetched, so those cases can always do
+// the instant in-place flip. A normal "today + N days back" load usually has
+// plenty more history beyond what's loaded, so switching to 'oldest' there
+// has to fall back to a real search() - same as clicking Search by hand.
 async function setDirection(d: 'newest' | 'oldest') {
   if (d === direction.value) return
   if (!searched.value) {
@@ -1433,6 +1445,14 @@ async function setDirection(d: 'newest' | 'oldest') {
     direction.value = d
     return
   }
+
+  const canReverseInPlace = d === 'oldest' ? noMore.value : noNewer.value
+  if (!canReverseInPlace) {
+    direction.value = d
+    await search()
+    return
+  }
+
   direction.value = d
   // Heights are per-item-id and still valid after reversal, but the virtual
   // window needs a full reset since cumulative positions have changed.
