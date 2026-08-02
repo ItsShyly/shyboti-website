@@ -1424,6 +1424,33 @@ async function autoFillIfShort() {
   }
 }
 
+// Toggle direction without refetching — just reverse the display and fix scroll.
+// Only fetches if msgs haven't been loaded yet for this direction.
+async function setDirection(d: 'newest' | 'oldest') {
+  if (d === direction.value) return
+  if (!searched.value) {
+    // Nothing loaded yet — just set and let the next search() use it
+    direction.value = d
+    return
+  }
+  direction.value = d
+  // After the computed reversal re-renders, scroll to the top
+  // (newest messages are now at top in oldest mode, oldest at top in newest mode)
+  await nextTick()
+  vUpdateWindow()
+  const body = getBody()
+  if (body) {
+    if (d === 'oldest') {
+      body.scrollTop = 0  // newest messages now at top
+    } else {
+      body.scrollTop = body.scrollHeight  // newest messages back at bottom
+    }
+  }
+  await nextTick()
+  vUpdateWindow()
+  updateCustomScrollbar()
+}
+
 function scrollToBottom() {
   nextTick(() => {
     const b = getBody()
@@ -2713,8 +2740,8 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
             <div class="visuals-panel" :class="{ 'visuals-panel-open': visualsOpen }" @click.stop>
               <div class="options-group">
                 <span class="options-group-lbl show-mobile">Sort</span>
-                <button class="dir-btn" :class="{ active: direction === 'newest' }" @click="direction = 'newest'">↓ Newest</button>
-                <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="direction = 'oldest'">↑ Oldest</button>
+                <button class="dir-btn" :class="{ active: direction === 'newest' }" @click="setDirection('newest')">&#8595; Newest</button>
+                <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="setDirection('oldest')">&#8593; Oldest</button>
               </div>
               <div class="options-group">
                 <span class="options-group-lbl show-mobile">Visuals</span>
