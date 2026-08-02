@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
@@ -81,6 +81,7 @@ const success     = ref('')
 // >>> Edit panel <<<
 const editOpen = ref(false)
 const isNew    = ref(false)
+const editOrigName = ref('')  // name before any in-progress rename, used to know which row to PUT/DELETE
 const overlayMousedown = ref(false)
 const editCountdown = ref<Partial<Countdown> & { name: string }>({
   name: '', duration_sec: 60, msg_start: '', msg_tick: '',
@@ -111,12 +112,34 @@ function fmtRemaining(cd: Countdown): string {
 // >>> Tick: recompute remaining every second <<<
 const tick = ref(0)
 let tickInterval: ReturnType<typeof setInterval> | null = null
+let pollInterval: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
-  tickInterval = setInterval(() => tick.value++, 1000)
+  tickInterval = setInterval(() => {
+    tick.value++
+    // The backend auto-transitions a running countdown to 'idle' the instant it
+    // hits 0 remaining - no manual "stop" click needed server-side. Mirror that
+    // locally on the same 1s cadence so the UI reflects it immediately instead of
+    // waiting for the next full reload (which previously only happened on mount
+    // or channel switch, making it look like you still had to click stop).
+    for (const cd of countdowns.value) {
+      if (cd.status !== 'running' || !cd.started_at) continue
+      const elapsed = Math.floor((Date.now() - cd.started_at) / 1000)
+      if (elapsed >= cd.duration_sec) {
+        cd.status = 'idle'
+        cd.started_at = null
+      }
+    }
+  }, 1000)
+  // Light periodic refresh so externally-triggered changes (e.g. a custom command
+  // calling $countdown.name.start/stop) show up here too, not just the local timer.
+  pollInterval = setInterval(load, 5000)
   load()
 })
-onUnmounted(() => { if (tickInterval) clearInterval(tickInterval) })
+onUnmounted(() => {
+  if (tickInterval) clearInterval(tickInterval)
+  if (pollInterval) clearInterval(pollInterval)
+})
 watch(() => session.value?.channel, load)
 
 async function load() {
@@ -135,6 +158,7 @@ async function load() {
 
 function openNew() {
   isNew.value = true
+  editOrigName.value = ''
   editCountdown.value = {
     name: '', duration_sec: 60, msg_start: '', msg_tick: '',
     tick_every_sec: 10, msg_end: '', enabled_when: 'always',
@@ -146,9 +170,22 @@ function openNew() {
 
 function openEdit(cd: Countdown) {
   isNew.value = false
+  editOrigName.value = cd.name
   editCountdown.value = { ...cd }
   editOpen.value = true
   setTimeout(() => { initEditors() }, 50)
+}
+
+// >>> Clickable inline rename - click the countdown name in the panel header to edit it.
+const editingName = ref(false)
+const nameInputEl = ref<HTMLInputElement | null>(null)
+function startEditingName() {
+  editingName.value = true
+  nextTick(() => { nameInputEl.value?.focus(); nameInputEl.value?.select() })
+}
+function stopEditingName() {
+  editingName.value = false
+  if (!editCountdown.value.name?.trim()) editCountdown.value.name = editOrigName.value
 }
 
 function initEditors() {
@@ -223,6 +260,14 @@ async function saveCountdown() {
     if (!res.ok) {
       const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
       throw new Error(errData.error ?? `Save failed (${res.status})`)
+    }
+    // >>> Renamed: the PUT above created/updated the row under the NEW name (the URL
+    // >>> is upsert-by-name-in-path), so the old-named row is now a stale duplicate -
+    // >>> remove it. Same pattern used for renaming custom commands.
+    if (!isNew.value && editOrigName.value && editOrigName.value !== name) {
+      await fetch(`${API}/countdowns/${session.value.channel}/${encodeURIComponent(editOrigName.value)}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
+      }).catch(() => {})
     }
     showSuccess(t('countdown.save') + '!')
     editOpen.value = false
@@ -343,7 +388,28 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
         <div class="panel">
           <div class="panel-header">
             <div>
-              <div class="panel-title">{{ isNew ? t('countdown.edit_new') : `${t('countdown.edit_title')} ${editCountdown.name}` }}</div>
+              <div class="panel-title">
+                <template v-if="isNew">{{ t('countdown.edit_new') }}</template>
+                <template v-else>
+                  {{ t('countdown.edit_title') }}
+                  <span v-if="!editingName"
+                    class="panel-name-editable"
+                    title="Click to rename"
+                    @click="startEditingName"
+                  >{{ editCountdown.name }}<span class="panel-name-edit-icon">✎</span></span>
+                  <span v-else class="panel-name-rename-wrap">
+                    <input
+                      ref="nameInputEl"
+                      v-model="editCountdown.name"
+                      class="panel-name-rename-input"
+                      placeholder="hype"
+                      @blur="stopEditingName"
+                      @keydown.enter="stopEditingName"
+                      @keydown.esc="stopEditingName"
+                    />
+                  </span>
+                </template>
+              </div>
               <div class="panel-sub">#{{ session?.channel }}</div>
             </div>
             <button class="panel-close" @click="editOpen = false">✕</button>
@@ -351,11 +417,11 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
 
           <div class="panel-body">
 
-            <!-- Name + Duration -->
+            <!-- Name (new only - existing countdowns are renamed via the clickable header title above) + Duration -->
             <div class="row-2">
-              <div class="field-group">
+              <div v-if="isNew" class="field-group">
                 <label class="field-label">{{ t('countdown.field.name') }} <span class="field-hint">{{ t('countdown.field.name_hint') }}</span></label>
-                <input v-model="editCountdown.name" class="field-input" :disabled="!isNew" placeholder="hype" />
+                <input v-model="editCountdown.name" class="field-input" placeholder="hype" />
               </div>
               <div class="field-group">
                 <label class="field-label">{{ t('countdown.field.seconds') }} <span class="field-hint">{{ t('countdown.field.secs_hint') }}</span></label>
@@ -442,7 +508,7 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
             </div>
 
             <div class="panel-footer">
-              <button v-if="!isNew && canDelete" class="btn-delete" @click="deleteCountdown(editCountdown.name); editOpen = false">{{ t('countdown.delete') }}</button>
+              <button v-if="!isNew && canDelete" class="btn-delete" @click="deleteCountdown(editOrigName); editOpen = false">{{ t('countdown.delete') }}</button>
               <div v-else></div>
               <div class="footer-right">
                 <button class="btn-cancel" @click="editOpen = false">{{ t('countdown.cancel') }}</button>
@@ -535,6 +601,11 @@ async function controlCountdown(name: string, action: 'start' | 'stop' | 'reset'
 @keyframes slideIn { from { transform: translateX(40px); opacity: 0 } to { transform: none; opacity: 1 } }
 .panel-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #222; flex-shrink: 0; }
 .panel-title  { font-size: 16px; font-weight: 700; color: #e0e0e0; }
+.panel-name-editable { cursor: pointer; border-radius: 4px; padding: 1px 4px; margin: -1px -4px; transition: background .12s; color: #9d6cff; }
+.panel-name-editable:hover { background: #2a2440; }
+.panel-name-edit-icon { font-size: 11px; opacity: .5; margin-left: 4px; }
+.panel-name-rename-wrap { display: inline-flex; align-items: center; border: 1px solid #9d6cff; border-radius: 4px; background: #0d0d10; vertical-align: middle; }
+.panel-name-rename-input { border: none; background: transparent; color: #e0e0e0; font-size: 13px; font-weight: 700; padding: 4px 8px; outline: none; width: 140px; }
 .panel-sub    { font-size: 11px; color: #555; margin-top: 3px; }
 .panel-close  { width: 28px; height: 28px; border: none; background: transparent; color: #555; font-size: 14px; cursor: pointer; }
 .panel-close:hover { color: #e0e0e0; }

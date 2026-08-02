@@ -4,6 +4,7 @@ import { API } from '../api'
 import { useAuth } from '../auth'
 import { highlightScript } from '../composables/scriptHighlight'
 import { mockEval, resetMockState, seedMockState, DEFAULT_MOCK, type MockContext } from '../composables/scriptMockEval'
+import { REF_GROUPS, renderRefToken } from '../composables/scriptReference'
 import { useI18n } from '../i18n'
 
 export interface CustomCommand {
@@ -26,6 +27,20 @@ const saving        = ref(false)
 const saved         = ref(false)
 const deleting      = ref(false)
 const deleteConfirm = ref(false)
+
+// >>> Clickable inline rename - click the command name in the panel header to edit it,
+// >>> replacing the old separate "Command name" field + hint text further down the form.
+const editingName  = ref(false)
+const nameInputEl  = ref<HTMLInputElement | null>(null)
+function startEditingName() {
+  if (props.isBuiltIn) return
+  editingName.value = true
+  nextTick(() => { nameInputEl.value?.focus(); nameInputEl.value?.select() })
+}
+function stopEditingName() {
+  editingName.value = false
+  if (!form.value.name.trim()) form.value.name = props.cmdName // don't allow blanking the name
+}
 
 const form = ref<CustomCommand>({
   name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
@@ -440,7 +455,7 @@ function syncResponseFromChip(chipIdx: number, newUsage: string) {
   updatePreview()
 }
 
-watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false } })
+watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; editingName.value = false } })
 onMounted(() => { if (props.open) load() })
 
 watch(() => form.value.response, (src) => {
@@ -942,7 +957,27 @@ function removeArgVariant(i: number) {
 
         <div class="panel-header">
           <div>
-            <div class="panel-title">Edit <span class="panel-cmd">+{{ cmdName }}</span></div>
+            <div class="panel-title">
+              Edit
+              <span v-if="!editingName"
+                class="panel-cmd"
+                :class="{ 'panel-cmd-editable': !isBuiltIn }"
+                :title="isBuiltIn ? undefined : 'Click to rename'"
+                @click="startEditingName"
+              >+{{ form.name || cmdName }}<span v-if="!isBuiltIn" class="panel-cmd-edit-icon">✎</span></span>
+              <span v-else class="panel-cmd-rename-wrap">
+                <span class="name-prefix">{{ prefix || '+' }}</span>
+                <input
+                  ref="nameInputEl"
+                  v-model="form.name"
+                  class="panel-cmd-rename-input"
+                  placeholder="commandname"
+                  @blur="stopEditingName"
+                  @keydown.enter="stopEditingName"
+                  @keydown.esc="stopEditingName"
+                />
+              </span>
+            </div>
             <div class="panel-sub">Rule builder for #{{ channel }}</div>
           </div>
           <button class="panel-close" @click="emit('close')">✕</button>
@@ -1034,17 +1069,6 @@ function removeArgVariant(i: number) {
                 </div>
               </div>
             </details>
-          </div>
-
-          <!-- Name field with rename support -->
-          <div v-if="!isBuiltIn" class="field-group">
-            <label class="field-label">Command name
-              <span class="field-hint">Rename by changing this - saves with new name</span>
-            </label>
-            <div class="name-input-wrap">
-              <span class="name-prefix">{{ prefix || '+' }}</span>
-              <input v-model="form.name" class="field-input name-input" placeholder="commandname" />
-            </div>
           </div>
 
           <!-- Description field -->
@@ -1154,6 +1178,12 @@ function removeArgVariant(i: number) {
 .panel-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #222; flex-shrink: 0; }
 .panel-title { font-size: 16px; font-weight: 700; color: #e0e0e0; }
 .panel-cmd   { color: #9d6cff; }
+.panel-cmd-editable { cursor: pointer; border-radius: 4px; padding: 1px 4px; margin: -1px -4px; transition: background .12s; }
+.panel-cmd-editable:hover { background: #2a2440; }
+.panel-cmd-edit-icon { font-size: 11px; opacity: .5; margin-left: 4px; }
+.panel-cmd-rename-wrap { display: inline-flex; align-items: center; border: 1px solid #9d6cff; border-radius: 4px; background: #0d0d10; vertical-align: middle; }
+.panel-cmd-rename-wrap .name-prefix { color: #9d6cff; font-weight: 700; font-size: 13px; padding-left: 8px; }
+.panel-cmd-rename-input { border: none; background: transparent; color: #e0e0e0; font-size: 13px; font-weight: 700; padding: 4px 8px 4px 2px; outline: none; width: 160px; }
 .panel-sub   { font-size: 11px; color: #555; margin-top: 3px; }
 .panel-close { width: 28px; height: 28px; border: none; background: transparent; color: #555; font-size: 14px; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
 .panel-close:hover { color: #e0e0e0; }

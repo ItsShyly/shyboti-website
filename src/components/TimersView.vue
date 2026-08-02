@@ -112,6 +112,7 @@ const editTimer = ref<Partial<Timer> & { name: string }>({
   enabled_when: 'always', required_game: '', condition: '', is_active: 1,
 })
 const isNew = ref(false)
+const editOrigName = ref('')  // name before any in-progress rename, used to know which row to PUT/DELETE
 const editorRef = ref<HTMLDivElement | null>(null)
 
 function showSuccess(msg: string) { success.value = msg; setTimeout(() => success.value = '', 3000) }
@@ -138,6 +139,7 @@ async function load() {
 
 function openNew() {
   isNew.value = true
+  editOrigName.value = ''
   editTimer.value = { name: '', response: '', interval_sec: 300, min_messages: 0,
     enabled_when: 'always', required_game: '', condition: '', is_active: 1 }
   editOpen.value = true
@@ -148,11 +150,24 @@ function openNew() {
 
 function openEdit(timer: Timer) {
   isNew.value = false
+  editOrigName.value = timer.name
   editTimer.value = { ...timer }
   editOpen.value = true
   setTimeout(() => {
     if (editorRef.value) { editorRef.value.innerText = timer.response; applyHL() }
   }, 50)
+}
+
+// >>> Clickable inline rename - click the timer name in the panel header to edit it.
+const editingName = ref(false)
+const nameInputEl = ref<HTMLInputElement | null>(null)
+function startEditingName() {
+  editingName.value = true
+  nextTick(() => { nameInputEl.value?.focus(); nameInputEl.value?.select() })
+}
+function stopEditingName() {
+  editingName.value = false
+  if (!editTimer.value.name?.trim()) editTimer.value.name = editOrigName.value
 }
 
 function applyHL() {
@@ -191,12 +206,20 @@ async function saveTimer() {
   if (!session.value || !editTimer.value.name) return
   saving.value = editTimer.value.name
   try {
-    const res = await fetch(`${API}/timers/${session.value.channel}/${editTimer.value.name}`, {
+    const name = editTimer.value.name.trim()
+    const res = await fetch(`${API}/timers/${session.value.channel}/${name}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
       body: JSON.stringify(editTimer.value),
     })
     if (!res.ok) throw new Error(await res.text())
+    // >>> Renamed: the PUT above created/updated the row under the NEW name (the URL
+    // >>> is upsert-by-name-in-path), so the old-named row is now a stale duplicate.
+    if (!isNew.value && editOrigName.value && editOrigName.value !== name) {
+      await fetch(`${API}/timers/${session.value.channel}/${editOrigName.value}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
+      }).catch(() => {})
+    }
     showSuccess(t('timer.save') + '!')
     editOpen.value = false
     load()
@@ -394,16 +417,38 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
         <div class="panel">
           <div class="panel-header">
             <div>
-              <div class="panel-title">{{ isNew ? t('timer.edit_new') : `${t('timer.edit_title')} ${editTimer.name}` }}</div>
+              <div class="panel-title">
+                <template v-if="isNew">{{ t('timer.edit_new') }}</template>
+                <template v-else>
+                  {{ t('timer.edit_title') }}
+                  <span v-if="!editingName"
+                    class="panel-name-editable"
+                    title="Click to rename"
+                    @click="startEditingName"
+                  >{{ editTimer.name }}<span class="panel-name-edit-icon">✎</span></span>
+                  <span v-else class="panel-name-rename-wrap">
+                    <input
+                      ref="nameInputEl"
+                      v-model="editTimer.name"
+                      class="panel-name-rename-input"
+                      placeholder="welcome"
+                      @blur="stopEditingName"
+                      @keydown.enter="stopEditingName"
+                      @keydown.esc="stopEditingName"
+                    />
+                  </span>
+                </template>
+              </div>
               <div class="panel-sub">#{{ session?.channel }}</div>
             </div>
             <button class="panel-close" @click="editOpen = false">✕</button>
           </div>
 
           <div class="panel-body">
-            <div class="field-group">
+            <!-- Name (new only - existing timers are renamed via the clickable header title above) -->
+            <div v-if="isNew" class="field-group">
               <label class="field-label">{{ t('timer.field.name') }} <span class="field-hint">{{ t('timer.field.name_hint') }}</span></label>
-              <input v-model="editTimer.name" class="field-input" :disabled="!isNew" placeholder="welcome" />
+              <input v-model="editTimer.name" class="field-input" placeholder="welcome" />
             </div>
 
             <div class="field-group">
@@ -465,7 +510,7 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
             </div>
 
             <div class="panel-footer">
-              <button v-if="!isNew && canDelete" class="btn-delete" @click="deleteTimer(editTimer.name); editOpen = false">{{ t('timer.delete') }}</button>
+              <button v-if="!isNew && canDelete" class="btn-delete" @click="deleteTimer(editOrigName); editOpen = false">{{ t('timer.delete') }}</button>
               <div v-else></div>
               <div class="footer-right">
                 <button class="btn-cancel" @click="editOpen = false">{{ t('timer.cancel') }}</button>
@@ -603,6 +648,11 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
 @keyframes slideIn { from { transform: translateX(40px); opacity: 0 } to { transform: none; opacity: 1 } }
 .panel-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #222; flex-shrink: 0; }
 .panel-title { font-size: 16px; font-weight: 700; color: #e0e0e0; }
+.panel-name-editable { cursor: pointer; border-radius: 4px; padding: 1px 4px; margin: -1px -4px; transition: background .12s; color: #9d6cff; }
+.panel-name-editable:hover { background: #2a2440; }
+.panel-name-edit-icon { font-size: 11px; opacity: .5; margin-left: 4px; }
+.panel-name-rename-wrap { display: inline-flex; align-items: center; border: 1px solid #9d6cff; border-radius: 4px; background: #0d0d10; vertical-align: middle; }
+.panel-name-rename-input { border: none; background: transparent; color: #e0e0e0; font-size: 13px; font-weight: 700; padding: 4px 8px; outline: none; width: 140px; }
 .panel-sub   { font-size: 11px; color: #555; margin-top: 3px; }
 .panel-close { width: 28px; height: 28px; border: none; background: transparent; color: #555; font-size: 14px; cursor: pointer; }
 .panel-close:hover { color: #e0e0e0; }

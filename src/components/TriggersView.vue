@@ -118,6 +118,7 @@ const success  = ref('')
 
 const editOpen    = ref(false)
 const isNew       = ref(false)
+const editOrigName = ref('')  // name before any in-progress rename, used to know which row to PUT/DELETE
 const overlayMousedown = ref(false)
 const editorRef   = ref<HTMLDivElement | null>(null)
 const editTrigger = ref<Partial<Trigger> & { name: string }>({
@@ -173,6 +174,7 @@ async function load() {
 
 function openNew() {
   isNew.value = true
+  editOrigName.value = ''
   editTrigger.value = { name: '', event_type: 'message', match_pattern: '', match_type: 'contains',
     response: '', action_type: 'say', enabled_when: 'always',
     required_game: '', condition: '', cooldown_sec: 30, is_active: 1 }
@@ -182,9 +184,22 @@ function openNew() {
 
 function openEdit(trigger: Trigger) {
   isNew.value = false
+  editOrigName.value = trigger.name
   editTrigger.value = { ...trigger }
   editOpen.value = true
   setTimeout(() => { if (editorRef.value) { editorRef.value.innerText = trigger.response; applyHL() } }, 50)
+}
+
+// >>> Clickable inline rename - click the trigger name in the panel header to edit it.
+const editingName = ref(false)
+const nameInputEl = ref<HTMLInputElement | null>(null)
+function startEditingName() {
+  editingName.value = true
+  nextTick(() => { nameInputEl.value?.focus(); nameInputEl.value?.select() })
+}
+function stopEditingName() {
+  editingName.value = false
+  if (!editTrigger.value.name?.trim()) editTrigger.value.name = editOrigName.value
 }
 
 function applyHL() {
@@ -219,12 +234,20 @@ async function saveTrigger() {
   if (!session.value || !editTrigger.value.name) return
   saving.value = editTrigger.value.name
   try {
-    const res = await fetch(`${API}/triggers/${session.value.channel}/${editTrigger.value.name}`, {
+    const name = editTrigger.value.name.trim()
+    const res = await fetch(`${API}/triggers/${session.value.channel}/${name}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
       body: JSON.stringify(editTrigger.value),
     })
     if (!res.ok) throw new Error(await res.text())
+    // >>> Renamed: the PUT above created/updated the row under the NEW name (the URL
+    // >>> is upsert-by-name-in-path), so the old-named row is now a stale duplicate.
+    if (!isNew.value && editOrigName.value && editOrigName.value !== name) {
+      await fetch(`${API}/triggers/${session.value.channel}/${editOrigName.value}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
+      }).catch(() => {})
+    }
     showSuccess(t('trigger.save') + '!')
     editOpen.value = false
     load()
@@ -426,16 +449,38 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
         <div class="panel">
           <div class="panel-header">
             <div>
-              <div class="panel-title">{{ isNew ? t('trigger.edit_new') : `${t('trigger.edit_title')} ${editTrigger.name}` }}</div>
+              <div class="panel-title">
+                <template v-if="isNew">{{ t('trigger.edit_new') }}</template>
+                <template v-else>
+                  {{ t('trigger.edit_title') }}
+                  <span v-if="!editingName"
+                    class="panel-name-editable"
+                    title="Click to rename"
+                    @click="startEditingName"
+                  >{{ editTrigger.name }}<span class="panel-name-edit-icon">✎</span></span>
+                  <span v-else class="panel-name-rename-wrap">
+                    <input
+                      ref="nameInputEl"
+                      v-model="editTrigger.name"
+                      class="panel-name-rename-input"
+                      placeholder="hype-train"
+                      @blur="stopEditingName"
+                      @keydown.enter="stopEditingName"
+                      @keydown.esc="stopEditingName"
+                    />
+                  </span>
+                </template>
+              </div>
               <div class="panel-sub">#{{ session?.channel }}</div>
             </div>
             <button class="panel-close" @click="editOpen = false">✕</button>
           </div>
 
           <div class="panel-body">
-            <div class="field-group">
+            <!-- Name (new only - existing triggers are renamed via the clickable header title above) -->
+            <div v-if="isNew" class="field-group">
               <label class="field-label">{{ t('trigger.field.name') }}</label>
-              <input v-model="editTrigger.name" class="field-input" :disabled="!isNew" placeholder="hype-train" />
+              <input v-model="editTrigger.name" class="field-input" placeholder="hype-train" />
             </div>
 
             <!-- Event type -->
@@ -526,7 +571,7 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
             </div>
 
             <div class="panel-footer">
-              <button v-if="!isNew && canDelete" class="btn-delete" @click="deleteTrigger(editTrigger.name); editOpen = false">{{ t('trigger.delete') }}</button>
+              <button v-if="!isNew && canDelete" class="btn-delete" @click="deleteTrigger(editOrigName); editOpen = false">{{ t('trigger.delete') }}</button>
               <div v-else></div>
               <div class="footer-right">
                 <button class="btn-cancel" @click="editOpen = false">{{ t('trigger.cancel') }}</button>
@@ -655,6 +700,11 @@ const needsPattern = (ev: string) => ['message','command'].includes(ev)
 @keyframes slideIn { from { transform: translateX(40px); opacity: 0 } to { transform: none; opacity: 1 } }
 .panel-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid #222; flex-shrink: 0; }
 .panel-title { font-size: 16px; font-weight: 700; color: #e0e0e0; }
+.panel-name-editable { cursor: pointer; border-radius: 4px; padding: 1px 4px; margin: -1px -4px; transition: background .12s; color: #9d6cff; }
+.panel-name-editable:hover { background: #2a2440; }
+.panel-name-edit-icon { font-size: 11px; opacity: .5; margin-left: 4px; }
+.panel-name-rename-wrap { display: inline-flex; align-items: center; border: 1px solid #9d6cff; border-radius: 4px; background: #0d0d10; vertical-align: middle; }
+.panel-name-rename-input { border: none; background: transparent; color: #e0e0e0; font-size: 13px; font-weight: 700; padding: 4px 8px; outline: none; width: 140px; }
 .panel-sub   { font-size: 11px; color: #555; margin-top: 3px; }
 .panel-close { width: 28px; height: 28px; border: none; background: transparent; color: #555; font-size: 14px; cursor: pointer; }
 .panel-close:hover { color: #e0e0e0; }
