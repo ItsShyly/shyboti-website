@@ -3171,11 +3171,13 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   
 }
 
+.logs-thead > :nth-child(3) {
+  text-align: center;
+}
+
 
 
 .day-jump-bar {
-  display: grid;
-  grid-template-columns: 120px var(--user-width, 140px) 1fr;
   position: sticky;
   top: 0;
   z-index: 4;
@@ -3183,13 +3185,12 @@ function paintNameStyle(paint: { imageUrl: string | null; stops: { at: number; c
   border-bottom: 0;
 }
 .day-jump-btn {
-  grid-column: 3; 
   width: 100%;
   height: 100%;
   padding: 10px 0;
   background: #6f2bff14;
   border: 0;
-  color: #555;
+  color: #555;;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
