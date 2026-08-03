@@ -4,16 +4,20 @@ import { useRouter } from 'vue-router'
 import { useI18n } from '../i18n'
 import { useAuth } from '../auth'
 import { API } from '../api'
+import { useOverlayClose } from '../composables/useOverlayClose'
+import ObsConnectionPanel from './ObsConnectionPanel.vue'
 
 const { t } = useI18n()
 const router = useRouter()
 const { session } = useAuth()
+const obsOverlay = useOverlayClose()
 
-const showChatterino = ref(false)
-const showToken      = ref(false)
-const copied         = ref('')
-const uploadToken    = ref('')
-const tokenLoading   = ref(false)
+const showChatterino  = ref(false)
+const showToken       = ref(false)
+const copied          = ref('')
+const uploadToken     = ref('')
+const tokenLoading    = ref(false)
+const showObsPanel    = ref(false)
 
 function copyText(text: string, key: string) {
   navigator.clipboard.writeText(text).catch(() => {})
@@ -103,7 +107,33 @@ async function openChatterino() {
       </button>
     </div>
 
+    <!-- OBS connection card -->
+    <div class="service-card" @click="session && (showObsPanel = true)">
+      <div class="card-icon obs-icon">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="4" y="10" width="40" height="26" rx="3" stroke="currentColor" stroke-width="2.5"/>
+          <circle cx="24" cy="23" r="7" stroke="currentColor" stroke-width="2.5"/>
+          <path d="M14 40h20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="38" cy="10" r="7" fill="#e5c07b" opacity="0.9"/>
+          <path d="M35 10h6M38 7v6" stroke="#141418" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">OBS connection</div>
+        <div class="card-sub">Switch scenes and control sources from chat</div>
+        <div class="card-url">websocket, scenes, sources, commands</div>
+      </div>
+      <div v-if="!session" class="obs-locked-hint">sign in to set this up</div>
+    </div>
+
   </div>
+
+  <!-- OBS connection panel -->
+  <Teleport to="body">
+    <div v-if="showObsPanel" class="ep-overlay" v-bind="obsOverlay.handlers(() => showObsPanel = false)">
+      <ObsConnectionPanel @close="showObsPanel = false" />
+    </div>
+  </Teleport>
 
   <!-- Chatterino popup -->
   <Teleport to="body">
@@ -175,6 +205,9 @@ async function openChatterino() {
 .card-icon svg { width: 72px; height: 72px; }
 .images-icon { color: #9d6cff; }
 .notes-icon  { color: #4ec9b0; }
+.obs-icon    { color: #e5c07b; }
+
+.obs-locked-hint { font-size: 10px; color: #444; padding: 0 18px 14px; }
 
 .card-body { padding: 16px 18px 10px; display: flex; flex-direction: column; gap: 5px; }
 .card-title { font-size: 18px; font-weight: 700; color: #e0e0e0; }
