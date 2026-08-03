@@ -19,6 +19,15 @@ export const REF_GROUPS: RefGroup[] = [
     { token: '$define name(params){ }', desc: 'Define a macro', example: '$define greet(user){ hi $user }' },
     { token: '$index', desc: 'Current loop index (0-based)', example: '' },
   ]},
+  { label: 'Operators', items: [
+    { token: '=  ==', desc: 'Equal (both work, same thing)', example: '$if($1 = win){ nice }' },
+    { token: '!=', desc: 'Not equal', example: '$if($1 != win){ try again }' },
+    { token: '<', desc: 'Less than (numeric)', example: '$if($counter.wins < 10){ keep going }' },
+    { token: '>', desc: 'Greater than (numeric)', example: '$if($counter.wins > 10){ nice! }' },
+    { token: '<=', desc: 'Less than or equal', example: '$if($args.count <= 1){ one word max }' },
+    { token: '>=', desc: 'Greater than or equal', example: '$if($counter.wins >= 100){ legend }' },
+    { token: 'and  or  not', desc: 'Combine conditions', example: '$if($user.is(mod) and $args){ ok }' },
+  ]},
   { label: 'Counters', items: [
     { token: '$counter.name', desc: 'Increment +1, return value', example: '$counter.wins' },
     { token: '$counter.name.get', desc: 'Read without changing', example: '$counter.wins.get' },

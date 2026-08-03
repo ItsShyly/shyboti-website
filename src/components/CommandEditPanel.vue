@@ -157,7 +157,12 @@ function validateScript(src: string): ValidationError[] {
       if (bodyEnd !== -1) {
         const body = src.slice(braceStart + 1, bodyEnd).trim()
         if (condSrc === '') errors.push({ blockIndex: idx, type: 'cond_missing', message: 'Expression missing' })
-        else if (!/\$/.test(condSrc)) errors.push({ blockIndex: idx, type: 'cond_invalid', message: `${condSrc} is not a valid expression` })
+        // >>> Flag conditions that still look like the unedited reference-panel
+        // >>> placeholder ($if(condition){ } -> literal word "condition"), while
+        // >>> still allowing real expressions that happen to have no $ in them,
+        // >>> e.g. bare literal comparisons like "1 = 1" or "true".
+        else if (!/\$/.test(condSrc) && !/[=<>!]/.test(condSrc) && !/^(true|false|\d+)$/i.test(condSrc) && !/\b(and|or|not)\b/i.test(condSrc))
+          errors.push({ blockIndex: idx, type: 'cond_invalid', message: `${condSrc} is not a valid expression` })
         if (body === '') errors.push({ blockIndex: idx, type: 'body_missing', message: 'Body missing' })
         pos = bodyEnd + 1
         idx++

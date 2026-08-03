@@ -84,13 +84,14 @@ function evalCondStr(s: string): string {
   const notM = t.match(/^not\s+(.+)$/i)
   if (notM) return String(!isTruthy(evalCondStr(notM[1]!)))
 
-  // Comparison operators (==, !=, >=, <=, >, <)
-  const cmpM = t.match(/^(.+?)\s*(==|!=|>=|<=|>|<)\s*(.+)$/)
+  // Comparison operators (==, =, !=, >=, <=, >, <)
+  const cmpM = t.match(/^(.+?)\s*(==|!=|>=|<=|=|>|<)\s*(.+)$/)
   if (cmpM) {
     const left = cmpM[1]!.trim(), op = cmpM[2]!, right = cmpM[3]!.trim()
     const lN = parseFloat(left), rN = parseFloat(right)
     const num = !isNaN(lN) && !isNaN(rN)
     switch (op) {
+      case '=':
       case '==': return String(num ? lN === rN : left === right)
       case '!=': return String(num ? lN !== rN : left !== right)
       case '>':  return String(num ? lN >  rN : left >  right)
