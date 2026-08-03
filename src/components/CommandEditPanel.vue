@@ -826,38 +826,16 @@ function removeArgVariant(i: number) {
             </div>
 
             <div class="normal-hint">{{ t('edit.tab_complete') }} &nbsp;·&nbsp; <code>$</code></div>
-
-            <!-- Preview + mock values, combined so they're understood as one unit:
-                 "this is what it looks like, and here's what I'm faking to get that" -->
-            <details class="preview-details" open>
-              <summary class="preview-summary">
-                {{ t('edit.preview') }} <span class="preview-note">{{ t('edit.preview_note') }}</span>
-              </summary>
-              <div class="preview-body">
-                <div class="preview-output">{{ previewOutput || '-' }}</div>
-
-                <div class="mock-ctx-grid">
-                  <label>user</label><input v-model="mockCtx.user" class="ep-field-input mock-input" @input="mockCtx.display = mockCtx.user" />
-                  <label>message</label><input v-model="mockCtx.messageText" class="ep-field-input mock-input" @input="() => { const w = mockCtx.messageText.split(' '); mockCtx.args = w.slice(1).join(' '); mockCtx.argList = w.slice(1) }" placeholder="message without command" />
-                </div>
-                <div class="mock-role-row">
-                  <span class="mock-role-hint">Role:</span>
-                  <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isMod" /> mod</label>
-                  <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isSub" /> sub</label>
-                  <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isVip" /> vip</label>
-                  <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isBroadcaster" /> broadcaster</label>
-                </div>
-              </div>
-            </details>
-
-            <!-- Variable reference -->
-            <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
           </div>
+
+          <!-- Variable reference -->
+          <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
 
           <!-- Description + argument variants, combined: this is everything that
                documents the command for chat/the commands list, nothing here
-               touches the script itself. -->
-          <details class="ep-field-group desc-details" open>
+               touches the script itself. Closed by default - not needed to
+               understand or edit the response itself. -->
+          <details class="ep-field-group desc-details">
             <summary class="ep-field-label desc-summary">
               {{ t('edit.description') }} <span class="ep-field-hint">&amp; usage</span>
             </summary>
@@ -898,6 +876,30 @@ function removeArgVariant(i: number) {
                   </div>
                 </div>
               </template>
+            </div>
+          </details>
+
+          <!-- Preview + mock values, combined so they're understood as one unit:
+               "this is what it looks like, and here's what I'm faking to get that".
+               Closed by default - opt-in once you want to check the output. -->
+          <details class="ep-field-group preview-details">
+            <summary class="ep-field-label preview-summary">
+              {{ t('edit.preview') }} <span class="preview-note">{{ t('edit.preview_note') }}</span>
+            </summary>
+            <div class="preview-body">
+              <div class="preview-output">{{ previewOutput || '-' }}</div>
+
+              <div class="mock-ctx-grid">
+                <label>user</label><input v-model="mockCtx.user" class="ep-field-input mock-input" @input="mockCtx.display = mockCtx.user" />
+                <label>message</label><input v-model="mockCtx.messageText" class="ep-field-input mock-input" @input="() => { const w = mockCtx.messageText.split(' '); mockCtx.args = w.slice(1).join(' '); mockCtx.argList = w.slice(1) }" placeholder="message without command" />
+              </div>
+              <div class="mock-role-row">
+                <span class="mock-role-hint">Role:</span>
+                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isMod" /> mod</label>
+                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isSub" /> sub</label>
+                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isVip" /> vip</label>
+                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isBroadcaster" /> broadcaster</label>
+              </div>
             </div>
           </details>
 
@@ -1102,14 +1104,10 @@ function removeArgVariant(i: number) {
 .normal-hint code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; }
 
 /*  Preview + mock values (combined dropdown)  */
-.preview-details { border: 1px solid #1e1e22; background: #0d0d10; }
+.preview-details { border: 1px solid #1e1e22; background: #0d0d10; padding: 0 !important; }
 .preview-summary {
-  padding: 8px 10px; font-size: 10px; font-weight: 600; color: #555;
-  text-transform: uppercase; letter-spacing: .05em;
-  cursor: pointer; user-select: none; list-style: none;
-  display: flex; align-items: center; gap: 6px;
+  display: flex; padding: 8px 10px; margin: 0; cursor: pointer; user-select: none; list-style: none;
 }
-.preview-summary:hover { color: #888; }
 .preview-details[open] .preview-summary { border-bottom: 1px solid #1e1e22; }
 .preview-note { font-size: 9px; color: #333; font-weight: 400; text-transform: none; letter-spacing: 0; }
 .preview-body { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
