@@ -109,7 +109,7 @@ export const REF_GROUPS: RefGroup[] = [
     { token: '$twitch.followers(user)', desc: 'Follower count', example: '$twitch.followers($user.name) → 1234' },
   ]},
   { label: 'Emotes', items: [
-    { token: '$emote.has(7tv,code)', desc: 'Check if emote exists', example: '$emote.has(7tv,KEKW) → true' },
+    { token: '$emote.has(7tv,emote)', desc: 'Check if emote exists', example: '$emote.has(7tv,KEKW) → true' },
     { token: '$emote.count(7tv)', desc: 'Count emotes', example: '42' },
   ]},
   { label: 'Command', items: [
