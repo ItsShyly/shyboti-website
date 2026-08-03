@@ -7,7 +7,7 @@
 const CUSTOM_FAMILIES = ['$counter.', '$ucounter.', '$var.', '$uvar.', '$list.']
 
 const BUILTIN_PREFIXES = [
-  '$user', '$target', '$channel', '$command', '$message',
+  '$user', '$target', '$channel', '$command', '$countdown', '$message',
   '$args', '$query', '$random', '$time', '$text', '$regex',
   '$calc', '$http', '$twitch', '$emote', '$log',
   '$mod', '$chat', '$cooldown', '$debug',
