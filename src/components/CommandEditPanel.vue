@@ -379,108 +379,10 @@ function removeAllIfBlocksForArg(src: string, argNum: number): string {
   return result.replace(/  +/g, ' ').trim()
 }
 
-function extractIfBlockBody(src: string, argNum: number): string {
-  const ifPat = new RegExp(`\\$if\\(\\s*\\$(?:args\\.)?${argNum}\\s*(?:=[^)]*)?\\)`)
-  const m = ifPat.exec(src)
-  if (!m) return ''
-  const after = src.slice(m.index + m[0].length)
-  const braceM = after.match(/^\s*\{/)
-  if (braceM) {
-    const braceStart = after.indexOf('{')
-    let depth = 0, bodyEnd = -1
-    for (let k = braceStart; k < after.length; k++) {
-      if (after[k] === '{') depth++
-      else if (after[k] === '}') { depth--; if (depth === 0) { bodyEnd = k; break } }
-    }
-    return bodyEnd === -1 ? '' : after.slice(braceStart + 1, bodyEnd).trim()
-  }
-  const endIdx = after.indexOf('$end')
-  return endIdx === -1 ? '' : after.slice(0, endIdx).trim()
-}
-
 function removeArgFromResponse(src: string, argNum: number): string {
   let r = removeAllIfBlocksForArg(src, argNum)
   r = r.replace(new RegExp(`\\$(?:args\\.)?${argNum}\\b`, 'g'), '')
   return r.replace(/  +/g, ' ').trim()
-}
-
-function parseChipToCondition(usage: string): string | null {
-  const trimmed = usage.trim()
-  if (!trimmed) return null
-
-  const rawTokens = trimmed.split(/\s+/)
-  const clauses: string[] = []
-
-  rawTokens.forEach((tok, i) => {
-    const argN = i + 1
-    if (tok === '<word>' || tok === '') return
-    const varMatch = tok.match(/^<(\$[^>]+)>$/)
-    if (varMatch) { clauses.push(`$${argN} = ${varMatch[1]}`); return }
-    if (/^\$?(?:args\.)?[1-9]\d*$/.test(tok)) return
-    clauses.push(`$${argN} = ${tok}`)
-  })
-
-  if (clauses.length === 0) return null
-  return clauses.join(' && ')
-}
-
-function replaceIfBlock(src: string, oldCondStr: string, bodyText: string, newCond: string | null): string {
-  const escaped = oldCondStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const ifPat = new RegExp(`\\$if\\(\\s*${escaped}\\s*\\)`)
-  const m = ifPat.exec(src)
-  if (!m) return src
-  const start = m.index
-  const after = src.slice(start + m[0].length)
-  const braceM = after.match(/^\s*\{/)
-
-  let blockEnd: number  // index into `after` right past the end of the whole $if[...] block
-  let bodySrc: string
-  if (braceM) {
-    const braceStart = after.indexOf('{')
-    let depth = 0, bodyEnd = -1
-    for (let k = braceStart; k < after.length; k++) {
-      if (after[k] === '{') depth++
-      else if (after[k] === '}') { depth--; if (depth === 0) { bodyEnd = k; break } }
-    }
-    if (bodyEnd === -1) return src
-    bodySrc  = after.slice(braceStart + 1, bodyEnd)
-    blockEnd = bodyEnd + 1
-  } else {
-    const endIdx = after.indexOf('$end')
-    if (endIdx === -1) return src
-    bodySrc  = after.slice(0, endIdx)
-    blockEnd = endIdx + 4
-  }
-
-  if (newCond !== null) {
-    const replacement = braceM ? `$if(${newCond}){${bodySrc}}` : `$if(${newCond})${bodySrc}$end`
-    return src.slice(0, start) + replacement + after.slice(blockEnd)
-  }
-  return (src.slice(0, start) + ' ' + bodyText + ' ' + after.slice(blockEnd)).replace(/  +/g, ' ').trim()
-}
-
-function syncResponseFromChip(chipIdx: number, newUsage: string) {
-  const { variants } = extractVariants(form.value.response || '')
-  let src = form.value.response || ''
-
-  const isVariant = chipIdx < variants.length
-
-  if (isVariant) {
-    const v = variants[chipIdx]!
-    const newCond = parseChipToCondition(newUsage.trim())
-    if (newCond === null) {
-      const firstArgNum = v.constraints.keys().next().value ?? 1
-      const body = extractIfBlockBody(src, firstArgNum)
-      src = replaceIfBlock(src, v.condStr, body, null)
-    } else {
-      src = replaceIfBlock(src, v.condStr, '', newCond)
-    }
-  }
-
-  form.value.response = src
-  const nel = normalEditorRef.value
-  if (nel) { nel.innerText = src; applyNormalHighlight(nel, src) }
-  updatePreview()
 }
 
 watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false } })
@@ -925,16 +827,15 @@ function removeArgVariant(i: number) {
 
             <div class="normal-hint">{{ t('edit.tab_complete') }} &nbsp;·&nbsp; <code>$</code></div>
 
-            <!-- Preview -->
-            <div class="preview-section">
-              <div class="preview-label">{{ t('edit.preview') }} <span class="preview-note">{{ t('edit.preview_note') }}</span></div>
-              <div class="preview-output">{{ previewOutput || '-' }}</div>
-            </div>
+            <!-- Preview + mock values, combined so they're understood as one unit:
+                 "this is what it looks like, and here's what I'm faking to get that" -->
+            <details class="preview-details" open>
+              <summary class="preview-summary">
+                {{ t('edit.preview') }} <span class="preview-note">{{ t('edit.preview_note') }}</span>
+              </summary>
+              <div class="preview-body">
+                <div class="preview-output">{{ previewOutput || '-' }}</div>
 
-            <!-- Mock values -->
-            <details class="mock-ctx-details">
-              <summary class="mock-ctx-summary">{{ t('edit.mock_values') }}</summary>
-              <div class="mock-ctx-body">
                 <div class="mock-ctx-grid">
                   <label>user</label><input v-model="mockCtx.user" class="ep-field-input mock-input" @input="mockCtx.display = mockCtx.user" />
                   <label>message</label><input v-model="mockCtx.messageText" class="ep-field-input mock-input" @input="() => { const w = mockCtx.messageText.split(' '); mockCtx.args = w.slice(1).join(' '); mockCtx.argList = w.slice(1) }" placeholder="message without command" />
@@ -953,54 +854,54 @@ function removeArgVariant(i: number) {
             <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
           </div>
 
-          <!-- Description field -->
-          <div class="ep-field-group">
-            <label class="ep-field-label">
-              {{ t('edit.description') }}
-              <span v-if="isBuiltIn" class="ep-field-hint">{{ t('edit.desc_hint_builtin') }}</span>
-              <span v-else class="ep-field-hint">{{ t('edit.desc_hint_custom') }}</span>
-            </label>
-            <div v-if="isBuiltIn" class="desc-readonly">{{ form.description || '-' }}</div>
-            <input
-              v-else
-              v-model="form.description"
-              class="ep-field-input"
-              :placeholder="t('edit.desc_placeholder')"
-              maxlength="120"
-            />
-          </div>
+          <!-- Description + argument variants, combined: this is everything that
+               documents the command for chat/the commands list, nothing here
+               touches the script itself. -->
+          <details class="ep-field-group desc-details" open>
+            <summary class="ep-field-label desc-summary">
+              {{ t('edit.description') }} <span class="ep-field-hint">&amp; usage</span>
+            </summary>
 
-          <!-- Arg variants editor (custom commands only) -->
-          <div v-if="!isBuiltIn" class="ep-field-group">
-            <div class="arg-descs-header">
-              <label class="ep-field-label">Argument Variants
-                <span class="ep-field-hint">Auto-detected from response - edit chips to update the response</span>
-              </label>
-              <button class="arg-add-btn" @click="addArgVariant" type="button">+ Arg</button>
-            </div>
-            <div v-if="!form.arg_descs?.length" class="arg-descs-empty">
-              No variants detected. Use <code class="hint-code">$if($1 = value)</code>, <code class="hint-code">$1</code>, <code class="hint-code">$args</code> in the response.
-            </div>
-            <div class="arg-descs-list">
-              <div v-for="(v, i) in form.arg_descs" :key="i" class="arg-desc-row">
-                <span class="arg-desc-prefix">{{ prefix || '+' }}{{ form.name }}</span>
-                <input
-                  :value="form.arg_descs[i]?.usage ?? ''"
-                  class="ep-field-input arg-usage-input"
-                  placeholder="<value>"
-                  @change="(e) => { const val = (e.target as HTMLInputElement).value; if (form.arg_descs[i]) { form.arg_descs[i].usage = val; syncResponseFromChip(i, val) } }"
-                />
-                <input
-                  :value="form.arg_descs[i]?.desc ?? ''"
-                  class="ep-field-input arg-desc-input"
-                  placeholder="What this variant does…"
-                  @change="(e) => { if (form.arg_descs[i]) form.arg_descs[i].desc = (e.target as HTMLInputElement).value }"
-                />
-                <button class="arg-remove-btn" @click="removeArgVariant(i)" type="button">✕</button>
-              </div>
-            </div>
-          </div>
+            <div class="desc-body">
+              <div v-if="isBuiltIn" class="desc-readonly">{{ form.description || '-' }}</div>
+              <input
+                v-else
+                v-model="form.description"
+                class="ep-field-input"
+                :placeholder="t('edit.desc_placeholder')"
+                maxlength="120"
+              />
 
+              <!-- Arg variants (custom commands only): purely descriptive - the
+                   usage pattern is auto-detected and read-only, only the
+                   explanation text is yours to edit. Add/remove still manage
+                   the underlying $if/$N blocks in the response. -->
+              <template v-if="!isBuiltIn">
+                <div class="arg-descs-header">
+                  <span class="arg-descs-title">Argument usage <span class="ep-field-hint">auto-detected - describe what each does</span></span>
+                  <button class="arg-add-btn" @click="addArgVariant" type="button">+ Arg</button>
+                </div>
+                <div v-if="!form.arg_descs?.length" class="arg-descs-empty">
+                  No variants detected. Use <code class="hint-code">$if($1 = value)</code>, <code class="hint-code">$1</code>, <code class="hint-code">$args</code> in the response.
+                </div>
+                <div class="arg-descs-list">
+                  <div v-for="(v, i) in form.arg_descs" :key="i" class="arg-desc-row">
+                    <span class="arg-desc-prefix">{{ prefix || '+' }}{{ form.name }}</span>
+                    <span class="arg-usage-display">{{ form.arg_descs[i]?.usage || '<value>' }}</span>
+                    <input
+                      :value="form.arg_descs[i]?.desc ?? ''"
+                      class="ep-field-input arg-desc-input"
+                      placeholder="What this variant does…"
+                      @change="(e) => { if (form.arg_descs[i]) form.arg_descs[i].desc = (e.target as HTMLInputElement).value }"
+                    />
+                    <button class="arg-remove-btn" @click="removeArgVariant(i)" type="button" title="Remove this variant from the response">✕</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </details>
+
+          <div class="ep-section-label">Behavior</div>
           <div class="ep-row-3">
             <div class="ep-field-group ep-sm">
               <label class="ep-field-label">{{ t('edit.active_when') }}</label>
@@ -1057,8 +958,17 @@ function removeArgVariant(i: number) {
 .desc-readonly { font-size: 12px; color: #555; background: #0d0d10; border: 1px solid #1e1e22; padding: 7px 10px; font-style: italic; }
 .hint-code   { font-family: 'Consolas','Fira Mono',monospace; color: #4ec9b0; font-style: normal; font-size: 10px; background: rgba(78,201,176,.1); padding: 1px 4px; border-radius: 2px; }
 
+/* Description + args dropdown */
+.desc-details { border: 1px solid #1e1e22; background: #0d0d10; padding: 0 !important; }
+.desc-summary {
+  display: flex; padding: 8px 10px; margin: 0; cursor: pointer; user-select: none; list-style: none;
+}
+.desc-details[open] .desc-summary { border-bottom: 1px solid #1e1e22; }
+.desc-body { display: flex; flex-direction: column; gap: 10px; padding: 10px; }
+
 /* Arg variants editor */
 .arg-descs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.arg-descs-title  { font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .05em; }
 .arg-add-btn {
   height: 24px; padding: 0 10px; border: 1px solid #6f2bff55;
   background: transparent; color: #9d6cff; font-family: inherit; font-size: 11px;
@@ -1074,7 +984,12 @@ function removeArgVariant(i: number) {
   font-family: 'Consolas','Fira Mono',monospace; font-size: 12px;
   color: #9d6cff; font-weight: 700; flex-shrink: 0; white-space: nowrap;
 }
-.arg-usage-input { width: 160px; flex-shrink: 0; font-family: 'Consolas','Fira Mono',monospace !important; color: #e5c07b !important; }
+.arg-usage-display {
+  width: 160px; flex-shrink: 0; font-family: 'Consolas','Fira Mono',monospace;
+  font-size: 12px; color: #e5c07b; background: #111217; border: 1px solid #222;
+  padding: 7px 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  cursor: default;
+}
 .arg-desc-input  { flex: 1; min-width: 0; }
 .arg-remove-btn {
   width: 24px; height: 24px; flex-shrink: 0; border: 1px solid #f1494933;
@@ -1186,10 +1101,18 @@ function removeArgVariant(i: number) {
 .normal-hint { font-size: 10px; color: #383838; }
 .normal-hint code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; }
 
-/*  Preview  */
-.preview-section { display: flex; flex-direction: column; gap: 4px; }
-.preview-label { font-size: 10px; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: .05em; display: flex; align-items: center; gap: 6px; }
+/*  Preview + mock values (combined dropdown)  */
+.preview-details { border: 1px solid #1e1e22; background: #0d0d10; }
+.preview-summary {
+  padding: 8px 10px; font-size: 10px; font-weight: 600; color: #555;
+  text-transform: uppercase; letter-spacing: .05em;
+  cursor: pointer; user-select: none; list-style: none;
+  display: flex; align-items: center; gap: 6px;
+}
+.preview-summary:hover { color: #888; }
+.preview-details[open] .preview-summary { border-bottom: 1px solid #1e1e22; }
 .preview-note { font-size: 9px; color: #333; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.preview-body { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
 .preview-output {
   font-family: 'Consolas','Fira Mono',monospace; font-size: 13px;
   color: #4ec9b0; background: rgba(78,201,176,.06);
@@ -1197,25 +1120,24 @@ function removeArgVariant(i: number) {
   padding: 8px 12px; min-height: 32px; word-break: break-all;
 }
 
-/*  Mock context  */
-.mock-ctx-details { border: 1px solid #1e1e22; }
-.mock-ctx-summary {
-  padding: 6px 10px; font-size: 10px; font-weight: 600; color: #555;
-  text-transform: uppercase; letter-spacing: .05em;
-  cursor: pointer; user-select: none; list-style: none;
-}
-.mock-ctx-summary:hover { color: #888; }
+/*  Mock context (now nested inside the preview dropdown)  */
 .mock-ctx-grid {
   display: grid; grid-template-columns: 60px 1fr; gap: 4px 8px;
-  padding: 8px 10px; align-items: center;
+  align-items: center;
 }
-.mock-ctx-body { display: flex; flex-direction: column; }
 .mock-ctx-grid label { font-size: 10px; color: #555; font-family: 'Consolas','Fira Mono',monospace; }
 .mock-input { font-size: 11px !important; padding: 3px 6px !important; }
-.mock-role-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px 8px; }
+.mock-role-row { display: flex; align-items: center; gap: 10px; }
 .mock-role-hint { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
 .mock-check-label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #666; cursor: pointer; }
 .mock-check-label input { accent-color: #6f2bff; }
+
+/*  Section label  */
+.ep-section-label {
+  font-size: 9px; font-weight: 700; color: #444;
+  text-transform: uppercase; letter-spacing: .08em;
+  margin: 2px 0 -4px;
+}
 </style>
 
 <style>

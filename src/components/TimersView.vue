@@ -63,7 +63,6 @@ const editTimer = ref<Partial<Timer> & { name: string }>({
   name: '', response: '', interval_sec: 300, min_messages: 0,
   enabled_when: 'always', required_game: '', condition: '', is_active: 1,
 })
-const isNew = ref(false)
 const editOrigName = ref('')  // name before any in-progress rename, used to know which row to PUT/DELETE
 const editorRef = ref<HTMLDivElement | null>(null)
 
@@ -89,19 +88,46 @@ async function load() {
   loading.value = false
 }
 
-function openNew() {
-  isNew.value = true
-  editOrigName.value = ''
-  editTimer.value = { name: '', response: '', interval_sec: 300, min_messages: 0,
+// >>> New timer name entry - mirrors CommandsView's inline create row: type a
+// name, PUT an empty timer under it, then open the edit panel exactly like any
+// existing timer (no separate "new" name field inside the panel itself).
+const creatingNew   = ref(false)
+const newTimerName  = ref('')
+const newTimerError = ref('')
+const newTimerInput = ref<HTMLInputElement | null>(null)
+
+function startCreate() {
+  creatingNew.value = true
+  newTimerName.value  = ''
+  newTimerError.value = ''
+  nextTick(() => newTimerInput.value?.focus())
+}
+function cancelCreate() {
+  creatingNew.value = false
+  newTimerName.value  = ''
+  newTimerError.value = ''
+}
+async function confirmCreate() {
+  const name = newTimerName.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
+  if (!name) { newTimerError.value = 'Enter a name'; return }
+  if (timers.value.some(ti => ti.name === name)) { newTimerError.value = 'Already exists'; return }
+  if (!session.value) return
+  creatingNew.value = false
+  const blank = { name, response: '', interval_sec: 300, min_messages: 0,
     enabled_when: 'always', required_game: '', condition: '', is_active: 1 }
-  editOpen.value = true
-  setTimeout(() => {
-    if (editorRef.value) { editorRef.value.innerText = ''; applyScriptHighlight(editorRef.value) }
-  }, 50)
+  try {
+    await fetch(`${API}/timers/${session.value.channel}/${name}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify(blank),
+    })
+  } catch {}
+  await load()
+  const created = timers.value.find(ti => ti.name === name)
+  openEdit(created ?? { id: 0, last_fired: 0, ...blank })
 }
 
 function openEdit(timer: Timer) {
-  isNew.value = false
   editOrigName.value = timer.name
   editTimer.value = { ...timer }
   editOpen.value = true
@@ -135,7 +161,7 @@ async function saveTimer() {
     if (!res.ok) throw new Error(await res.text())
     // >>> Renamed: the PUT above created/updated the row under the NEW name (the URL
     // >>> is upsert-by-name-in-path), so the old-named row is now a stale duplicate.
-    if (!isNew.value && editOrigName.value && editOrigName.value !== name) {
+    if (editOrigName.value && editOrigName.value !== name) {
       await fetch(`${API}/timers/${session.value.channel}/${editOrigName.value}`, {
         method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
       }).catch(() => {})
@@ -278,7 +304,24 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
           <button v-else class="ep-sync-config-btn" @click="syncOpen = !syncOpen">{{ t('timer.sync.config') }} <span class="ep-sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span></button>
         </div>
       </div>
-      <button class="ep-btn-new" @click="canEdit && openNew()" :disabled="!canEdit">{{ t('timer.new') }}</button>
+      <div v-if="!creatingNew">
+        <button class="ep-btn-new" @click="canEdit && startCreate()" :disabled="!canEdit">{{ t('timer.new') }}</button>
+      </div>
+      <div v-else class="new-timer-row">
+        <input
+          ref="newTimerInput"
+          v-model="newTimerName"
+          class="new-timer-input"
+          :class="{ 'new-timer-input-conflict': !!newTimerError }"
+          placeholder="timername"
+          maxlength="32"
+          @keydown.enter="confirmCreate"
+          @keydown.escape="cancelCreate"
+        />
+        <button class="ep-btn-new" @click="confirmCreate">{{ t('cmd.create') }}</button>
+        <button class="new-timer-cancel" @click="cancelCreate">✕</button>
+        <span v-if="newTimerError" class="new-timer-error">{{ newTimerError }}</span>
+      </div>
     </div>
 
     <!-- Sync panel -->
@@ -335,11 +378,8 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
           <div class="ep-panel-header">
             <div>
               <div class="ep-panel-title">
-                <template v-if="isNew">{{ t('timer.edit_new') }}</template>
-                <template v-else>
-                  {{ t('timer.edit_title') }}
-                  <EditableNameHeader v-model="editTimer.name" :orig-name="editOrigName" placeholder="welcome" />
-                </template>
+                {{ t('timer.edit_title') }}
+                <EditableNameHeader v-model="editTimer.name" :orig-name="editOrigName" placeholder="welcome" />
               </div>
               <div class="ep-panel-sub">#{{ session?.channel }}</div>
             </div>
@@ -347,12 +387,6 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
           </div>
 
           <div class="ep-panel-body">
-            <!-- Name (new only - existing timers are renamed via the clickable header title above) -->
-            <div v-if="isNew" class="ep-field-group">
-              <label class="ep-field-label">{{ t('timer.field.name') }} <span class="ep-field-hint">{{ t('timer.field.name_hint') }}</span></label>
-              <input v-model="editTimer.name" class="ep-field-input" placeholder="welcome" />
-            </div>
-
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t('timer.field.response') }} <span class="ep-field-hint">{{ t('timer.field.resp_hint') }}</span></label>
               <div
@@ -401,7 +435,7 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
             </div>
 
             <div class="ep-panel-footer">
-              <button v-if="!isNew && canDelete" class="ep-btn-delete" @click="deleteTimer(editOrigName); editOpen = false">{{ t('timer.delete') }}</button>
+              <button v-if="canDelete" class="ep-btn-delete" @click="deleteTimer(editOrigName); editOpen = false">{{ t('timer.delete') }}</button>
               <div v-else></div>
               <div class="ep-footer-right">
                 <button class="ep-btn-cancel" @click="editOpen = false">{{ t('timer.cancel') }}</button>
@@ -455,6 +489,21 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
 .interval-row { display: flex; align-items: center; gap: 8px; }
 .interval-row .ep-field-input { flex: 1; }
 
+.new-timer-row { display: flex; align-items: center; gap: 6px; }
+.new-timer-input {
+  height: 32px; padding: 0 10px;
+  background: #111217; border: 1px solid #6f2bff55; color: #e0e0e0;
+  font-family: inherit; font-size: 13px; outline: none; width: 160px;
+}
+.new-timer-input:focus { border-color: #9d6cff; }
+.new-timer-input-conflict { border-color: #f1494966 !important; background: #1c1215 !important; }
+.new-timer-cancel {
+  height: 32px; width: 32px; border: 1px solid #333; background: transparent;
+  color: #666; font-size: 12px; cursor: pointer;
+}
+.new-timer-cancel:hover { color: #e0e0e0; border-color: #555; }
+.new-timer-error { font-size: 11px; color: #f14949; }
+
 @media (max-width: 680px) {
   .ep-view-header { flex-wrap: wrap; gap: 10px; }
   .ep-panel-body { padding: 14px 16px; }
@@ -462,5 +511,6 @@ watch(() => session.value?.channel, () => { load(); fetchSync() })
   .ep-row-actions { gap: 4px; }
   .ep-btn-action { padding: 0 8px; font-size: 10px; }
   .ep-sync-row { flex-wrap: wrap; }
+  .new-timer-input { width: 120px; }
 }
 </style>
