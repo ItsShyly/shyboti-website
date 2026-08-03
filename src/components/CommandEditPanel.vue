@@ -378,7 +378,17 @@ function extractIfBlockBody(src: string, argNum: number): string {
   const ifPat = new RegExp(`\\$if\\(\\s*\\$(?:args\\.)?${argNum}\\s*(?:=[^)]*)?\\)`)
   const m = ifPat.exec(src)
   if (!m) return ''
-  const after  = src.slice(m.index + m[0].length)
+  const after = src.slice(m.index + m[0].length)
+  const braceM = after.match(/^\s*\{/)
+  if (braceM) {
+    const braceStart = after.indexOf('{')
+    let depth = 0, bodyEnd = -1
+    for (let k = braceStart; k < after.length; k++) {
+      if (after[k] === '{') depth++
+      else if (after[k] === '}') { depth--; if (depth === 0) { bodyEnd = k; break } }
+    }
+    return bodyEnd === -1 ? '' : after.slice(braceStart + 1, bodyEnd).trim()
+  }
   const endIdx = after.indexOf('$end')
   return endIdx === -1 ? '' : after.slice(0, endIdx).trim()
 }
@@ -411,13 +421,37 @@ function parseChipToCondition(usage: string): string | null {
 
 function replaceIfBlock(src: string, oldCondStr: string, bodyText: string, newCond: string | null): string {
   const escaped = oldCondStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const pat = new RegExp(`\\$if\\(\\s*${escaped}\\s*\\)([\\s\\S]*?)\\$end`)
-  const m = pat.exec(src)
+  const ifPat = new RegExp(`\\$if\\(\\s*${escaped}\\s*\\)`)
+  const m = ifPat.exec(src)
   if (!m) return src
-  if (newCond !== null) {
-    return src.slice(0, m.index) + `$if(${newCond})${m[1]}$end` + src.slice(m.index + m[0].length)
+  const start = m.index
+  const after = src.slice(start + m[0].length)
+  const braceM = after.match(/^\s*\{/)
+
+  let blockEnd: number  // index into `after` right past the end of the whole $if[...] block
+  let bodySrc: string
+  if (braceM) {
+    const braceStart = after.indexOf('{')
+    let depth = 0, bodyEnd = -1
+    for (let k = braceStart; k < after.length; k++) {
+      if (after[k] === '{') depth++
+      else if (after[k] === '}') { depth--; if (depth === 0) { bodyEnd = k; break } }
+    }
+    if (bodyEnd === -1) return src
+    bodySrc  = after.slice(braceStart + 1, bodyEnd)
+    blockEnd = bodyEnd + 1
+  } else {
+    const endIdx = after.indexOf('$end')
+    if (endIdx === -1) return src
+    bodySrc  = after.slice(0, endIdx)
+    blockEnd = endIdx + 4
   }
-  return (src.slice(0, m.index) + ' ' + bodyText + ' ' + src.slice(m.index + m[0].length)).replace(/  +/g, ' ').trim()
+
+  if (newCond !== null) {
+    const replacement = braceM ? `$if(${newCond}){${bodySrc}}` : `$if(${newCond})${bodySrc}$end`
+    return src.slice(0, start) + replacement + after.slice(blockEnd)
+  }
+  return (src.slice(0, start) + ' ' + bodyText + ' ' + after.slice(blockEnd)).replace(/  +/g, ' ').trim()
 }
 
 function syncResponseFromChip(chipIdx: number, newUsage: string) {
@@ -719,10 +753,10 @@ function acceptCurrentGhost() {
     insert = '$if(  ){ }'
     cursorOffset = before.length - partial.length + 5 // cursor between parentheses
   } else if (full === '$foreach()') {
-    insert = '$foreach( in )\n  \n$end'
+    insert = '$foreach( in ){\n  \n}'
     cursorOffset = before.length - partial.length + 9
   } else if (full === '$repeat()') {
-    insert = '$repeat()\n  \n$end'
+    insert = '$repeat(){\n  \n}'
     cursorOffset = before.length - partial.length + 8
   }
 

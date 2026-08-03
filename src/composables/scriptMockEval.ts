@@ -116,6 +116,22 @@ function findLogicalOp(s: string, op: string): number {
 
 //  Source evaluator 
 
+// >>> Find a brace-delimited block body starting at/after `from` (mirrors the
+// >>> same helper in the backend's scriptEngine.ts so the preview matches what
+// >>> the real bot will do). Returns null if there's no `{` there so callers can
+// >>> fall back to the legacy $end-terminated form.
+function findBraceBody(src: string, from: number): { body: string; endIdx: number } | null {
+  let i = from
+  while (i < src.length && /\s/.test(src[i]!)) i++
+  if (src[i] !== '{') return null
+  let depth = 0, start = i
+  for (; i < src.length; i++) {
+    if (src[i] === '{') depth++
+    else if (src[i] === '}') { depth--; if (depth === 0) { i++; break } }
+  }
+  return { body: src.slice(start + 1, i - 1), endIdx: i }
+}
+
 function evalSrc(src: string, env: MockEnv): string {
   if (env.calls++ > 500) return '[overflow]'
   let out = '', i = 0
@@ -123,20 +139,36 @@ function evalSrc(src: string, env: MockEnv): string {
   while (i < src.length) {
     const rest = src.slice(i)
 
-    // $if(<cond>) ... [$else ...] $end
+    // $if(<cond>){ ... }[$else{ ... }]  (new)  or  $if(<cond>) ... [$else ...] $end  (legacy)
     const ifM = rest.match(/^\$if\s*\(/)
     if (ifM) {
       const condStart = i + ifM[0].length
       const condEnd   = findMatchingParen(src, condStart - 1)
       const cond      = src.slice(condStart, condEnd)
-      const { thenSrc, elseSrc, endIdx } = findIfBody(src, condEnd + 1)
       // Evaluate vars in condition first, then evaluate comparison
       const condVal = evalCondStr(evalSrc(cond.trim(), env))
-      out += evalSrc(isTruthy(condVal) ? thenSrc : (elseSrc ?? ''), env)
+      const truthy  = isTruthy(condVal)
+
+      const braceThen = findBraceBody(src, condEnd + 1)
+      if (braceThen) {
+        let elseBody = ''
+        let endIdx = braceThen.endIdx
+        let j = endIdx
+        while (j < src.length && /\s/.test(src[j]!)) j++
+        if (src.slice(j, j + 5) === '$else') {
+          const braceElse = findBraceBody(src, j + 5)
+          if (braceElse) { elseBody = braceElse.body; endIdx = braceElse.endIdx }
+        }
+        out += evalSrc(truthy ? braceThen.body : elseBody, env)
+        i = endIdx; continue
+      }
+
+      const { thenSrc, elseSrc, endIdx } = findIfBody(src, condEnd + 1)
+      out += evalSrc(truthy ? thenSrc : (elseSrc ?? ''), env)
       i = endIdx; continue
     }
 
-    // $foreach
+    // $foreach(item in list){ ... }  (new)  or  ... $end  (legacy)
     const feM = rest.match(/^\$foreach\s*\(/)
     if (feM) {
       const argStart = i + feM[0].length
@@ -146,7 +178,8 @@ function evalSrc(src: string, env: MockEnv): string {
       const item     = fm?.[1] ?? 'item'
       const list     = evalSrc((fm?.[2] ?? '').trim(), env)
       const items    = list.split(',').map(s => s.trim()).filter(Boolean)
-      const { body, endIdx } = findBlock(src, argEnd + 1)
+      const brace = findBraceBody(src, argEnd + 1)
+      const { body, endIdx } = brace ?? findBlock(src, argEnd + 1)
       const childEnv = { ...env, locals: { ...env.locals } }
       let loopOut = ''
       for (let idx = 0; idx < Math.min(items.length, 20); idx++) {
@@ -156,13 +189,14 @@ function evalSrc(src: string, env: MockEnv): string {
       out += loopOut; i = endIdx; continue
     }
 
-    // $repeat
+    // $repeat(n){ ... }  (new)  or  ... $end  (legacy)
     const repM = rest.match(/^\$repeat\s*\(/)
     if (repM) {
       const argStart = i + repM[0].length
       const argEnd   = findMatchingParen(src, argStart - 1)
       const count    = parseInt(evalSrc(src.slice(argStart, argEnd), env)) || 0
-      const { body, endIdx } = findBlock(src, argEnd + 1)
+      const brace = findBraceBody(src, argEnd + 1)
+      const { body, endIdx } = brace ?? findBlock(src, argEnd + 1)
       const childEnv = { ...env, locals: { ...env.locals } }
       let loopOut = ''
       for (let idx = 0; idx < Math.min(count, 20); idx++) {
@@ -171,13 +205,14 @@ function evalSrc(src: string, env: MockEnv): string {
       out += loopOut; i = endIdx; continue
     }
 
-    // $define
+    // $define name(params){ ... }  (new)  or  ... $end  (legacy)
     const defM = rest.match(/^\$define\s+(\w+)\s*\(([^)]*)\)/)
     if (defM) {
       const name   = defM[1]!
       const params = defM[2]!.split(',').map(s => s.trim()).filter(Boolean)
       const after  = i + defM[0].length
-      const { body, endIdx } = findBlock(src, after)
+      const brace = findBraceBody(src, after)
+      const { body, endIdx } = brace ?? findBlock(src, after)
       env.macros[name] = { params, body }
       i = endIdx; continue
     }

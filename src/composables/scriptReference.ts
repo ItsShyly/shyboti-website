@@ -12,12 +12,11 @@ export interface RefGroup { label: string; items: RefItem[] }
 
 export const REF_GROUPS: RefGroup[] = [
   { label: 'Control Flow', items: [
-    { token: '$if(condition)', desc: 'Conditional block', example: '$if($user.is(mod))' },
-    { token: '$else', desc: 'Else branch', example: '' },
-    { token: '$end', desc: 'End block', example: '' },
-    { token: '$foreach(item in list)', desc: 'Loop over list', example: '$foreach(q in $list.quotes)' },
-    { token: '$repeat(n)', desc: 'Repeat n times', example: '$repeat(3)' },
-    { token: '$define name(params)', desc: 'Define a macro', example: '$define greet(user)' },
+    { token: '$if(condition){ }', desc: 'Conditional block', example: '$if($user.is(mod)){ You are a mod! }' },
+    { token: '$if(condition){ }$else{ }', desc: 'With an else branch', example: '$if($args){ $args }$else{ nothing }' },
+    { token: '$foreach(item in list){ }', desc: 'Loop over list', example: '$foreach(q in $list.quotes){ $q }' },
+    { token: '$repeat(n){ }', desc: 'Repeat n times', example: '$repeat(3){ hi }' },
+    { token: '$define name(params){ }', desc: 'Define a macro', example: '$define greet(user){ hi $user }' },
     { token: '$index', desc: 'Current loop index (0-based)', example: '' },
   ]},
   { label: 'Counters', items: [
