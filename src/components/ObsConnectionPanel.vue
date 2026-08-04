@@ -310,7 +310,7 @@ watch(() => session.value?.channel, () => load())
             </li>
             <li>
               <strong>Download the ShyBoti Agent</strong> - a small app that runs alongside OBS on the streamer's PC.
-              <a class="ep-btn-cancel obc-dl-btn" href="https://shyboti.de/agent/download" target="_blank" rel="noopener">
+              <a class="ep-btn-cancel obc-dl-btn" :href="`${API}/agent/download`" target="_blank" rel="noopener">
                 Download Agent (.exe)
               </a>
             </li>
