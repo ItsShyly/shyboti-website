@@ -296,23 +296,35 @@ watch(() => session.value?.channel, () => load())
               <strong>Generate a pairing token</strong> - valid until you regenerate it.
               <template v-if="isBroadcaster">
                 <button class="ep-btn-new obc-token-btn" :disabled="generatingToken" @click="generateToken">
-                  {{ generatingToken ? 'generating…' : agentStatus?.paired ? 'regenerate token' : 'generate token' }}
+                  {{ generatingToken ? 'generating...' : agentStatus?.paired ? 'regenerate token' : 'generate token' }}
                 </button>
                 <div v-if="tokenVisible && token" class="obc-token-box">
                   <code class="obc-token-val">{{ token }}</code>
                   <button class="obc-copy-btn" @click="copyToken">
                     {{ tokenJustCopied ? 'copied!' : 'copy' }}
                   </button>
-                  <div class="obc-token-warn">⚠ Save this now - it won't be shown again after you close this panel.</div>
+                  <button class="obc-dismiss-btn" @click="tokenVisible = false; token = ''" title="I saved it, dismiss">
+                    done
+                  </button>
+                  <div class="obc-token-warn">Copy this before dismissing - it is not stored on the server and cannot be shown again. If you lose it, regenerate a new one (this will disconnect the agent).</div>
+                </div>
+                <div v-else-if="agentStatus?.paired && !token" class="obc-token-hint">
+                  Token already set. Click "regenerate token" to replace it (disconnects the current agent).
                 </div>
               </template>
               <span v-else class="obc-setup-hint">Ask your broadcaster to generate a token.</span>
             </li>
             <li>
-              <strong>Download the ShyBoti Agent</strong> - a small app that runs alongside OBS on the streamer's PC.
-              <a class="ep-btn-cancel obc-dl-btn" :href="`${API}/agent/download`" target="_blank" rel="noopener">
-                Download Agent (.exe)
-              </a>
+              <strong>Download the ShyBoti Agent</strong> - a small Node.js app that runs alongside OBS on the streamer's PC. Requires <a href="https://nodejs.org" target="_blank" rel="noopener" class="obc-link">Node.js</a>.
+              <div class="obc-dl-row">
+                <a class="ep-btn-cancel obc-dl-btn" :href="`${API}/agent/download/windows`" target="_blank" rel="noopener">
+                  Download for Windows (.zip)
+                </a>
+                <a class="ep-btn-cancel obc-dl-btn" :href="`${API}/agent/download/linux`" target="_blank" rel="noopener">
+                  Download for Linux (.tar.gz)
+                </a>
+              </div>
+              <div class="obc-av-note">Extract the zip, then run <code>start.bat</code> (Windows) or <code>start.sh</code> (Linux/Mac). No installer, no .exe - avoids antivirus false positives.</div>
             </li>
             <li>
               <strong>Paste the token</strong> into the agent when prompted, then click "Connect". The agent will dial our server outbound - no port-forwarding needed.
@@ -515,7 +527,19 @@ watch(() => session.value?.channel, () => load())
   transition: background .15s;
 }
 .obc-copy-btn:hover { background: #6f2bff22; }
-.obc-token-warn { width: 100%; font-size: 10px; color: #e5c07b; flex-basis: 100%; }
+.obc-token-warn { width: 100%; font-size: 10px; color: #e5c07b; flex-basis: 100%; line-height: 1.5; }
+.obc-token-hint { font-size: 11px; color: #555; margin-top: 4px; }
+.obc-dismiss-btn {
+  height: 22px; padding: 0 10px; border: 1px solid #2a2a30;
+  background: transparent; color: #666; font-family: inherit; font-size: 10px;
+  cursor: pointer; flex-shrink: 0;
+}
+.obc-dismiss-btn:hover { border-color: #444; color: #aaa; }
+.obc-dl-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.obc-av-note { font-size: 10px; color: #555; margin-top: 6px; line-height: 1.5; }
+.obc-av-note code { color: #9d6cff; font-family: 'Consolas','Fira Mono',monospace; }
+.obc-link { color: #9d6cff; text-decoration: none; }
+.obc-link:hover { text-decoration: underline; }
 
 /* Scenes */
 .obc-section-label { display: flex; align-items: center; gap: 8px; }
