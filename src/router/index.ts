@@ -6,7 +6,7 @@ import DashboardView   from '../components/DashboardView.vue'
 import CommandsView    from '../components/CommandsView.vue'
 import AutomationsView from '../components/AutomationsView.vue'
 import LogsView        from '../components/LogsView.vue'
-import ToolsView       from '../components/ToolsView.vue'
+import UploadsView     from '../components/UploadsView.vue'
 
 
 const router = createRouter({
@@ -21,8 +21,8 @@ const router = createRouter({
     // alone still works. Legacy ?channel=&user= links are still read by
     // LogsView for backwards compatibility.
     { path: '/logs/:channel?/:user?', component: LogsView },
-    { path: '/uploads',     component: ToolsView },
-    { path: '/tools',       component: () => import('../components/FeaturesView.vue') },
+    { path: '/uploads',     component: UploadsView },
+    { path: '/tools',       component: () => import('../components/ToolsView.vue') },
     { path: '/more',        redirect: '/uploads' },
     { path: '/images',      component: () => import('../components/ImagesView.vue') },
     { path: '/obs-widgets', component: () => import('../components/ObsView.vue') },
