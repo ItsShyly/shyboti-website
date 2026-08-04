@@ -324,7 +324,7 @@ watch(() => session.value?.channel, () => load())
                   Download for Linux (.tar.gz)
                 </a>
               </div>
-              <div class="obc-av-note">Extract the zip, then run <code>start.bat</code> (Windows) or <code>start.sh</code> (Linux/Mac). No installer, no .exe - avoids antivirus false positives.</div>
+              <div class="obc-av-note">Extract the zip, then run <code>start.bat</code> (Windows) or <code>start.sh</code> (Linux/Mac)</div>
             </li>
             <li>
               <strong>Paste the token</strong> into the agent when prompted, then click "Connect". The agent will dial our server outbound - no port-forwarding needed.
