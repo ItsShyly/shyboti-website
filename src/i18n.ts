@@ -463,6 +463,13 @@ const translations: Record<Locale, Record<string, string>> = {
     'perm.moderation_view.desc':   'See blocked terms, spam filters, and nukes.',
     'perm.moderation_manage':      'Manage',
     'perm.moderation_manage.desc': 'Add, delete, and fire nukes. Full moderation control.',
+    'perm.group.obs':                'OBS',
+    'perm.obs_view':                 'View',
+    'perm.obs_view.desc':            'Access the OBS connection page and see scenes.',
+    'perm.obs_edit':                 'Edit',
+    'perm.obs_edit.desc':            'Switch scenes, toggle sources, and manage bindings.',
+    'perm.obs_force_preview':        'Force Preview',
+    'perm.obs_force_preview.desc':   'Be able to Force scene previews (opens an OBS projector, only possible if scene previews are enabled).',
 
     // >>> Logs <<<
     'logs.title':                  'Logs',
@@ -1126,6 +1133,13 @@ const translations: Record<Locale, Record<string, string>> = {
     'perm.moderation_view.desc':   'Gesperrte Begriffe, Spam-Filter und Nukes sehen.',
     'perm.moderation_manage':      'Verwalten',
     'perm.moderation_manage.desc': 'Hinzufügen, Löschen und Nukes zünden. Vollständige Moderationskontrolle.',
+    'perm.group.obs':                'OBS',
+    'perm.obs_view':                 'Anzeigen',
+    'perm.obs_view.desc':            'Zugriff auf die OBS-Verbindungsseite und Szenen anzeigen.',
+    'perm.obs_edit':                 'Bearbeiten',
+    'perm.obs_edit.desc':            'Szenen wechseln, Quellen umschalten und Bindings verwalten.',
+    'perm.obs_force_preview':        'Force Preview',
+    'perm.obs_force_preview.desc':   'Möglichkeit Scene Previews zu forcen (Öffnen eines OBS-Projektors. Nur möglich, wenn Szenenpreviews aktiviert sind).',
 
     // >>> Logs <<<
     'logs.title':                  'Logs',

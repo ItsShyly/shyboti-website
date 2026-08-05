@@ -35,6 +35,7 @@ const PERM_GROUPS = computed(() => [
   { label: t('perm.group.obs'), perms: [
     { key: 'obs_view' as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.obs_view'), desc: t('perm.obs_view.desc') },
     { key: 'obs_edit' as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.obs_edit'), desc: t('perm.obs_edit.desc') },
+    { key: 'obs_force_preview' as keyof Omit<RolePermissions,'modsEnabled'>, label: t('perm.obs_force_preview'), desc: t('perm.obs_force_preview.desc') },
   ]},
 ])
 
@@ -47,6 +48,7 @@ const DEFAULT_PERMS: Omit<RolePermissions, 'modsEnabled'> = {
   moderation_manage:  false,
   obs_view:           true,
   obs_edit:           false,
+  obs_force_preview:  false,
 }
 
 // >>> Global mod defaults

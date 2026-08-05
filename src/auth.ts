@@ -29,6 +29,7 @@ export interface RolePermissions {
   // OBS
   obs_view: boolean
   obs_edit: boolean
+  obs_force_preview: boolean
 }
 
 export interface ChannelRole {

@@ -15,7 +15,7 @@ import { API } from '../api'
 import { useAuth } from '../auth'
 import { useOverlayClose } from '../composables/useOverlayClose'
 
-const { session } = useAuth()
+const { session, channelRole } = useAuth()
 const settingsOverlay = useOverlayClose()
 
 interface AgentStatus {
@@ -176,6 +176,10 @@ let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const authHeaders = computed(() => session.value ? { Authorization: `Bearer ${session.value.token}` } : {} as Record<string, string>)
 const isBroadcaster = computed(() => session.value?.login?.toLowerCase() === session.value?.channel?.toLowerCase())
+const canForcePreview = computed(() =>
+  !!agentStatus.value?.screenshots &&
+  (isBroadcaster.value || channelRole.value?.permissions?.obs_force_preview === true)
+)
 
 // derived
 const agentConnected = computed(() => agentStatus.value?.connected ?? false)
@@ -367,6 +371,27 @@ function addSourceBinding() {
 
 function removeSourceBinding(i: number) { sourceBindings.value.splice(i, 1); bindingsDirty.value = true }
 
+// --- context menu (Force Preview) ---
+const contextMenu = ref<{ visible: boolean; x: number; y: number; scene: string }>({ visible: false, x: 0, y: 0, scene: '' })
+
+function onSceneContextMenu(scene: SceneInfo, e: MouseEvent) {
+  if (!canForcePreview.value) return
+  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, scene: scene.sceneName }
+}
+
+function closeContextMenu() { contextMenu.value.visible = false }
+
+async function forcePreview(sceneName: string) {
+  if (!session.value) return
+  try {
+    await fetch(`${API}/obs/${session.value.channel}/projector`, {
+      method: 'POST',
+      headers: { ...authHeaders.value, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ scene: sceneName }),
+    })
+  } catch {}
+}
+
 // --- lifecycle ---
 onMounted(() => {
   load()
@@ -375,10 +400,12 @@ onMounted(() => {
     if (agentConnected.value && obsConnected.value && selectedScene.value) loadSources(selectedScene.value)
     if (agentConnected.value && obsConnected.value && scenes.value.length === 0) refreshScenes()
   }, 5000)
+  window.addEventListener('click', closeContextMenu)
 })
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
   if (shotTimer) clearInterval(shotTimer)
+  window.removeEventListener('click', closeContextMenu)
 })
 watch(() => session.value?.channel, () => load())
 </script>
@@ -444,6 +471,7 @@ watch(() => session.value?.channel, () => load())
               class="obc-scene-card"
               :class="{ active: s.sceneName === currentScene, picked: s.sceneName === selectedScene }"
               @click="switchScene(s.sceneName); loadSources(s.sceneName)"
+              @contextmenu.prevent="onSceneContextMenu(s, $event)"
             >
               <div class="obc-scene-thumb">
                 <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
@@ -678,6 +706,18 @@ watch(() => session.value?.channel, () => load())
       </div>
     </div>
   </Teleport>
+
+  <!-- Scene right-click context menu -->
+  <Teleport to="body">
+    <div
+      v-if="contextMenu.visible"
+      class="obc-ctx-menu"
+      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+      @click.stop
+    >
+      <button class="obc-ctx-btn" @click="forcePreview(contextMenu.scene); closeContextMenu()">Force Preview</button>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -850,4 +890,20 @@ watch(() => session.value?.channel, () => load())
   .obc-bind-cmd, .obc-bind-target { width: 100%; }
   .obc-arg-label { width: 100%; }
 }
+
+/* Context menu */
+.obc-ctx-menu {
+  position: fixed; z-index: 9999;
+  background: #18181c; border: 1px solid #2a2a30;
+  padding: 3px;
+  box-shadow: 0 4px 16px rgba(0,0,0,.5);
+}
+.obc-ctx-btn {
+  display: block; width: 100%;
+  padding: 7px 14px; border: none; background: transparent;
+  color: #d0d0d0; font-family: inherit; font-size: 12px;
+  text-align: left; cursor: pointer; white-space: nowrap;
+  transition: background .1s;
+}
+.obc-ctx-btn:hover { background: #6f2bff22; color: #c4a0ff; }
 </style>
