@@ -35,7 +35,7 @@ interface AgentStatus {
 }
 
 interface SceneInfo { sceneName: string; sceneIndex: number }
-interface SourceInfo { sceneItemId: number; sourceName: string; visible: boolean; isAudioSource: boolean }
+interface SourceInfo { sceneItemId: number; sourceName: string; sceneItemEnabled: boolean; visible: boolean; isAudioSource: boolean; inputKind: string | null; muted?: boolean; volumePercent?: number }
 interface SceneBind  { command: string; scene: string }
 interface SourceBind { command: string; source: string; action: string; value?: number }
 
@@ -290,42 +290,41 @@ async function loadSources(sceneName: string) {
       `${API}/obs/${session.value.channel}/sources?scene=${encodeURIComponent(sceneName)}`,
       { headers: authHeaders.value }
     )
-    if (res.ok) sources.value = (await res.json() as any).sources ?? []
+    if (res.ok) {
+      const rawSources = (await res.json() as any).sources ?? []
+      sources.value = rawSources.map((s: any) => ({ ...s, visible: s.sceneItemEnabled }))
+    }
   } catch {}
   sourcesLoading.value = false
 }
 
 async function toggleSourceVisible(src: SourceInfo) {
   if (!session.value || pendingSources.value.has(src.sceneItemId)) return
-  const next = !src.visible
-  src.visible = next
   pendingSources.value = new Set(pendingSources.value).add(src.sceneItemId)
   try {
     await fetch(`${API}/obs/${session.value.channel}/source/visibility`, {
       method: 'POST',
       headers: { ...authHeaders.value, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scene: selectedScene.value, sceneItemId: src.sceneItemId, enabled: next }),
+      body: JSON.stringify({ scene: selectedScene.value, sceneItemId: src.sceneItemId, enabled: !src.visible }),
     })
-  } catch { src.visible = !next }
+  } catch {}
+  // reload ground truth to sync UI with actual OBS state
+  if (selectedScene.value) await loadSources(selectedScene.value)
   const next_ = new Set(pendingSources.value); next_.delete(src.sceneItemId); pendingSources.value = next_
-  // reload ground truth so rapid toggling can't leave stale values
-  if (selectedScene.value) loadSources(selectedScene.value)
 }
 
 async function toggleSourceMute(src: SourceInfo & { muted?: boolean }) {
   if (!session.value || pendingSources.value.has(src.sceneItemId)) return
-  const next = !(src.muted ?? false)
-  src.muted = next
   pendingSources.value = new Set(pendingSources.value).add(src.sceneItemId)
   try {
     await fetch(`${API}/obs/${session.value.channel}/source/mute`, {
       method: 'POST',
       headers: { ...authHeaders.value, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source: src.sourceName, muted: next }),
+      body: JSON.stringify({ source: src.sourceName, muted: !(src.muted ?? false) }),
     })
-  } catch { src.muted = !next }
+  } catch {}
+  if (selectedScene.value) await loadSources(selectedScene.value)
   const next_ = new Set(pendingSources.value); next_.delete(src.sceneItemId); pendingSources.value = next_
-  if (selectedScene.value) loadSources(selectedScene.value)
 }
 
 // --- bindings ---
