@@ -81,6 +81,7 @@ const sourcesLoading = ref(false)
 
 const sceneBindings  = ref<SceneBind[]>([])
 const sourceBindings = ref<SourceBind[]>([])
+const argCommands    = ref<Record<string, string>>({})
 const bindingsDirty  = ref(false)
 const bindingsSaving = ref(false)
 const bindingsSaved  = ref(false)
@@ -96,6 +97,7 @@ const knownSources   = ref<string[]>([])
 watch(sources, list => {
   for (const s of list) if (!knownSources.value.includes(s.sourceName)) knownSources.value.push(s.sourceName)
 })
+watch(argCommands, () => { bindingsDirty.value = true }, { deep: true })
 
 // --- settings panel (broadcaster only - mirrors the PUT /obs/:ch/settings guard) ---
 const showSettings         = ref(false)
@@ -104,14 +106,12 @@ const settingsSaved        = ref(false)
 const enabledLocal         = ref(true)
 const screenshotsLocal     = ref(true)
 const screenshotIntervalLocal = ref(5)
-const argCommandsLocal     = ref<Record<string, string>>({})
 
 function openSettings() {
   if (!isBroadcaster.value) return // belt-and-suspenders - the gear button is v-if'd out for non-broadcasters already
   enabledLocal.value             = agentStatus.value?.enabled ?? true
   screenshotsLocal.value         = agentStatus.value?.screenshots ?? true
   screenshotIntervalLocal.value  = agentStatus.value?.screenshot_interval_sec ?? 5
-  argCommandsLocal.value         = { ...(agentStatus.value?.arg_commands ?? {}) }
   showSettings.value = true
 }
 
@@ -119,14 +119,6 @@ async function saveSettings() {
   if (!session.value || !isBroadcaster.value) return
   settingsSaving.value = true
   try {
-    // >>> Drop blank command names before saving so an emptied field actually
-    // >>> disables that generic command instead of saving "" as its trigger
-    // >>> word (which would never match anything typed in chat anyway, but
-    // >>> better to just not store it).
-    const cleaned: Record<string, string> = {}
-    for (const [action, cmd] of Object.entries(argCommandsLocal.value)) {
-      if (cmd && cmd.trim()) cleaned[action] = cmd.trim().replace(/^\+/, '').toLowerCase()
-    }
     const res = await fetch(`${API}/obs/${session.value.channel}/settings`, {
       method: 'PUT',
       headers: { ...authHeaders.value, 'Content-Type': 'application/json' },
@@ -134,7 +126,6 @@ async function saveSettings() {
         enabled: enabledLocal.value,
         screenshots: screenshotsLocal.value,
         screenshot_interval_sec: screenshotIntervalLocal.value,
-        arg_commands: cleaned,
       }),
     })
     if (res.ok) {
@@ -214,6 +205,7 @@ async function load() {
       agentStatus.value   = d
       sceneBindings.value  = d.scene_bindings  ?? []
       sourceBindings.value = d.source_bindings ?? []
+      argCommands.value    = d.arg_commands    ?? {}
       bindingsDirty.value  = false
     }
   } catch {}
@@ -272,7 +264,7 @@ async function refreshScenes() {
 }
 
 async function switchScene(name: string) {
-  if (!session.value || !isBroadcaster.value) return
+  if (!session.value) return // backend enforces obs_edit permission; mods with it can switch scenes too
   try {
     await fetch(`${API}/obs/${session.value.channel}/scene`, {
       method: 'POST',
@@ -299,7 +291,7 @@ async function loadSources(sceneName: string) {
 }
 
 async function toggleSourceVisible(src: SourceInfo) {
-  if (!session.value || !isBroadcaster.value) return
+  if (!session.value) return // backend enforces obs_edit permission; mods with it can toggle sources too
   const next = !src.visible
   src.visible = next
   try {
@@ -312,7 +304,7 @@ async function toggleSourceVisible(src: SourceInfo) {
 }
 
 async function toggleSourceMute(src: SourceInfo & { muted?: boolean }) {
-  if (!session.value || !isBroadcaster.value) return
+  if (!session.value) return // backend enforces obs_edit permission; mods with it can toggle mute too
   const next = !(src.muted ?? false)
   src.muted = next
   try {
@@ -329,10 +321,20 @@ async function saveBindings() {
   if (!session.value) return
   bindingsSaving.value = true
   try {
+    // >>> Drop blank command names so an emptied field actually disables that
+    // >>> generic command instead of saving "" as its trigger word.
+    const cleanedArgCommands: Record<string, string> = {}
+    for (const [action, cmd] of Object.entries(argCommands.value)) {
+      if (cmd && cmd.trim()) cleanedArgCommands[action] = cmd.trim().replace(/^\+/, '').toLowerCase()
+    }
     await fetch(`${API}/obs/${session.value.channel}/bindings`, {
       method: 'PUT',
       headers: { ...authHeaders.value, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scene_bindings: sceneBindings.value, source_bindings: sourceBindings.value }),
+      body: JSON.stringify({
+        scene_bindings: sceneBindings.value,
+        source_bindings: sourceBindings.value,
+        arg_commands: cleanedArgCommands,
+      }),
     })
     bindingsDirty.value = false
     bindingsSaved.value  = true
@@ -406,55 +408,23 @@ watch(() => session.value?.channel, () => load())
 
     <div class="obsconn-body">
 
-      <!-- SETUP SECTION (shown until agent is connected + OBS is reachable) -->
+      <!-- SETUP PROMPT (shown until agent is connected + OBS is reachable) -->
+      <!-- Full setup instructions live in the gear panel now - broadcaster only -->
       <template v-if="!agentConnected || !obsConnected">
-        <div class="obc-setup-card">
-          <div class="obc-setup-title">Set up the ShyBoti Agent</div>
-          <ol class="obc-setup-steps">
-            <li>
-              <strong>Generate a pairing token</strong> - valid until you regenerate it.
-              <template v-if="isBroadcaster">
-                <button class="ep-btn-new obc-token-btn" :disabled="generatingToken" @click="generateToken">
-                  {{ generatingToken ? 'generating...' : agentStatus?.paired ? 'regenerate token' : 'generate token' }}
-                </button>
-                <div v-if="tokenVisible && token" class="obc-token-box">
-                  <code class="obc-token-val">{{ token }}</code>
-                  <button class="obc-copy-btn" @click="copyToken">
-                    {{ tokenJustCopied ? 'copied!' : 'copy' }}
-                  </button>
-                  <button class="obc-dismiss-btn" @click="tokenVisible = false; token = ''" title="I saved it, dismiss">
-                    done
-                  </button>
-                  <div class="obc-token-warn">Copy this before dismissing - it is not stored on the server and cannot be shown again. If you lose it, regenerate a new one (this will disconnect the agent).</div>
-                </div>
-                <div v-else-if="agentStatus?.paired && !token" class="obc-token-hint">
-                  Token already set. Click "regenerate token" to replace it (disconnects the current agent).
-                </div>
-              </template>
-              <span v-else class="obc-setup-hint">Ask your broadcaster to generate a token.</span>
-            </li>
-            <li>
-              <strong>Download the ShyBoti Agent</strong> - a small Node.js app that runs alongside OBS on the streamer's PC. Requires <a href="https://nodejs.org" target="_blank" rel="noopener" class="obc-link">Node.js</a>.
-              <div class="obc-dl-row">
-                <a class="ep-btn-cancel obc-dl-btn" :href="`${API}/agent/download/windows`" target="_blank" rel="noopener">
-                  Download for Windows (.zip)
-                </a>
-                <a class="ep-btn-cancel obc-dl-btn" :href="`${API}/agent/download/linux`" target="_blank" rel="noopener">
-                  Download for Linux (.tar.gz)
-                </a>
-              </div>
-              <div class="obc-av-note">Extract the zip, then run <code>start.bat</code> (Windows) or <code>start.sh</code> (Linux/Mac)</div>
-            </li>
-            <li>
-              <strong>Paste the token</strong> into the agent when prompted, then click "Connect". The agent will dial our server outbound - no port-forwarding needed.
-            </li>
-            <li>
-              <strong>Open OBS</strong> with the WebSocket server enabled (Tools → WebSocket Server Settings → enabled). The agent connects to OBS locally on the same PC - you never share your OBS password with anyone.
-            </li>
-          </ol>
-          <div v-if="agentStatus?.paired && !agentConnected" class="obc-setup-hint obc-paired-hint">
-            Token is set - waiting for the agent to connect…
-          </div>
+        <div class="obc-setup-card obc-setup-compact">
+          <template v-if="isBroadcaster">
+            <div class="obc-setup-title">
+              {{ agentStatus?.paired ? (agentConnected ? 'Agent connected - waiting for OBS…' : 'Waiting for the agent to connect…') : 'OBS agent is not set up yet' }}
+            </div>
+            <div class="obc-setup-hint">
+              Click the gear icon above to
+              {{ agentStatus?.paired ? 'view your pairing token again or re-download the agent.' : 'get your pairing token and download the agent.' }}
+            </div>
+          </template>
+          <template v-else>
+            <div class="obc-setup-title">OBS isn't connected yet</div>
+            <div class="obc-setup-hint">Ask your broadcaster to set it up (gear icon, broadcaster only).</div>
+          </template>
         </div>
       </template>
 
@@ -575,6 +545,21 @@ watch(() => session.value?.channel, () => load())
           </datalist>
         </div>
 
+        <div class="ep-field-group">
+          <label class="ep-field-label">
+            Arg commands
+            <span class="ep-field-hint">one command per action, works with any scene/source name typed as the argument - e.g. "+scene cam" instead of one binding per scene</span>
+          </label>
+          <div class="obc-arg-list">
+            <div v-for="a in ARG_ACTIONS" :key="a.value" class="obc-arg-row">
+              <span class="obc-arg-label">{{ a.label }}</span>
+              <span class="obc-bind-prefix">+</span>
+              <input v-model="argCommands[a.value]" class="ep-field-input ep-mono obc-bind-cmd" placeholder="(disabled)" />
+              <span class="obc-arg-usage">{{ a.usage }}</span>
+            </div>
+          </div>
+        </div>
+
       </template>
 
     </div><!-- end body -->
@@ -607,6 +592,52 @@ watch(() => session.value?.channel, () => load())
         <div class="ep-panel-body">
 
           <div class="ep-field-group">
+            <label class="ep-field-label">Set up the ShyBoti Agent</label>
+            <ol class="obc-setup-steps">
+              <li>
+                <strong>Generate a pairing token</strong> - valid until you regenerate it.
+                <button class="ep-btn-new obc-token-btn" :disabled="generatingToken" @click="generateToken">
+                  {{ generatingToken ? 'generating...' : agentStatus?.paired ? 'regenerate token' : 'generate token' }}
+                </button>
+                <div v-if="tokenVisible && token" class="obc-token-box">
+                  <code class="obc-token-val">{{ token }}</code>
+                  <button class="obc-copy-btn" @click="copyToken">
+                    {{ tokenJustCopied ? 'copied!' : 'copy' }}
+                  </button>
+                  <button class="obc-dismiss-btn" @click="tokenVisible = false; token = ''" title="I saved it, dismiss">
+                    done
+                  </button>
+                  <div class="obc-token-warn">Copy this before dismissing - it is not stored on the server and cannot be shown again. If you lose it, regenerate a new one (this will disconnect the agent).</div>
+                </div>
+                <div v-else-if="agentStatus?.paired && !token" class="obc-token-hint">
+                  Token already set. Click "regenerate token" to replace it (disconnects the current agent).
+                </div>
+              </li>
+              <li>
+                <strong>Download the ShyBoti Agent</strong> - a small Node.js app that runs alongside OBS on the streamer's PC. Requires <a href="https://nodejs.org" target="_blank" rel="noopener" class="obc-link">Node.js</a>.
+                <div class="obc-dl-row">
+                  <a class="ep-btn-cancel obc-dl-btn" :href="`${API}/agent/download/windows`" target="_blank" rel="noopener">
+                    Download for Windows (.zip)
+                  </a>
+                  <a class="ep-btn-cancel obc-dl-btn" :href="`${API}/agent/download/linux`" target="_blank" rel="noopener">
+                    Download for Linux (.tar.gz)
+                  </a>
+                </div>
+                <div class="obc-av-note">Extract the zip, then run <code>start.bat</code> (Windows) or <code>start.sh</code> (Linux/Mac)</div>
+              </li>
+              <li>
+                <strong>Paste the token</strong> into the agent when prompted, then click "Connect". The agent will dial our server outbound - no port-forwarding needed.
+              </li>
+              <li>
+                <strong>Open OBS</strong> with the WebSocket server enabled (Tools → WebSocket Server Settings → enabled). The agent connects to OBS locally on the same PC - you never share your OBS password with anyone.
+              </li>
+            </ol>
+            <div v-if="agentStatus?.paired && !agentConnected" class="obc-setup-hint obc-paired-hint">
+              Token is set - waiting for the agent to connect…
+            </div>
+          </div>
+
+          <div class="ep-field-group">
             <label class="ep-field-label">Connection enabled</label>
             <div class="obc-toggle-row">
               <button class="obc-toggle" :class="{ on: enabledLocal }" @click="enabledLocal = !enabledLocal">
@@ -631,21 +662,6 @@ watch(() => session.value?.channel, () => load())
             </div>
             <div class="ep-field-hint">
               Only you (the broadcaster) can change this - moderators can see previews if they're on, but can't turn them on or off.
-            </div>
-          </div>
-
-          <div class="ep-field-group">
-            <label class="ep-field-label">
-              Generic arg commands
-              <span class="ep-field-hint">one chat command per action, works with any scene/source name as the argument</span>
-            </label>
-            <div class="obc-arg-list">
-              <div v-for="a in ARG_ACTIONS" :key="a.value" class="obc-arg-row">
-                <span class="obc-arg-label">{{ a.label }}</span>
-                <span class="obc-bind-prefix">+</span>
-                <input v-model="argCommandsLocal[a.value]" class="ep-field-input ep-mono obc-bind-cmd" placeholder="(disabled)" />
-                <span class="obc-arg-usage">{{ a.usage }}</span>
-              </div>
             </div>
           </div>
 
@@ -710,6 +726,8 @@ watch(() => session.value?.channel, () => load())
 .obc-setup-card {
   border: 1px solid #1e1e22; padding: 14px 16px; background: #0d0d10;
 }
+.obc-setup-compact { padding: 12px 14px; }
+.obc-setup-compact .obc-setup-title { margin-bottom: 4px; }
 .obc-setup-title { font-size: 12px; font-weight: 600; color: #ccc; margin-bottom: 12px; }
 .obc-setup-steps {
   padding-left: 18px; margin: 0 0 10px; display: flex; flex-direction: column; gap: 12px;
