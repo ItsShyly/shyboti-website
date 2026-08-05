@@ -26,6 +26,9 @@ export interface RolePermissions {
   // Moderation
   moderation_view: boolean
   moderation_manage: boolean
+  // OBS
+  obs_view: boolean
+  obs_edit: boolean
 }
 
 export interface ChannelRole {
