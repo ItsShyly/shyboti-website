@@ -1,17 +1,22 @@
 <script setup lang="ts">
-// ObsConnectionPanel.vue
+// ObsConnectionView.vue
 // Agent-relay model: no host/port/password fields. The streamer:
 //   1. clicks "Generate token" (or it auto-generates on first open)
 //   2. downloads the ShyBoti Agent app (link on this page)
 //   3. pastes the token into the agent on their PC - done
 // From here on the agent keeps a persistent outbound ws connection to the
-// relay; this panel just shows status and lets them manage scenes/bindings.
+// relay; this page just shows status and lets them manage scenes/bindings.
+// Routed page (/obs-connection), not a modal - the settings sub-panel
+// (enabled/screenshots/arg-commands, broadcaster only) is the only remaining
+// Teleport overlay here.
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { API } from '../api'
 import { useAuth } from '../auth'
+import { useOverlayClose } from '../composables/useOverlayClose'
 
 const { session } = useAuth()
+const settingsOverlay = useOverlayClose()
 
 interface AgentStatus {
   paired: boolean
@@ -22,6 +27,11 @@ interface AgentStatus {
   current_scene: string
   scene_bindings:  SceneBind[]
   source_bindings: SourceBind[]
+  arg_commands: Record<string, string>
+  screenshots: boolean
+  // broadcaster-only fields - the backend omits these entirely for anyone else
+  enabled?: boolean
+  screenshot_interval_sec?: number
 }
 
 interface SceneInfo { sceneName: string; sceneIndex: number }
@@ -37,6 +47,22 @@ const SOURCE_ACTIONS = [
   { value: 'unmute',     label: 'unmute' },
   { value: 'mutetoggle', label: 'toggle mute' },
   { value: 'volume',     label: 'set volume' },
+]
+
+// >>> Every action that can be triggered generically, e.g. "+scene cam" or
+// >>> "+volume mic 50", instead of one fixed binding per scene/source. Mirrors
+// >>> resolveObsCommand's kind-check in agentRelay.ts - 'scene' is handled as
+// >>> its own arg shape (just a name), everything else takes a source name
+// >>> (+ a value for volume).
+const ARG_ACTIONS = [
+  { value: 'scene',      label: 'Switch scene',       usage: '+<cmd> <scene name>' },
+  { value: 'show',       label: 'Show source',        usage: '+<cmd> <source name>' },
+  { value: 'hide',       label: 'Hide source',        usage: '+<cmd> <source name>' },
+  { value: 'toggle',     label: 'Toggle visibility',  usage: '+<cmd> <source name>' },
+  { value: 'mute',       label: 'Mute source',        usage: '+<cmd> <source name>' },
+  { value: 'unmute',     label: 'Unmute source',      usage: '+<cmd> <source name>' },
+  { value: 'mutetoggle', label: 'Toggle mute',        usage: '+<cmd> <source name>' },
+  { value: 'volume',     label: 'Set volume',         usage: '+<cmd> <source name> <0-100>' },
 ]
 
 // --- state ---
@@ -70,6 +96,90 @@ const knownSources   = ref<string[]>([])
 watch(sources, list => {
   for (const s of list) if (!knownSources.value.includes(s.sourceName)) knownSources.value.push(s.sourceName)
 })
+
+// --- settings panel (broadcaster only - mirrors the PUT /obs/:ch/settings guard) ---
+const showSettings         = ref(false)
+const settingsSaving       = ref(false)
+const settingsSaved        = ref(false)
+const enabledLocal         = ref(true)
+const screenshotsLocal     = ref(true)
+const screenshotIntervalLocal = ref(5)
+const argCommandsLocal     = ref<Record<string, string>>({})
+
+function openSettings() {
+  if (!isBroadcaster.value) return // belt-and-suspenders - the gear button is v-if'd out for non-broadcasters already
+  enabledLocal.value             = agentStatus.value?.enabled ?? true
+  screenshotsLocal.value         = agentStatus.value?.screenshots ?? true
+  screenshotIntervalLocal.value  = agentStatus.value?.screenshot_interval_sec ?? 5
+  argCommandsLocal.value         = { ...(agentStatus.value?.arg_commands ?? {}) }
+  showSettings.value = true
+}
+
+async function saveSettings() {
+  if (!session.value || !isBroadcaster.value) return
+  settingsSaving.value = true
+  try {
+    // >>> Drop blank command names before saving so an emptied field actually
+    // >>> disables that generic command instead of saving "" as its trigger
+    // >>> word (which would never match anything typed in chat anyway, but
+    // >>> better to just not store it).
+    const cleaned: Record<string, string> = {}
+    for (const [action, cmd] of Object.entries(argCommandsLocal.value)) {
+      if (cmd && cmd.trim()) cleaned[action] = cmd.trim().replace(/^\+/, '').toLowerCase()
+    }
+    const res = await fetch(`${API}/obs/${session.value.channel}/settings`, {
+      method: 'PUT',
+      headers: { ...authHeaders.value, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        enabled: enabledLocal.value,
+        screenshots: screenshotsLocal.value,
+        screenshot_interval_sec: screenshotIntervalLocal.value,
+        arg_commands: cleaned,
+      }),
+    })
+    if (res.ok) {
+      settingsSaved.value = true
+      setTimeout(() => { settingsSaved.value = false }, 2000)
+      await load()
+      restartShotLoop()
+    }
+  } catch {}
+  settingsSaving.value = false
+}
+
+// --- scene screenshots (item: previews weren't rendered anywhere before) ---
+// Uses the existing GET /obs/:ch/screenshot?scene=X route + the channel's
+// `screenshots` toggle, which were already wired up server-side but nothing
+// in the frontend ever called them.
+const sceneShots = ref<Record<string, string>>({})
+let shotTimer: ReturnType<typeof setInterval> | null = null
+
+async function refreshScreenshot(sceneName: string) {
+  if (!session.value || !agentStatus.value?.screenshots) return
+  try {
+    const res = await fetch(
+      `${API}/obs/${session.value.channel}/screenshot?scene=${encodeURIComponent(sceneName)}`,
+      { headers: authHeaders.value }
+    )
+    if (res.ok) {
+      const d = await res.json() as { imageData: string | null }
+      if (d.imageData) sceneShots.value = { ...sceneShots.value, [sceneName]: d.imageData }
+    }
+  } catch {}
+}
+
+function refreshAllShots() {
+  if (!agentConnected.value || !obsConnected.value || !agentStatus.value?.screenshots) return
+  for (const s of scenes.value) refreshScreenshot(s.sceneName)
+}
+
+function restartShotLoop() {
+  if (shotTimer) { clearInterval(shotTimer); shotTimer = null }
+  if (!agentStatus.value?.screenshots) return
+  const intervalMs = Math.max(3, agentStatus.value?.screenshot_interval_sec ?? 5) * 1000
+  refreshAllShots() // don't wait a full interval for the first paint
+  shotTimer = setInterval(refreshAllShots, intervalMs)
+}
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -156,6 +266,7 @@ async function refreshScenes() {
       scenes.value = d.scenes
       if (!selectedScene.value && scenes.value[0]) selectedScene.value = scenes.value[0].sceneName
       if (selectedScene.value) loadSources(selectedScene.value)
+      restartShotLoop()
     }
   } catch {}
 }
@@ -263,29 +374,37 @@ onMounted(() => {
     if (agentConnected.value && obsConnected.value && scenes.value.length === 0) refreshScenes()
   }, 5000)
 })
-onUnmounted(() => { if (pollTimer) clearInterval(pollTimer) })
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
+  if (shotTimer) clearInterval(shotTimer)
+})
 watch(() => session.value?.channel, () => load())
 </script>
 
 <template>
-  <div class="ep-panel">
+  <div class="obsconn-page">
 
-    <div class="ep-panel-header">
+    <div class="obsconn-header">
       <div>
-        <div class="ep-panel-title">OBS control</div>
-        <div class="ep-panel-sub">#{{ session?.channel }}</div>
+        <div class="obsconn-title">OBS connection</div>
+        <div class="obsconn-sub">#{{ session?.channel }}</div>
       </div>
-      <button class="ep-panel-close" @click="$emit('close')">x</button>
+      <div class="obsconn-header-right">
+        <div class="obc-status-bar" :class="connStatusClass">
+          <div class="obc-status-dot"></div>
+          <span class="obc-status-text">{{ connStatusLabel }}</span>
+          <span v-if="agentStatus?.version" class="obc-status-version">v{{ agentStatus.version }}</span>
+        </div>
+        <button v-if="isBroadcaster" class="obsconn-gear-btn" title="OBS settings" @click="openSettings">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M16.2 12.3a1.4 1.4 0 00.3 1.5l.05.05a1.65 1.65 0 11-2.35 2.35l-.05-.05a1.4 1.4 0 00-1.5-.3 1.4 1.4 0 00-.85 1.28v.14a1.65 1.65 0 11-3.3 0v-.07a1.4 1.4 0 00-.92-1.28 1.4 1.4 0 00-1.5.3l-.05.05A1.65 1.65 0 113.63 13.9l.05-.05a1.4 1.4 0 00.3-1.5 1.4 1.4 0 00-1.28-.85h-.14a1.65 1.65 0 110-3.3h.07a1.4 1.4 0 001.28-.92 1.4 1.4 0 00-.3-1.5l-.05-.05A1.65 1.65 0 116.09 3.38l.05.05a1.4 1.4 0 001.5.3h.06a1.4 1.4 0 00.85-1.28V2.3a1.65 1.65 0 113.3 0v.07a1.4 1.4 0 00.85 1.28h.06a1.4 1.4 0 001.5-.3l.05-.05a1.65 1.65 0 112.35 2.35l-.05.05a1.4 1.4 0 00-.3 1.5v.06a1.4 1.4 0 001.28.85h.14a1.65 1.65 0 110 3.3h-.07a1.4 1.4 0 00-1.28.85z" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+        </button>
+      </div>
     </div>
 
-    <div class="ep-panel-body">
-
-      <!-- STATUS BAR -->
-      <div class="obc-status-bar" :class="connStatusClass">
-        <div class="obc-status-dot"></div>
-        <span class="obc-status-text">{{ connStatusLabel }}</span>
-        <span v-if="agentStatus?.version" class="obc-status-version">v{{ agentStatus.version }}</span>
-      </div>
+    <div class="obsconn-body">
 
       <!-- SETUP SECTION (shown until agent is connected + OBS is reachable) -->
       <template v-if="!agentConnected || !obsConnected">
@@ -356,6 +475,10 @@ watch(() => session.value?.channel, () => load())
               :class="{ active: s.sceneName === currentScene, picked: s.sceneName === selectedScene }"
               @click="switchScene(s.sceneName); loadSources(s.sceneName)"
             >
+              <div class="obc-scene-thumb">
+                <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
+                <div v-else class="obc-scene-thumb-empty">{{ agentStatus?.screenshots ? '…' : 'previews off' }}</div>
+              </div>
               <div class="obc-scene-name">{{ s.sceneName }}</div>
               <div v-if="s.sceneName === currentScene" class="obc-scene-live">live</div>
             </div>
@@ -456,7 +579,7 @@ watch(() => session.value?.channel, () => load())
 
     </div><!-- end body -->
 
-    <div class="ep-panel-footer">
+    <div class="obsconn-footer">
       <div>
         <span v-if="bindingsDirty" class="obc-unsaved">unsaved changes</span>
       </div>
@@ -468,9 +591,96 @@ watch(() => session.value?.channel, () => load())
     </div>
 
   </div>
+
+  <!-- SETTINGS PANEL - broadcaster only, mirrors PUT /obs/:ch/settings's own guard -->
+  <Teleport to="body">
+    <div v-if="showSettings && isBroadcaster" class="ep-overlay" v-bind="settingsOverlay.handlers(() => showSettings = false)">
+      <div class="ep-panel obsconn-settings-panel">
+        <div class="ep-panel-header">
+          <div>
+            <div class="ep-panel-title">OBS settings</div>
+            <div class="ep-panel-sub">broadcaster only</div>
+          </div>
+          <button class="ep-panel-close" @click="showSettings = false">x</button>
+        </div>
+
+        <div class="ep-panel-body">
+
+          <div class="ep-field-group">
+            <label class="ep-field-label">Connection enabled</label>
+            <div class="obc-toggle-row">
+              <button class="obc-toggle" :class="{ on: enabledLocal }" @click="enabledLocal = !enabledLocal">
+                <span class="obc-toggle-knob"></span>
+              </button>
+              <span class="obc-toggle-label">{{ enabledLocal ? 'on - agent can relay commands' : 'off - agent connections are rejected' }}</span>
+            </div>
+          </div>
+
+          <div class="ep-field-group">
+            <label class="ep-field-label">Scene previews</label>
+            <div class="obc-toggle-row">
+              <button class="obc-toggle" :class="{ on: screenshotsLocal }" @click="screenshotsLocal = !screenshotsLocal">
+                <span class="obc-toggle-knob"></span>
+              </button>
+              <span class="obc-toggle-label">{{ screenshotsLocal ? 'on - periodic screenshots of each scene' : 'off - no screenshots are taken' }}</span>
+            </div>
+            <div v-if="screenshotsLocal" class="obc-interval-row">
+              <span class="ep-field-hint">refresh every</span>
+              <input v-model.number="screenshotIntervalLocal" type="number" min="3" max="60" class="ep-field-input obc-interval-input" />
+              <span class="ep-field-hint">seconds (min 3, to keep this light on OBS)</span>
+            </div>
+            <div class="ep-field-hint">
+              Only you (the broadcaster) can change this - moderators can see previews if they're on, but can't turn them on or off.
+            </div>
+          </div>
+
+          <div class="ep-field-group">
+            <label class="ep-field-label">
+              Generic arg commands
+              <span class="ep-field-hint">one chat command per action, works with any scene/source name as the argument</span>
+            </label>
+            <div class="obc-arg-list">
+              <div v-for="a in ARG_ACTIONS" :key="a.value" class="obc-arg-row">
+                <span class="obc-arg-label">{{ a.label }}</span>
+                <span class="obc-bind-prefix">+</span>
+                <input v-model="argCommandsLocal[a.value]" class="ep-field-input ep-mono obc-bind-cmd" placeholder="(disabled)" />
+                <span class="obc-arg-usage">{{ a.usage }}</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="ep-panel-footer">
+          <div></div>
+          <div class="ep-footer-right">
+            <button class="ep-btn-save" :class="{ saved: settingsSaved }" :disabled="settingsSaving" @click="saveSettings">
+              {{ settingsSaved ? 'saved' : settingsSaving ? 'saving' : 'save settings' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
+/* Page chrome (was a modal panel before, now a routed page like ObsView) */
+.obsconn-page { display: flex; flex-direction: column; gap: 16px; max-width: 900px; }
+.obsconn-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.obsconn-title { font-size: 20px; font-weight: 700; color: #e0e0e0; }
+.obsconn-sub   { font-size: 12px; color: #555; margin-top: 2px; }
+.obsconn-header-right { display: flex; align-items: center; gap: 8px; }
+.obsconn-gear-btn {
+  width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid #2a2a30; background: #111217; color: #666; cursor: pointer; transition: all .15s; flex-shrink: 0;
+}
+.obsconn-gear-btn svg { width: 16px; height: 16px; }
+.obsconn-gear-btn:hover { border-color: #9d6cff55; color: #9d6cff; }
+.obsconn-body   { display: flex; flex-direction: column; gap: 18px; }
+.obsconn-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid #1e1e22; }
+.obsconn-settings-panel { width: min(560px, 92vw); }
+
 /* Status bar */
 .obc-status-bar {
   display: flex; align-items: center; gap: 8px;
@@ -551,9 +761,9 @@ watch(() => session.value?.channel, () => load())
 
 .obc-scenes { display: flex; flex-wrap: wrap; gap: 6px; }
 .obc-scene-card {
-  padding: 7px 12px; border: 1px solid #2a2a30; background: #111217;
+  width: 150px; padding: 0 0 7px; border: 1px solid #2a2a30; background: #111217;
   cursor: pointer; font-size: 11px; color: #888; position: relative;
-  transition: border-color .15s, color .15s;
+  transition: border-color .15s, color .15s; overflow: hidden;
 }
 .obc-scene-card:hover { border-color: #3a3a44; color: #aaa; }
 .obc-scene-card.active { border-color: #6f2bff; color: #c4a0ff; }
@@ -561,9 +771,15 @@ watch(() => session.value?.channel, () => load())
 .obc-scene-live {
   position: absolute; top: 3px; right: 4px;
   font-size: 7px; font-weight: 700; letter-spacing: .08em;
-  color: #fff; background: #f14949; padding: 1px 4px;
+  color: #fff; background: #f14949; padding: 1px 4px; z-index: 1;
 }
-.obc-scene-name { white-space: nowrap; }
+.obc-scene-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 6px 8px 0; }
+.obc-scene-thumb {
+  width: 100%; aspect-ratio: 16/9; background: #0a0a0d; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #1e1e24;
+}
+.obc-scene-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.obc-scene-thumb-empty { font-size: 9px; color: #333; }
 
 /* Sources */
 .obc-source-list { display: flex; flex-direction: column; gap: 2px; }
@@ -591,7 +807,29 @@ watch(() => session.value?.channel, () => load())
 
 .obc-unsaved { font-size: 11px; color: #e5c07b; }
 
+/* Settings panel: toggles + generic arg commands */
+.obc-toggle-row { display: flex; align-items: center; gap: 10px; }
+.obc-toggle {
+  width: 34px; height: 18px; border: 1px solid #2a2a30; background: #0d0d10;
+  padding: 2px; cursor: pointer; flex-shrink: 0; transition: border-color .15s, background .15s;
+}
+.obc-toggle.on { border-color: #6f2bff88; background: #6f2bff22; }
+.obc-toggle-knob {
+  display: block; width: 12px; height: 12px; background: #555; transition: transform .15s, background .15s;
+}
+.obc-toggle.on .obc-toggle-knob { background: #9d6cff; transform: translateX(14px); }
+.obc-toggle-label { font-size: 11px; color: #888; }
+
+.obc-interval-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.obc-interval-input { width: 56px; flex: none; text-align: center; }
+
+.obc-arg-list { display: flex; flex-direction: column; gap: 6px; }
+.obc-arg-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 3px 0; }
+.obc-arg-label { width: 130px; flex: none; font-size: 11px; color: #999; }
+.obc-arg-usage { font-size: 10px; color: #444; font-family: 'Consolas','Fira Mono',monospace; }
+
 @media (max-width: 680px) {
   .obc-bind-cmd, .obc-bind-target { width: 100%; }
+  .obc-arg-label { width: 100%; }
 }
 </style>

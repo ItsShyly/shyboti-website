@@ -4,14 +4,10 @@ import { useRouter } from 'vue-router'
 import { useAuth } from '../auth'
 import { useI18n } from '../i18n'
 import { API } from '../api'
-import { useOverlayClose } from '../composables/useOverlayClose'
-import ObsConnectionPanel from './ObsConnectionPanel.vue'
 
 const router = useRouter()
 const { session } = useAuth()
 const { t } = useI18n()
-const obsOverlay = useOverlayClose()
-const showObsPanel = ref(false)
 
 // >>> Variables & Counters
 interface Counter  { name: string; value: number }
@@ -161,7 +157,7 @@ async function addEntry() {
     </div>
 
     <!-- OBS connection card -->
-    <div class="service-card" @click="session && (showObsPanel = true)">
+    <div class="service-card" @click="session && router.push('/obs-connection')">
       <div class="card-icon obsconn-icon">
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect x="4" y="10" width="40" height="26" rx="3" stroke="currentColor" stroke-width="2.5"/>
@@ -176,17 +172,17 @@ async function addEntry() {
         <div class="card-sub">Switch scenes and control sources from chat</div>
         <div class="card-url">websocket, scenes, sources, commands</div>
       </div>
-      <div v-if="!session" class="obsconn-locked-hint">sign in to set this up</div>
+      <button v-if="session" class="your-btn obsconn-btn" @click.stop="router.push('/obs-connection')">
+        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="1" y="1" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+          <path d="M4 13h6M7 10v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+        </svg>
+        open
+      </button>
+      <div v-else class="obsconn-locked-hint">sign in to set this up</div>
     </div>
 
   </div>
-
-  <!-- OBS connection panel -->
-  <Teleport to="body">
-    <div v-if="showObsPanel" class="ep-overlay" v-bind="obsOverlay.handlers(() => showObsPanel = false)">
-      <ObsConnectionPanel @close="showObsPanel = false" />
-    </div>
-  </Teleport>
 
   <!-- Variables & Counters modal -->
   <Teleport to="body">
@@ -363,6 +359,8 @@ async function addEntry() {
 .obs-btn:hover  { background: rgba(241,73,73,.16); border-color: #f1494988; }
 .vars-btn { border-color: #e5c07b44; color: #e5c07b; background: rgba(229,192,123,.06); }
 .vars-btn:hover { background: rgba(229,192,123,.16); border-color: #e5c07b88; }
+.obsconn-btn { border-color: #9d6cff44; color: #9d6cff; background: rgba(157,108,255,.06); }
+.obsconn-btn:hover { background: rgba(157,108,255,.16); border-color: #9d6cff88; }
 
 .vars-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .vars-modal { background: #141418; border: 1px solid #2a2a30; width: min(720px, 95vw); height: min(600px, 90vh); display: flex; flex-direction: column; }
