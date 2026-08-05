@@ -94,6 +94,7 @@ const newSourceAction = ref('show')
 const newSourceValue  = ref(50)
 
 const knownSources   = ref<string[]>([])
+const pendingSources = ref<Set<number>>(new Set())
 watch(sources, list => {
   for (const s of list) if (!knownSources.value.includes(s.sourceName)) knownSources.value.push(s.sourceName)
 })
@@ -295,9 +296,10 @@ async function loadSources(sceneName: string) {
 }
 
 async function toggleSourceVisible(src: SourceInfo) {
-  if (!session.value) return // backend enforces obs_edit permission; mods with it can toggle sources too
+  if (!session.value || pendingSources.value.has(src.sceneItemId)) return
   const next = !src.visible
   src.visible = next
+  pendingSources.value = new Set(pendingSources.value).add(src.sceneItemId)
   try {
     await fetch(`${API}/obs/${session.value.channel}/source/visibility`, {
       method: 'POST',
@@ -305,12 +307,16 @@ async function toggleSourceVisible(src: SourceInfo) {
       body: JSON.stringify({ scene: selectedScene.value, sceneItemId: src.sceneItemId, enabled: next }),
     })
   } catch { src.visible = !next }
+  const next_ = new Set(pendingSources.value); next_.delete(src.sceneItemId); pendingSources.value = next_
+  // reload ground truth so rapid toggling can't leave stale values
+  if (selectedScene.value) loadSources(selectedScene.value)
 }
 
 async function toggleSourceMute(src: SourceInfo & { muted?: boolean }) {
-  if (!session.value) return // backend enforces obs_edit permission; mods with it can toggle mute too
+  if (!session.value || pendingSources.value.has(src.sceneItemId)) return
   const next = !(src.muted ?? false)
   src.muted = next
+  pendingSources.value = new Set(pendingSources.value).add(src.sceneItemId)
   try {
     await fetch(`${API}/obs/${session.value.channel}/source/mute`, {
       method: 'POST',
@@ -318,6 +324,8 @@ async function toggleSourceMute(src: SourceInfo & { muted?: boolean }) {
       body: JSON.stringify({ source: src.sourceName, muted: next }),
     })
   } catch { src.muted = !next }
+  const next_ = new Set(pendingSources.value); next_.delete(src.sceneItemId); pendingSources.value = next_
+  if (selectedScene.value) loadSources(selectedScene.value)
 }
 
 // --- bindings ---
@@ -492,11 +500,11 @@ watch(() => session.value?.channel, () => load())
           <div class="obc-source-list">
             <div v-for="src in (sources as any[])" :key="src.sceneItemId" class="obc-source-row">
               <span class="obc-source-name">{{ src.sourceName }}</span>
-              <button class="obc-vis-btn" :class="{ on: src.visible }" @click="toggleSourceVisible(src)">
+              <button class="obc-vis-btn" :class="{ on: src.visible }" :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceVisible(src)">
                 {{ src.visible ? 'visible' : 'hidden' }}
               </button>
               <template v-if="src.isAudioSource">
-                <button class="obc-mute-btn" :class="{ muted: src.muted }" @click="toggleSourceMute(src)">
+                <button class="obc-mute-btn" :class="{ muted: src.muted }" :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceMute(src)">
                   {{ src.muted ? 'muted' : 'live' }}
                 </button>
               </template>
