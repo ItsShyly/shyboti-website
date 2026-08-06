@@ -41,31 +41,19 @@ interface SourceInfo { sceneItemId: number; sourceName: string; sceneItemEnabled
 interface SceneBind  { command: string; scene: string }
 interface SourceBind { command: string; source: string; action: string; value?: number }
 
-const SOURCE_ACTIONS = [
-  { value: 'show',       label: 'show' },
-  { value: 'hide',       label: 'hide' },
-  { value: 'toggle',     label: 'toggle visibility' },
-  { value: 'mute',       label: 'mute' },
-  { value: 'unmute',     label: 'unmute' },
-  { value: 'mutetoggle', label: 'toggle mute' },
-  { value: 'volume',     label: 'set volume' },
-]
+// >>> Unified action list for the command builder
 
-// >>> Every action that can be triggered generically, e.g. "+scene cam" or
-// >>> "+volume mic 50", instead of one fixed binding per scene/source. Mirrors
-// >>> resolveObsCommand's kind-check in agentRelay.ts - 'scene' is handled as
-// >>> its own arg shape (just a name), everything else takes a source name
-// >>> (+ a value for volume).
-const ARG_ACTIONS = [
-  { value: 'scene',      label: 'Switch scene',       usage: '+<cmd> <scene name>' },
-  { value: 'show',       label: 'Show source',        usage: '+<cmd> <source name>' },
-  { value: 'hide',       label: 'Hide source',        usage: '+<cmd> <source name>' },
-  { value: 'toggle',     label: 'Toggle visibility',  usage: '+<cmd> <source name>' },
-  { value: 'mute',       label: 'Mute source',        usage: '+<cmd> <source name>' },
-  { value: 'unmute',     label: 'Unmute source',      usage: '+<cmd> <source name>' },
-  { value: 'mutetoggle', label: 'Toggle mute',        usage: '+<cmd> <source name>' },
-  { value: 'volume',     label: 'Set volume',         usage: '+<cmd> <source name> <0-100>' },
+const BUILDER_ACTIONS = [
+  { value: 'scene',      label: 'Switch scene',      usage: '+<cmd> <scene name>' },
+  { value: 'show',       label: 'Show source',       usage: '+<cmd> <source name>' },
+  { value: 'hide',       label: 'Hide source',       usage: '+<cmd> <source name>' },
+  { value: 'toggle',     label: 'Toggle visibility', usage: '+<cmd> <source name>' },
+  { value: 'mute',       label: 'Mute source',       usage: '+<cmd> <source name>' },
+  { value: 'unmute',     label: 'Unmute source',     usage: '+<cmd> <source name>' },
+  { value: 'mutetoggle', label: 'Toggle mute',       usage: '+<cmd> <source name>' },
+  { value: 'volume',     label: 'Set volume',        usage: '+<cmd> <source name> <0-100>' },
 ]
+const BUILDER_ACTION_LABEL: Record<string, string> = Object.fromEntries(BUILDER_ACTIONS.map(a => [a.value, a.label]))
 
 // --- state ---
 const loading        = ref(true)
@@ -88,12 +76,12 @@ const bindingsDirty  = ref(false)
 const bindingsSaving = ref(false)
 const bindingsSaved  = ref(false)
 
-const newSceneCmd    = ref('')
-const newSceneTarget = ref('')
-const newSourceCmd   = ref('')
-const newSourceTarget = ref('')
-const newSourceAction = ref('show')
-const newSourceValue  = ref(50)
+// --- command builder (unified add-form: pick an action, then a target) ---
+const builderAction = ref('scene')
+const builderMode    = ref<'specific' | 'argument'>('specific')
+const builderCmd     = ref('')
+const builderTarget  = ref('')
+const builderValue   = ref(50)
 
 const knownSources   = ref<string[]>([])
 const pendingSources = ref<Set<number>>(new Set())
@@ -358,29 +346,80 @@ async function saveBindings() {
   bindingsSaving.value = false
 }
 
-function addSceneBinding() {
-  const cmd = newSceneCmd.value.trim().replace(/^\+/, '').toLowerCase()
-  if (!cmd || !newSceneTarget.value) return
-  if (sceneBindings.value.some(b => b.command === cmd)) return
-  sceneBindings.value.push({ command: cmd, scene: newSceneTarget.value })
-  newSceneCmd.value = ''; newSceneTarget.value = ''
+// --- command builder ---
+interface UnifiedCommand {
+  type: 'scene' | 'source' | 'arg'
+  command: string
+  label: string
+  index?: number
+  action?: string
+}
+
+const unifiedCommands = computed<UnifiedCommand[]>(() => {
+  const list: UnifiedCommand[] = []
+  sceneBindings.value.forEach((b, i) => list.push({ type: 'scene', command: b.command, label: `switch scene → ${b.scene}`, index: i }))
+  sourceBindings.value.forEach((b, i) => {
+    const valSuffix = b.action === 'volume' && b.value != null ? ` (${b.value}%)` : ''
+    list.push({ type: 'source', command: b.command, label: `${BUILDER_ACTION_LABEL[b.action] ?? b.action} → ${b.source}${valSuffix}`, index: i })
+  })
+  Object.entries(argCommands.value).forEach(([action, cmd]) => {
+    if (cmd) list.push({ type: 'arg', command: cmd, label: `${BUILDER_ACTION_LABEL[action] ?? action} → $1 argument`, action })
+  })
+  return list
+})
+
+function addBuilderCommand() {
+  const cmd = builderCmd.value.trim().replace(/^\+/, '').toLowerCase()
+  if (!cmd) return
+  if (builderMode.value === 'argument') {
+    argCommands.value = { ...argCommands.value, [builderAction.value]: cmd }
+  } else {
+    if (!builderTarget.value) return
+    if (builderAction.value === 'scene') {
+      if (sceneBindings.value.some(b => b.command === cmd)) return
+      sceneBindings.value.push({ command: cmd, scene: builderTarget.value })
+    } else {
+      if (sourceBindings.value.some(b => b.command === cmd)) return
+      const entry: SourceBind = { command: cmd, source: builderTarget.value, action: builderAction.value }
+      if (builderAction.value === 'volume') entry.value = builderValue.value
+      sourceBindings.value.push(entry)
+    }
+  }
+  builderCmd.value = ''; builderTarget.value = ''
   bindingsDirty.value = true
 }
 
-function removeSceneBinding(i: number) { sceneBindings.value.splice(i, 1); bindingsDirty.value = true }
-
-function addSourceBinding() {
-  const cmd = newSourceCmd.value.trim().replace(/^\+/, '').toLowerCase()
-  if (!cmd || !newSourceTarget.value) return
-  if (sourceBindings.value.some(b => b.command === cmd)) return
-  const entry: SourceBind = { command: cmd, source: newSourceTarget.value, action: newSourceAction.value }
-  if (newSourceAction.value === 'volume') entry.value = newSourceValue.value
-  sourceBindings.value.push(entry)
-  newSourceCmd.value = ''; newSourceTarget.value = ''
+function removeUnifiedCommand(item: UnifiedCommand) {
+  if (item.type === 'scene' && item.index != null) sceneBindings.value.splice(item.index, 1)
+  else if (item.type === 'source' && item.index != null) sourceBindings.value.splice(item.index, 1)
+  else if (item.type === 'arg' && item.action) {
+    const next = { ...argCommands.value }
+    delete next[item.action]
+    argCommands.value = next
+  }
   bindingsDirty.value = true
 }
 
-function removeSourceBinding(i: number) { sourceBindings.value.splice(i, 1); bindingsDirty.value = true }
+// --- audio mixer ---
+const audioSources = computed(() => (sources.value as any[]).filter(s => s.isAudioSource))
+
+function volumeToDb(percent: number | undefined): string {
+  const mul = Math.max(0, Math.min(100, percent ?? 0)) / 100
+  if (mul <= 0) return '-∞'
+  return (20 * Math.log10(mul)).toFixed(1)
+}
+
+async function setSourceVolume(src: any, percent: number) {
+  if (!session.value) return
+  try {
+    await fetch(`${API}/obs/${session.value.channel}/source/volume`, {
+      method: 'POST',
+      headers: { ...authHeaders.value, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: src.sourceName, percent }),
+    })
+  } catch {}
+  if (selectedScene.value) await loadSources(selectedScene.value)
+}
 
 // --- force all previews button ---
 const forcePreviewLoading = ref(false)
@@ -438,9 +477,16 @@ watch(() => session.value?.channel, () => load())
 
     <div class="obsconn-body">
 
+      <!-- LOADING (brief flash while the first status fetch is in flight) -->
+      <template v-if="loading">
+        <div class="obc-loading">
+          <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="loading" class="obc-loading-emote" />
+        </div>
+      </template>
+
       <!-- SETUP PROMPT (shown until agent is connected + OBS is reachable) -->
       <!-- Full setup instructions live in the gear panel now - broadcaster only -->
-      <template v-if="!agentConnected || !obsConnected">
+      <template v-else-if="!agentConnected || !obsConnected">
         <div class="obc-setup-card obc-setup-compact">
           <template v-if="isBroadcaster">
             <div class="obc-setup-title">
@@ -459,7 +505,7 @@ watch(() => session.value?.channel, () => load())
       </template>
 
       <!-- LIVE CONTROLS (shown when agent + OBS both reachable) -->
-      <template v-if="agentConnected && obsConnected">
+      <template v-else>
 
         <!-- Scenes -->
         <div class="ep-field-group">
@@ -501,109 +547,107 @@ watch(() => session.value?.channel, () => load())
           </div>
         </div>
 
-        <!-- Sources -->
-        <div class="ep-field-group" v-if="selectedScene">
-          <label class="ep-field-label">sources <span class="ep-field-hint">{{ selectedScene }}</span></label>
-          <div class="obc-source-list">
-            <div v-for="src in (sources as any[])" :key="src.sceneItemId" class="obc-source-row">
-              <span class="obc-source-name">{{ src.sourceName }}</span>
-              <button class="obc-vis-btn" :class="{ on: src.visible }" :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceVisible(src)">
-                {{ src.visible ? 'visible' : 'hidden' }}
-              </button>
-              <template v-if="src.isAudioSource">
-                <button class="obc-mute-btn" :class="{ muted: src.muted }" :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceMute(src)">
-                  {{ src.muted ? 'muted' : 'live' }}
+        <!-- Sources | Audio mixer | Command builder -->
+        <div class="obc-boxes-row">
+
+          <!-- Sources -->
+          <div class="ep-field-group obc-box">
+            <label class="ep-field-label">sources <span v-if="selectedScene" class="ep-field-hint">{{ selectedScene }}</span></label>
+            <div class="obc-source-list">
+              <div v-for="src in (sources as any[])" :key="src.sceneItemId" class="obc-source-row">
+                <span class="obc-source-name">{{ src.sourceName }}</span>
+                <button class="obc-vis-btn" :class="{ on: src.visible }" :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceVisible(src)">
+                  {{ src.visible ? 'visible' : 'hidden' }}
                 </button>
-              </template>
+                <template v-if="src.isAudioSource">
+                  <button class="obc-mute-btn" :class="{ muted: src.muted }" :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceMute(src)">
+                    {{ src.muted ? 'muted' : 'live' }}
+                  </button>
+                </template>
+              </div>
+              <div v-if="!sources.length && !sourcesLoading" class="ep-empty">{{ selectedScene ? 'no sources in this scene' : 'pick a scene above' }}</div>
             </div>
-            <div v-if="!sources.length && !sourcesLoading" class="ep-empty">no sources in this scene</div>
           </div>
+
+          <!-- Audio mixer -->
+          <div class="ep-field-group obc-box">
+            <label class="ep-field-label">audio mixer <span v-if="selectedScene" class="ep-field-hint">{{ selectedScene }}</span></label>
+            <div class="obc-mixer-list">
+              <div v-for="src in audioSources" :key="src.sceneItemId" class="obc-mixer-row">
+                <div class="obc-mixer-top">
+                  <span class="obc-source-name">{{ src.sourceName }}</span>
+                  <button class="obc-mute-btn" :class="{ muted: src.muted }" :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceMute(src)">
+                    {{ src.muted ? 'muted' : 'live' }}
+                  </button>
+                </div>
+                <div class="obc-mixer-slider-row">
+                  <input
+                    type="range" min="0" max="100"
+                    :value="src.volumePercent ?? 100"
+                    class="obc-mixer-slider"
+                    @change="setSourceVolume(src, +($event.target as HTMLInputElement).value)"
+                  />
+                  <span class="obc-mixer-db">{{ volumeToDb(src.volumePercent) }} dB</span>
+                </div>
+              </div>
+              <div v-if="!audioSources.length" class="ep-empty">{{ selectedScene ? 'no audio sources in this scene' : 'pick a scene above' }}</div>
+            </div>
+          </div>
+
+          <!-- Command builder -->
+          <div class="ep-field-group obc-box" v-if="agentStatus?.paired">
+            <label class="ep-field-label">
+              command builder
+              <span class="ep-field-hint">pick an action, then a fixed target or a $1 argument</span>
+            </label>
+            <div class="obc-bind-list">
+              <div v-for="(c, i) in unifiedCommands" :key="c.type + i" class="obc-cmd-row">
+                <span class="obc-bind-prefix">+</span>
+                <span class="obc-cmd-name ep-mono">{{ c.command }}</span>
+                <span class="obc-bind-arrow">→</span>
+                <span class="obc-cmd-label">{{ c.label }}</span>
+                <button class="ep-btn-delete" @click="removeUnifiedCommand(c)">×</button>
+              </div>
+              <div v-if="!unifiedCommands.length" class="ep-empty">no commands set up yet</div>
+            </div>
+
+            <div class="obc-builder-form">
+              <select v-model="builderAction" class="ep-field-select">
+                <option v-for="a in BUILDER_ACTIONS" :key="a.value" :value="a.value">{{ a.label }}</option>
+              </select>
+              <div class="obc-mode-toggle">
+                <button type="button" class="obc-mode-btn" :class="{ active: builderMode === 'specific' }" @click="builderMode = 'specific'">specific</button>
+                <button type="button" class="obc-mode-btn" :class="{ active: builderMode === 'argument' }" @click="builderMode = 'argument'">argument ($1)</button>
+              </div>
+
+              <div class="obc-add-row">
+                <span class="obc-bind-prefix">+</span>
+                <input v-model="builderCmd" class="ep-field-input ep-mono obc-bind-cmd" placeholder="command" />
+                <span class="obc-bind-arrow">→</span>
+
+                <template v-if="builderMode === 'specific'">
+                  <select v-if="builderAction === 'scene'" v-model="builderTarget" class="ep-field-select obc-bind-target">
+                    <option value="" disabled>pick scene</option>
+                    <option v-for="s in scenes" :key="s.sceneName" :value="s.sceneName">{{ s.sceneName }}</option>
+                  </select>
+                  <input v-else v-model="builderTarget" list="obc-src-names" class="ep-field-input obc-bind-target" placeholder="source name" />
+                  <input v-if="builderAction === 'volume'" v-model.number="builderValue" type="number" min="0" max="100" class="ep-field-input obc-bind-vol" />
+                </template>
+                <template v-else>
+                  <span class="obc-arg-usage">{{ BUILDER_ACTIONS.find(a => a.value === builderAction)?.usage }}</span>
+                </template>
+
+                <button class="ep-btn-new" :disabled="!builderCmd || (builderMode === 'specific' && !builderTarget)" @click="addBuilderCommand">add</button>
+              </div>
+              <datalist id="obc-src-names">
+                <option v-for="n in knownSources" :key="n" :value="n" />
+              </datalist>
+            </div>
+          </div>
+
         </div>
 
       </template><!-- end live controls -->
-
-      <!-- COMMAND BINDINGS (always shown once paired, even if offline, so bindings can be set up in advance) -->
-      <template v-if="agentStatus?.paired">
-
-        <div class="ep-field-group">
-          <label class="ep-field-label">
-            Scene commands
-            <span class="ep-field-hint">type a chat command → switches to a scene</span>
-          </label>
-          <div class="obc-bind-list">
-            <div v-for="(b, i) in sceneBindings" :key="'sc'+i" class="obc-bind-row">
-              <span class="obc-bind-prefix">+</span>
-              <input v-model="b.command" class="ep-field-input ep-mono obc-bind-cmd" @change="bindingsDirty = true" />
-              <span class="obc-bind-arrow">→</span>
-              <select v-model="b.scene" class="ep-field-select obc-bind-target" @change="bindingsDirty = true">
-                <option v-for="s in scenes" :key="s.sceneName" :value="s.sceneName">{{ s.sceneName }}</option>
-                <option v-if="!scenes.some(s => s.sceneName === b.scene)" :value="b.scene">{{ b.scene }}</option>
-              </select>
-              <button class="ep-btn-delete" @click="removeSceneBinding(i)">×</button>
-            </div>
-          </div>
-          <div class="obc-add-row">
-            <span class="obc-bind-prefix">+</span>
-            <input v-model="newSceneCmd" class="ep-field-input ep-mono obc-bind-cmd" placeholder="command" />
-            <span class="obc-bind-arrow">→</span>
-            <select v-model="newSceneTarget" class="ep-field-select obc-bind-target">
-              <option value="" disabled>pick scene</option>
-              <option v-for="s in scenes" :key="s.sceneName" :value="s.sceneName">{{ s.sceneName }}</option>
-            </select>
-            <button class="ep-btn-new" :disabled="!newSceneCmd || !newSceneTarget" @click="addSceneBinding">add</button>
-          </div>
-        </div>
-
-        <div class="ep-field-group">
-          <label class="ep-field-label">
-            Source commands
-            <span class="ep-field-hint">show, hide, mute or set volume from chat</span>
-          </label>
-          <div class="obc-bind-list">
-            <div v-for="(b, i) in sourceBindings" :key="'so'+i" class="obc-bind-row">
-              <span class="obc-bind-prefix">+</span>
-              <input v-model="b.command" class="ep-field-input ep-mono obc-bind-cmd" @change="bindingsDirty = true" />
-              <span class="obc-bind-arrow">→</span>
-              <input v-model="b.source" list="obc-src-names" class="ep-field-input obc-bind-target" @change="bindingsDirty = true" />
-              <select v-model="b.action" class="ep-field-select" @change="bindingsDirty = true">
-                <option v-for="a in SOURCE_ACTIONS" :key="a.value" :value="a.value">{{ a.label }}</option>
-              </select>
-              <input v-if="b.action === 'volume'" v-model.number="b.value" type="number" min="0" max="100" class="ep-field-input obc-bind-vol" @change="bindingsDirty = true" />
-              <button class="ep-btn-delete" @click="removeSourceBinding(i)">×</button>
-            </div>
-          </div>
-          <div class="obc-add-row">
-            <span class="obc-bind-prefix">+</span>
-            <input v-model="newSourceCmd" class="ep-field-input ep-mono obc-bind-cmd" placeholder="command" />
-            <span class="obc-bind-arrow">→</span>
-            <input v-model="newSourceTarget" list="obc-src-names" class="ep-field-input obc-bind-target" placeholder="source name" />
-            <select v-model="newSourceAction" class="ep-field-select">
-              <option v-for="a in SOURCE_ACTIONS" :key="a.value" :value="a.value">{{ a.label }}</option>
-            </select>
-            <input v-if="newSourceAction === 'volume'" v-model.number="newSourceValue" type="number" min="0" max="100" class="ep-field-input obc-bind-vol" />
-            <button class="ep-btn-new" :disabled="!newSourceCmd || !newSourceTarget" @click="addSourceBinding">add</button>
-          </div>
-          <datalist id="obc-src-names">
-            <option v-for="n in knownSources" :key="n" :value="n" />
-          </datalist>
-        </div>
-
-        <div class="ep-field-group">
-          <label class="ep-field-label">
-            Arg commands
-            <span class="ep-field-hint">one command per action, works with any scene/source name typed as the argument - e.g. "+scene cam" instead of one binding per scene</span>
-          </label>
-          <div class="obc-arg-list">
-            <div v-for="a in ARG_ACTIONS" :key="a.value" class="obc-arg-row">
-              <span class="obc-arg-label">{{ a.label }}</span>
-              <span class="obc-bind-prefix">+</span>
-              <input v-model="argCommands[a.value]" class="ep-field-input ep-mono obc-bind-cmd" placeholder="(disabled)" />
-              <span class="obc-arg-usage">{{ a.usage }}</span>
-            </div>
-          </div>
-        </div>
-
-      </template>
 
     </div><!-- end body -->
 
@@ -892,6 +936,45 @@ watch(() => session.value?.channel, () => load())
 .obc-arg-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 3px 0; }
 .obc-arg-label { width: 130px; flex: none; font-size: 11px; color: #999; }
 .obc-arg-usage { font-size: 10px; color: #444; font-family: 'Consolas','Fira Mono',monospace; }
+
+/* Vertically center the content of each field group within its box (matters
+   once boxes sit side by side and can end up with uneven heights) */
+.ep-field-group { justify-content: center; }
+
+/* Loading state - centered spinning brand emote instead of a flash of
+   "not set up yet" while the very first status fetch is in flight */
+.obc-loading { display: flex; align-items: center; justify-content: center; padding: 48px 0; }
+.obc-loading-emote { width: 48px; height: 48px; image-rendering: pixelated; animation: obc-spin 1.1s linear infinite; }
+@keyframes obc-spin { to { transform: rotate(360deg); } }
+
+/* Sources | Audio mixer | Command builder - 3 boxes beneath the scenes */
+.obc-boxes-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: stretch; }
+.obc-box { padding: 12px 14px; border: 1px solid #1e1e22; background: #0d0d10; }
+
+/* Audio mixer */
+.obc-mixer-list { display: flex; flex-direction: column; gap: 8px; }
+.obc-mixer-row { padding: 6px 8px; background: #111217; border: 1px solid #1e1e24; display: flex; flex-direction: column; gap: 6px; }
+.obc-mixer-top { display: flex; align-items: center; gap: 8px; }
+.obc-mixer-slider-row { display: flex; align-items: center; gap: 8px; }
+.obc-mixer-slider { flex: 1; accent-color: #9d6cff; }
+.obc-mixer-db { font-size: 10px; color: #666; font-family: 'Consolas','Fira Mono',monospace; width: 56px; text-align: right; flex-shrink: 0; }
+
+/* Command builder */
+.obc-cmd-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 3px 0; }
+.obc-cmd-name { color: #c4a0ff; }
+.obc-cmd-label { flex: 1; font-size: 11px; color: #888; min-width: 0; }
+.obc-builder-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #1e1e22; }
+.obc-mode-toggle { display: flex; gap: 6px; }
+.obc-mode-btn {
+  height: 22px; padding: 0 10px; border: 1px solid #2a2a30; background: transparent;
+  color: #555; font-family: inherit; font-size: 10px; cursor: pointer; transition: all .15s;
+}
+.obc-mode-btn.active { border-color: #6f2bff55; color: #9d6cff; background: #6f2bff0e; }
+.obc-mode-btn:hover { border-color: #444; color: #aaa; }
+
+@media (max-width: 900px) {
+  .obc-boxes-row { grid-template-columns: 1fr; }
+}
 
 @media (max-width: 680px) {
   .obc-bind-cmd, .obc-bind-target { width: 100%; }
