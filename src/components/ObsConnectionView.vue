@@ -378,25 +378,19 @@ function addSourceBinding() {
 
 function removeSourceBinding(i: number) { sourceBindings.value.splice(i, 1); bindingsDirty.value = true }
 
-// --- context menu (Force Preview) ---
-const contextMenu = ref<{ visible: boolean; x: number; y: number; scene: string }>({ visible: false, x: 0, y: 0, scene: '' })
+// --- force all previews button ---
+const forcePreviewLoading = ref(false)
 
-function onSceneContextMenu(scene: SceneInfo, e: MouseEvent) {
-  if (!canForcePreview.value) return
-  contextMenu.value = { visible: true, x: e.clientX, y: e.clientY, scene: scene.sceneName }
-}
-
-function closeContextMenu() { contextMenu.value.visible = false }
-
-async function forcePreview(sceneName: string) {
-  if (!session.value) return
+async function forceAllPreviews() {
+  if (!session.value || !canForcePreview.value) return
+  forcePreviewLoading.value = true
   try {
-    await fetch(`${API}/obs/${session.value.channel}/projector`, {
+    await fetch(`${API}/obs/${session.value.channel}/force-all-previews`, {
       method: 'POST',
-      headers: { ...authHeaders.value, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ scene: sceneName }),
+      headers: authHeaders.value,
     })
   } catch {}
+  forcePreviewLoading.value = false
 }
 
 // --- lifecycle ---
@@ -407,12 +401,10 @@ onMounted(() => {
     if (agentConnected.value && obsConnected.value && selectedScene.value) loadSources(selectedScene.value)
     if (agentConnected.value && obsConnected.value && scenes.value.length === 0) refreshScenes()
   }, 5000)
-  window.addEventListener('click', closeContextMenu)
 })
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
   if (shotTimer) clearInterval(shotTimer)
-  window.removeEventListener('click', closeContextMenu)
 })
 watch(() => session.value?.channel, () => load())
 </script>
@@ -478,7 +470,6 @@ watch(() => session.value?.channel, () => load())
               class="obc-scene-card"
               :class="{ active: s.sceneName === currentScene, picked: s.sceneName === selectedScene }"
               @click="switchScene(s.sceneName); loadSources(s.sceneName)"
-              @contextmenu.prevent="onSceneContextMenu(s, $event)"
             >
               <div class="obc-scene-thumb">
                 <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
@@ -491,6 +482,14 @@ watch(() => session.value?.channel, () => load())
               <button class="ep-btn-cancel" @click="refreshScenes">load scenes</button>
             </div>
           </div>
+          <button
+            v-if="canForcePreview && scenes.length > 0"
+            class="ep-btn"
+            @click="forceAllPreviews()"
+            :disabled="forcePreviewLoading"
+          >
+            {{ forcePreviewLoading ? 'Opening…' : 'Force all previews' }}
+          </button>
         </div>
 
         <!-- Sources -->
@@ -714,17 +713,7 @@ watch(() => session.value?.channel, () => load())
     </div>
   </Teleport>
 
-  <!-- Scene right-click context menu -->
-  <Teleport to="body">
-    <div
-      v-if="contextMenu.visible"
-      class="obc-ctx-menu"
-      :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
-      @click.stop
-    >
-      <button class="obc-ctx-btn" @click="forcePreview(contextMenu.scene); closeContextMenu()">Force Preview</button>
-    </div>
-  </Teleport>
+
 </template>
 
 <style scoped>
