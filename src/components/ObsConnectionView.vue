@@ -487,13 +487,13 @@ watch(() => session.value?.channel, () => load())
             </div>
           </div>
           <button
-            v-if="canForcePreview && scenes.length > 0"
+            v-if="canForcePreview && scenes.length > 0 && !videoMixProjectorOpen"
             class="ep-btn-new"
             @click="forceAllPreviews()"
             :disabled="forcePreviewLoading"
             style="width: 100%"
           >
-            {{ forcePreviewLoading ? 'Opening…' : videoMixProjectorOpen ? 'Multiview already open' : 'Force all previews' }}
+            {{ forcePreviewLoading ? 'Opening…' : 'Force all previews' }}
           </button>
           <div v-if="canForcePreview" class="obc-projector-state">
             Multiview projector: {{ videoMixProjectorOpen ? 'open' : 'closed' }}
