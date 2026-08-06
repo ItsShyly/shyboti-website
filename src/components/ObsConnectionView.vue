@@ -484,9 +484,10 @@ watch(() => session.value?.channel, () => load())
           </div>
           <button
             v-if="canForcePreview && scenes.length > 0"
-            class="ep-btn"
+            class="ep-btn-new"
             @click="forceAllPreviews()"
             :disabled="forcePreviewLoading"
+            style="width: 100%"
           >
             {{ forcePreviewLoading ? 'Opening…' : 'Force all previews' }}
           </button>
@@ -886,20 +887,4 @@ watch(() => session.value?.channel, () => load())
   .obc-bind-cmd, .obc-bind-target { width: 100%; }
   .obc-arg-label { width: 100%; }
 }
-
-/* Context menu */
-.obc-ctx-menu {
-  position: fixed; z-index: 9999;
-  background: #18181c; border: 1px solid #2a2a30;
-  padding: 3px;
-  box-shadow: 0 4px 16px rgba(0,0,0,.5);
-}
-.obc-ctx-btn {
-  display: block; width: 100%;
-  padding: 7px 14px; border: none; background: transparent;
-  color: #d0d0d0; font-family: inherit; font-size: 12px;
-  text-align: left; cursor: pointer; white-space: nowrap;
-  transition: background .1s;
-}
-.obc-ctx-btn:hover { background: #6f2bff22; color: #c4a0ff; }
 </style>
