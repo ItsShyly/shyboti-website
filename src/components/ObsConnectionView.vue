@@ -18,6 +18,11 @@ import { useOverlayClose } from '../composables/useOverlayClose'
 const { session, channelRole } = useAuth()
 const settingsOverlay = useOverlayClose()
 
+type AccessLevel = 'everyone' | 'mod' | 'broadcaster'
+// >>> arg_commands entries used to be plain strings - older saved rows may
+// >>> still be in that shape, normalized to the object form on load()
+type ArgCommandRaw = string | { command: string; access?: AccessLevel }
+
 interface AgentStatus {
   paired: boolean
   connected: boolean
@@ -29,7 +34,7 @@ interface AgentStatus {
   video_mix_projector_title?: string | null
   scene_bindings:  SceneBind[]
   source_bindings: SourceBind[]
-  arg_commands: Record<string, string>
+  arg_commands: Record<string, ArgCommandRaw>
   screenshots: boolean
   // broadcaster-only fields - the backend omits these entirely for anyone else
   enabled?: boolean
@@ -38,8 +43,13 @@ interface AgentStatus {
 
 interface SceneInfo { sceneName: string; sceneIndex: number }
 interface SourceInfo { sceneItemId: number; sourceName: string; sceneItemEnabled: boolean; visible: boolean; isAudioSource: boolean; inputKind: string | null; muted?: boolean; volumePercent?: number }
-interface SceneBind  { command: string; scene: string }
-interface SourceBind { command: string; source: string; action: string; value?: number }
+interface SceneBind  { command: string; scene: string; access?: AccessLevel }
+interface SourceBind { command: string; source: string; action: string; value?: number; access?: AccessLevel }
+interface ArgCommand { command: string; access: AccessLevel }
+
+const ACCESS_CYCLE: AccessLevel[] = ['everyone', 'mod', 'broadcaster']
+function nextAccess(a: AccessLevel): AccessLevel { return ACCESS_CYCLE[(ACCESS_CYCLE.indexOf(a) + 1) % ACCESS_CYCLE.length]! }
+function accessLabel(a: AccessLevel): string { return a === 'broadcaster' ? 'bc only' : a === 'mod' ? 'mod only' : 'everyone' }
 
 // >>> Unified action list for the command builder
 
@@ -71,7 +81,7 @@ const sourcesLoading = ref(false)
 
 const sceneBindings  = ref<SceneBind[]>([])
 const sourceBindings = ref<SourceBind[]>([])
-const argCommands    = ref<Record<string, string>>({})
+const argCommands    = ref<Record<string, ArgCommand>>({})
 const bindingsDirty  = ref(false)
 const bindingsSaving = ref(false)
 const bindingsSaved  = ref(false)
@@ -79,6 +89,7 @@ const bindingsSaved  = ref(false)
 // --- command builder (unified add-form: pick an action, then a target) ---
 const builderAction = ref('scene')
 const builderMode    = ref<'specific' | 'argument'>('specific')
+const builderAccess  = ref<AccessLevel>('everyone')
 const builderCmd     = ref('')
 const builderTarget  = ref('')
 const builderValue   = ref(50)
@@ -202,7 +213,12 @@ async function load() {
       agentStatus.value   = d
       sceneBindings.value  = d.scene_bindings  ?? []
       sourceBindings.value = d.source_bindings ?? []
-      argCommands.value    = d.arg_commands    ?? {}
+      const normalizedArg: Record<string, ArgCommand> = {}
+      for (const [action, entry] of Object.entries(d.arg_commands ?? {})) {
+        if (typeof entry === 'string') normalizedArg[action] = { command: entry, access: 'everyone' }
+        else if (entry?.command)      normalizedArg[action] = { command: entry.command, access: entry.access ?? 'everyone' }
+      }
+      argCommands.value    = normalizedArg
       bindingsDirty.value  = false
     }
   } catch {}
@@ -326,9 +342,11 @@ async function saveBindings() {
   try {
     // >>> Drop blank command names so an emptied field actually disables that
     // >>> generic command instead of saving "" as its trigger word.
-    const cleanedArgCommands: Record<string, string> = {}
-    for (const [action, cmd] of Object.entries(argCommands.value)) {
-      if (cmd && cmd.trim()) cleanedArgCommands[action] = cmd.trim().replace(/^\+/, '').toLowerCase()
+    const cleanedArgCommands: Record<string, ArgCommand> = {}
+    for (const [action, entry] of Object.entries(argCommands.value)) {
+      if (entry?.command && entry.command.trim()) {
+        cleanedArgCommands[action] = { command: entry.command.trim().replace(/^\+/, '').toLowerCase(), access: entry.access ?? 'everyone' }
+      }
     }
     await fetch(`${API}/obs/${session.value.channel}/bindings`, {
       method: 'PUT',
@@ -351,19 +369,20 @@ interface UnifiedCommand {
   type: 'scene' | 'source' | 'arg'
   command: string
   label: string
+  access: AccessLevel
   index?: number
   action?: string
 }
 
 const unifiedCommands = computed<UnifiedCommand[]>(() => {
   const list: UnifiedCommand[] = []
-  sceneBindings.value.forEach((b, i) => list.push({ type: 'scene', command: b.command, label: `switch scene → ${b.scene}`, index: i }))
+  sceneBindings.value.forEach((b, i) => list.push({ type: 'scene', command: b.command, label: `switch scene → ${b.scene}`, access: b.access ?? 'everyone', index: i }))
   sourceBindings.value.forEach((b, i) => {
     const valSuffix = b.action === 'volume' && b.value != null ? ` (${b.value}%)` : ''
-    list.push({ type: 'source', command: b.command, label: `${BUILDER_ACTION_LABEL[b.action] ?? b.action} → ${b.source}${valSuffix}`, index: i })
+    list.push({ type: 'source', command: b.command, label: `${BUILDER_ACTION_LABEL[b.action] ?? b.action} → ${b.source}${valSuffix}`, access: b.access ?? 'everyone', index: i })
   })
-  Object.entries(argCommands.value).forEach(([action, cmd]) => {
-    if (cmd) list.push({ type: 'arg', command: cmd, label: `${BUILDER_ACTION_LABEL[action] ?? action} → $1 argument`, action })
+  Object.entries(argCommands.value).forEach(([action, entry]) => {
+    if (entry?.command) list.push({ type: 'arg', command: entry.command, label: `${BUILDER_ACTION_LABEL[action] ?? action} → $1 argument`, access: entry.access ?? 'everyone', action })
   })
   return list
 })
@@ -372,15 +391,15 @@ function addBuilderCommand() {
   const cmd = builderCmd.value.trim().replace(/^\+/, '').toLowerCase()
   if (!cmd) return
   if (builderMode.value === 'argument') {
-    argCommands.value = { ...argCommands.value, [builderAction.value]: cmd }
+    argCommands.value = { ...argCommands.value, [builderAction.value]: { command: cmd, access: builderAccess.value } }
   } else {
     if (!builderTarget.value) return
     if (builderAction.value === 'scene') {
       if (sceneBindings.value.some(b => b.command === cmd)) return
-      sceneBindings.value.push({ command: cmd, scene: builderTarget.value })
+      sceneBindings.value.push({ command: cmd, scene: builderTarget.value, access: builderAccess.value })
     } else {
       if (sourceBindings.value.some(b => b.command === cmd)) return
-      const entry: SourceBind = { command: cmd, source: builderTarget.value, action: builderAction.value }
+      const entry: SourceBind = { command: cmd, source: builderTarget.value, action: builderAction.value, access: builderAccess.value }
       if (builderAction.value === 'volume') entry.value = builderValue.value
       sourceBindings.value.push(entry)
     }
@@ -400,6 +419,19 @@ function removeUnifiedCommand(item: UnifiedCommand) {
   bindingsDirty.value = true
 }
 
+function cycleUnifiedAccess(item: UnifiedCommand) {
+  const next = nextAccess(item.access)
+  if (item.type === 'scene' && item.index != null) {
+    const b = sceneBindings.value[item.index]; if (b) b.access = next
+  } else if (item.type === 'source' && item.index != null) {
+    const b = sourceBindings.value[item.index]; if (b) b.access = next
+  } else if (item.type === 'arg' && item.action) {
+    const cur = argCommands.value[item.action]
+    if (cur) argCommands.value = { ...argCommands.value, [item.action]: { ...cur, access: next } }
+  }
+  bindingsDirty.value = true
+}
+
 // --- audio mixer ---
 const audioSources = computed(() => (sources.value as any[]).filter(s => s.isAudioSource))
 
@@ -407,6 +439,23 @@ function volumeToDb(percent: number | undefined): string {
   const mul = Math.max(0, Math.min(100, percent ?? 0)) / 100
   if (mul <= 0) return '-∞'
   return (20 * Math.log10(mul)).toFixed(1)
+}
+
+// >>> Local override while a slider is being dragged/just-committed, so a
+// >>> stale/rounded value coming back from a poll-triggered loadSources()
+// >>> can't snap the handle backwards mid-interaction ("jumping").
+const sliderOverride = ref<Record<number, number>>({})
+
+function onVolumeInput(src: any, percent: number) {
+  sliderOverride.value = { ...sliderOverride.value, [src.sceneItemId]: percent }
+}
+
+async function onVolumeChange(src: any, percent: number) {
+  onVolumeInput(src, percent)
+  await setSourceVolume(src, percent)
+  const next = { ...sliderOverride.value }
+  delete next[src.sceneItemId]
+  sliderOverride.value = next
 }
 
 async function setSourceVolume(src: any, percent: number) {
@@ -505,7 +554,7 @@ watch(() => session.value?.channel, () => load())
       </template>
 
       <!-- LIVE CONTROLS (shown when agent + OBS both reachable) -->
-      <template v-else>
+      <template v-if="agentConnected && obsConnected">
 
         <!-- Scenes -->
         <div class="ep-field-group">
@@ -547,8 +596,17 @@ watch(() => session.value?.channel, () => load())
           </div>
         </div>
 
-        <!-- Sources | Audio mixer | Command builder -->
-        <div class="obc-boxes-row">
+      </template>
+
+      <!-- Sources | Audio mixer | Command builder - the first two need a live scene,
+           the command builder just needs the agent paired (works while offline) -->
+      <div
+        v-if="(agentConnected && obsConnected) || agentStatus?.paired"
+        class="obc-boxes-row"
+        :class="{ 'obc-boxes-single': !(agentConnected && obsConnected) }"
+      >
+
+        <template v-if="agentConnected && obsConnected">
 
           <!-- Sources -->
           <div class="ep-field-group obc-box">
@@ -561,7 +619,7 @@ watch(() => session.value?.channel, () => load())
                 </button>
                 <template v-if="src.isAudioSource">
                   <button class="obc-mute-btn" :class="{ muted: src.muted }" :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceMute(src)">
-                    {{ src.muted ? 'muted' : 'live' }}
+                    {{ src.muted ? 'muted' : 'unmuted' }}
                   </button>
                 </template>
               </div>
@@ -577,77 +635,89 @@ watch(() => session.value?.channel, () => load())
                 <div class="obc-mixer-top">
                   <span class="obc-source-name">{{ src.sourceName }}</span>
                   <button class="obc-mute-btn" :class="{ muted: src.muted }" :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceMute(src)">
-                    {{ src.muted ? 'muted' : 'live' }}
+                    {{ src.muted ? 'muted' : 'unmuted' }}
                   </button>
                 </div>
                 <div class="obc-mixer-slider-row">
                   <input
                     type="range" min="0" max="100"
-                    :value="src.volumePercent ?? 100"
+                    :value="sliderOverride[src.sceneItemId] ?? src.volumePercent ?? 100"
                     class="obc-mixer-slider"
-                    @change="setSourceVolume(src, +($event.target as HTMLInputElement).value)"
+                    @input="onVolumeInput(src, +($event.target as HTMLInputElement).value)"
+                    @change="onVolumeChange(src, +($event.target as HTMLInputElement).value)"
                   />
-                  <span class="obc-mixer-db">{{ volumeToDb(src.volumePercent) }} dB</span>
+                  <span class="obc-mixer-db">{{ volumeToDb(sliderOverride[src.sceneItemId] ?? src.volumePercent) }} dB</span>
                 </div>
               </div>
               <div v-if="!audioSources.length" class="ep-empty">{{ selectedScene ? 'no audio sources in this scene' : 'pick a scene above' }}</div>
             </div>
           </div>
 
-          <!-- Command builder -->
-          <div class="ep-field-group obc-box" v-if="agentStatus?.paired">
-            <label class="ep-field-label">
-              command builder
-              <span class="ep-field-hint">pick an action, then a fixed target or a $1 argument</span>
-            </label>
-            <div class="obc-bind-list">
-              <div v-for="(c, i) in unifiedCommands" :key="c.type + i" class="obc-cmd-row">
-                <span class="obc-bind-prefix">+</span>
-                <span class="obc-cmd-name ep-mono">{{ c.command }}</span>
-                <span class="obc-bind-arrow">→</span>
-                <span class="obc-cmd-label">{{ c.label }}</span>
-                <button class="ep-btn-delete" @click="removeUnifiedCommand(c)">×</button>
-              </div>
-              <div v-if="!unifiedCommands.length" class="ep-empty">no commands set up yet</div>
+        </template>
+
+        <!-- Command builder -->
+        <div v-if="agentStatus?.paired" class="ep-field-group obc-box">
+          <label class="ep-field-label">
+            command builder
+            <span class="ep-field-hint">pick an action, then a fixed target or a $1 argument</span>
+          </label>
+          <div class="obc-bind-list">
+            <div v-for="(c, i) in unifiedCommands" :key="c.type + i" class="obc-cmd-row">
+              <span class="obc-bind-prefix">+</span>
+              <span class="obc-cmd-name ep-mono">{{ c.command }}</span>
+              <span class="obc-bind-arrow">→</span>
+              <span class="obc-cmd-label">{{ c.label }}</span>
+              <button
+                class="access-btn"
+                :class="{ 'access-mod': c.access === 'mod', 'access-bc': c.access === 'broadcaster' }"
+                @click="cycleUnifiedAccess(c)"
+              >{{ accessLabel(c.access) }}</button>
+              <button class="ep-btn-delete" @click="removeUnifiedCommand(c)">×</button>
             </div>
-
-            <div class="obc-builder-form">
-              <select v-model="builderAction" class="ep-field-select">
-                <option v-for="a in BUILDER_ACTIONS" :key="a.value" :value="a.value">{{ a.label }}</option>
-              </select>
-              <div class="obc-mode-toggle">
-                <button type="button" class="obc-mode-btn" :class="{ active: builderMode === 'specific' }" @click="builderMode = 'specific'">specific</button>
-                <button type="button" class="obc-mode-btn" :class="{ active: builderMode === 'argument' }" @click="builderMode = 'argument'">argument ($1)</button>
-              </div>
-
-              <div class="obc-add-row">
-                <span class="obc-bind-prefix">+</span>
-                <input v-model="builderCmd" class="ep-field-input ep-mono obc-bind-cmd" placeholder="command" />
-                <span class="obc-bind-arrow">→</span>
-
-                <template v-if="builderMode === 'specific'">
-                  <select v-if="builderAction === 'scene'" v-model="builderTarget" class="ep-field-select obc-bind-target">
-                    <option value="" disabled>pick scene</option>
-                    <option v-for="s in scenes" :key="s.sceneName" :value="s.sceneName">{{ s.sceneName }}</option>
-                  </select>
-                  <input v-else v-model="builderTarget" list="obc-src-names" class="ep-field-input obc-bind-target" placeholder="source name" />
-                  <input v-if="builderAction === 'volume'" v-model.number="builderValue" type="number" min="0" max="100" class="ep-field-input obc-bind-vol" />
-                </template>
-                <template v-else>
-                  <span class="obc-arg-usage">{{ BUILDER_ACTIONS.find(a => a.value === builderAction)?.usage }}</span>
-                </template>
-
-                <button class="ep-btn-new" :disabled="!builderCmd || (builderMode === 'specific' && !builderTarget)" @click="addBuilderCommand">add</button>
-              </div>
-              <datalist id="obc-src-names">
-                <option v-for="n in knownSources" :key="n" :value="n" />
-              </datalist>
-            </div>
+            <div v-if="!unifiedCommands.length" class="ep-empty">no commands set up yet</div>
           </div>
 
+          <div class="obc-builder-form">
+            <select v-model="builderAction" class="ep-field-select">
+              <option v-for="a in BUILDER_ACTIONS" :key="a.value" :value="a.value">{{ a.label }}</option>
+            </select>
+            <div class="obc-mode-toggle">
+              <button type="button" class="obc-mode-btn" :class="{ active: builderMode === 'specific' }" @click="builderMode = 'specific'">specific</button>
+              <button type="button" class="obc-mode-btn" :class="{ active: builderMode === 'argument' }" @click="builderMode = 'argument'">argument ($1)</button>
+              <button
+                type="button"
+                class="access-btn"
+                :class="{ 'access-mod': builderAccess === 'mod', 'access-bc': builderAccess === 'broadcaster' }"
+                @click="builderAccess = nextAccess(builderAccess)"
+              >{{ accessLabel(builderAccess) }}</button>
+            </div>
+
+            <div class="obc-add-row">
+              <span class="obc-bind-prefix">+</span>
+              <input v-model="builderCmd" class="ep-field-input ep-mono obc-bind-cmd" placeholder="command" />
+              <span class="obc-bind-arrow">→</span>
+
+              <template v-if="builderMode === 'specific'">
+                <select v-if="builderAction === 'scene'" v-model="builderTarget" class="ep-field-select obc-bind-target">
+                  <option value="" disabled>pick scene</option>
+                  <option v-for="s in scenes" :key="s.sceneName" :value="s.sceneName">{{ s.sceneName }}</option>
+                </select>
+                <input v-else v-model="builderTarget" list="obc-src-names" class="ep-field-input obc-bind-target" placeholder="source name" />
+                <input v-if="builderAction === 'volume'" v-model.number="builderValue" type="number" min="0" max="100" class="ep-field-input obc-bind-vol" />
+              </template>
+              <template v-else>
+                <span class="obc-arg-usage">{{ BUILDER_ACTIONS.find(a => a.value === builderAction)?.usage }}</span>
+              </template>
+
+              <button class="ep-btn-new" :disabled="!builderCmd || (builderMode === 'specific' && !builderTarget)" @click="addBuilderCommand">add</button>
+            </div>
+            <datalist id="obc-src-names">
+              <option v-for="n in knownSources" :key="n" :value="n" />
+            </datalist>
+          </div>
         </div>
 
-      </template><!-- end live controls -->
+      </div>
 
     </div><!-- end body -->
 
@@ -940,6 +1010,7 @@ watch(() => session.value?.channel, () => load())
 /* Vertically center the content of each field group within its box (matters
    once boxes sit side by side and can end up with uneven heights) */
 .ep-field-group { justify-content: center; }
+.obc-box { justify-content: flex-start; }
 
 /* Loading state - centered spinning brand emote instead of a flash of
    "not set up yet" while the very first status fetch is in flight */
@@ -949,7 +1020,19 @@ watch(() => session.value?.channel, () => load())
 
 /* Sources | Audio mixer | Command builder - 3 boxes beneath the scenes */
 .obc-boxes-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: stretch; }
+.obc-boxes-row.obc-boxes-single { grid-template-columns: 1fr; }
 .obc-box { padding: 12px 14px; border: 1px solid #1e1e22; background: #0d0d10; }
+
+/* Access-level cycle button - matches CommandsView.vue's access-btn */
+.access-btn {
+  height: 22px; padding: 0 9px; border: 1px solid #2a2a30; background: transparent;
+  color: #555; font-family: inherit; font-size: 10px; cursor: pointer; flex-shrink: 0; transition: all .15s;
+}
+.access-btn:hover { border-color: #555; color: #aaa; }
+.access-btn.access-mod  { border-color: #c792ea55; color: #c792ea; background: rgba(199,146,234,.08); }
+.access-btn.access-mod:hover { background: rgba(199,146,234,.15); }
+.access-btn.access-bc   { border-color: #f1494955; color: #f14949; background: rgba(241,73,73,.08); }
+.access-btn.access-bc:hover  { background: rgba(241,73,73,.15); }
 
 /* Audio mixer */
 .obc-mixer-list { display: flex; flex-direction: column; gap: 8px; }
