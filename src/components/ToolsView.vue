@@ -120,13 +120,7 @@ async function addEntry() {
         <div class="card-sub">{{ t('feat.obs.sub') }}</div>
         <div class="card-url">obs.shyboti.de/<span class="url-id obs-url-id">id</span></div>
       </div>
-      <button class="your-btn obs-btn" @click.stop="router.push('/obs-widgets')">
-        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="1" y="1" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
-          <path d="M4 13h6M7 10v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        </svg>
-        {{ t('feat.obs.btn') }}
-      </button>
+
     </div>
 
     <!-- Variables & Counters card -->
@@ -145,15 +139,6 @@ async function addEntry() {
         <div class="card-url" v-if="totalCount > 0">{{ totalCount }} entr{{ totalCount === 1 ? 'y' : 'ies' }}</div>
         <div class="card-url" v-else style="color:#444">{{ t('feat.vars.none') }}</div>
       </div>
-      <button class="your-btn vars-btn" @click.stop="openVars">
-        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="1" y="1" width="5" height="5" rx="0.5" stroke="currentColor" stroke-width="1.4"/>
-          <rect x="8" y="1" width="5" height="5" rx="0.5" stroke="currentColor" stroke-width="1.4"/>
-          <rect x="1" y="8" width="5" height="5" rx="0.5" stroke="currentColor" stroke-width="1.4"/>
-          <path d="M8 10.5h5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        </svg>
-        {{ t('feat.vars.btn') }}
-      </button>
     </div>
 
     <!-- OBS connection card -->
@@ -172,14 +157,6 @@ async function addEntry() {
         <div class="card-sub">Switch scenes and control sources from chat</div>
         <div class="card-url">websocket, scenes, sources, commands</div>
       </div>
-      <button v-if="session" class="your-btn obsconn-btn" @click.stop="router.push('/obs-connection')">
-        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="1" y="1" width="12" height="9" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
-          <path d="M4 13h6M7 10v3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-        </svg>
-        open
-      </button>
-      <div v-else class="obsconn-locked-hint">sign in to set this up</div>
     </div>
 
   </div>
@@ -345,16 +322,6 @@ async function addEntry() {
 .card-sub   { font-size: 12px; color: #555; }
 .card-url   { font-family: 'Consolas','Fira Mono',monospace; font-size: 11px; color: #444; margin-top: 4px; }
 .obs-url-id  { color: #f14949; }
-
-.your-btn {
-  display: flex; align-items: center; gap: 7px;
-  margin: 0 12px 14px; height: 32px; padding: 0 12px;
-  border: 1px solid #9d6cff44; background: rgba(111,43,255,.06);
-  color: #9d6cff; font-family: inherit; font-size: 11px; font-weight: 600;
-  cursor: pointer; transition: all .15s; align-self: flex-start;
-}
-.your-btn:hover { background: rgba(111,43,255,.16); border-color: #9d6cff88; }
-.your-btn svg { width: 13px; height: 13px; flex-shrink: 0; }
 .obs-btn  { border-color: #f1494944; color: #f14949; background: rgba(241,73,73,.06); }
 .obs-btn:hover  { background: rgba(241,73,73,.16); border-color: #f1494988; }
 .vars-btn { border-color: #e5c07b44; color: #e5c07b; background: rgba(229,192,123,.06); }
