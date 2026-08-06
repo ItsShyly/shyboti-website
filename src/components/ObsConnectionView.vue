@@ -25,6 +25,8 @@ interface AgentStatus {
   version: string
   obs_connected: boolean
   current_scene: string
+  video_mix_projector_open?: boolean
+  video_mix_projector_title?: string | null
   scene_bindings:  SceneBind[]
   source_bindings: SourceBind[]
   arg_commands: Record<string, string>
@@ -181,6 +183,8 @@ const canForcePreview = computed(() =>
   !!agentStatus.value?.screenshots &&
   (isBroadcaster.value || channelRole.value?.permissions?.obs_force_preview === true)
 )
+const videoMixProjectorOpen = computed(() => !!agentStatus.value?.video_mix_projector_open)
+const videoMixProjectorTitle = computed(() => agentStatus.value?.video_mix_projector_title ?? null)
 
 // derived
 const agentConnected = computed(() => agentStatus.value?.connected ?? false)
@@ -489,8 +493,12 @@ watch(() => session.value?.channel, () => load())
             :disabled="forcePreviewLoading"
             style="width: 100%"
           >
-            {{ forcePreviewLoading ? 'Opening…' : 'Force all previews' }}
+            {{ forcePreviewLoading ? 'Opening…' : videoMixProjectorOpen ? 'Multiview already open' : 'Force all previews' }}
           </button>
+          <div v-if="canForcePreview" class="obc-projector-state">
+            Multiview projector: {{ videoMixProjectorOpen ? 'open' : 'closed' }}
+            <span v-if="videoMixProjectorTitle">({{ videoMixProjectorTitle }})</span>
+          </div>
         </div>
 
         <!-- Sources -->
@@ -835,6 +843,7 @@ watch(() => session.value?.channel, () => load())
 }
 .obc-scene-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .obc-scene-thumb-empty { font-size: 9px; color: #333; }
+.obc-projector-state { margin-top: 6px; font-size: 11px; color: #666; }
 
 /* Sources */
 .obc-source-list { display: flex; flex-direction: column; gap: 2px; }
