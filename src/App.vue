@@ -5,6 +5,7 @@ import { API } from './api'
 import { useAuth } from './auth'
 import { useI18n, useLocale, type Locale } from './i18n'
 import SnippetOverlay from './components/SnippetOverlay.vue'
+import DebugGitInfo from './components/DebugGitInfo.vue'
 import { useLogsSearch } from './composables/useLogsSearch'
 
 const { session, availableChannels, channelRole, restoreSession, switchChannel, logout, login } = useAuth()
@@ -624,6 +625,7 @@ provide('searchOpenTrigger', searchOpenTrigger)
 
       <main class="main-panel" ref="mainPanelRef">
         <SnippetOverlay />
+        <DebugGitInfo />
         <RouterView v-slot="{ Component }">
           <KeepAlive :include="KEEP_ALIVE_ROUTES">
             <component :is="Component" />
