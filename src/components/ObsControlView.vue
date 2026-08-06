@@ -416,7 +416,35 @@ async function copyToken() {
   setTimeout(() => { tokenCopied.value = false }, 2000)
 }
 
-// ─── lifecycle ────────────────────────────────────────────────────────────────
+const canForcePreview = computed(() =>
+  agentOk.value &&
+  settings.value.screenshots &&
+  (isBroadcaster.value || (channelRole.value?.permissions?.obs_force_preview ?? false))
+)
+
+const forcingPreviews = ref(false)
+const forcePreviewError = ref('')
+
+async function forceAllPreviews() {
+  if (!session.value || !canForcePreview.value) return
+  forcingPreviews.value = true
+  forcePreviewError.value = ''
+  try {
+    const res = await fetch(`${API}/obs/${session.value.channel}/projector`, {
+      method: 'POST',
+      headers: { ...authHeaders.value, 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({})) as any
+      forcePreviewError.value = d?.error ?? `Error ${res.status}`
+    }
+  } catch (e: any) {
+    forcePreviewError.value = e?.message ?? 'Request failed'
+  }
+  forcingPreviews.value = false
+  if (forcePreviewError.value) setTimeout(() => { forcePreviewError.value = '' }, 4000)
+}
 
 onMounted(() => {
   load()
@@ -528,6 +556,15 @@ watch(() => session.value?.channel, () => load())
         <div class="ep-field-label obs-section-hd">
           Scenes
           <span class="ep-field-hint">click to switch</span>
+          <button class="obs-sm-btn" @click="refreshScenes">refresh</button>
+          <button
+            v-if="canForcePreview"
+            class="obs-sm-btn obs-force-btn"
+            :disabled="forcingPreviews"
+            @click="forceAllPreviews"
+            title="Open a floating OBS window showing the full program mix"
+          >{{ forcingPreviews ? '...' : 'force preview' }}</button>
+          <span v-if="forcePreviewError" class="obs-force-err">{{ forcePreviewError }}</span>
         </div>
         <div class="obs-scene-grid">
           <div
@@ -785,6 +822,10 @@ watch(() => session.value?.channel, () => load())
   color: #555; font-family: inherit; font-size: 10px; cursor: pointer;
 }
 .obs-sm-btn:hover { color: #aaa; border-color: #444; }
+.obs-force-btn { border-color: #6f2bff44; color: #9d6cff; }
+.obs-force-btn:hover:not(:disabled) { border-color: #9d6cff; background: #6f2bff14; }
+.obs-force-btn:disabled { opacity: .4; cursor: default; }
+.obs-force-err { font-size: 10px; color: #f14949; margin-left: 4px; }
 
 /* scene grid */
 .obs-scene-grid {
