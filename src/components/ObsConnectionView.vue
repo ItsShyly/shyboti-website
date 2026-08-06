@@ -491,13 +491,13 @@ watch(() => session.value?.channel, () => load())
             class="ep-btn-new"
             @click="forceAllPreviews()"
             :disabled="forcePreviewLoading"
-            style="width: 100%"
+            style="width: 200px; display: block; margin: 0 auto;"
           >
             {{ forcePreviewLoading ? 'Opening…' : 'Force all previews' }}
           </button>
           <div v-if="canForcePreview" class="obc-projector-state">
             Multiview projector: {{ videoMixProjectorOpen ? 'open' : 'closed' }}
-            <span v-if="videoMixProjectorTitle">({{ videoMixProjectorTitle }})</span>
+            <span v-if="videoMixProjectorTitle" class="obc-projector-title">"{{ videoMixProjectorTitle }}"</span>
           </div>
         </div>
 
@@ -727,7 +727,7 @@ watch(() => session.value?.channel, () => load())
 
 <style scoped>
 /* Page chrome (was a modal panel before, now a routed page like ObsView) */
-.obsconn-page { display: flex; flex-direction: column; gap: 16px; max-width: 900px; }
+.obsconn-page { display: flex; flex-direction: column; gap: 16px;}
 .obsconn-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .obsconn-title { font-size: 20px; font-weight: 700; color: #e0e0e0; }
 .obsconn-sub   { font-size: 12px; color: #555; margin-top: 2px; }
@@ -822,7 +822,7 @@ watch(() => session.value?.channel, () => load())
 }
 .obc-refresh-btn:hover { color: #9d6cff; }
 
-.obc-scenes { display: flex; flex-wrap: wrap; gap: 6px; }
+.obc-scenes { display: flex; flex-wrap: wrap; gap: 6px; max-width: 800px;}
 .obc-scene-card {
   width: 150px; padding: 0 0 7px; border: 1px solid #2a2a30; background: #111217;
   cursor: pointer; font-size: 11px; color: #888; position: relative;
@@ -844,6 +844,7 @@ watch(() => session.value?.channel, () => load())
 .obc-scene-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .obc-scene-thumb-empty { font-size: 9px; color: #333; }
 .obc-projector-state { margin-top: 6px; font-size: 11px; color: #666; }
+.obc-projector-title { color: #666666ab; font-style: italic; }
 
 /* Sources */
 .obc-source-list { display: flex; flex-direction: column; gap: 2px; }
