@@ -40,6 +40,76 @@ export interface ChannelRole {
 const session = ref<Session | null>(null)
 const availableChannels = ref<string[]>([])
 const channelRole = ref<ChannelRole | null>(null)
+let accessRefreshTimer: ReturnType<typeof setInterval> | null = null
+let accessRefreshBound = false
+
+async function fetchChannels() {
+  if (!session.value) return
+  try {
+    const res = await fetch(`${API}/channels`, {
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    if (!res.ok) return
+    const data = await res.json() as { channels: string[] }
+    availableChannels.value = data.channels
+  } catch {}
+}
+
+async function fetchRole(channel: string) {
+  if (!session.value) return
+  try {
+    const res = await fetch(`${API}/role/${channel}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    if (!res.ok) {
+      channelRole.value = null
+      return
+    }
+    channelRole.value = await res.json() as ChannelRole
+  } catch {
+    channelRole.value = null
+  }
+}
+
+async function refreshAccessState() {
+  if (!session.value) return
+  await fetchChannels()
+  if (!session.value) return
+
+  const current = session.value.channel
+  const next = availableChannels.value.includes(current)
+    ? current
+    : (availableChannels.value.includes(session.value.login) ? session.value.login : availableChannels.value[0])
+
+  if (next && next !== current) {
+    session.value = { ...session.value, channel: next }
+    await fetchRole(next)
+    return
+  }
+
+  if (current) await fetchRole(current)
+}
+
+function stopAccessRefresh() {
+  if (accessRefreshTimer) {
+    clearInterval(accessRefreshTimer)
+    accessRefreshTimer = null
+  }
+}
+
+function startAccessRefresh() {
+  stopAccessRefresh()
+  accessRefreshTimer = setInterval(() => { refreshAccessState().catch(() => {}) }, 30_000)
+
+  if (!accessRefreshBound && typeof window !== 'undefined') {
+    const kick = () => { refreshAccessState().catch(() => {}) }
+    window.addEventListener('focus', kick)
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) kick()
+    })
+    accessRefreshBound = true
+  }
+}
 
 export function useAuth() {
   async function restoreSession(token: string) {
@@ -51,35 +121,15 @@ export function useAuth() {
       const data = await res.json() as { login: string; channel: string }
       session.value = { login: data.login, channel: data.channel, token }
       localStorage.setItem('shyboti_token', token)
-      await fetchChannels()
-      await fetchRole(data.channel)
+      await refreshAccessState()
+      startAccessRefresh()
     } catch {
       session.value = null
+      availableChannels.value = []
+      channelRole.value = null
+      stopAccessRefresh()
       localStorage.removeItem('shyboti_token')
     }
-  }
-
-  async function fetchChannels() {
-    if (!session.value) return
-    try {
-      const res = await fetch(`${API}/channels`, {
-        headers: { Authorization: `Bearer ${session.value.token}` }
-      })
-      if (!res.ok) return
-      const data = await res.json() as { channels: string[] }
-      availableChannels.value = data.channels
-    } catch {}
-  }
-
-  async function fetchRole(channel: string) {
-    if (!session.value) return
-    try {
-      const res = await fetch(`${API}/role/${channel}`, {
-        headers: { Authorization: `Bearer ${session.value.token}` }
-      })
-      if (!res.ok) return
-      channelRole.value = await res.json() as ChannelRole
-    } catch {}
   }
 
   async function switchChannel(channel: string) {
@@ -97,6 +147,7 @@ export function useAuth() {
     session.value = null
     availableChannels.value = []
     channelRole.value = null
+    stopAccessRefresh()
     localStorage.removeItem('shyboti_token')
   }
 
