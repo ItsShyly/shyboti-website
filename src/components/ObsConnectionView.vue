@@ -458,7 +458,7 @@ const unifiedCommands = computed<UnifiedCommand[]>(() => {
     let actionHint = ''
 
     if (action === 'volume') {
-      targetDisplay = '<vol>'
+      targetDisplay = '<source>'
       actionHint = ' <source> <vol>'
     } else if (action === 'scene') {  
       targetDisplay = '<scene>'
