@@ -94,12 +94,40 @@ const builderAccess  = ref<AccessLevel>('everyone')
 const builderCmd     = ref('')
 const builderTarget  = ref('')
 
+// A target is only required when the user is in 'specific' preset mode
+// (not chat-arg mode, and not volume's src+vol mode). In all other cases
+// the target comes from chat at runtime.
+const addDisabled = computed(() => {
+  if (!builderCmd.value.trim()) return true
+  const needsTarget =
+    builderAction.value !== 'volume' && builderMode.value === 'specific'
+    || (builderAction.value === 'volume' && builderVolMode.value === 'vol_only')
+  if (needsTarget && !builderTarget.value.trim()) return true
+  if (unifiedCommands.value.some(c => c.command === builderCmd.value.trim().replace(/^\+/, '').toLowerCase())) return true
+  return false
+})
+
 const knownSources   = ref<string[]>([])
 const pendingSources = ref<Set<number>>(new Set())
 watch(sources, list => {
   for (const s of list) if (!knownSources.value.includes(s.sourceName)) knownSources.value.push(s.sourceName)
 })
 watch(argCommands, () => { bindingsDirty.value = true }, { deep: true })
+
+// Set of names OBS currently knows about - used to flag unknown targets in the table
+const knownSceneNames  = computed(() => new Set(scenes.value.map(s => s.sceneName)))
+const knownSourceNames = computed(() => new Set(knownSources.value))
+
+function isTargetMissing(c: UnifiedCommand): boolean {
+  if (!obsConnected.value) return false
+  if (c.badgeClass === 'arg-type') return false
+  if (c.type === 'scene') return knownSceneNames.value.size > 0 && !knownSceneNames.value.has(c.targetDisplay)
+  if (c.type === 'source') {
+    const rawTarget = c.targetDisplay.replace(/ <vol>$/, '').replace(/ @ \d+%$/, '')
+    return knownSourceNames.value.size > 0 && !knownSourceNames.value.has(rawTarget)
+  }
+  return false
+}
 
 // >>> settings panel---
 const showSettings         = ref(false)
@@ -445,7 +473,7 @@ const unifiedCommands = computed<UnifiedCommand[]>(() => {
       command: entry.command,
       actionLabel,
       targetDisplay,
-      badgeText: action === 'volume' ? 'src+vol arg' : '$1 arg',
+      badgeText: action === 'volume' ? 'args' : 'arg',
       badgeClass: 'arg-type',
       access: entry.access ?? 'everyone', action,
       actionHint
@@ -456,27 +484,21 @@ const unifiedCommands = computed<UnifiedCommand[]>(() => {
 })
 
 function addBuilderCommand() {
+  if (addDisabled.value) return
   const cmd = builderCmd.value.trim().replace(/^\+/, '').toLowerCase()
-  if (!cmd) return
-  if (unifiedCommands.value.some(c => c.command === cmd)) return
-
   if (builderAction.value === 'volume') {
     if (builderVolMode.value === 'both') {
-      // source AND value both come from chat, e.g. "+vol mic 70"
       argCommands.value = { ...argCommands.value, volume: { command: cmd, access: builderAccess.value } }
     } else {
-      // fixed source, only the number comes from chat, e.g. "+setvol 70"
-      if (!builderTarget.value) return
-      sourceBindings.value.push({ command: cmd, source: builderTarget.value, action: 'volume', access: builderAccess.value })
+      sourceBindings.value.push({ command: cmd, source: builderTarget.value.trim(), action: 'volume', access: builderAccess.value })
     }
   } else if (builderMode.value === 'argument') {
     argCommands.value = { ...argCommands.value, [builderAction.value]: { command: cmd, access: builderAccess.value } }
   } else {
-    if (!builderTarget.value) return
     if (builderAction.value === 'scene') {
-      sceneBindings.value.push({ command: cmd, scene: builderTarget.value, access: builderAccess.value })
+      sceneBindings.value.push({ command: cmd, scene: builderTarget.value.trim(), access: builderAccess.value })
     } else {
-      sourceBindings.value.push({ command: cmd, source: builderTarget.value, action: builderAction.value, access: builderAccess.value })
+      sourceBindings.value.push({ command: cmd, source: builderTarget.value.trim(), action: builderAction.value, access: builderAccess.value })
     }
   }
 
@@ -742,7 +764,7 @@ watch(() => session.value?.channel, () => load())
               <span class="obc-col-label">trigger</span>
               <div class="obc-trigger-wrap">
                 <span class="obc-bind-prefix">+</span>
-                <input v-model="builderCmd" class="obc-trigger-input ep-mono" placeholder="cmd" maxlength="20" @keydown.enter="addBuilderCommand" />
+                <input v-model="builderCmd" class="obc-trigger-input ep-mono" placeholder="cmd" maxlength="20" @keydown.enter="!addDisabled && addBuilderCommand()" />
               </div>
             </div>
 
@@ -773,21 +795,22 @@ watch(() => session.value?.channel, () => load())
 
               <!-- volume: vol only -> fixed source, number from chat -->
               <template v-else-if="builderAction === 'volume'">
-                <select v-model="builderTarget" list="obc-src-names" class="obc-target-select">
-                  <option value="" disabled>pick source</option>
-                  <option v-for="n in knownSources" :key="n" :value="n">{{ n }}</option>
-                </select>
+                <input v-model="builderTarget" list="obc-src-names" class="obc-target-input" placeholder="source name" />
               </template>
 
               <!-- non-volume: chat arg -->
               <span v-else-if="builderMode === 'argument'" class="obc-arg-badge">&lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
 
-              <!-- non-volume: preset -->
-              <select v-else-if="builderAction === 'scene'" v-model="builderTarget" class="obc-target-select">
-                <option value="" disabled>pick scene</option>
-                <option v-for="s in scenes" :key="s.sceneName" :value="s.sceneName">{{ s.sceneName }}</option>
-              </select>
-              <input v-else v-model="builderTarget" list="obc-src-names" class="obc-target-input" placeholder="source" />
+              <!-- non-volume: preset scene - combo: type or pick -->
+              <template v-else-if="builderAction === 'scene'">
+                <input v-model="builderTarget" list="obc-scene-names" class="obc-target-input" placeholder="scene name" />
+                <datalist id="obc-scene-names">
+                  <option v-for="s in scenes" :key="s.sceneName" :value="s.sceneName" />
+                </datalist>
+              </template>
+
+              <!-- non-volume: preset source - combo: type or pick -->
+              <input v-else v-model="builderTarget" list="obc-src-names" class="obc-target-input" placeholder="source name" />
             </div>
 
             <div class="obc-label-col">
@@ -798,7 +821,7 @@ watch(() => session.value?.channel, () => load())
             <div class="obc-label-col obc-label-col-end">
               <button
                 class="obc-add-btn"
-                :disabled="!builderCmd || ((builderMode === 'specific' || (builderAction === 'volume' && builderVolMode === 'vol_only')) && !builderTarget)"
+                :disabled="addDisabled"
                 @click="addBuilderCommand"
               >add</button>
             </div>
@@ -835,13 +858,18 @@ watch(() => session.value?.channel, () => load())
                   <td colspan="6" class="obc-table-empty">no commands set up yet</td>
                 </tr>
                 <tr v-for="c in unifiedCommands" :key="c.type + (c.index ?? c.action)">
-                  <td class="obc-td-trigger ep-mono">+{{ c.command }}</td>
+                  <td class="obc-td-trigger ep-mono">
+                    +{{ c.command }}
+                    <span v-if="c.actionHint" class="cmd-usecase-arg">{{ c.actionHint }}</span>
+                  </td>
                   <td>
-                    {{ c.actionLabel }} 
-                    <span v-if="c.actionHint" class="cmd-usecase-arg">&lt;{{ c.actionHint }}&gt;</span>
+                    {{ c.actionLabel }}
                   </td>
                   <td><span class="obc-type-badge" :class="c.badgeClass">{{ c.badgeText }}</span></td>
-                  <td class="obc-td-target" :class="{ 'obc-td-target-arg': c.badgeClass === 'arg-type' }">{{ c.targetDisplay }}</td>
+                  <td class="obc-td-target" :class="{ 'obc-td-target-arg': c.badgeClass === 'arg-type' }">
+                    {{ c.targetDisplay }}
+                    <span v-if="isTargetMissing(c)" class="obc-target-warn" title="Not found in OBS right now - check the name">!</span>
+                  </td>
                   <td>
                     <button class="access-btn access-btn-sm" :class="{ 'access-mod': c.access === 'mod', 'access-bc': c.access === 'broadcaster' }" @click="cycleUnifiedAccess(c)">{{ accessLabel(c.access) }}</button>
                   </td>
@@ -1257,6 +1285,11 @@ color: rgb(from #e5c07b r g b / 80%);
 .obc-td-trigger { color: #c4a0ff; font-weight: 600; }
 .obc-td-target { color: #ccc; }
 .obc-td-target-arg { color: #e5c07b; font-style: italic; font-family: 'Consolas','Fira Mono',monospace; }
+.obc-target-warn {
+  display: inline-block; margin-left: 4px;
+  color: #f14949; font-weight: 700; font-size: 11px;
+  cursor: help;
+}
 .obc-td-delete { color: #555; cursor: pointer; font-size: 13px; transition: color .15s; text-align: center; width: 30px; }
 .obc-td-delete:hover { color: #f14949; }
 
