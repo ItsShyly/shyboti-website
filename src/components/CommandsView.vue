@@ -705,6 +705,18 @@ onUnmounted(() => { _sseSource?.close() })
         <button class="create-btn mt" @click="startCreate">{{ t('cmd.new') }}</button>
       </div>
 
+      <!-- OBS commands live in their own table/page, not here -->
+      <div v-if="filteredCustom().length > 0 || customCommands.length === 0" class="obs-cmd-notice">
+        <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="obs-cmd-icon">
+          <rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+          <circle cx="8" cy="7" r="2.5" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M5 14h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        OBS commands (scene switches, source control) are managed on the
+        <router-link to="/obs-connection" class="obs-cmd-link">OBS connection</router-link> page
+        and run alongside these — they won't appear here.
+      </div>
+
       <div v-else class="rows">
         <template v-for="cmd in filteredCustom()" :key="cmd.name">
           <div class="table-row custom-row" :class="{ expanded: expandedCustom.has(cmd.name) }">
@@ -1082,6 +1094,16 @@ onUnmounted(() => { _sseSource?.close() })
 .btn-save:disabled { opacity: .4; cursor: not-allowed; }
 .btn-cancel { height: 32px; padding: 0 12px; border: 1px solid #333; background: transparent; color: #888; font-family: inherit; font-size: 12px; cursor: pointer; }
 .btn-cancel:hover { border-color: #555; color: #e0e0e0; }
+
+/* OBS commands notice in Custom tab */
+.obs-cmd-notice {
+  display: flex; align-items: center; gap: 8px; margin-top: 10px;
+  padding: 8px 12px; background: #111217; border: 1px solid #2a2a30;
+  font-size: 11px; color: #555;
+}
+.obs-cmd-icon { width: 14px; height: 14px; flex-shrink: 0; color: #9d6cff55; }
+.obs-cmd-link { color: #9d6cff; text-decoration: none; }
+.obs-cmd-link:hover { text-decoration: underline; }
 
 /*  Extras tab  */
 .extras-gate-note { font-size: 11px; color: #e5c07b; margin-top: 5px; max-width: 300px; line-height: 1.5; }

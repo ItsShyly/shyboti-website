@@ -82,7 +82,6 @@ const sourcesLoading = ref(false)
 const sceneBindings  = ref<SceneBind[]>([])
 const sourceBindings = ref<SourceBind[]>([])
 const argCommands    = ref<Record<string, ArgCommand>>({})
-const bindingsDirty  = ref(false)
 const bindingsSaving = ref(false)
 const bindingsSaved  = ref(false)
 
@@ -103,16 +102,30 @@ const addDisabled = computed(() => {
     builderAction.value !== 'volume' && builderMode.value === 'specific'
     || (builderAction.value === 'volume' && builderVolMode.value === 'vol_only')
   if (needsTarget && !builderTarget.value.trim()) return true
-  if (unifiedCommands.value.some(c => c.command === builderCmd.value.trim().replace(/^\+/, '').toLowerCase())) return true
+  const cmd = builderCmd.value.trim().replace(/^\+/, '').toLowerCase()
+  if (unifiedCommands.value.some(c => c.command === cmd)) return true
+  // Don't allow names that clash with existing custom commands
+  if (existingCmdNames.value.includes(cmd)) return true
   return false
 })
 
-const knownSources   = ref<string[]>([])
-const pendingSources = ref<Set<number>>(new Set())
+const knownSources        = ref<string[]>([])
+const pendingSources      = ref<Set<number>>(new Set())
+const existingCmdNames    = ref<string[]>([])  // all custom command names for this channel
 watch(sources, list => {
   for (const s of list) if (!knownSources.value.includes(s.sourceName)) knownSources.value.push(s.sourceName)
 })
-watch(argCommands, () => { bindingsDirty.value = true }, { deep: true })
+
+async function loadExistingCmdNames() {
+  if (!session.value) return
+  try {
+    const res = await fetch(`${API}/commands/${session.value.channel}`, { headers: authHeaders.value })
+    if (res.ok) {
+      const data = await res.json() as Array<{ name: string }>
+      existingCmdNames.value = data.map(c => c.name.toLowerCase())
+    }
+  } catch {}
+}
 
 // Set of names OBS currently knows about - used to flag unknown targets in the table
 const knownSceneNames  = computed(() => new Set(scenes.value.map(s => s.sceneName)))
@@ -247,7 +260,6 @@ async function load() {
         else if (entry?.command)      normalizedArg[action] = { command: entry.command, access: entry.access ?? 'everyone' }
       }
       argCommands.value    = normalizedArg
-      bindingsDirty.value  = false
     }
   } catch {}
   loading.value = false
@@ -260,7 +272,19 @@ async function poll() {
     const res = await fetch(`${API}/obs/${session.value.channel}`, { headers: authHeaders.value })
     if (res.ok) {
       const d = await res.json() as AgentStatus
+      const wasConnected = obsConnected.value
       agentStatus.value = d
+      // >>> When OBS goes offline clear our local scene/source caches so
+      // >>> isTargetMissing returns false (we can't know anything when OBS is
+      // >>> disconnected, so showing stale ! warnings would be misleading).
+      // >>> They repopulate automatically on the next refreshScenes() call.
+      if (wasConnected && !d.obs_connected) {
+        scenes.value       = []
+        knownSources.value = []
+        selectedScene.value = ''
+        sceneShots.value   = {}
+        if (shotTimer) { clearInterval(shotTimer); shotTimer = null }
+      }
     }
   } catch {}
 }
@@ -297,9 +321,35 @@ async function refreshScenes() {
     if (res.ok) {
       const d = await res.json() as { scenes: SceneInfo[]; currentScene: string }
       scenes.value = d.scenes
-      if (!selectedScene.value && scenes.value[0]) selectedScene.value = scenes.value[0].sceneName
+      // >>> Sync the live scene from OBS's own answer, not just whatever the
+      // >>> cached agent status happened to have - this is what makes the
+      // >>> "live" badge/border and the right scene's sources show up on page
+      // >>> load without having to click a scene first.
+      if (d.currentScene && agentStatus.value) agentStatus.value.current_scene = d.currentScene
+      if (!selectedScene.value) selectedScene.value = d.currentScene || scenes.value[0]?.sceneName || ''
       if (selectedScene.value) loadSources(selectedScene.value)
       restartShotLoop()
+      // >>> Pre-populate source names for ALL scenes so isTargetMissing works
+      // >>> on existing bindings immediately on page load - not just after the
+      // >>> user manually clicks each scene to load its sources.
+      for (const s of scenes.value) prefetchSourceNames(s.sceneName)
+    }
+  } catch {}
+}
+
+async function prefetchSourceNames(sceneName: string) {
+  if (!session.value) return
+  try {
+    const res = await fetch(
+      `${API}/obs/${session.value.channel}/sources?scene=${encodeURIComponent(sceneName)}`,
+      { headers: authHeaders.value }
+    )
+    if (res.ok) {
+      const data = (await res.json() as any).sources ?? []
+      for (const s of data) {
+        if (s.sourceName && !knownSources.value.includes(s.sourceName))
+          knownSources.value = [...knownSources.value, s.sourceName]
+      }
     }
   } catch {}
 }
@@ -385,7 +435,6 @@ async function saveBindings() {
         arg_commands: cleanedArgCommands,
       }),
     })
-    bindingsDirty.value = false
     bindingsSaved.value  = true
     setTimeout(() => { bindingsSaved.value = false }, 2000)
   } catch {}
@@ -503,7 +552,7 @@ function addBuilderCommand() {
   }
 
   builderCmd.value = ''; builderTarget.value = ''
-  bindingsDirty.value = true
+  saveBindings()
 }
 
 function removeUnifiedCommand(item: UnifiedCommand) {
@@ -514,7 +563,7 @@ function removeUnifiedCommand(item: UnifiedCommand) {
     delete next[item.action]
     argCommands.value = next
   }
-  bindingsDirty.value = true
+  saveBindings()
 }
 
 function cycleUnifiedAccess(item: UnifiedCommand) {
@@ -527,7 +576,7 @@ function cycleUnifiedAccess(item: UnifiedCommand) {
     const cur = argCommands.value[item.action]
     if (cur) argCommands.value = { ...argCommands.value, [item.action]: { ...cur, access: next } }
   }
-  bindingsDirty.value = true
+  saveBindings()
 }
 
 // --- audio mixer ---
@@ -586,6 +635,7 @@ async function forceAllPreviews() {
 // --- lifecycle ---
 onMounted(() => {
   load()
+  loadExistingCmdNames()
   pollTimer = setInterval(async () => {
     await poll()
     if (agentConnected.value && obsConnected.value && selectedScene.value) loadSources(selectedScene.value)
@@ -618,6 +668,7 @@ watch(() => session.value?.channel, () => load())
             <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5"/>
             <path d="M16.2 12.3a1.4 1.4 0 00.3 1.5l.05.05a1.65 1.65 0 11-2.35 2.35l-.05-.05a1.4 1.4 0 00-1.5-.3 1.4 1.4 0 00-.85 1.28v.14a1.65 1.65 0 11-3.3 0v-.07a1.4 1.4 0 00-.92-1.28 1.4 1.4 0 00-1.5.3l-.05.05A1.65 1.65 0 113.63 13.9l.05-.05a1.4 1.4 0 00.3-1.5 1.4 1.4 0 00-1.28-.85h-.14a1.65 1.65 0 110-3.3h.07a1.4 1.4 0 001.28-.92 1.4 1.4 0 00-.3-1.5l-.05-.05A1.65 1.65 0 116.09 3.38l.05.05a1.4 1.4 0 001.5.3h.06a1.4 1.4 0 00.85-1.28V2.3a1.65 1.65 0 113.3 0v.07a1.4 1.4 0 00.85 1.28h.06a1.4 1.4 0 001.5-.3l.05-.05a1.65 1.65 0 112.35 2.35l-.05.05a1.4 1.4 0 00-.3 1.5v.06a1.4 1.4 0 001.28.85h.14a1.65 1.65 0 110 3.3h-.07a1.4 1.4 0 00-1.28.85z" stroke="currentColor" stroke-width="1.3"/>
           </svg>
+          <span v-if="!loading && !agentStatus?.paired" class="obc-gear-badge" title="OBS agent not set up yet">!</span>
         </button>
       </div>
     </div>
@@ -764,7 +815,15 @@ watch(() => session.value?.channel, () => load())
               <span class="obc-col-label">trigger</span>
               <div class="obc-trigger-wrap">
                 <span class="obc-bind-prefix">+</span>
-                <input v-model="builderCmd" class="obc-trigger-input ep-mono" placeholder="cmd" maxlength="20" @keydown.enter="!addDisabled && addBuilderCommand()" />
+                <input
+                  v-model="builderCmd"
+                  class="obc-trigger-input ep-mono"
+                  :class="{ 'obc-trigger-conflict': existingCmdNames.includes(builderCmd.trim().replace(/^\+/,'').toLowerCase()) }"
+                  placeholder="cmd"
+                  maxlength="20"
+                  :title="existingCmdNames.includes(builderCmd.trim().replace(/^\+/,'').toLowerCase()) ? 'This name is already used by a custom command' : ''"
+                  @keydown.enter="!addDisabled && addBuilderCommand()"
+                />
               </div>
             </div>
 
@@ -815,7 +874,7 @@ watch(() => session.value?.channel, () => load())
 
             <div class="obc-label-col">
               <span class="obc-col-label">access</span>
-              <button type="button" class="access-btn" :class="{ 'access-mod': builderAccess === 'mod', 'access-bc': builderAccess === 'broadcaster' }" @click="builderAccess = nextAccess(builderAccess)">{{ accessLabel(builderAccess) }}</button>
+              <button type="button" class="access-btn" :class="{ 'access-mod': builderAccess === 'mod', 'access-bc': builderAccess === 'broadcaster' }" @click="builderAccess = nextAccess(builderAccess)"><span class="access-arrow">⤹</span>{{ accessLabel(builderAccess) }}<span class="access-arrow">⤴︎</span></button>
             </div>
 
             <div class="obc-label-col obc-label-col-end">
@@ -860,7 +919,7 @@ watch(() => session.value?.channel, () => load())
                     <span v-if="isTargetMissing(c)" class="obc-target-warn" title="Not found in OBS right now - check the name">!</span>
                   </td>
                   <td>
-                    <button class="access-btn access-btn-sm" :class="{ 'access-mod': c.access === 'mod', 'access-bc': c.access === 'broadcaster' }" @click="cycleUnifiedAccess(c)">{{ accessLabel(c.access) }}</button>
+                    <button class="access-btn access-btn-sm" :class="{ 'access-mod': c.access === 'mod', 'access-bc': c.access === 'broadcaster' }" @click="cycleUnifiedAccess(c)"><span class="access-arrow">⤹</span>{{ accessLabel(c.access) }}<span class="access-arrow">⤴︎</span></button>
                   </td>
                   <td class="obc-td-delete" @click="removeUnifiedCommand(c)">×</td>
                 </tr>
@@ -887,16 +946,7 @@ watch(() => session.value?.channel, () => load())
 
     </div><!-- end body -->
 
-    <div class="obsconn-footer">
-      <div>
-        <span v-if="bindingsDirty" class="obc-unsaved">unsaved changes</span>
-      </div>
-      <div class="ep-footer-right">
-        <button class="ep-btn-save" :class="{ saved: bindingsSaved }" :disabled="bindingsSaving || !bindingsDirty" @click="saveBindings">
-          {{ bindingsSaved ? 'saved' : bindingsSaving ? 'saving' : 'save commands' }}
-        </button>
-      </div>
-    </div>
+    <div v-if="bindingsSaving || bindingsSaved" class="obsconn-autosave">{{ bindingsSaving ? 'saving…' : 'saved' }}</div>
 
   </div>
 
@@ -1013,13 +1063,21 @@ watch(() => session.value?.channel, () => load())
 .obsconn-sub   { font-size: 12px; color: #555; margin-top: 2px; }
 .obsconn-header-right { display: flex; align-items: center; gap: 8px; }
 .obsconn-gear-btn {
+  position: relative;
   width: 30px; height: 30px; display: flex; align-items: center; justify-content: center;
   border: 1px solid #2a2a30; background: #111217; color: #666; cursor: pointer; transition: all .15s; flex-shrink: 0;
+}
+.obc-gear-badge {
+  position: absolute; top: -5px; right: -5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 15px; height: 15px; padding: 0 3px;
+  background: #f14949; color: #fff; border-radius: 3px;
+  font-weight: 700; font-size: 10px; line-height: 1;
 }
 .obsconn-gear-btn svg { width: 16px; height: 16px; }
 .obsconn-gear-btn:hover { border-color: #9d6cff55; color: #9d6cff; }
 .obsconn-body   { display: flex; flex-direction: column; gap: 18px; }
-.obsconn-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid #1e1e22; }
+.obsconn-autosave { align-self: flex-end; font-size: 10px; color: #555; padding-top: 4px; }
 .obsconn-settings-panel { width: min(560px, 92vw); }
 
 /* Status bar */
@@ -1103,7 +1161,6 @@ color: rgb(from #e5c07b r g b / 80%);
 .obc-link { color: #9d6cff; text-decoration: none; }
 .obc-link:hover { text-decoration: underline; }
 
-/* Scenes */
 .obc-section-label { display: flex; align-items: center; gap: 8px; }
 .obc-refresh-btn {
   height: 20px; padding: 0 7px; border: 1px solid #2a2a30; background: transparent;
@@ -1111,21 +1168,22 @@ color: rgb(from #e5c07b r g b / 80%);
 }
 .obc-refresh-btn:hover { color: #9d6cff; }
 
-.obc-scenes { display: flex; flex-wrap: wrap; gap: 6px; max-width: 800px;}
+/* Scenes - bigger cards, centered label, no max-width clamp on the row */
+.obc-scenes { display: flex; flex-wrap: wrap; gap: 10px; }
 .obc-scene-card {
-  width: 150px; padding: 0 0 7px; border: 1px solid #2a2a30; background: #111217;
-  cursor: pointer; font-size: 11px; color: #888; position: relative;
+  width: 220px; padding: 0 0 8px; border: 1px solid #2a2a30; background: #111217;
+  cursor: pointer; font-size: 12px; color: #888; position: relative;
   transition: border-color .15s, color .15s; overflow: hidden;
 }
 .obc-scene-card:hover { border-color: #3a3a44; color: #aaa; }
 .obc-scene-card.active { border-color: #6f2bff; color: #c4a0ff; }
 .obc-scene-card.picked:not(.active) { border-color: #2a2a42; }
 .obc-scene-live {
-  position: absolute; top: 3px; right: 4px;
-  font-size: 7px; font-weight: 700; letter-spacing: .08em;
-  color: #fff; background: #f14949; padding: 1px 4px; z-index: 1;
+  position: absolute; top: 5px; right: 6px;
+  font-size: 8px; font-weight: 700; letter-spacing: .08em;
+  color: #fff; background: #f14949; padding: 2px 5px; z-index: 1;
 }
-.obc-scene-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 6px 8px 0; }
+.obc-scene-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 7px 10px 0; text-align: center; }
 .obc-scene-thumb {
   width: 100%; aspect-ratio: 16/9; background: #0a0a0d; overflow: hidden;
   display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #1e1e24;
@@ -1159,7 +1217,6 @@ color: rgb(from #e5c07b r g b / 80%);
 .obc-bind-vol    { width: 64px; flex: none; }
 .obc-bind-arrow  { color: #555; font-size: 12px; flex-shrink: 0; }
 
-.obc-unsaved { font-size: 11px; color: #e5c07b; }
 
 /* Settings panel: toggles + generic arg commands */
 .obc-toggle-row { display: flex; align-items: center; gap: 10px; }
@@ -1193,10 +1250,8 @@ color: rgb(from #e5c07b r g b / 80%);
 .obc-loading-emote { width: 48px; height: 48px; image-rendering: pixelated; animation: obc-spin 1.1s linear infinite; }
 @keyframes obc-spin { to { transform: rotate(360deg); } }
 
-/* Sources | Audio mixer | Command builder - 3 boxes beneath the scenes.
-   Command builder needs real width to fit the demo's single-row form, so
-   sources/mixer give up width instead of splitting evenly three ways. */
-.obc-boxes-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+/* Sources | Audio mixer | Command builder */
+.obc-boxes-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: stretch; }
 .obc-boxes-row.obc-boxes-single { display: block; }
 .obc-box { padding: 12px 14px; border: 1px solid #1e1e22; background: #0d0d10; flex: 1 1 200px; min-width: 200px; max-width: 400px; }
 .obc-box-builder { flex: 0 0 700px; max-width: 700px; width: 700px; }
@@ -1207,6 +1262,10 @@ color: rgb(from #e5c07b r g b / 80%);
   color: #555; font-family: inherit; font-size: 10px; cursor: pointer; flex-shrink: 0; transition: all .15s;
 }
 .access-btn:hover { border-color: #555; color: #aaa; }
+.access-arrow { display: inline-block; font-size: 10px; opacity: .5; transition: color .15s, opacity .15s; }
+.access-arrow:first-child { margin-right: 3px; }
+.access-arrow:last-child  { margin-left: 3px; }
+.access-btn:hover .access-arrow { color: #9d6cff; opacity: 1; }
 .access-btn.access-mod  { border-color: #c792ea55; color: #c792ea; background: rgba(199,146,234,.08); }
 .access-btn.access-mod:hover { background: rgba(199,146,234,.15); }
 .access-btn.access-bc   { border-color: #f1494955; color: #f14949; background: rgba(241,73,73,.08); }
@@ -1218,7 +1277,17 @@ color: rgb(from #e5c07b r g b / 80%);
 .obc-mixer-row { padding: 6px 8px; background: #111217; border: 1px solid #1e1e24; display: flex; flex-direction: column; gap: 6px; }
 .obc-mixer-top { display: flex; align-items: center; gap: 8px; }
 .obc-mixer-slider-row { display: flex; align-items: center; gap: 8px; }
-.obc-mixer-slider { flex: 1; accent-color: #9d6cff; }
+.obc-mixer-slider {
+  flex: 1; accent-color: #9d6cff;
+  /* Remove browser default white track background */
+  background: transparent;
+  -webkit-appearance: none;
+  height: 4px;
+}
+.obc-mixer-slider::-webkit-slider-runnable-track { background: #2a2a30; height: 4px; border-radius: 2px; }
+.obc-mixer-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #9d6cff; margin-top: -4px; cursor: pointer; }
+.obc-mixer-slider::-moz-range-track { background: #2a2a30; height: 4px; border-radius: 2px; }
+.obc-mixer-slider::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: #9d6cff; border: none; cursor: pointer; }
 .obc-mixer-db { font-size: 10px; color: #666; font-family: 'Consolas','Fira Mono',monospace; width: 56px; text-align: right; flex-shrink: 0; }
 
 /* Command builder - single-row form matching the reference demo */
@@ -1233,6 +1302,7 @@ color: rgb(from #e5c07b r g b / 80%);
   color: #c4a0ff; font-weight: 600; font-size: 12px; transition: border-color .15s;
 }
 .obc-trigger-input:focus { outline: none; border-color: #6f2bff88; }
+.obc-trigger-conflict { border-color: #f1494988 !important; color: #f14949 !important; }
 
 .obc-action-select, .obc-target-select {
   height: 28px; padding: 0 6px; background: #0a0a0d; border: 1px solid #2a2a30;
@@ -1290,9 +1360,10 @@ color: rgb(from #e5c07b r g b / 80%);
 .obc-td-target { color: #ccc; }
 .obc-td-target-arg { color: #e5c07b; font-style: italic; font-family: 'Consolas','Fira Mono',monospace; }
 .obc-target-warn {
-  display: inline-block; margin-left: 4px;
-  color: #f14949; font-weight: 700; font-size: 11px;
-  cursor: help;
+  display: inline-flex; align-items: center; justify-content: center;
+  margin-left: 4px; min-width: 15px; height: 15px; padding: 0 3px;
+  background: #f14949; color: #fff; border-radius: 3px;
+  font-weight: 700; font-size: 10px; line-height: 1; cursor: help;
 }
 .obc-td-delete { color: #555; cursor: pointer; font-size: 13px; transition: color .15s; text-align: center; width: 30px; }
 .obc-td-delete:hover { color: #f14949; }
