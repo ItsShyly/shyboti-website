@@ -541,7 +541,7 @@ onUnmounted(() => { _sseSource?.close() })
       <circle cx="8" cy="7" r="2.5" stroke="currentColor" stroke-width="1.3" />
       <path d="M5 14h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
     </svg>
-    OBS commandsare managed on the
+    OBS commands are managed on the
     <router-link to="/obs-connection" class="obs-cmd-link">OBS connection</router-link> page (they won't appear here).
   </div>
 
