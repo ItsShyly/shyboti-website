@@ -707,15 +707,7 @@ onUnmounted(() => { _sseSource?.close() })
 
       <!-- OBS commands live in their own table/page, not here -->
       <template v-else>
-        <div class="obs-cmd-notice">
-        <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="obs-cmd-icon">
-          <rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
-          <circle cx="8" cy="7" r="2.5" stroke="currentColor" stroke-width="1.3"/>
-          <path d="M5 14h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-        </svg>
-        OBS commands are managed on the
-        <router-link to="/obs-connection" class="obs-cmd-link">OBS connection</router-link> page (they won't appear here).
-      </div>
+
 
       <div class="rows">
         <template v-for="cmd in filteredCustom()" :key="cmd.name">
@@ -825,6 +817,15 @@ onUnmounted(() => { _sseSource?.close() })
         <div v-if="!isBroadcaster" class="extras-readonly-note">{{ t('cmd.extras.readonly') }}</div>
       </template>
     </template><!-- /Extras tab -->
+  </div>
+      <div class="obs-cmd-notice">
+    <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="obs-cmd-icon">
+      <rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+      <circle cx="8" cy="7" r="2.5" stroke="currentColor" stroke-width="1.3"/>
+      <path d="M5 14h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+    </svg>
+    OBS commandsare managed on the
+    <router-link to="/obs-connection" class="obs-cmd-link">OBS connection</router-link> page (they won't appear here).
   </div>
 <CommandEditPanel
     :cmdName="editingCmd"
