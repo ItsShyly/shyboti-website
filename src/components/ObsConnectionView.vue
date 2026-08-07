@@ -119,11 +119,20 @@ watch(sources, list => {
 async function loadExistingCmdNames() {
   if (!session.value) return
   try {
-    const res = await fetch(`${API}/commands/${session.value.channel}`, { headers: authHeaders.value })
-    if (res.ok) {
-      const data = await res.json() as Array<{ name: string }>
-      existingCmdNames.value = data.map(c => c.name.toLowerCase())
+    const [defRes, customRes] = await Promise.all([
+      fetch(`${API}/commands/${session.value.channel}`, { headers: authHeaders.value }),
+      fetch(`${API}/custom-commands/${session.value.channel}`, { headers: authHeaders.value }),
+    ])
+    const names: string[] = []
+    if (defRes.ok) {
+      const d = await defRes.json() as { commands: { name: string }[] }
+      names.push(...(d.commands ?? []).map(c => c.name.toLowerCase()))
     }
+    if (customRes.ok) {
+      const d = await customRes.json() as { commands: { name: string }[] }
+      names.push(...(d.commands ?? []).map(c => c.name.toLowerCase()))
+    }
+    existingCmdNames.value = names
   } catch {}
 }
 
@@ -648,7 +657,7 @@ onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer)
   if (shotTimer) clearInterval(shotTimer)
 })
-watch(() => session.value?.channel, () => load())
+watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
 </script>
 
 <template>
