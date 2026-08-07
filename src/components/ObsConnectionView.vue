@@ -441,7 +441,7 @@ const unifiedCommands = computed<UnifiedCommand[]>(() => {
       command: b.command,
       actionLabel,
       targetDisplay: b.action === 'volume'
-        ? (isVolArg ? `${b.source} <vol>` : `${b.source} @ ${b.value}%`)
+        ? (isVolArg ? b.source : `${b.source} @ ${b.value}%`)
         : b.source,
       badgeText: isVolArg ? 'vol arg' : 'fixed',
       badgeClass,
@@ -458,9 +458,9 @@ const unifiedCommands = computed<UnifiedCommand[]>(() => {
     let actionHint = ''
 
     if (action === 'volume') {
-      targetDisplay = '<source> <vol>'
+      targetDisplay = '<vol>'
       actionHint = ' <source> <vol>'
-    } else if (action === 'scene') {
+    } else if (action === 'scene') {  
       targetDisplay = '<scene>'
       actionHint = ' <scene>'
     } else {
