@@ -234,18 +234,22 @@ async function saveSettings() {
 const sceneShots = ref<Record<string, string>>({})
 let shotTimer: ReturnType<typeof setInterval> | null = null
 
-// >>> Screenshot quality is tiered: full quality for the live scene (the one
-// >>> people are actually watching), a much cheaper JPEG for the row of
-// >>> non-live thumbnails - same request either way, agent just honors
-// >>> whatever width/quality it's given (see agent/src/localObs.js).
-const LIVE_SHOT_QUALITY  = 75  // matches the agent's own default - i.e. "don't override it"
-const OTHER_SHOT_QUALITY = 38  // ~50% of the default, per the requested network-load cut
 
-async function refreshScreenshot(sceneName: string, quality: number) {
+const LIVE_SHOT_WIDTH = 1000  // Crisp for 500px 2x high-DPI display
+const LIVE_SHOT_QUALITY = 80  // High quality
+
+const OTHER_SHOT_WIDTH = 480  // Scaled down to match thumbnail box size
+const OTHER_SHOT_QUALITY = 65 // Keeps text readable without heavy JPEG artifacts
+
+
+async function refreshScreenshot(sceneName: string, isLive: boolean) {
   if (!session.value || !agentStatus.value?.screenshots) return
   try {
+    const width = isLive ? LIVE_SHOT_WIDTH : OTHER_SHOT_WIDTH
+    const quality = isLive ? LIVE_SHOT_QUALITY : OTHER_SHOT_QUALITY
+
     const res = await fetch(
-      `${API}/obs/${session.value.channel}/screenshot?scene=${encodeURIComponent(sceneName)}&quality=${quality}`,
+      `${API}/obs/${session.value.channel}/screenshot?scene=${encodeURIComponent(sceneName)}&width=${width}&quality=${quality}`,
       { headers: authHeaders.value }
     )
     if (res.ok) {
@@ -259,7 +263,7 @@ function refreshAllShots() {
   if (!agentConnected.value || !obsConnected.value || !agentStatus.value?.screenshots) return
   for (const s of scenes.value) {
     const isLive = s.sceneName === currentScene.value
-    refreshScreenshot(s.sceneName, isLive ? LIVE_SHOT_QUALITY : OTHER_SHOT_QUALITY)
+    refreshScreenshot(s.sceneName, isLive)
   }
 }
 
