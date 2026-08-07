@@ -35,6 +35,10 @@ interface AgentStatus {
   scene_bindings:  SceneBind[]
   source_bindings: SourceBind[]
   arg_commands: Record<string, ArgCommandRaw>
+  rules: ObsRule[]
+  bitrate_kbps: number | null
+  congested: boolean
+  streaming: boolean
   screenshots: boolean
   // broadcaster-only fields - the backend omits these entirely for anyone else
   enabled?: boolean
@@ -46,6 +50,20 @@ interface SourceInfo { sceneItemId: number; sourceName: string; sceneItemEnabled
 interface SceneBind  { command: string; scene: string; access?: AccessLevel }
 interface SourceBind { command: string; source: string; action: string; value?: number; access?: AccessLevel }
 interface ArgCommand { command: string; access: AccessLevel }
+// >>> Bitrate-triggered automation ("rule builder") - never chat-triggered
+// >>> (no command/access), the bitrate condition itself is the trigger.
+// >>> Evaluated entirely on the agent from its own local cached copy, so a
+// >>> dropped connection to us can't delay or block a rule from firing - see
+// >>> agent/src/rules.js.
+interface ObsRule {
+  id: string
+  condition: 'below' | 'above'
+  bitrate_kbps: number
+  action: string          // same vocabulary as BUILDER_ACTIONS, incl. 'scene'
+  target: string          // scene name, or source name
+  value?: number          // only used when action === 'volume'
+  enabled: boolean
+}
 
 const ACCESS_CYCLE: AccessLevel[] = ['everyone', 'mod', 'broadcaster']
 function nextAccess(a: AccessLevel): AccessLevel { return ACCESS_CYCLE[(ACCESS_CYCLE.indexOf(a) + 1) % ACCESS_CYCLE.length]! }
@@ -84,6 +102,25 @@ const sourceBindings = ref<SourceBind[]>([])
 const argCommands    = ref<Record<string, ArgCommand>>({})
 const bindingsSaving = ref(false)
 const bindingsSaved  = ref(false)
+
+// >>> command builder vs rule builder tab
+const builderView = ref<'command' | 'rule'>('command')
+
+// >>> rule builder
+const rules       = ref<ObsRule[]>([])
+const rulesSaving = ref(false)
+const rulesSaved  = ref(false)
+const ruleCondition = ref<'below' | 'above'>('below')
+const ruleBitrate    = ref(2500)
+const ruleAction     = ref('scene')
+const ruleTarget     = ref('')
+const ruleValue      = ref(50)
+const ruleAddDisabled = computed(() => {
+  if (!ruleBitrate.value || ruleBitrate.value <= 0) return true
+  if (ruleAction.value !== 'volume' && !ruleTarget.value.trim()) return true
+  if (ruleAction.value === 'volume' && !ruleTarget.value.trim()) return true
+  return false
+})
 
 // >>> command builder
 const builderAction  = ref('scene')
@@ -197,11 +234,18 @@ async function saveSettings() {
 const sceneShots = ref<Record<string, string>>({})
 let shotTimer: ReturnType<typeof setInterval> | null = null
 
-async function refreshScreenshot(sceneName: string) {
+// >>> Screenshot quality is tiered: full quality for the live scene (the one
+// >>> people are actually watching), a much cheaper JPEG for the row of
+// >>> non-live thumbnails - same request either way, agent just honors
+// >>> whatever width/quality it's given (see agent/src/localObs.js).
+const LIVE_SHOT_QUALITY  = 75  // matches the agent's own default - i.e. "don't override it"
+const OTHER_SHOT_QUALITY = 38  // ~50% of the default, per the requested network-load cut
+
+async function refreshScreenshot(sceneName: string, quality: number) {
   if (!session.value || !agentStatus.value?.screenshots) return
   try {
     const res = await fetch(
-      `${API}/obs/${session.value.channel}/screenshot?scene=${encodeURIComponent(sceneName)}`,
+      `${API}/obs/${session.value.channel}/screenshot?scene=${encodeURIComponent(sceneName)}&quality=${quality}`,
       { headers: authHeaders.value }
     )
     if (res.ok) {
@@ -213,7 +257,10 @@ async function refreshScreenshot(sceneName: string) {
 
 function refreshAllShots() {
   if (!agentConnected.value || !obsConnected.value || !agentStatus.value?.screenshots) return
-  for (const s of scenes.value) refreshScreenshot(s.sceneName)
+  for (const s of scenes.value) {
+    const isLive = s.sceneName === currentScene.value
+    refreshScreenshot(s.sceneName, isLive ? LIVE_SHOT_QUALITY : OTHER_SHOT_QUALITY)
+  }
 }
 
 function restartShotLoop() {
@@ -234,6 +281,17 @@ const canForcePreview = computed(() =>
 )
 const videoMixProjectorOpen = computed(() => !!agentStatus.value?.video_mix_projector_open)
 const videoMixProjectorTitle = computed(() => agentStatus.value?.video_mix_projector_title ?? null)
+
+// >>> Bitrate badge next to the live scene - red once OBS's own congestion
+// >>> signal says the network can't keep up (see localObs.js's
+// >>> CONGESTION_BAD_THRESHOLD), not a guessed kbps cutoff, since "good"
+// >>> bitrate varies a lot by resolution/codec/target.
+const bitrateLabel = computed(() => {
+  if (!agentStatus.value?.streaming) return null
+  const kbps = agentStatus.value.bitrate_kbps
+  return kbps == null ? 'measuring…' : `${kbps >= 1000 ? (kbps / 1000).toFixed(1) + ' mbps' : kbps + ' kbps'}`
+})
+const bitrateBad = computed(() => !!agentStatus.value?.streaming && !!agentStatus.value?.congested)
 
 // derived
 const agentConnected = computed(() => agentStatus.value?.connected ?? false)
@@ -265,6 +323,7 @@ async function load() {
       agentStatus.value   = d
       sceneBindings.value  = d.scene_bindings  ?? []
       sourceBindings.value = d.source_bindings ?? []
+      rules.value           = d.rules ?? []
       const normalizedArg: Record<string, ArgCommand> = {}
       for (const [action, entry] of Object.entries(d.arg_commands ?? {})) {
         if (typeof entry === 'string') normalizedArg[action] = { command: entry, access: 'everyone' }
@@ -590,6 +649,48 @@ function cycleUnifiedAccess(item: UnifiedCommand) {
   saveBindings()
 }
 
+// --- rule builder ---
+async function saveRules() {
+  if (!session.value) return
+  rulesSaving.value = true
+  try {
+    await fetch(`${API}/obs/${session.value.channel}/rules`, {
+      method: 'PUT',
+      headers: { ...authHeaders.value, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rules: rules.value }),
+    })
+    rulesSaved.value = true
+    setTimeout(() => { rulesSaved.value = false }, 2000)
+  } catch {}
+  rulesSaving.value = false
+}
+
+function addRule() {
+  if (ruleAddDisabled.value) return
+  const rule: ObsRule = {
+    id: crypto.randomUUID(),
+    condition: ruleCondition.value,
+    bitrate_kbps: ruleBitrate.value,
+    action: ruleAction.value,
+    target: ruleTarget.value.trim(),
+    enabled: true,
+  }
+  if (ruleAction.value === 'volume') rule.value = ruleValue.value
+  rules.value = [...rules.value, rule]
+  ruleTarget.value = ''
+  saveRules()
+}
+
+function removeRule(id: string) {
+  rules.value = rules.value.filter(r => r.id !== id)
+  saveRules()
+}
+
+function toggleRule(rule: ObsRule) {
+  rule.enabled = !rule.enabled
+  saveRules()
+}
+
 // --- audio mixer ---
 const audioSources = computed(() => (sources.value as any[]).filter(s => s.isAudioSource))
 
@@ -735,6 +836,7 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
                 </div>
                 <div class="obc-scene-name">{{ liveScene.sceneName }}</div>
                 <div class="obc-scene-live">live</div>
+                <div v-if="bitrateLabel" class="obc-bitrate-badge" :class="{ bad: bitrateBad }">{{ bitrateLabel }}</div>
               </div>
             </div>
             <div class="obc-scenes-others">
@@ -830,11 +932,14 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
 
         </template>
 
-        <!-- Command builder -->
+        <!-- Command builder / Rule builder -->
         <div v-if="agentStatus?.paired" class="ep-field-group obc-box obc-box-builder">
-          <label class="ep-field-label">
-            command builder
-          </label>
+          <div class="obc-builder-tabs">
+            <button type="button" class="obc-builder-tab" :class="{ active: builderView === 'command' }" @click="builderView = 'command'">command builder</button>
+            <button type="button" class="obc-builder-tab" :class="{ active: builderView === 'rule' }" @click="builderView = 'rule'">rule builder</button>
+          </div>
+
+          <template v-if="builderView === 'command'">
 
           <div class="obc-label-row">
             <div class="obc-label-col">
@@ -965,6 +1070,87 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
              </template>
           </div>
 
+          </template>
+
+          <!-- Rule builder - bitrate-triggered, no chat command/access, evaluated
+               entirely on the agent from its own local cached copy (rules.js) so
+               a dropped relay connection can't delay or block a rule firing. -->
+          <template v-else>
+
+            <div class="obc-label-row">
+              <div class="obc-label-col">
+                <span class="obc-col-label">condition</span>
+                <div class="obc-mode-seg">
+                  <button type="button" class="obc-mode-seg-btn" :class="{ active: ruleCondition === 'below' }" @click="ruleCondition = 'below'">below</button>
+                  <button type="button" class="obc-mode-seg-btn" :class="{ active: ruleCondition === 'above' }" @click="ruleCondition = 'above'">above</button>
+                </div>
+              </div>
+
+              <div class="obc-label-col">
+                <span class="obc-col-label">bitrate (kbps)</span>
+                <input v-model.number="ruleBitrate" type="number" min="1" class="obc-target-input" style="width: 90px;" />
+              </div>
+
+              <div class="obc-label-col">
+                <span class="obc-col-label">action</span>
+                <select v-model="ruleAction" class="obc-action-select">
+                  <option v-for="a in BUILDER_ACTIONS" :key="a.value" :value="a.value">{{ a.label }}</option>
+                </select>
+              </div>
+
+              <div class="obc-label-col">
+                <span class="obc-col-label">target</span>
+                <input
+                  v-model="ruleTarget"
+                  :list="ruleAction === 'scene' ? 'obc-scene-names' : 'obc-src-names'"
+                  class="obc-target-input"
+                  :placeholder="ruleAction === 'scene' ? 'scene name' : 'source name'"
+                />
+              </div>
+
+              <div v-if="ruleAction === 'volume'" class="obc-label-col">
+                <span class="obc-col-label">volume %</span>
+                <input v-model.number="ruleValue" type="number" min="0" max="100" class="obc-target-input" style="width: 60px;" />
+              </div>
+
+              <div class="obc-label-col obc-label-col-end">
+                <button class="obc-add-btn" :disabled="ruleAddDisabled" @click="addRule">add</button>
+              </div>
+            </div>
+
+            <div class="obc-table-wrap">
+              <table class="obc-table">
+                <thead>
+                  <tr>
+                    <th>condition</th>
+                    <th>action</th>
+                    <th>target</th>
+                    <th>on</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="!rules.length">
+                    <td colspan="5" class="obc-table-empty">no rules set up yet</td>
+                  </tr>
+                  <tr v-for="r in rules" :key="r.id">
+                    <td class="ep-mono">{{ r.condition }} {{ r.bitrate_kbps }} kbps</td>
+                    <td>{{ BUILDER_ACTION_LABEL[r.action] ?? r.action }}</td>
+                    <td class="obc-td-target">{{ r.target }}<span v-if="r.action === 'volume'"> @ {{ r.value }}%</span></td>
+                    <td>
+                      <button class="obc-toggle obc-toggle-sm" :class="{ on: r.enabled }" @click="toggleRule(r)">
+                        <span class="obc-toggle-knob"></span>
+                      </button>
+                    </td>
+                    <td class="obc-td-delete" @click="removeRule(r.id)">×</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div v-if="rulesSaving || rulesSaved" class="obsconn-autosave" style="align-self: flex-start;">{{ rulesSaving ? 'saving…' : 'saved' }}</div>
+
+          </template>
+
           
         </div>
 
@@ -1056,8 +1242,8 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
             </div>
             <div v-if="screenshotsLocal" class="obc-interval-row">
               <span class="ep-field-hint">refresh every</span>
-              <input v-model.number="screenshotIntervalLocal" type="number" min="3" max="60" class="ep-field-input obc-interval-input" />
-              <span class="ep-field-hint">seconds (min 3, to keep this light on OBS)</span>
+              <input v-model.number="screenshotIntervalLocal" type="number" min="1" max="60" class="ep-field-input obc-interval-input" />
+              <span class="ep-field-hint">seconds (min 1, to keep this light on OBS)</span>
             </div>
             <div class="ep-field-hint">
               Only you (the broadcaster) can change this - moderators can see previews if they're on, but can't turn them on or off.
@@ -1412,4 +1598,28 @@ color: rgb(from #e5c07b r g b / 80%);
   .obc-bind-cmd, .obc-bind-target { width: 100%; }
   .obc-arg-label { width: 100%; }
 }
+
+/* Bitrate badge on the live scene card */
+.obc-bitrate-badge {
+  position: absolute; bottom: 5px; right: 6px;
+  font-size: 9px; font-weight: 700; letter-spacing: .03em;
+  color: #23d18b; background: #0a0a0dcc; border: 1px solid #23d18b44;
+  padding: 2px 6px; z-index: 1; font-family: 'Consolas','Fira Mono',monospace;
+}
+.obc-bitrate-badge.bad { color: #f14949; border-color: #f1494955; }
+
+/* Command builder / Rule builder tab switch */
+.obc-builder-tabs { display: flex; gap: 2px; margin-bottom: 10px; border-bottom: 1px solid #1e1e22; }
+.obc-builder-tab {
+  padding: 6px 12px; border: none; background: transparent; color: #555;
+  font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .15s, border-color .15s;
+}
+.obc-builder-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
+.obc-builder-tab:hover:not(.active) { color: #888; }
+
+/* Small toggle used in the rule table's "on" column */
+.obc-toggle-sm { width: 26px; height: 15px; }
+.obc-toggle-sm .obc-toggle-knob { width: 9px; height: 9px; }
+.obc-toggle-sm.on .obc-toggle-knob { transform: translateX(11px); }
 </style>
