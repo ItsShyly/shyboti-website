@@ -771,8 +771,15 @@ watch(() => session.value?.channel, () => load())
               >add</button>
             </div>
           </div>
-          <div v-if="builderMode === 'argument'" class="cmd-use">
-              <span>+{{ builderCmd }}</span><span class="cmd-arg-name"> &lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
+          <div v-if="builderMode === 'argument' || builderAction === 'volume'" class="cmd-usecase">
+            <span>+{{ builderCmd }}</span>
+
+          <template v-if="builderAction === 'volume'">
+              <span v-if="builderVolMode === 'both'" class="cmd-usecase-arg"> &lt;source&gt; &lt;vol&gt;</span>
+              <span v-else class="cmd-usecase-arg"> &lt;volume&gt;</span>
+          </template>
+
+          <span v-else class="cmd-usecase-arg"> &lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
           </div>
 
           <datalist id="obc-src-names">
@@ -975,11 +982,11 @@ watch(() => session.value?.channel, () => load())
 }
 
 /* Setup card */
-.cmd-arg-name {
+.cmd-usecase-arg {
 color: rgb(from #e5c07b r g b / 80%);
 }
 
-.cmd-use {
+.cmd-usecase {
   color: rgb(from #c4a0ff r g b / 80%);
   font-size: 10px;
 }
