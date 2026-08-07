@@ -869,7 +869,7 @@ watch(() => session.value?.channel, () => load())
           </div>
 
            <div class="cmd-usecase">
-            <span>+{{ builderCmd }}</span>
+            <span v-if="builderCmd">+{{ builderCmd }}</span>
             <div v-if="builderMode === 'argument' || builderAction === 'volume'">
               <template v-if="builderAction === 'volume'">
                   <span v-if="builderVolMode === 'both'" class="cmd-usecase-arg"> &lt;source&gt; &lt;vol&gt;</span>
