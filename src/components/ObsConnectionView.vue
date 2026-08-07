@@ -378,44 +378,77 @@ interface UnifiedCommand {
   access: AccessLevel
   index?: number
   action?: string
+  actionHint?: string
 }
 
 const unifiedCommands = computed<UnifiedCommand[]>(() => {
   const list: UnifiedCommand[] = []
 
-  sceneBindings.value.forEach((b, i) => list.push({
-    type: 'scene', command: b.command, actionLabel: 'Switch scene',
-    targetDisplay: b.scene, badgeText: 'fixed', badgeClass: 'fixed-type',
-    access: b.access ?? 'everyone', index: i,
-  }))
+  sceneBindings.value.forEach((b, i) => {
+    list.push({
+      type: 'scene', command: b.command, actionLabel: 'Switch scene',
+      targetDisplay: b.scene, badgeText: 'fixed', badgeClass: 'fixed-type',
+      access: b.access ?? 'everyone', index: i,
+      actionHint: '' // no chat argument for fixed scene binds
+    })
+  })
 
   sourceBindings.value.forEach((b, i) => {
-    // a volume binding with no fixed value means the number comes from
-    // whatever the chat user types after the command ("vol only" mode)
     const isVolArg = b.action === 'volume' && b.value === undefined
+    const badgeClass = isVolArg ? 'arg-type' as const : 'fixed-type' as const
+    const actionLabel = BUILDER_ACTION_LABEL[b.action] ?? b.action
+
+    // Determine hint based on action and whether it's an arg command
+    let actionHint = ''
+    if (isVolArg) {
+      actionHint = ' <volume>' // fixed source, volume from chat
+    } else if (b.action === 'volume') {
+      actionHint = '' // fixed value binding, no chat argument
+    } else if (badgeClass === 'fixed-type') {
+      actionHint = '' // fixed source action (show/hide/toggle etc.)
+    }
+
     list.push({
       type: 'source',
       command: b.command,
-      actionLabel: BUILDER_ACTION_LABEL[b.action] ?? b.action,
+      actionLabel,
       targetDisplay: b.action === 'volume'
         ? (isVolArg ? `${b.source} <vol>` : `${b.source} @ ${b.value}%`)
         : b.source,
       badgeText: isVolArg ? 'vol arg' : 'fixed',
-      badgeClass: isVolArg ? 'arg-type' : 'fixed-type',
+      badgeClass,
       access: b.access ?? 'everyone', index: i, action: b.action,
+      actionHint
     })
   })
 
   Object.entries(argCommands.value).forEach(([action, entry]) => {
     if (!entry?.command) return
+
+    const actionLabel = BUILDER_ACTION_LABEL[action] ?? action
+    let targetDisplay = ''
+    let actionHint = ''
+
+    if (action === 'volume') {
+      targetDisplay = '<source> <vol>'
+      actionHint = ' <source> <vol>'
+    } else if (action === 'scene') {
+      targetDisplay = '<scene>'
+      actionHint = ' <scene>'
+    } else {
+      targetDisplay = '<source>'
+      actionHint = ' <source>'
+    }
+
     list.push({
       type: 'arg',
       command: entry.command,
-      actionLabel: BUILDER_ACTION_LABEL[action] ?? action,
-      targetDisplay: action === 'volume' ? '<source> <vol>' : action === 'scene' ? '<scene>' : '<source>',
+      actionLabel,
+      targetDisplay,
       badgeText: action === 'volume' ? 'src+vol arg' : '$1 arg',
       badgeClass: 'arg-type',
       access: entry.access ?? 'everyone', action,
+      actionHint
     })
   })
 
@@ -744,7 +777,6 @@ watch(() => session.value?.channel, () => load())
                   <option value="" disabled>pick source</option>
                   <option v-for="n in knownSources" :key="n" :value="n">{{ n }}</option>
                 </select>
-                <span class="obc-arg-badge">&lt;volume&gt;</span>
               </template>
 
               <!-- non-volume: chat arg -->
@@ -804,7 +836,10 @@ watch(() => session.value?.channel, () => load())
                 </tr>
                 <tr v-for="c in unifiedCommands" :key="c.type + (c.index ?? c.action)">
                   <td class="obc-td-trigger ep-mono">+{{ c.command }}</td>
-                  <td>{{ c.actionLabel }}</td>
+                  <td>
+                    {{ c.actionLabel }} 
+                    <span v-if="c.actionHint" class="cmd-usecase-arg">&lt;{{ c.actionHint }}&gt;</span>
+                  </td>
                   <td><span class="obc-type-badge" :class="c.badgeClass">{{ c.badgeText }}</span></td>
                   <td class="obc-td-target" :class="{ 'obc-td-target-arg': c.badgeClass === 'arg-type' }">{{ c.targetDisplay }}</td>
                   <td>
@@ -1136,7 +1171,7 @@ color: rgb(from #e5c07b r g b / 80%);
 
 /* Access-level cycle button - matches CommandsView.vue's access-btn */
 .access-btn {
-  height: 22px; padding: 0 9px; border: 1px solid #2a2a30; background: transparent;
+  height: 28px; min-width: 70px; padding: 0 9px; border: 1px solid #2a2a30; background: transparent;
   color: #555; font-family: inherit; font-size: 10px; cursor: pointer; flex-shrink: 0; transition: all .15s;
 }
 .access-btn:hover { border-color: #555; color: #aaa; }
@@ -1156,7 +1191,7 @@ color: rgb(from #e5c07b r g b / 80%);
 
 /* Command builder - single-row form matching the reference demo */
 .obc-label-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; padding: 4px 0 12px; }
-.obc-label-col { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex-shrink: 0; }
+.obc-label-col { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 .obc-label-col-end { align-self: flex-end; }
 .obc-col-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #555; white-space: nowrap; }
 
@@ -1184,7 +1219,7 @@ color: rgb(from #e5c07b r g b / 80%);
 
 .obc-mode-seg { display: inline-flex; border: 1px solid #2a2a30; overflow: hidden; flex-shrink: 0; }
 .obc-mode-seg-btn {
-  height: 28px; padding: 0 8px; border: none; background: transparent; color: #666;
+  height: 26px; padding: 0 8px; border: none; background: transparent; color: #666;
   font-family: inherit; font-size: 10px; cursor: pointer; transition: all .15s;
   white-space: nowrap; border-right: 1px solid #2a2a30;
 }
