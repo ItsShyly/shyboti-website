@@ -713,10 +713,6 @@ watch(() => session.value?.channel, () => load())
               </div>
             </div>
 
-            <div class="cmd-use">
-              <span>{{ builderCmd }}</span><span v-if="builderMode === 'argument'" class="obc-arg-badge">&lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
-            </div>
-
             <div class="obc-label-col">
               <span class="obc-col-label">action</span>
               <select v-model="builderAction" class="obc-action-select">
@@ -774,6 +770,9 @@ watch(() => session.value?.channel, () => load())
                 @click="addBuilderCommand"
               >add</button>
             </div>
+          </div>
+          <div class="cmd-use">
+              <span>{{ builderCmd }}</span><span v-if="builderMode === 'argument'" class="obc-arg-badge">&lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
           </div>
 
           <datalist id="obc-src-names">
