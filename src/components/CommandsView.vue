@@ -706,18 +706,18 @@ onUnmounted(() => { _sseSource?.close() })
       </div>
 
       <!-- OBS commands live in their own table/page, not here -->
-      <div v-if="filteredCustom().length > 0 || customCommands.length === 0" class="obs-cmd-notice">
+      <template v-else>
+        <div class="obs-cmd-notice">
         <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="obs-cmd-icon">
           <rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
           <circle cx="8" cy="7" r="2.5" stroke="currentColor" stroke-width="1.3"/>
           <path d="M5 14h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
         </svg>
-        OBS commands (scene switches, source control) are managed on the
-        <router-link to="/obs-connection" class="obs-cmd-link">OBS connection</router-link> page
-        and run alongside these — they won't appear here.
+        OBS commands are managed on the
+        <router-link to="/obs-connection" class="obs-cmd-link">OBS connection</router-link> page (they won't appear here).
       </div>
 
-      <div v-else class="rows">
+      <div class="rows">
         <template v-for="cmd in filteredCustom()" :key="cmd.name">
           <div class="table-row custom-row" :class="{ expanded: expandedCustom.has(cmd.name) }">
             <!-- chevron -->
@@ -793,6 +793,7 @@ onUnmounted(() => { _sseSource?.close() })
           </template>
         </template>
       </div>
+      </template>
     </template><!-- /Custom tab -->
 
     <!-- Extras tab -->
