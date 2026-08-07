@@ -771,8 +771,8 @@ watch(() => session.value?.channel, () => load())
               >add</button>
             </div>
           </div>
-          <div class="cmd-use">
-              <span>{{ builderCmd }}</span><span v-if="builderMode === 'argument'" class="obc-arg-badge">&lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
+          <div v-if="builderMode === 'argument'" class="cmd-use">
+              <span>+{{ builderCmd }}</span><span class="cmd-arg-name"> &lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
           </div>
 
           <datalist id="obc-src-names">
@@ -975,6 +975,14 @@ watch(() => session.value?.channel, () => load())
 }
 
 /* Setup card */
+.cmd-arg-name {
+  color: #9d6cff;
+}
+
+.cmd-use {
+  color: #555;
+  font-size: 8px;
+}
 .obc-setup-card {
   border: 1px solid #1e1e22; padding: 14px 16px; background: #0d0d10;
 }
