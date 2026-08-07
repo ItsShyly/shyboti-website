@@ -23,6 +23,9 @@ interface AgentStatus {
   source_bindings: SourceBind[]
   arg_commands:    Record<string, string>
   screenshots:     boolean
+  bitrate_kbps:    number | null
+  streaming:       boolean
+  congested:       boolean
   // broadcaster only
   enabled?:                 boolean
   screenshot_interval_sec?: number
@@ -65,6 +68,7 @@ const sourcesLoading = ref(false)
 // screenshot per scene name
 const shots        = ref<Record<string, string | null>>({})
 const shotPending  = ref<Record<string, boolean>>({})
+const shotCpuMs    = ref<Record<string, number | null>>({})
 
 // bindings state
 const sceneBindings  = ref<SceneBind[]>([])
@@ -241,8 +245,11 @@ async function fetchShot(sceneName: string) {
       { headers: authHeaders.value }
     )
     if (res.ok) {
-      const d = await res.json() as { imageData: string | null }
-      if (d.imageData) shots.value = { ...shots.value, [sceneName]: d.imageData }
+      const d = await res.json() as { imageData: string | null; cpuMs?: number | null }
+      if (d.imageData) {
+        shots.value     = { ...shots.value, [sceneName]: d.imageData }
+        shotCpuMs.value = { ...shotCpuMs.value, [sceneName]: d.cpuMs ?? null }
+      }
     }
   } catch {}
   shotPending.value = { ...shotPending.value, [sceneName]: false }
@@ -266,6 +273,10 @@ function stopShotPolling() {
 
 watch(() => settings.value.screenshots, v => { if (v && agentOk.value) startShotPolling(); else stopShotPolling() })
 watch(agentOk, v => { if (v) { refreshScenes(); if (settings.value.screenshots) startShotPolling() } else stopShotPolling() })
+// keep currentScene in sync when polled status updates - no click needed
+watch(() => agentStatus.value?.current_scene, (scene) => {
+  if (scene && scenes.value.length === 0) refreshScenes()
+})
 
 // ─── sources ─────────────────────────────────────────────────────────────────
 
@@ -588,7 +599,13 @@ watch(() => session.value?.channel, () => load())
               <div v-else class="obs-thumb-ph obs-thumb-no-shot">
                 <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M6 7h4M8 5v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
               </div>
-              <div v-if="s.sceneName === currentScene" class="obs-live-badge">live</div>
+              <div v-if="s.sceneName === currentScene" class="obs-live-badge">
+                live
+                <span v-if="agentStatus?.bitrate_kbps != null" class="obs-live-stat">
+                  {{ agentStatus.bitrate_kbps }} kbps<span v-if="agentStatus.congested" class="obs-live-congested"> !</span>
+                </span>
+                <span v-if="shotCpuMs[s.sceneName] != null" class="obs-live-stat obs-live-cpu">{{ shotCpuMs[s.sceneName] }}ms</span>
+              </div>
             </div>
             <div class="obs-scene-label">{{ s.sceneName }}</div>
           </div>
@@ -829,7 +846,7 @@ watch(() => session.value?.channel, () => load())
 
 /* scene grid */
 .obs-scene-grid {
-  display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin-top: 4px;
 }
 .obs-scene-card {
   width: 180px; flex-shrink: 0; cursor: pointer;

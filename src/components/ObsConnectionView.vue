@@ -303,6 +303,21 @@ const obsConnected   = computed(() => agentStatus.value?.obs_connected ?? false)
 const currentScene   = computed(() => agentStatus.value?.current_scene ?? '')
 const liveScene      = computed(() => scenes.value.find(s => s.sceneName === currentScene.value) ?? null)
 const nonLiveScenes  = computed(() => scenes.value.filter(s => s.sceneName !== currentScene.value))
+
+// >>> selectedScene (which scene's sources/mixer are shown, and which card
+// >>> gets the "picked" border) always follows whatever OBS reports as the
+// >>> live scene - clicking a card calls switchScene() which changes OBS's
+// >>> actual program scene either way, so there was never a legitimate case
+// >>> where they should diverge. Without this watcher selectedScene only ever
+// >>> moved when the USER clicked something on the site, so a scene change
+// >>> from OBS itself (hotkey, chat command, a rule firing) left the sources
+// >>> panel and the "picked" border stuck on the old scene until a click
+// >>> "refreshed" it - this is what actually keeps them in sync.
+watch(currentScene, (name) => {
+  if (!name) return
+  selectedScene.value = name
+  loadSources(name)
+})
 const connStatusLabel = computed(() => {
   if (!agentStatus.value?.paired) return 'not set up'
   if (!agentConnected.value) return 'agent offline'
