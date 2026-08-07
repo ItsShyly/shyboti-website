@@ -1055,6 +1055,7 @@ color: rgb(from #e5c07b r g b / 80%);
 .cmd-usecase {
   color: rgb(from #c4a0ff r g b / 80%);
   font-size: 10px;
+  padding-left: 10px;
 }
 .obc-setup-card {
   border: 1px solid #1e1e22; padding: 14px 16px; background: #0d0d10;
