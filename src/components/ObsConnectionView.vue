@@ -86,7 +86,7 @@ const bindingsDirty  = ref(false)
 const bindingsSaving = ref(false)
 const bindingsSaved  = ref(false)
 
-// --- command builder (unified add-form: pick an action, then a target) ---
+// >>> command builder
 const builderAction  = ref('scene')
 const builderMode    = ref<'specific' | 'argument'>('specific')
 const builderVolMode = ref<'both' | 'vol_only'>('both')
@@ -101,7 +101,7 @@ watch(sources, list => {
 })
 watch(argCommands, () => { bindingsDirty.value = true }, { deep: true })
 
-// --- settings panel (broadcaster only - mirrors the PUT /obs/:ch/settings guard) ---
+// >>> settings panel---
 const showSettings         = ref(false)
 const settingsSaving       = ref(false)
 const settingsSaved        = ref(false)
@@ -702,7 +702,6 @@ watch(() => session.value?.channel, () => load())
         <div v-if="agentStatus?.paired" class="ep-field-group obc-box obc-box-builder">
           <label class="ep-field-label">
             command builder
-            <span class="ep-field-hint">pick an action, then a fixed target or a $1 argument</span>
           </label>
 
           <div class="obc-label-row">
@@ -712,6 +711,10 @@ watch(() => session.value?.channel, () => load())
                 <span class="obc-bind-prefix">+</span>
                 <input v-model="builderCmd" class="obc-trigger-input ep-mono" placeholder="cmd" maxlength="20" @keydown.enter="addBuilderCommand" />
               </div>
+            </div>
+
+            <div class="cmd-use">
+              <span>{{ builderCmd }}</span><span v-if="builderMode === 'argument'" class="obc-arg-badge">&lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
             </div>
 
             <div class="obc-label-col">
@@ -749,7 +752,7 @@ watch(() => session.value?.channel, () => load())
               </template>
 
               <!-- non-volume: chat arg -->
-              <span v-else-if="builderMode === 'argument'" class="obc-arg-badge">+cmd &lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
+              <span v-else-if="builderMode === 'argument'" class="obc-arg-badge">&lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
 
               <!-- non-volume: preset -->
               <select v-else-if="builderAction === 'scene'" v-model="builderTarget" class="obc-target-select">
