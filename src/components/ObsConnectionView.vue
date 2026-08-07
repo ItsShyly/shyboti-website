@@ -234,6 +234,12 @@ async function saveSettings() {
 const sceneShots = ref<Record<string, string>>({})
 let shotTimer: ReturnType<typeof setInterval> | null = null
 
+// >>> CPU time + payload size of the LIVE scene's last screenshot capture -
+// >>> both were already coming back from the API (localObs.js measures cpuMs
+// >>> via process.cpuUsage() around the OBS call, apiServer.ts computes kb
+// >>> from the base64 length) but nothing on this side ever read them.
+const liveShotStats = ref<{ cpuMs: number | null; kb: number | null }>({ cpuMs: null, kb: null })
+
 
 const LIVE_SHOT_WIDTH = 1000  // Crisp for 500px 2x high-DPI display
 const LIVE_SHOT_QUALITY = 80  // High quality
@@ -253,8 +259,9 @@ async function refreshScreenshot(sceneName: string, isLive: boolean) {
       { headers: authHeaders.value }
     )
     if (res.ok) {
-      const d = await res.json() as { imageData: string | null }
+      const d = await res.json() as { imageData: string | null; cpuMs?: number | null; kb?: number }
       if (d.imageData) sceneShots.value = { ...sceneShots.value, [sceneName]: d.imageData }
+      if (isLive) liveShotStats.value = { cpuMs: d.cpuMs ?? null, kb: d.kb ?? null }
     }
   } catch {}
 }
@@ -445,13 +452,17 @@ async function prefetchSourceNames(sceneName: string) {
 
 async function switchScene(name: string) {
   if (!session.value) return // backend enforces obs_edit permission; mods with it can switch scenes too
+  // Optimistic update BEFORE the request completes, not after - this is what
+  // makes the click feel instant: it flips currentScene right away, which the
+  // watch(currentScene, ...) above picks up immediately to select the card
+  // and load its sources, instead of waiting on a network round trip first.
+  if (agentStatus.value) agentStatus.value.current_scene = name
   try {
     await fetch(`${API}/obs/${session.value.channel}/scene`, {
       method: 'POST',
       headers: { ...authHeaders.value, 'Content-Type': 'application/json' },
       body: JSON.stringify({ name }),
     })
-    if (agentStatus.value) agentStatus.value.current_scene = name
   } catch {}
 }
 
@@ -847,7 +858,7 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
               <div
                 class="obc-scene-card obc-scene-card-live active"
                 :class="{ picked: liveScene.sceneName === selectedScene }"
-                @click="switchScene(liveScene.sceneName); loadSources(liveScene.sceneName)"
+                @click="switchScene(liveScene.sceneName)"
               >
                 <div class="obc-scene-thumb">
                   <img v-if="sceneShots[liveScene.sceneName]" :src="sceneShots[liveScene.sceneName]" :alt="liveScene.sceneName" />
@@ -855,7 +866,20 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
                 </div>
                 <div class="obc-scene-name">{{ liveScene.sceneName }}</div>
                 <div class="obc-scene-live">live</div>
-                <div v-if="bitrateLabel" class="obc-bitrate-badge" :class="{ bad: bitrateBad }">{{ bitrateLabel }}</div>
+              </div>
+              <div class="obc-live-stats">
+                <div class="obc-live-stat" :class="{ bad: bitrateBad }">
+                  <span class="obc-live-stat-label">bandwidth</span>
+                  <span class="obc-live-stat-value">{{ bitrateLabel ?? 'not streaming' }}</span>
+                </div>
+                <div class="obc-live-stat">
+                  <span class="obc-live-stat-label">preview size</span>
+                  <span class="obc-live-stat-value">{{ liveShotStats.kb != null ? liveShotStats.kb + ' kb' : agentStatus?.screenshots ? '…' : 'off' }}</span>
+                </div>
+                <div class="obc-live-stat">
+                  <span class="obc-live-stat-label">preview cpu</span>
+                  <span class="obc-live-stat-value">{{ liveShotStats.cpuMs != null ? liveShotStats.cpuMs + ' ms' : agentStatus?.screenshots ? '…' : 'off' }}</span>
+                </div>
               </div>
             </div>
             <div class="obc-scenes-others">
@@ -864,7 +888,7 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
                 :key="s.sceneName"
                 class="obc-scene-card"
                 :class="{ picked: s.sceneName === selectedScene }"
-                @click="switchScene(s.sceneName); loadSources(s.sceneName)"
+                @click="switchScene(s.sceneName)"
               >
                 <div class="obc-scene-thumb">
                   <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
@@ -1401,7 +1425,7 @@ color: rgb(from #e5c07b r g b / 80%);
 
 /* Scenes - live scene big & centered above, the rest small & centered below */
 .obc-scenes { display: flex; flex-direction: column; align-items: center; gap: 14px; }
-.obc-scenes-live-row { display: flex; justify-content: center; width: 100%; }
+.obc-scenes-live-row { display: flex; justify-content: center; align-items: stretch; gap: 14px; width: 100%; flex-wrap: wrap; }
 .obc-scenes-others   { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; width: 100%; }
 .obc-scene-card {
   width: 200px; padding: 0 0 8px; border: 1px solid #2a2a30; background: #111217;
@@ -1616,16 +1640,23 @@ color: rgb(from #e5c07b r g b / 80%);
 @media (max-width: 680px) {
   .obc-bind-cmd, .obc-bind-target { width: 100%; }
   .obc-arg-label { width: 100%; }
+
+  /* Non-live scenes: 2 per row instead of stacked (was forcing a fixed
+     200px card width, which only fit 1 per row on a phone). The live scene
+     and its stats panel stack vertically here too, each going full width. */
+  .obc-scenes-others { gap: 8px; }
+  .obc-scenes-others .obc-scene-card { width: calc(50% - 4px); }
+  .obc-scenes-live-row { flex-direction: column; align-items: center; }
+  .obc-live-stats { flex-direction: row; flex-wrap: wrap; justify-content: center; width: 100%; min-width: 0; }
+  .obc-live-stat { flex: 1 1 90px; }
 }
 
-/* Bitrate badge on the live scene card */
-.obc-bitrate-badge {
-  position: absolute; bottom: 5px; right: 6px;
-  font-size: 9px; font-weight: 700; letter-spacing: .03em;
-  color: #23d18b; background: #0a0a0dcc; border: 1px solid #23d18b44;
-  padding: 2px 6px; z-index: 1; font-family: 'Consolas','Fira Mono',monospace;
-}
-.obc-bitrate-badge.bad { color: #f14949; border-color: #f1494955; }
+/* Bitrate/preview stats panel next to the live scene */
+.obc-live-stats { display: flex; flex-direction: column; justify-content: center; gap: 8px; min-width: 130px; flex-shrink: 0; }
+.obc-live-stat { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid #1e1e24; background: #0d0d10; }
+.obc-live-stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: #555; }
+.obc-live-stat-value { font-size: 13px; font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; font-weight: 600; }
+.obc-live-stat.bad .obc-live-stat-value { color: #f14949; }
 
 /* Command builder / Rule builder tab switch */
 .obc-builder-tabs { display: flex; gap: 2px; margin-bottom: 10px; border-bottom: 1px solid #1e1e22; }
