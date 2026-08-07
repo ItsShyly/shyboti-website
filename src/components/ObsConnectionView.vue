@@ -87,12 +87,12 @@ const bindingsSaving = ref(false)
 const bindingsSaved  = ref(false)
 
 // --- command builder (unified add-form: pick an action, then a target) ---
-const builderAction = ref('scene')
+const builderAction  = ref('scene')
 const builderMode    = ref<'specific' | 'argument'>('specific')
+const builderVolMode = ref<'both' | 'vol_only'>('both')
 const builderAccess  = ref<AccessLevel>('everyone')
 const builderCmd     = ref('')
 const builderTarget  = ref('')
-const builderValue   = ref(50)
 
 const knownSources   = ref<string[]>([])
 const pendingSources = ref<Set<number>>(new Set())
@@ -365,10 +365,16 @@ async function saveBindings() {
 }
 
 // --- command builder ---
+// Matches the table columns directly: trigger, action, a type badge (fixed vs
+// chat-arg), and a rendered target string - instead of one pre-joined label,
+// so the template can lay these out as real table cells.
 interface UnifiedCommand {
   type: 'scene' | 'source' | 'arg'
   command: string
-  label: string
+  actionLabel: string
+  targetDisplay: string
+  badgeText: string
+  badgeClass: 'fixed-type' | 'arg-type'
   access: AccessLevel
   index?: number
   action?: string
@@ -376,34 +382,71 @@ interface UnifiedCommand {
 
 const unifiedCommands = computed<UnifiedCommand[]>(() => {
   const list: UnifiedCommand[] = []
-  sceneBindings.value.forEach((b, i) => list.push({ type: 'scene', command: b.command, label: `switch scene → ${b.scene}`, access: b.access ?? 'everyone', index: i }))
+
+  sceneBindings.value.forEach((b, i) => list.push({
+    type: 'scene', command: b.command, actionLabel: 'Switch scene',
+    targetDisplay: b.scene, badgeText: 'fixed', badgeClass: 'fixed-type',
+    access: b.access ?? 'everyone', index: i,
+  }))
+
   sourceBindings.value.forEach((b, i) => {
-    const valSuffix = b.action === 'volume' && b.value != null ? ` (${b.value}%)` : ''
-    list.push({ type: 'source', command: b.command, label: `${BUILDER_ACTION_LABEL[b.action] ?? b.action} → ${b.source}${valSuffix}`, access: b.access ?? 'everyone', index: i })
+    // a volume binding with no fixed value means the number comes from
+    // whatever the chat user types after the command ("vol only" mode)
+    const isVolArg = b.action === 'volume' && b.value === undefined
+    list.push({
+      type: 'source',
+      command: b.command,
+      actionLabel: BUILDER_ACTION_LABEL[b.action] ?? b.action,
+      targetDisplay: b.action === 'volume'
+        ? (isVolArg ? `${b.source} <vol>` : `${b.source} @ ${b.value}%`)
+        : b.source,
+      badgeText: isVolArg ? 'vol arg' : 'fixed',
+      badgeClass: isVolArg ? 'arg-type' : 'fixed-type',
+      access: b.access ?? 'everyone', index: i, action: b.action,
+    })
   })
+
   Object.entries(argCommands.value).forEach(([action, entry]) => {
-    if (entry?.command) list.push({ type: 'arg', command: entry.command, label: `${BUILDER_ACTION_LABEL[action] ?? action} → $1 argument`, access: entry.access ?? 'everyone', action })
+    if (!entry?.command) return
+    list.push({
+      type: 'arg',
+      command: entry.command,
+      actionLabel: BUILDER_ACTION_LABEL[action] ?? action,
+      targetDisplay: action === 'volume' ? '<source> <vol>' : action === 'scene' ? '<scene>' : '<source>',
+      badgeText: action === 'volume' ? 'src+vol arg' : '$1 arg',
+      badgeClass: 'arg-type',
+      access: entry.access ?? 'everyone', action,
+    })
   })
+
   return list
 })
 
 function addBuilderCommand() {
   const cmd = builderCmd.value.trim().replace(/^\+/, '').toLowerCase()
   if (!cmd) return
-  if (builderMode.value === 'argument') {
+  if (unifiedCommands.value.some(c => c.command === cmd)) return
+
+  if (builderAction.value === 'volume') {
+    if (builderVolMode.value === 'both') {
+      // source AND value both come from chat, e.g. "+vol mic 70"
+      argCommands.value = { ...argCommands.value, volume: { command: cmd, access: builderAccess.value } }
+    } else {
+      // fixed source, only the number comes from chat, e.g. "+setvol 70"
+      if (!builderTarget.value) return
+      sourceBindings.value.push({ command: cmd, source: builderTarget.value, action: 'volume', access: builderAccess.value })
+    }
+  } else if (builderMode.value === 'argument') {
     argCommands.value = { ...argCommands.value, [builderAction.value]: { command: cmd, access: builderAccess.value } }
   } else {
     if (!builderTarget.value) return
     if (builderAction.value === 'scene') {
-      if (sceneBindings.value.some(b => b.command === cmd)) return
       sceneBindings.value.push({ command: cmd, scene: builderTarget.value, access: builderAccess.value })
     } else {
-      if (sourceBindings.value.some(b => b.command === cmd)) return
-      const entry: SourceBind = { command: cmd, source: builderTarget.value, action: builderAction.value, access: builderAccess.value }
-      if (builderAction.value === 'volume') entry.value = builderValue.value
-      sourceBindings.value.push(entry)
+      sourceBindings.value.push({ command: cmd, source: builderTarget.value, action: builderAction.value, access: builderAccess.value })
     }
   }
+
   builderCmd.value = ''; builderTarget.value = ''
   bindingsDirty.value = true
 }
@@ -656,64 +699,112 @@ watch(() => session.value?.channel, () => load())
         </template>
 
         <!-- Command builder -->
-        <div v-if="agentStatus?.paired" class="ep-field-group obc-box">
+        <div v-if="agentStatus?.paired" class="ep-field-group obc-box obc-box-builder">
           <label class="ep-field-label">
             command builder
             <span class="ep-field-hint">pick an action, then a fixed target or a $1 argument</span>
           </label>
-          <div class="obc-bind-list">
-            <div v-for="(c, i) in unifiedCommands" :key="c.type + i" class="obc-cmd-row">
-              <span class="obc-bind-prefix">+</span>
-              <span class="obc-cmd-name ep-mono">{{ c.command }}</span>
-              <span class="obc-bind-arrow">→</span>
-              <span class="obc-cmd-label">{{ c.label }}</span>
-              <button
-                class="access-btn"
-                :class="{ 'access-mod': c.access === 'mod', 'access-bc': c.access === 'broadcaster' }"
-                @click="cycleUnifiedAccess(c)"
-              >{{ accessLabel(c.access) }}</button>
-              <button class="ep-btn-delete" @click="removeUnifiedCommand(c)">×</button>
+
+          <div class="obc-label-row">
+            <div class="obc-label-col">
+              <span class="obc-col-label">trigger</span>
+              <div class="obc-trigger-wrap">
+                <span class="obc-bind-prefix">+</span>
+                <input v-model="builderCmd" class="obc-trigger-input ep-mono" placeholder="cmd" maxlength="20" @keydown.enter="addBuilderCommand" />
+              </div>
             </div>
-            <div v-if="!unifiedCommands.length" class="ep-empty">no commands set up yet</div>
+
+            <div class="obc-label-col">
+              <span class="obc-col-label">action</span>
+              <select v-model="builderAction" class="obc-action-select">
+                <option v-for="a in BUILDER_ACTIONS" :key="a.value" :value="a.value">{{ a.label }}</option>
+              </select>
+            </div>
+
+            <div class="obc-label-col">
+              <span class="obc-col-label">target type</span>
+              <div class="obc-mode-seg" v-if="builderAction === 'volume'">
+                <button type="button" class="obc-mode-seg-btn" :class="{ active: builderVolMode === 'both' }" @click="builderVolMode = 'both'">src+vol</button>
+                <button type="button" class="obc-mode-seg-btn" :class="{ active: builderVolMode === 'vol_only' }" @click="builderVolMode = 'vol_only'">vol only</button>
+              </div>
+              <div class="obc-mode-seg" v-else>
+                <button type="button" class="obc-mode-seg-btn" :class="{ active: builderMode === 'specific' }" @click="builderMode = 'specific'">preset</button>
+                <button type="button" class="obc-mode-seg-btn" :class="{ active: builderMode === 'argument' }" @click="builderMode = 'argument'">chat arg</button>
+              </div>
+            </div>
+
+            <div class="obc-label-col">
+              <span class="obc-col-label">target</span>
+
+              <!-- volume: src+vol -> both come from chat -->
+              <span v-if="builderAction === 'volume' && builderVolMode === 'both'" class="obc-arg-badge">&lt;source&gt; &lt;vol&gt;</span>
+
+              <!-- volume: vol only -> fixed source, number from chat -->
+              <template v-else-if="builderAction === 'volume'">
+                <select v-model="builderTarget" list="obc-src-names" class="obc-target-select">
+                  <option value="" disabled>pick source</option>
+                  <option v-for="n in knownSources" :key="n" :value="n">{{ n }}</option>
+                </select>
+                <span class="obc-arg-badge">&lt;volume&gt;</span>
+              </template>
+
+              <!-- non-volume: chat arg -->
+              <span v-else-if="builderMode === 'argument'" class="obc-arg-badge">+cmd &lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
+
+              <!-- non-volume: preset -->
+              <select v-else-if="builderAction === 'scene'" v-model="builderTarget" class="obc-target-select">
+                <option value="" disabled>pick scene</option>
+                <option v-for="s in scenes" :key="s.sceneName" :value="s.sceneName">{{ s.sceneName }}</option>
+              </select>
+              <input v-else v-model="builderTarget" list="obc-src-names" class="obc-target-input" placeholder="source" />
+            </div>
+
+            <div class="obc-label-col">
+              <span class="obc-col-label">access</span>
+              <button type="button" class="access-btn" :class="{ 'access-mod': builderAccess === 'mod', 'access-bc': builderAccess === 'broadcaster' }" @click="builderAccess = nextAccess(builderAccess)">{{ accessLabel(builderAccess) }}</button>
+            </div>
+
+            <div class="obc-label-col obc-label-col-end">
+              <button
+                class="obc-add-btn"
+                :disabled="!builderCmd || ((builderMode === 'specific' || (builderAction === 'volume' && builderVolMode === 'vol_only')) && !builderTarget)"
+                @click="addBuilderCommand"
+              >add</button>
+            </div>
           </div>
 
-          <div class="obc-builder-form">
-            <select v-model="builderAction" class="ep-field-select">
-              <option v-for="a in BUILDER_ACTIONS" :key="a.value" :value="a.value">{{ a.label }}</option>
-            </select>
-            <div class="obc-mode-toggle">
-              <button type="button" class="obc-mode-btn" :class="{ active: builderMode === 'specific' }" @click="builderMode = 'specific'">specific</button>
-              <button type="button" class="obc-mode-btn" :class="{ active: builderMode === 'argument' }" @click="builderMode = 'argument'">argument ($1)</button>
-              <button
-                type="button"
-                class="access-btn"
-                :class="{ 'access-mod': builderAccess === 'mod', 'access-bc': builderAccess === 'broadcaster' }"
-                @click="builderAccess = nextAccess(builderAccess)"
-              >{{ accessLabel(builderAccess) }}</button>
-            </div>
+          <datalist id="obc-src-names">
+            <option v-for="n in knownSources" :key="n" :value="n" />
+          </datalist>
 
-            <div class="obc-add-row">
-              <span class="obc-bind-prefix">+</span>
-              <input v-model="builderCmd" class="ep-field-input ep-mono obc-bind-cmd" placeholder="command" />
-              <span class="obc-bind-arrow">→</span>
-
-              <template v-if="builderMode === 'specific'">
-                <select v-if="builderAction === 'scene'" v-model="builderTarget" class="ep-field-select obc-bind-target">
-                  <option value="" disabled>pick scene</option>
-                  <option v-for="s in scenes" :key="s.sceneName" :value="s.sceneName">{{ s.sceneName }}</option>
-                </select>
-                <input v-else v-model="builderTarget" list="obc-src-names" class="ep-field-input obc-bind-target" placeholder="source name" />
-                <input v-if="builderAction === 'volume'" v-model.number="builderValue" type="number" min="0" max="100" class="ep-field-input obc-bind-vol" />
-              </template>
-              <template v-else>
-                <span class="obc-arg-usage">{{ BUILDER_ACTIONS.find(a => a.value === builderAction)?.usage }}</span>
-              </template>
-
-              <button class="ep-btn-new" :disabled="!builderCmd || (builderMode === 'specific' && !builderTarget)" @click="addBuilderCommand">add</button>
-            </div>
-            <datalist id="obc-src-names">
-              <option v-for="n in knownSources" :key="n" :value="n" />
-            </datalist>
+          <div class="obc-table-wrap">
+            <table class="obc-table">
+              <thead>
+                <tr>
+                  <th>trigger</th>
+                  <th>action</th>
+                  <th>type</th>
+                  <th>target</th>
+                  <th>access</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!unifiedCommands.length">
+                  <td colspan="6" class="obc-table-empty">no commands set up yet</td>
+                </tr>
+                <tr v-for="c in unifiedCommands" :key="c.type + (c.index ?? c.action)">
+                  <td class="obc-td-trigger ep-mono">+{{ c.command }}</td>
+                  <td>{{ c.actionLabel }}</td>
+                  <td><span class="obc-type-badge" :class="c.badgeClass">{{ c.badgeText }}</span></td>
+                  <td class="obc-td-target" :class="{ 'obc-td-target-arg': c.badgeClass === 'arg-type' }">{{ c.targetDisplay }}</td>
+                  <td>
+                    <button class="access-btn access-btn-sm" :class="{ 'access-mod': c.access === 'mod', 'access-bc': c.access === 'broadcaster' }" @click="cycleUnifiedAccess(c)">{{ accessLabel(c.access) }}</button>
+                  </td>
+                  <td class="obc-td-delete" @click="removeUnifiedCommand(c)">×</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -1018,10 +1109,13 @@ watch(() => session.value?.channel, () => load())
 .obc-loading-emote { width: 48px; height: 48px; image-rendering: pixelated; animation: obc-spin 1.1s linear infinite; }
 @keyframes obc-spin { to { transform: rotate(360deg); } }
 
-/* Sources | Audio mixer | Command builder - 3 boxes beneath the scenes */
-.obc-boxes-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: stretch; }
-.obc-boxes-row.obc-boxes-single { grid-template-columns: 1fr; }
-.obc-box { padding: 12px 14px; border: 1px solid #1e1e22; background: #0d0d10; }
+/* Sources | Audio mixer | Command builder - 3 boxes beneath the scenes.
+   Command builder needs real width to fit the demo's single-row form, so
+   sources/mixer give up width instead of splitting evenly three ways. */
+.obc-boxes-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+.obc-boxes-row.obc-boxes-single { display: block; }
+.obc-box { padding: 12px 14px; border: 1px solid #1e1e22; background: #0d0d10; flex: 1 1 200px; min-width: 200px; max-width: 260px; }
+.obc-box-builder { flex: 0 0 700px; max-width: 700px; width: 700px; }
 
 /* Access-level cycle button - matches CommandsView.vue's access-btn */
 .access-btn {
@@ -1033,6 +1127,7 @@ watch(() => session.value?.channel, () => load())
 .access-btn.access-mod:hover { background: rgba(199,146,234,.15); }
 .access-btn.access-bc   { border-color: #f1494955; color: #f14949; background: rgba(241,73,73,.08); }
 .access-btn.access-bc:hover  { background: rgba(241,73,73,.15); }
+.access-btn-sm { height: 20px; font-size: 9px; }
 
 /* Audio mixer */
 .obc-mixer-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1042,21 +1137,86 @@ watch(() => session.value?.channel, () => load())
 .obc-mixer-slider { flex: 1; accent-color: #9d6cff; }
 .obc-mixer-db { font-size: 10px; color: #666; font-family: 'Consolas','Fira Mono',monospace; width: 56px; text-align: right; flex-shrink: 0; }
 
-/* Command builder */
-.obc-cmd-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 3px 0; }
-.obc-cmd-name { color: #c4a0ff; }
-.obc-cmd-label { flex: 1; font-size: 11px; color: #888; min-width: 0; }
-.obc-builder-form { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid #1e1e22; }
-.obc-mode-toggle { display: flex; gap: 6px; }
-.obc-mode-btn {
-  height: 22px; padding: 0 10px; border: 1px solid #2a2a30; background: transparent;
-  color: #555; font-family: inherit; font-size: 10px; cursor: pointer; transition: all .15s;
+/* Command builder - single-row form matching the reference demo */
+.obc-label-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; padding: 4px 0 12px; }
+.obc-label-col { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; flex-shrink: 0; }
+.obc-label-col-end { align-self: flex-end; }
+.obc-col-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #555; white-space: nowrap; }
+
+.obc-trigger-wrap { display: flex; align-items: center; gap: 2px; }
+.obc-trigger-input {
+  width: 74px; height: 28px; padding: 0 6px; background: #0a0a0d; border: 1px solid #2a2a30;
+  color: #c4a0ff; font-weight: 600; font-size: 12px; transition: border-color .15s;
 }
-.obc-mode-btn.active { border-color: #6f2bff55; color: #9d6cff; background: #6f2bff0e; }
-.obc-mode-btn:hover { border-color: #444; color: #aaa; }
+.obc-trigger-input:focus { outline: none; border-color: #6f2bff88; }
+
+.obc-action-select, .obc-target-select {
+  height: 28px; padding: 0 6px; background: #0a0a0d; border: 1px solid #2a2a30;
+  color: #ccc; font-family: inherit; font-size: 11px; cursor: pointer;
+  max-width: 130px; transition: border-color .15s;
+}
+.obc-action-select { width: 118px; }
+.obc-target-select { width: 118px; }
+.obc-action-select:focus, .obc-target-select:focus { outline: none; border-color: #6f2bff88; }
+
+.obc-target-input {
+  height: 28px; padding: 0 8px; background: #0a0a0d; border: 1px solid #2a2a30;
+  color: #ccc; font-family: inherit; font-size: 11px; width: 110px; transition: border-color .15s;
+}
+.obc-target-input:focus { outline: none; border-color: #6f2bff88; }
+
+.obc-mode-seg { display: inline-flex; border: 1px solid #2a2a30; overflow: hidden; flex-shrink: 0; }
+.obc-mode-seg-btn {
+  height: 28px; padding: 0 8px; border: none; background: transparent; color: #666;
+  font-family: inherit; font-size: 10px; cursor: pointer; transition: all .15s;
+  white-space: nowrap; border-right: 1px solid #2a2a30;
+}
+.obc-mode-seg-btn:last-child { border-right: none; }
+.obc-mode-seg-btn.active { background: #6f2bff15; color: #9d6cff; font-weight: 600; }
+.obc-mode-seg-btn:hover:not(.active) { color: #888; }
+
+.obc-arg-badge {
+  display: inline-flex; align-items: center; height: 28px; padding: 0 8px;
+  background: #e5c07b0e; border: 1px dashed #e5c07b55; color: #e5c07b;
+  font-family: 'Consolas','Fira Mono',monospace; font-size: 10px; white-space: nowrap;
+}
+
+.obc-add-btn {
+  height: 28px; padding: 0 14px; border: 1px solid #6f2bff66; background: #6f2bff12;
+  color: #9d6cff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+  transition: all .15s; white-space: nowrap;
+}
+.obc-add-btn:hover:not(:disabled) { background: #6f2bff25; border-color: #9d6cff99; }
+.obc-add-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+.obc-table-wrap { max-height: 240px; overflow-y: auto; border: 1px solid #1e1e24; }
+.obc-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.obc-table th {
+  text-align: left; padding: 6px 10px; color: #555; font-weight: 600; font-size: 9px;
+  text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid #1e1e24;
+  background: #0a0a0d; position: sticky; top: 0; z-index: 1;
+}
+.obc-table td {
+  padding: 6px 10px; color: #888; border-bottom: 1px solid #1a1a20;
+  white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis;
+}
+.obc-table tbody tr:hover { background: #ffffff03; }
+.obc-table-empty { text-align: center; color: #444; padding: 20px !important; }
+.obc-td-trigger { color: #c4a0ff; font-weight: 600; }
+.obc-td-target { color: #ccc; }
+.obc-td-target-arg { color: #e5c07b; font-style: italic; font-family: 'Consolas','Fira Mono',monospace; }
+.obc-td-delete { color: #555; cursor: pointer; font-size: 13px; transition: color .15s; text-align: center; width: 30px; }
+.obc-td-delete:hover { color: #f14949; }
+
+.obc-type-badge {
+  display: inline-block; font-size: 9px; padding: 1px 7px; border: 1px solid #2a2a30; color: #666;
+}
+.obc-type-badge.fixed-type { border-color: #6f2bff44; color: #9d6cff; }
+.obc-type-badge.arg-type   { border-color: #e5c07b44; color: #e5c07b; }
 
 @media (max-width: 900px) {
-  .obc-boxes-row { grid-template-columns: 1fr; }
+  .obc-boxes-row { flex-direction: column; }
+  .obc-box, .obc-box-builder { max-width: 100%; width: 100%; }
 }
 
 @media (max-width: 680px) {
