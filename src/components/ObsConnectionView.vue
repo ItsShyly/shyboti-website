@@ -270,7 +270,7 @@ function refreshAllShots() {
 function restartShotLoop() {
   if (shotTimer) { clearInterval(shotTimer); shotTimer = null }
   if (!agentStatus.value?.screenshots) return
-  const intervalMs = Math.max(3, agentStatus.value?.screenshot_interval_sec ?? 5) * 1000
+  const intervalMs = Math.max(1, agentStatus.value?.screenshot_interval_sec ?? 5) * 1000
   refreshAllShots() // don't wait a full interval for the first paint
   shotTimer = setInterval(refreshAllShots, intervalMs)
 }
