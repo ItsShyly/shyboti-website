@@ -1198,7 +1198,7 @@ color: rgb(from #e5c07b r g b / 80%);
    sources/mixer give up width instead of splitting evenly three ways. */
 .obc-boxes-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
 .obc-boxes-row.obc-boxes-single { display: block; }
-.obc-box { padding: 12px 14px; border: 1px solid #1e1e22; background: #0d0d10; flex: 1 1 200px; min-width: 200px; max-width: 260px; }
+.obc-box { padding: 12px 14px; border: 1px solid #1e1e22; background: #0d0d10; flex: 1 1 200px; min-width: 200px; max-width: 400px; }
 .obc-box-builder { flex: 0 0 700px; max-width: 700px; width: 700px; }
 
 /* Access-level cycle button - matches CommandsView.vue's access-btn */
