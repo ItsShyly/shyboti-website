@@ -2,7 +2,7 @@
 // ObsControlView.vue
 // Main OBS control page - scene switching, sources, audio, bindings, screenshots.
 // Config (token, enabled toggle, screenshot interval) opens in a side panel.
-// Screenshots poll via the server relay, not a direct OBS connection.
+// Screenshots poll via the server relay, not a direct OBS Control.
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { API } from '../api'

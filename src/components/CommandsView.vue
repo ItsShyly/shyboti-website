@@ -542,7 +542,7 @@ onUnmounted(() => { _sseSource?.close() })
       <path d="M5 14h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
     </svg>
     OBS commands are managed on the
-    <router-link to="/obs-connection" class="obs-cmd-link">OBS connection</router-link> page (they won't appear here).
+    <router-link to="/obs-control" class="obs-cmd-link">OBS Control</router-link> page (they won't appear here).
   </div>
 
   <div class="cmd-root">

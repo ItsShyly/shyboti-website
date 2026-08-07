@@ -6,7 +6,7 @@
 //   3. pastes the token into the agent on their PC - done
 // From here on the agent keeps a persistent outbound ws connection to the
 // relay; this page just shows status and lets them manage scenes/bindings.
-// Routed page (/obs-connection), not a modal - the settings sub-panel
+// Routed page (/obs-control), not a modal - the settings sub-panel
 // (enabled/screenshots/arg-commands, broadcaster only) is the only remaining
 // Teleport overlay here.
 
@@ -770,7 +770,7 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
 
     <div class="obsconn-header">
       <div>
-        <div class="obsconn-title">OBS connection</div>
+        <div class="obsconn-title">OBS Control</div>
         <div class="obsconn-sub">#{{ session?.channel }}</div>
       </div>
       <div class="obsconn-header-right">

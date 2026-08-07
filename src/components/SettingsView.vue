@@ -40,7 +40,7 @@ const emoteSetSuccess = ref('')
 const emoteInput7tv   = ref('')
 const emoteInputId    = ref('')
 
-// >>> OBS Connection (scene/source control via OBS-websocket, typically reached
+// >>> OBS Control (scene/source control via OBS-websocket, typically reached
 // >>> over Tailscale rather than a direct/public address - see host hint below)
 interface ObsScene  { sceneName: string; sceneIndex: number }
 interface ObsStatus { state: string; error: string; currentScene: string; scenes: ObsScene[] }
@@ -70,7 +70,7 @@ async function loadObs() {
   if (!session.value) return
   obsLoading.value = true
   try {
-    const res = await fetch(`${API}/obs-connection/${session.value.channel}`, {
+    const res = await fetch(`${API}/obs-control/${session.value.channel}`, {
       headers: { Authorization: `Bearer ${session.value.token}` }
     })
     if (res.ok) {
@@ -91,7 +91,7 @@ async function saveObsConnection(partial: Record<string, any>) {
   if (!session.value || !isBroadcaster.value) return
   obsSaving.value = true; obsErr.value = ''
   try {
-    const res = await fetch(`${API}/obs-connection/${session.value.channel}`, {
+    const res = await fetch(`${API}/obs-control/${session.value.channel}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
       body: JSON.stringify(partial)
@@ -99,7 +99,7 @@ async function saveObsConnection(partial: Record<string, any>) {
     if (!res.ok) throw new Error()
     obsMsg.value = 'Saved!'; setTimeout(() => obsMsg.value = '', 2000)
     await loadObs()
-  } catch { obsErr.value = 'Could not save OBS connection settings.' }
+  } catch { obsErr.value = 'Could not save OBS Control settings.' }
   obsSaving.value = false
 }
 
@@ -116,7 +116,7 @@ async function testObs() {
   if (!session.value) return
   obsTesting.value = true; obsTestResult.value = null
   try {
-    const res = await fetch(`${API}/obs-connection/${session.value.channel}/test`, {
+    const res = await fetch(`${API}/obs-control/${session.value.channel}/test`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
       body: JSON.stringify({ ws_host: obsHost.value.trim(), ws_port: Number(obsPort.value) || 4455, ws_password: obsPassword.value })
@@ -136,7 +136,7 @@ async function saveObsBindings() {
   if (!session.value || !isBroadcaster.value) return
   obsSaving.value = true; obsErr.value = ''
   try {
-    const res = await fetch(`${API}/obs-connection/${session.value.channel}/bindings`, {
+    const res = await fetch(`${API}/obs-control/${session.value.channel}/bindings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
       body: JSON.stringify({
@@ -154,7 +154,7 @@ async function loadObsSources(sceneName: string) {
   if (!session.value || !sceneName) return
   obsSourcesLoading.value = true; obsSourcesScene.value = sceneName
   try {
-    const res = await fetch(`${API}/obs-connection/${session.value.channel}/sources/${encodeURIComponent(sceneName)}`, {
+    const res = await fetch(`${API}/obs-control/${session.value.channel}/sources/${encodeURIComponent(sceneName)}`, {
       headers: { Authorization: `Bearer ${session.value.token}` }
     })
     if (res.ok) { const d = await res.json(); obsSources.value = d.sources ?? [] }
@@ -497,11 +497,11 @@ async function doRemoveBot() {
         </div>
       </div>
 
-      <!-- OBS Connection - broadcaster only, spans 2 cols -->
+      <!-- OBS Control - broadcaster only, spans 2 cols -->
       <div class="card card-wide" v-if="isBroadcaster">
         <div class="card-header">
           <div class="card-icon">&#127916;</div>
-          <div class="card-title">OBS Connection</div>
+          <div class="card-title">OBS Control</div>
           <div class="card-sub">Switch scenes and control sources from chat commands, via OBS-websocket.</div>
         </div>
         <div class="card-body">

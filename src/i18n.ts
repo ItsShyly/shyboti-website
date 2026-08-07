@@ -465,7 +465,7 @@ const translations: Record<Locale, Record<string, string>> = {
     'perm.moderation_manage.desc': 'Add, delete, and fire nukes. Full moderation control.',
     'perm.group.obs':                'OBS',
     'perm.obs_view':                 'View',
-    'perm.obs_view.desc':            'Access the OBS connection page and see scenes.',
+    'perm.obs_view.desc':            'Access the OBS Control page and see scenes.',
     'perm.obs_edit':                 'Edit',
     'perm.obs_edit.desc':            'Switch scenes, toggle sources, and manage bindings.',
     'perm.obs_force_preview':        'Force Preview',

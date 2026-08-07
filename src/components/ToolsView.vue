@@ -141,8 +141,8 @@ async function addEntry() {
       </div>
     </div>
 
-    <!-- OBS connection card -->
-    <div class="service-card" @click="session && router.push('/obs-connection')">
+    <!-- OBS Control card -->
+    <div class="service-card" @click="session && router.push('/obs-control')">
       <div class="card-icon obsconn-icon">
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect x="4" y="10" width="40" height="26" rx="3" stroke="currentColor" stroke-width="2.5"/>
@@ -153,7 +153,7 @@ async function addEntry() {
         </svg>
       </div>
       <div class="card-body">
-        <div class="card-title">OBS connection</div>
+        <div class="card-title">OBS Control</div>
         <div class="card-sub">Switch scenes and control sources from chat</div>
         <div class="card-url">websocket, scenes, sources, commands</div>
       </div>
