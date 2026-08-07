@@ -826,18 +826,6 @@ watch(() => session.value?.channel, () => load())
               >add</button>
             </div>
           </div>
-          <div class="cmd-usecase">
-            <span>+{{ builderCmd }}</span>
-            <div v-if="builderMode === 'argument' || builderAction === 'volume'">
-              <template v-if="builderAction === 'volume'">
-                  <span v-if="builderVolMode === 'both'" class="cmd-usecase-arg"> &lt;source&gt; &lt;vol&gt;</span>
-                  <span v-else class="cmd-usecase-arg"> &lt;volume&gt;</span>
-              </template>
-
-              <span v-else class="cmd-usecase-arg"> &lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
-             </div>
-          </div>
-
           <datalist id="obc-src-names">
             <option v-for="n in knownSources" :key="n" :value="n" />
           </datalist>
@@ -879,6 +867,20 @@ watch(() => session.value?.channel, () => load())
               </tbody>
             </table>
           </div>
+
+           <div class="cmd-usecase">
+            <span>+{{ builderCmd }}</span>
+            <div v-if="builderMode === 'argument' || builderAction === 'volume'">
+              <template v-if="builderAction === 'volume'">
+                  <span v-if="builderVolMode === 'both'" class="cmd-usecase-arg"> &lt;source&gt; &lt;vol&gt;</span>
+                  <span v-else class="cmd-usecase-arg"> &lt;volume&gt;</span>
+              </template>
+
+              <span v-else class="cmd-usecase-arg"> &lt;{{ builderAction === 'scene' ? 'scene' : 'source' }}&gt;</span>
+             </div>
+          </div>
+
+          
         </div>
 
       </div>
