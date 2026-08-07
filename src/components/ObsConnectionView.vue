@@ -230,6 +230,8 @@ const videoMixProjectorTitle = computed(() => agentStatus.value?.video_mix_proje
 const agentConnected = computed(() => agentStatus.value?.connected ?? false)
 const obsConnected   = computed(() => agentStatus.value?.obs_connected ?? false)
 const currentScene   = computed(() => agentStatus.value?.current_scene ?? '')
+const liveScene      = computed(() => scenes.value.find(s => s.sceneName === currentScene.value) ?? null)
+const nonLiveScenes  = computed(() => scenes.value.filter(s => s.sceneName !== currentScene.value))
 const connStatusLabel = computed(() => {
   if (!agentStatus.value?.paired) return 'not set up'
   if (!agentConnected.value) return 'agent offline'
@@ -712,19 +714,34 @@ watch(() => session.value?.channel, () => load())
             <button class="obc-refresh-btn" @click="refreshScenes" title="Refresh scene list">↻</button>
           </div>
           <div class="obc-scenes">
-            <div
-              v-for="s in scenes"
-              :key="s.sceneName"
-              class="obc-scene-card"
-              :class="{ active: s.sceneName === currentScene, picked: s.sceneName === selectedScene }"
-              @click="switchScene(s.sceneName); loadSources(s.sceneName)"
-            >
-              <div class="obc-scene-thumb">
-                <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
-                <div v-else class="obc-scene-thumb-empty">{{ agentStatus?.screenshots ? '…' : 'previews off' }}</div>
+            <div class="obc-scenes-live-row" v-if="liveScene">
+              <div
+                class="obc-scene-card obc-scene-card-live active"
+                :class="{ picked: liveScene.sceneName === selectedScene }"
+                @click="switchScene(liveScene.sceneName); loadSources(liveScene.sceneName)"
+              >
+                <div class="obc-scene-thumb">
+                  <img v-if="sceneShots[liveScene.sceneName]" :src="sceneShots[liveScene.sceneName]" :alt="liveScene.sceneName" />
+                  <div v-else class="obc-scene-thumb-empty">{{ agentStatus?.screenshots ? '…' : 'previews off' }}</div>
+                </div>
+                <div class="obc-scene-name">{{ liveScene.sceneName }}</div>
+                <div class="obc-scene-live">live</div>
               </div>
-              <div class="obc-scene-name">{{ s.sceneName }}</div>
-              <div v-if="s.sceneName === currentScene" class="obc-scene-live">live</div>
+            </div>
+            <div class="obc-scenes-others">
+              <div
+                v-for="s in nonLiveScenes"
+                :key="s.sceneName"
+                class="obc-scene-card"
+                :class="{ picked: s.sceneName === selectedScene }"
+                @click="switchScene(s.sceneName); loadSources(s.sceneName)"
+              >
+                <div class="obc-scene-thumb">
+                  <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
+                  <div v-else class="obc-scene-thumb-empty">{{ agentStatus?.screenshots ? '…' : 'previews off' }}</div>
+                </div>
+                <div class="obc-scene-name">{{ s.sceneName }}</div>
+              </div>
             </div>
             <div v-if="!scenes.length" class="ep-empty">
               <button class="ep-btn-cancel" @click="refreshScenes">load scenes</button>
@@ -1168,13 +1185,16 @@ color: rgb(from #e5c07b r g b / 80%);
 }
 .obc-refresh-btn:hover { color: #9d6cff; }
 
-/* Scenes - bigger cards, centered label, no max-width clamp on the row */
-.obc-scenes { display: flex; flex-wrap: wrap; gap: 10px; }
+/* Scenes - live scene big & centered above, the rest small & centered below */
+.obc-scenes { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.obc-scenes-live-row { display: flex; justify-content: center; width: 100%; }
+.obc-scenes-others   { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; width: 100%; }
 .obc-scene-card {
-  width: 220px; padding: 0 0 8px; border: 1px solid #2a2a30; background: #111217;
+  width: 200px; padding: 0 0 8px; border: 1px solid #2a2a30; background: #111217;
   cursor: pointer; font-size: 12px; color: #888; position: relative;
   transition: border-color .15s, color .15s; overflow: hidden;
 }
+.obc-scene-card-live { width: 500px; max-width: 100%; }
 .obc-scene-card:hover { border-color: #3a3a44; color: #aaa; }
 .obc-scene-card.active { border-color: #6f2bff; color: #c4a0ff; }
 .obc-scene-card.picked:not(.active) { border-color: #2a2a42; }
