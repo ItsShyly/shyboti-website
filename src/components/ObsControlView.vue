@@ -601,9 +601,15 @@ watch(() => session.value?.channel, () => load())
               </div>
               <div v-if="s.sceneName === currentScene" class="obs-live-badge">
                 <span class="obs-live-dot"></span>live
-                <span v-if="agentStatus?.bitrate_kbps != null" class="obs-live-stat" :class="{ 'obs-live-congested': agentStatus.congested }">{{ agentStatus.bitrate_kbps }}<span class="obs-live-unit">kbps</span></span>
-                <span v-if="lastShotKb[s.sceneName]" class="obs-live-stat obs-live-kb">{{ lastShotKb[s.sceneName] }}<span class="obs-live-unit">KB</span></span>
-                <span v-if="lastShotCpuMs[s.sceneName] != null" class="obs-live-stat obs-live-ms">{{ lastShotCpuMs[s.sceneName] }}<span class="obs-live-unit">ms</span></span>
+                <span class="obs-live-stat" :class="{ 'obs-live-congested': agentStatus?.congested }">
+                  {{ agentStatus?.bitrate_kbps != null ? agentStatus.bitrate_kbps : '--' }}<span class="obs-live-unit"> kbps</span>
+                </span>
+                <span v-if="settings.screenshots" class="obs-live-stat obs-live-kb">
+                  {{ lastShotKb[s.sceneName] != null ? lastShotKb[s.sceneName] : '--' }}<span class="obs-live-unit"> KB</span>
+                </span>
+                <span v-if="settings.screenshots" class="obs-live-stat obs-live-ms">
+                  {{ lastShotCpuMs[s.sceneName] != null ? lastShotCpuMs[s.sceneName] : '--' }}<span class="obs-live-unit"> ms</span>
+                </span>
               </div>
             </div>
             <div class="obs-scene-label">{{ s.sceneName }}</div>
