@@ -26,7 +26,7 @@ const router = createRouter({
     { path: '/more',        redirect: '/uploads' },
     { path: '/images',      component: () => import('../components/ImagesView.vue') },
     { path: '/obs-widgets', component: () => import('../components/ObsView.vue') },
-    { path: '/obs-control', component: () => import('../components/ObsConnectionView.vue') },
+    { path: '/obs-control', component: () => import('../components/ObsControlView.vue') },
     { path: '/notes',       component: () => import('../components/NotesView.vue') },
     { path: '/moderation',  component: () => import('../components/ModerationView.vue') },
     { path: '/automations', component: AutomationsView },
