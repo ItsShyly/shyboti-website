@@ -1096,7 +1096,7 @@ function onScroll() {
   })
 }
 
-// --- Custom scrollbar ---
+// vvv Custom scrollbar vvv
 function updateCustomScrollbar() {
   const body = getBody()
   const bar  = customScrollbarRef.value
@@ -1159,7 +1159,7 @@ function onThumbDragMove(ev: PointerEvent) {
 function onThumbDragEnd() {
   window.removeEventListener('pointermove', onThumbDragMove)
 }
-// --- /Custom scrollbar ---
+// vvv /Custom scrollbar vvv
 
 function attachScrollListener() {
   if (scrollListenerAttached) return

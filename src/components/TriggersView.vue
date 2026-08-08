@@ -41,7 +41,7 @@ const success  = ref('')
 
 const editOpen    = ref(false)
 const isNew       = ref(false)
-const editOrigName = ref('')  // name before any in-progress rename, used to know which row to PUT/DELETE
+const editOrigName = ref('')  // <<< name before rename, so we know which row to delete
 const overlay     = useOverlayClose()
 const editorRef   = ref<HTMLDivElement | null>(null)
 const editTrigger = ref<Partial<Trigger> & { name: string }>({
@@ -136,8 +136,7 @@ async function saveTrigger() {
       body: JSON.stringify(editTrigger.value),
     })
     if (!res.ok) throw new Error(await res.text())
-    // >>> Renamed: the PUT above created/updated the row under the NEW name (the URL
-    // >>> is upsert-by-name-in-path), so the old-named row is now a stale duplicate.
+    // >>> renamed, old-named row is now a stale duplicate, delete it
     if (!isNew.value && editOrigName.value && editOrigName.value !== name) {
       await fetch(`${API}/triggers/${session.value.channel}/${editOrigName.value}`, {
         method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }

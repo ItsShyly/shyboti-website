@@ -39,7 +39,7 @@ const success     = ref('')
 // >>> Edit panel <<<
 const editOpen = ref(false)
 const isNew    = ref(false)
-const editOrigName = ref('')  // name before any in-progress rename, used to know which row to PUT/DELETE
+const editOrigName = ref('')  // <<< name before rename, so we know which row to delete
 const overlay  = useOverlayClose()
 const editCountdown = ref<Partial<Countdown> & { name: string }>({
   name: '', duration_sec: 60, msg_start: '', msg_tick: '',
@@ -50,8 +50,7 @@ const editCountdown = ref<Partial<Countdown> & { name: string }>({
 const startEditorRef = ref<HTMLDivElement | null>(null)
 const tickEditorRef  = ref<HTMLDivElement | null>(null)
 const endEditorRef   = ref<HTMLDivElement | null>(null)
-// >>> Reference panel inserts into whichever of the 3 message editors was last
-// >>> focused - defaults to "start" if none has been focused yet this session.
+// >>> ref panel inserts into whichever message editor was last focused
 const activeField = ref<'msg_start' | 'msg_tick' | 'msg_end'>('msg_start')
 const FIELD_REFS = { msg_start: startEditorRef, msg_tick: tickEditorRef, msg_end: endEditorRef }
 
@@ -79,11 +78,7 @@ let pollInterval: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   tickInterval = setInterval(() => {
     tick.value++
-    // The backend auto-transitions a running countdown to 'idle' the instant it
-    // hits 0 remaining - no manual "stop" click needed server-side. Mirror that
-    // locally on the same 1s cadence so the UI reflects it immediately instead of
-    // waiting for the next full reload (which previously only happened on mount
-    // or channel switch, making it look like you still had to click stop).
+    // >>> backend auto-idles a finished countdown, mirror that locally so ui updates without a reload
     for (const cd of countdowns.value) {
       if (cd.status !== 'running' || !cd.started_at) continue
       const elapsed = Math.floor((Date.now() - cd.started_at) / 1000)
@@ -93,8 +88,7 @@ onMounted(() => {
       }
     }
   }, 1000)
-  // Light periodic refresh so externally-triggered changes (e.g. a custom command
-  // calling $countdown.name.start/stop) show up here too, not just the local timer.
+  // >>> poll too, so external triggers like $countdown.x.start show up here
   pollInterval = setInterval(load, 5000)
   load()
 })
@@ -160,8 +154,7 @@ function onEditorInput(el: HTMLDivElement | null, field: 'msg_start' | 'msg_tick
   applyScriptHighlight(el)
 }
 
-// >>> Reference panel click-to-insert - inserts into whichever message editor
-// >>> (start/tick/end) was last focused.
+// >>> inserts into whichever message editor was last focused
 function insertRefToken(token: string) {
   const el = FIELD_REFS[activeField.value].value
   if (!el) return
@@ -197,9 +190,7 @@ async function saveCountdown() {
       const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
       throw new Error(errData.error ?? `Save failed (${res.status})`)
     }
-    // >>> Renamed: the PUT above created/updated the row under the NEW name (the URL
-    // >>> is upsert-by-name-in-path), so the old-named row is now a stale duplicate -
-    // >>> remove it. Same pattern used for renaming custom commands.
+    // >>> renamed, old-named row is now a stale duplicate, delete it
     if (!isNew.value && editOrigName.value && editOrigName.value !== name) {
       await fetch(`${API}/countdowns/${session.value.channel}/${encodeURIComponent(editOrigName.value)}`, {
         method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }

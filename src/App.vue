@@ -43,7 +43,7 @@ function nav(to: NavItem) {
   router.push('/' + to)
 }
 
-// === Universal Search ===
+// vvv universal search vvv
 
 interface SearchResult {
   label: string
@@ -59,11 +59,9 @@ const searchInputDesktop = ref<HTMLInputElement | null>(null)
 const searchInputMobile  = ref<HTMLInputElement | null>(null)
 const searchResults      = ref<SearchResult[]>([])
 
-// === Logs in-page search scope ===
-// While on /logs, the nav search bar defaults to searching the messages
-// already loaded on that page (Discord-style scope chip) instead of the
-// universal site search. The chip's ✕ switches back to universal search
-// for the rest of the visit to that page.
+// vvv logs in-page search scope vvv
+// >>> on /logs, search bar scopes to loaded messages instead of the global index
+// >>> the chip's x switches back to universal search for the rest of the visit
 const {
   query: logsQuery, results: logsSearchResults, activeIndex: logsActiveIndex,
   matchCount: logsMatchCount, matchIndex: logsMatchIndex,
@@ -92,7 +90,7 @@ watch(onLogsPage, (isLogs, wasLogs) => {
 function focusSearch() {
   const desktop = searchInputDesktop.value
   const mobile  = searchInputMobile.value
-  // Desktop is hidden on mobile via CSS - check offsetParent to detect visibility
+  // >>> desktop hidden on mobile via css, offsetParent tells us which is visible
   if (desktop && desktop.offsetParent !== null) {
     desktop.focus(); desktop.select()
   } else if (mobile) {
@@ -134,7 +132,7 @@ function buildStaticIndex(): SearchResult[] {
   return items
 }
 
-// >>> nextActiveTab is read by CommandsView to pre-select a tab after navigation
+// >>> nextActiveTab tells CommandsView which tab to open after nav
 const nextActiveTab = ref('')
 
 // >>> Dynamic search: fetch commands + timers from API
@@ -231,8 +229,7 @@ async function runSearch(q: string) {
 
 function onSearchInput() {
   if (showLogsChip.value) {
-    // Scoped to logs: drive LogsView's in-page search instead of the
-    // universal index - no fetch, just filters/highlights loaded messages.
+    // >>> scoped to logs, drives in-page search instead of the global index
     logsQuery.value = searchQuery.value
     searchOpen.value = true
     searchResults.value = []
@@ -301,7 +298,7 @@ function onSearchBlur()  { setTimeout(() => { searchOpen.value = false }, 150) }
 // >>> Ctrl+F to focus search bar
 function onGlobalKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-    // Don't intercept if already typing in an input/textarea/contenteditable
+    // >>> don't steal focus if already typing somewhere
     const tag = (document.activeElement as HTMLElement)?.tagName
     const isEditable = (document.activeElement as HTMLElement)?.isContentEditable
     if (tag === 'TEXTAREA' || tag === 'INPUT' || isEditable) return
@@ -325,7 +322,7 @@ const groupedResults = computed(() => {
 
 const flatResults = computed(() => searchResults.value)
 
-// === Rest of App ===
+// vvv rest of app vvv
 
 const showAddBanner = ref(false)
 const reAuthUrl    = ref<string | null>(null)
@@ -366,18 +363,18 @@ function addBot() { window.location.href = `${API}/auth/add` }
 
 const KEEP_ALIVE_ROUTES = ['DashboardView', 'CommandsView', 'AutomationsView']
 
-// >>> Expose nextActiveTab and searchOpenEdit for CommandsView via provide
+// >>> provide nextActiveTab + searchOpenEdit for CommandsView
 provide('nextActiveTab', nextActiveTab)
 
-// >>> mainPanelRef - provided to SnippetOverlay so it knows which element to capture
+// >>> mainPanelRef, so SnippetOverlay knows what to capture
 const mainPanelRef = ref<HTMLElement | null>(null)
 provide('mainPanelRef', mainPanelRef)
 
-// >>> searchOpenEdit: when set to { name, builtIn }, CommandsView opens that edit panel directly
+// >>> searchOpenEdit opens that command's edit panel in CommandsView
 const searchOpenEdit = ref<{ name: string; builtIn: boolean } | null>(null)
 provide('searchOpenEdit', searchOpenEdit)
 
-// >>> searchOpenTimer / searchOpenTrigger: set to a name string to open that item's edit panel
+// >>> same idea for timers/triggers
 const searchOpenTimer   = ref<string | null>(null)
 const searchOpenTrigger = ref<string | null>(null)
 provide('searchOpenTimer',   searchOpenTimer)
@@ -651,7 +648,7 @@ body { background: #0e0e12; color: #fff; font-family: 'JetBrains Mono', monospac
 
 body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; user-select: none !important; }
 
-/*  Topbar  */
+/* topbar */
 .topbar { height: 52px; flex-shrink: 0; background: #0e0e12; border-bottom: 1px solid #1e1e24; display: flex; align-items: center; padding: 0 16px; gap: 10px; position: relative; }
 .topbar-brand { display: flex; align-items: center; gap: 8px; flex-shrink: 0; min-width: 0; }
 .brand-emote  { width: 36px; height: 36px; flex-shrink: 0; image-rendering: pixelated; }
@@ -660,7 +657,7 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .logged-in-as { font-size: 12px; color: #9d6cff; font-weight: 600; white-space: nowrap; }
 .logged-in-float { position: fixed; bottom: 36px; right: 10px; z-index: 60; pointer-events: none; font-size: 11px; color: #9d6cff; font-weight: 600; white-space: nowrap; background: #160d2e; border: 1px solid #9d6cff44; padding: 4px 10px; max-width: 200px; overflow: hidden; text-overflow: ellipsis; }
 
-/*  Universal Search  */
+/* search bar */
 .search-wrap {
   position: absolute; left: 50%; transform: translateX(-50%);
   width: min(420px, 40vw);
@@ -680,7 +677,7 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .search-clear { background: transparent; border: none; color: #555; font-size: 11px; cursor: pointer; padding: 0 8px; height: 100%; flex-shrink: 0; }
 .search-clear:hover { color: #e0e0e0; }
 
-/* Logs in-page search scope chip*/
+/* logs search chip */
 .search-wrap.has-chip .search-input { padding-left: 8px; }
 .search-scope-chip {
   display: flex; align-items: center; gap: 5px; height: 21px; padding: 0 6px 0 9px;
@@ -726,7 +723,7 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .result-label { font-weight: 600; flex-shrink: 0; }
 .result-sub   { font-size: 10px; color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 
-/*  Channel switcher  */
+/* channel switcher */
 .channel-switcher { position: relative; }
 .channel-btn { height: 30px; padding: 0 12px; border: 1px solid #333; background: #1e1e26; color: #9d6cff; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
 .channel-btn:hover { background: #252530; border-color: #6f2bff55; }
@@ -750,14 +747,14 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 @keyframes shake { 0%{transform:translateX(0)} 15%{transform:translateX(-5px)} 30%{transform:translateX(5px)} 45%{transform:translateX(-4px)} 60%{transform:translateX(4px)} 75%{transform:translateX(-2px)} 90%{transform:translateX(2px)} 100%{transform:translateX(0)} }
 .shake { animation: shake 0.6s ease; }
 
-/*  Hamburger  */
+/* hamburger */
 .hamburger { display: flex; flex-direction: column; justify-content: center; gap: 5px; width: 36px; height: 36px; padding: 0 6px; background: transparent; border: 1px solid #2a2a30; cursor: pointer; flex-shrink: 0; }
 .hamburger span { display: block; height: 2px; background: #888; transition: transform .2s, opacity .2s, background .2s; }
 .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); background: #9d6cff; }
 .hamburger.open span:nth-child(2) { opacity: 0; }
 .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); background: #9d6cff; }
 
-/*  Banner  */
+/* banner */
 .add-banner { background: #1a1025; border-bottom: 1px solid #6f2bff44; padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: #ccc; flex-shrink: 0; }
 .banner-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .banner-btn.add { height: 30px; padding: 0 12px; background: #6f2bff; border: none; color: #fff; font-family: inherit; font-size: 11px; cursor: pointer; }
@@ -765,11 +762,11 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .banner-dismiss { background: transparent; border: none; color: #666; font-size: 14px; cursor: pointer; padding: 0 4px; }
 .banner-dismiss:hover { color: #aaa; }
 
-/*  Body / Layout  */
+/* body layout */
 .body { display: flex; flex: 1; min-height: 0; overflow: hidden; position: relative; }
 .sidebar-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 99; }
 
-/*  Sidebar  */
+/* sidebar */
 .sidebar { width: 200px; flex-shrink: 0; background: #0e0e12; display: flex; flex-direction: column; padding: 8px 0; border-right: 1px solid #1e1e24; overflow-y: auto; scrollbar-width: none; transition: transform .25s ease; }
 .sidebar::-webkit-scrollbar { display: none; }
 .sidebar-spacer { flex: 1; }
@@ -814,7 +811,7 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .sidebar-logout { background: transparent; border: 1px solid #333; color: #888; font-family: inherit; font-size: 11px; padding: 4px 10px; cursor: pointer; }
 .sidebar-logout:hover { color: #fff; border-color: #555; }
 
-/*  Main panel  */
+/* main panel */
 .main-panel { flex: 1; background: #141418; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; min-height: 0; min-width: 0; scrollbar-width: none; }
 .main-panel::-webkit-scrollbar { display: none; }
 
@@ -823,7 +820,7 @@ body.snippet-dragging, body.snippet-dragging * { cursor: crosshair !important; u
 .footer-link { color: #555; text-decoration: none; transition: color .15s; }
 .footer-link:hover { color: #9d6cff; }
 
-/*  Responsive helpers  */
+/* responsive */
 .hide-mobile { }
 .show-mobile { display: none; }
 

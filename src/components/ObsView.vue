@@ -121,9 +121,7 @@ async function save() {
       body: JSON.stringify({ content: form.value.content, style: form.value.style, refresh_ms: form.value.refresh_ms })
     })
     if (!res.ok) { const d = await res.json() as any; throw new Error(d.error ?? 'Save failed') }
-    // >>> Renamed: the PUT above created/updated the row under the NEW name (the URL
-    // >>> is upsert-by-name-in-path), so the old-named row is now a stale duplicate -
-    // >>> same rename pattern used for triggers/timers/countdowns/custom commands.
+
     if (!isNew.value && editOrigName.value && editOrigName.value !== name) {
       await fetch(`${API}/obs-widgets/${session.value.channel}/${encodeURIComponent(editOrigName.value)}`, {
         method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }

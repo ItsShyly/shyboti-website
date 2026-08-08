@@ -63,7 +63,7 @@ const editTimer = ref<Partial<Timer> & { name: string }>({
   name: '', response: '', interval_sec: 300, min_messages: 0,
   enabled_when: 'always', required_game: '', condition: '', is_active: 1,
 })
-const editOrigName = ref('')  // name before any in-progress rename, used to know which row to PUT/DELETE
+const editOrigName = ref('')  // <<< name before rename, so we know which row to delete
 const editorRef = ref<HTMLDivElement | null>(null)
 
 function showSuccess(msg: string) { success.value = msg; setTimeout(() => success.value = '', 3000) }
@@ -88,9 +88,7 @@ async function load() {
   loading.value = false
 }
 
-// >>> New timer name entry - mirrors CommandsView's inline create row: type a
-// name, PUT an empty timer under it, then open the edit panel exactly like any
-// existing timer (no separate "new" name field inside the panel itself).
+// >>> new timer flow mirrors CommandsView's inline create row
 const creatingNew   = ref(false)
 const newTimerName  = ref('')
 const newTimerError = ref('')
@@ -159,8 +157,7 @@ async function saveTimer() {
       body: JSON.stringify(editTimer.value),
     })
     if (!res.ok) throw new Error(await res.text())
-    // >>> Renamed: the PUT above created/updated the row under the NEW name (the URL
-    // >>> is upsert-by-name-in-path), so the old-named row is now a stale duplicate.
+    // >>> renamed, old-named row is now a stale duplicate, delete it
     if (editOrigName.value && editOrigName.value !== name) {
       await fetch(`${API}/timers/${session.value.channel}/${editOrigName.value}`, {
         method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }

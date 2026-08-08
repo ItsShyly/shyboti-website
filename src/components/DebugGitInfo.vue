@@ -26,9 +26,7 @@ onMounted(async () => {
   loading.value = false
 })
 
-// --- minimize + drag ---
-// Panel and the floating restore button each keep their own free-floating
-// position once dragged (null = still sitting at its default fixed corner).
+// >>> minimize + drag - each remembers its own free position once dragged (null = default corner)
 const minimized = ref(false)
 const panelPos = ref<{ x: number; y: number } | null>(null)
 const btnPos    = ref<{ x: number; y: number } | null>(null)
@@ -38,8 +36,7 @@ let dragOffset = { x: 0, y: 0 }
 let dragMoved = false
 
 function startDrag(e: PointerEvent, target: 'panel' | 'btn') {
-  // >>> Only left-click/primary touch starts a drag - and skip elements
-  // >>> explicitly marked as their own controls (the minimize button).
+  // >>> left-click/primary touch only, and skip the minimize button (handles itself)
   if (e.button !== undefined && e.button !== 0) return
   const el = (e.currentTarget as HTMLElement)
   const rect = el.getBoundingClientRect()
@@ -62,8 +59,7 @@ function onDrag(e: PointerEvent) {
 }
 
 function stopDrag() {
-  // >>> A drag with no real movement is just a click - let the floating
-  // >>> button's own @click handle restoring the panel in that case.
+  // >>> no movement = just a click, let the button's own @click handle it
   dragTarget = null
   window.removeEventListener('pointermove', onDrag)
   window.removeEventListener('pointerup', stopDrag)

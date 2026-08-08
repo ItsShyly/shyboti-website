@@ -120,7 +120,7 @@ async function load() {
   updatePreview()
 }
 
-// --- Validation ---
+// vvv Validation vvv
 interface ValidationError {
   blockIndex: number
   type: 'cond_missing' | 'cond_invalid' | 'body_missing'
@@ -157,10 +157,7 @@ function validateScript(src: string): ValidationError[] {
       if (bodyEnd !== -1) {
         const body = src.slice(braceStart + 1, bodyEnd).trim()
         if (condSrc === '') errors.push({ blockIndex: idx, type: 'cond_missing', message: 'Expression missing' })
-        // >>> Flag conditions that still look like the unedited reference-panel
-        // >>> placeholder ($if(condition){ } -> literal word "condition"), while
-        // >>> still allowing real expressions that happen to have no $ in them,
-        // >>> e.g. bare literal comparisons like "1 = 1" or "true".
+        // >>> catches unedited "condition" placeholder text, still allows bare exprs like "1 = 1"
         else if (!/\$/.test(condSrc) && !/[=<>!]/.test(condSrc) && !/^(true|false|\d+)$/i.test(condSrc) && !/\b(and|or|not)\b/i.test(condSrc))
           errors.push({ blockIndex: idx, type: 'cond_invalid', message: `${condSrc} is not a valid expression` })
         if (body === '') errors.push({ blockIndex: idx, type: 'body_missing', message: 'Body missing' })
@@ -169,7 +166,7 @@ function validateScript(src: string): ValidationError[] {
         continue
       }
     }
-    // Fallback for legacy/unclosed
+    // >>> fallback for legacy/unclosed
     pos = condEnd + 1
     idx++
   }
@@ -182,13 +179,13 @@ const validationMessage = computed(() => {
   return errs.map(e => e.message).join(' · ')
 })
 
-// --- Line numbers ---
+// vvv Line numbers vvv
 const lineCount = ref(1)
 function updateLineNumbers(text: string) {
   lineCount.value = (text.match(/\n/g) || []).length + 1
 }
 
-// --- ARG VARIANT SYSTEM ---
+// vvv arg variant system vvv
 function scanArgNums(src: string): { positional: Set<number>; hasGeneric: boolean } {
   const positional = new Set<number>()
   for (const m of src.matchAll(/\$(?:args\.)?(\d+)\b/g)) {
@@ -199,7 +196,7 @@ function scanArgNums(src: string): { positional: Set<number>; hasGeneric: boolea
   return { positional, hasGeneric }
 }
 
-// Parse a single condition clause like "$1 = test" or "$channel.name = $2"
+// >>> parse a clause like "$1 = test" or "$channel.name = $2"
 function parseCondClause(clause: string): { argNum: number; value: string } | null {
   clause = clause.trim()
   let m = clause.match(/^\$(?:args\.)?(\d+)\s*=\s*(.+)$/)
@@ -217,15 +214,15 @@ function parseCondClause(clause: string): { argNum: number; value: string } | nu
   return null
 }
 
-// A parsed variant: one $if block (possibly with && compound conditions)
+// >>> one $if block, maybe with && compound conditions
 interface VariantEntry {
-  constraints: Map<number, string>  // argNum -> value (e.g. 1->"test", 2->"$channel.name")
-  condStr: string                   // raw condition string inside $if(...) for reconstruction
-  maxArg: number                    // highest argument number mentioned in condition or block body
-  bodyHasArgs: Set<number>          // $N references found inside the $if body
+  constraints: Map<number, string>  // <<< argNum -> value, e.g. 1->"test", 2->"$channel.name"
+  condStr: string                   // <<< raw condition string for reconstruction
+  maxArg: number                    // <<< highest arg number in condition or body
+  bodyHasArgs: Set<number>          // <<< $N refs found inside the $if body
 }
 
-// Extract all $if(...) ... $end blocks as VariantEntry[], plus set of bare $N references
+// >>> extract all $if blocks as VariantEntry[], plus bare $N refs
 function extractVariants(src: string): { variants: VariantEntry[]; bareArgs: Set<number> } {
   const variants: VariantEntry[] = []
   const usedInIf = new Set<number>()
@@ -441,13 +438,13 @@ async function deleteCmd() {
   deleting.value = false
 }
 
-// ========== NORMAL MODE EDITOR ==========
+// vvv normal mode editor vvv
 const normalEditorRef = ref<HTMLDivElement | null>(null)
 const previewOutput  = ref('')
 const mockCtx        = ref<MockContext>({ ...DEFAULT_MOCK })
 let   _normalHighlighting = false
 
-// Ghost autocomplete
+// >>> ghost autocomplete
 const ghostSuggestion = ref('')
 const ghostFull       = ref('')
 const ghostMatches    = ref<string[]>([])
@@ -559,13 +556,13 @@ function syncLineNumbers(el: HTMLElement) {
   lnEl.scrollTop = el.scrollTop
 }
 
-// Keep line numbers scroll in sync when editor scrolls
+// >>> keep line numbers scroll synced with editor
 function onEditorScroll(e: Event) {
   const lnEl = lineNumbersRef.value; if (!lnEl) return
   lnEl.scrollTop = (e.target as HTMLElement).scrollTop
 }
 
-// Clear ghost when cursor moves without typing (click, arrow keys, etc.)
+// >>> clear ghost if cursor moves without typing
 function onEditorClick() {
   const el = normalEditorRef.value; if (!el) return
   const offset = getTextOffset(el)
@@ -581,7 +578,7 @@ function onEditorClick() {
 }
 
 function onEditorKeyupClearGhost(e: KeyboardEvent) {
-  // On any non-autocomplete navigation key, re-check if ghost is still valid
+  // >>> recheck ghost validity on nav keys
   const navKeys = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End']
   if (!navKeys.includes(e.key)) return
   const el = normalEditorRef.value; if (!el) return
@@ -655,7 +652,7 @@ function acceptCurrentGhost() {
   let insert = full
   let cursorOffset = before.length - partial.length + full.length
 
-  // Special handling for $if -> $if(  ){ }
+  // >>> special case for $if, adds the braces too
   if (full.startsWith('$if(')) {
     insert = '$if(  ){ }'
     cursorOffset = before.length - partial.length + 5 // cursor between parentheses
@@ -675,8 +672,7 @@ function acceptCurrentGhost() {
   ghostSuggestion.value = ''; ghostMatches.value = []; ghostMatchIdx.value = 0; _lastGhostPartial = ''
 }
 
-// >>> Reference panel click-to-insert - inserts at the response editor's cursor,
-// >>> using the same caret-preserving helpers as the ghost autocomplete above.
+// >>> insert at cursor, reuses the caret-preserving helpers from ghost autocomplete
 function insertRefToken(token: string) {
   const el = normalEditorRef.value; if (!el) return
   removeGhostSpan()
@@ -782,7 +778,7 @@ function removeArgVariant(i: number) {
         <div v-if="loading" class="ep-panel-loading">{{ t('edit.saving').replace('…','…') || 'Loading…' }}</div>
         <div v-else class="ep-panel-body">
 
-          <!--  Response / Script editor  -->
+          <!-- response / script editor -->
           <div class="ep-field-group">
             <label class="ep-field-label">
               {{ t('edit.response') }}
@@ -831,10 +827,7 @@ function removeArgVariant(i: number) {
           <!-- Variable reference -->
           <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
 
-          <!-- Description + argument variants, combined: this is everything that
-               documents the command for chat/the commands list, nothing here
-               touches the script itself. Closed by default - not needed to
-               understand or edit the response itself. -->
+          <!-- description + arg variants, just docs, doesn't touch the script itself -->
           <details class="ep-field-group desc-details">
             <summary class="ep-field-label desc-summary">
               {{ t('edit.description') }} <span class="ep-field-hint">&amp; usage</span>
@@ -850,10 +843,7 @@ function removeArgVariant(i: number) {
                 maxlength="120"
               />
 
-              <!-- Arg variants (custom commands only): purely descriptive - the
-                   usage pattern is auto-detected and read-only, only the
-                   explanation text is yours to edit. Add/remove still manage
-                   the underlying $if/$N blocks in the response. -->
+              <!-- arg variants, usage is auto-detected, only the description text is editable -->
               <template v-if="!isBuiltIn">
                 <div class="arg-descs-header">
                   <span class="arg-descs-title">Argument usage <span class="ep-field-hint">auto-detected - describe what each does</span></span>
@@ -879,9 +869,7 @@ function removeArgVariant(i: number) {
             </div>
           </details>
 
-          <!-- Preview + mock values, combined so they're understood as one unit:
-               "this is what it looks like, and here's what I'm faking to get that".
-               Closed by default - opt-in once you want to check the output. -->
+          <!-- preview + mock values, closed by default -->
           <details class="ep-field-group preview-details">
             <summary class="ep-field-label preview-summary">
               {{ t('edit.preview') }} <span class="preview-note">{{ t('edit.preview_note') }}</span>
@@ -1000,7 +988,7 @@ function removeArgVariant(i: number) {
 }
 .arg-remove-btn:hover { background: #f1494911; }
 
-/*  Built-in prefix lock  */
+/* built-in prefix lock */
 .builtin-prefix-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
 .builtin-prefix-token {
   font-family: 'Consolas','Fira Mono',monospace; font-size: 12px;
@@ -1012,7 +1000,7 @@ function removeArgVariant(i: number) {
 .builtin-prefix-token::after { content: '🔒'; font-size: 9px; margin-left: 5px; opacity: .5; }
 .builtin-prefix-hint { font-size: 10px; color: #383838; }
 
-/*  Normal Mode editor  */
+/* normal mode editor */
 /* editor-wrapper: line numbers + editor side by side, sharing one border */
 .editor-wrapper {
   display: flex;
@@ -1103,7 +1091,7 @@ function removeArgVariant(i: number) {
 .normal-hint { font-size: 10px; color: #383838; }
 .normal-hint code { font-family: 'Consolas','Fira Mono',monospace; color: #9d6cff; }
 
-/*  Preview + mock values (combined dropdown)  */
+/* preview + mock values dropdown */
 .preview-details { border: 1px solid #1e1e22; background: #0d0d10; padding: 0 !important; }
 .preview-summary {
   display: flex; padding: 8px 10px; margin: 0; cursor: pointer; user-select: none; list-style: none;
@@ -1118,7 +1106,7 @@ function removeArgVariant(i: number) {
   padding: 8px 12px; min-height: 32px; word-break: break-all;
 }
 
-/*  Mock context (now nested inside the preview dropdown)  */
+/* mock context, nested in preview dropdown */
 .mock-ctx-grid {
   display: grid; grid-template-columns: 60px 1fr; gap: 4px 8px;
   align-items: center;
@@ -1130,7 +1118,7 @@ function removeArgVariant(i: number) {
 .mock-check-label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #666; cursor: pointer; }
 .mock-check-label input { accent-color: #6f2bff; }
 
-/*  Section label  */
+/* section label */
 .ep-section-label {
   font-size: 9px; font-weight: 700; color: #444;
   text-transform: uppercase; letter-spacing: .08em;

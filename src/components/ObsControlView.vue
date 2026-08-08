@@ -1,14 +1,7 @@
 <script setup lang="ts">
-// ObsControl.vue
-// Agent-relay model: no host/port/password fields. The streamer:
-//   1. clicks "Generate token" (or it auto-generates on first open)
-//   2. downloads the ShyBoti Agent app (link on this page)
-//   3. pastes the token into the agent on their PC - done
-// From here on the agent keeps a persistent outbound ws connection to the
-// relay; this page just shows status and lets them manage scenes/bindings.
-// Routed page (/obs-control), not a modal - the settings sub-panel
-// (enabled/screenshots/arg-commands, broadcaster only) is the only remaining
-// Teleport overlay here.
+// >>> obs control page, agent-relay model, no port/password fields
+// >>> generate token, download agent, paste token, done
+// >>> routed page, settings panel is a teleport overlay
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { API } from '../api'
@@ -19,8 +12,7 @@ const { session, channelRole } = useAuth()
 const settingsOverlay = useOverlayClose()
 
 type AccessLevel = 'everyone' | 'mod' | 'broadcaster'
-// >>> arg_commands entries used to be plain strings - older saved rows may
-// >>> still be in that shape, normalized to the object form on load()
+// >>> old data may be plain string, handle both
 type ArgCommandRaw = string | { command: string; access?: AccessLevel }
 
 interface AgentStatus {
@@ -40,7 +32,7 @@ interface AgentStatus {
   congested: boolean
   streaming: boolean
   screenshots: boolean
-  // broadcaster-only fields - the backend omits these entirely for anyone else
+  // broadcaster-only - backend omits these for non-broadcasters
   enabled?: boolean
   screenshot_interval_sec?: number
 }
@@ -50,18 +42,15 @@ interface SourceInfo { sceneItemId: number; sourceName: string; sceneItemEnabled
 interface SceneBind  { command: string; scene: string; access?: AccessLevel }
 interface SourceBind { command: string; source: string; action: string; value?: number; access?: AccessLevel }
 interface ArgCommand { command: string; access: AccessLevel }
-// >>> Bitrate-triggered automation ("rule builder") - never chat-triggered
-// >>> (no command/access), the bitrate condition itself is the trigger.
-// >>> Evaluated entirely on the agent from its own local cached copy, so a
-// >>> dropped connection to us can't delay or block a rule from firing - see
-// >>> agent/src/rules.js.
+// >>> bitrate rules - trigger is bitrate, no chat command, runs agent-side
+// >>> see agent/src/rules.js
 interface ObsRule {
   id: string
   condition: 'below' | 'above'
   bitrate_kbps: number
-  action: string          // same vocabulary as BUILDER_ACTIONS, incl. 'scene'
-  target: string          // scene name, or source name
-  value?: number          // only used when action === 'volume'
+  action: string
+  target: string
+  value?: number          // only for action 'volume'
   enabled: boolean
 }
 
@@ -69,8 +58,7 @@ const ACCESS_CYCLE: AccessLevel[] = ['everyone', 'mod', 'broadcaster']
 function nextAccess(a: AccessLevel): AccessLevel { return ACCESS_CYCLE[(ACCESS_CYCLE.indexOf(a) + 1) % ACCESS_CYCLE.length]! }
 function accessLabel(a: AccessLevel): string { return a === 'broadcaster' ? 'bc only' : a === 'mod' ? 'mod only' : 'everyone' }
 
-// >>> Unified action list for the command builder
-
+// >>> unified action list for builder
 const BUILDER_ACTIONS = [
   { value: 'scene',      label: 'Switch scene',      usage: '+<cmd> <scene name>' },
   { value: 'show',       label: 'Show source',       usage: '+<cmd> <source name>' },
@@ -83,7 +71,7 @@ const BUILDER_ACTIONS = [
 ]
 const BUILDER_ACTION_LABEL: Record<string, string> = Object.fromEntries(BUILDER_ACTIONS.map(a => [a.value, a.label]))
 
-// --- state ---
+// vvv state vvv
 const loading        = ref(true)
 const agentStatus    = ref<AgentStatus | null>(null)
 
@@ -103,7 +91,7 @@ const argCommands    = ref<Record<string, ArgCommand>>({})
 const bindingsSaving = ref(false)
 const bindingsSaved  = ref(false)
 
-// >>> command builder vs rule builder tab
+// >>> command builder / rule builder tab
 const builderView = ref<'command' | 'rule'>('command')
 
 // >>> rule builder
@@ -130,9 +118,6 @@ const builderAccess  = ref<AccessLevel>('everyone')
 const builderCmd     = ref('')
 const builderTarget  = ref('')
 
-// A target is only required when the user is in 'specific' preset mode
-// (not chat-arg mode, and not volume's src+vol mode). In all other cases
-// the target comes from chat at runtime.
 const addDisabled = computed(() => {
   if (!builderCmd.value.trim()) return true
   const needsTarget =
@@ -173,7 +158,7 @@ async function loadExistingCmdNames() {
   } catch {}
 }
 
-// Set of names OBS currently knows about - used to flag unknown targets in the table
+// >>> set of known scene/source names for "unknown target" warnings
 const knownSceneNames  = computed(() => new Set(scenes.value.map(s => s.sceneName)))
 const knownSourceNames = computed(() => new Set(knownSources.value))
 
@@ -188,7 +173,7 @@ function isTargetMissing(c: UnifiedCommand): boolean {
   return false
 }
 
-// >>> settings panel---
+// >>> settings panel (broadcaster only)
 const showSettings         = ref(false)
 const settingsSaving       = ref(false)
 const settingsSaved        = ref(false)
@@ -197,7 +182,7 @@ const screenshotsLocal     = ref(true)
 const screenshotIntervalLocal = ref(5)
 
 function openSettings() {
-  if (!isBroadcaster.value) return // belt-and-suspenders - the gear button is v-if'd out for non-broadcasters already
+  if (!isBroadcaster.value) return
   enabledLocal.value             = agentStatus.value?.enabled ?? true
   screenshotsLocal.value         = agentStatus.value?.screenshots ?? true
   screenshotIntervalLocal.value  = agentStatus.value?.screenshot_interval_sec ?? 5
@@ -227,26 +212,15 @@ async function saveSettings() {
   settingsSaving.value = false
 }
 
-// --- scene screenshots (item: previews weren't rendered anywhere before) ---
-// Uses the existing GET /obs/:ch/screenshot?scene=X route + the channel's
-// `screenshots` toggle, which were already wired up server-side but nothing
-// in the frontend ever called them.
 const sceneShots = ref<Record<string, string>>({})
 let shotTimer: ReturnType<typeof setInterval> | null = null
 
-// >>> CPU time + payload size of the LIVE scene's last screenshot capture -
-// >>> both were already coming back from the API (localObs.js measures cpuMs
-// >>> via process.cpuUsage() around the OBS call, apiServer.ts computes kb
-// >>> from the base64 length) but nothing on this side ever read them.
 const liveShotStats = ref<{ cpuMs: number | null; kb: number | null }>({ cpuMs: null, kb: null })
 
-
-const LIVE_SHOT_WIDTH = 1000  // Crisp for 500px 2x high-DPI display
-const LIVE_SHOT_QUALITY = 80  // High quality
-
-const OTHER_SHOT_WIDTH = 480  // Scaled down to match thumbnail box size
-const OTHER_SHOT_QUALITY = 65 // Keeps text readable without heavy JPEG artifacts
-
+const LIVE_SHOT_WIDTH = 1000
+const LIVE_SHOT_QUALITY = 80
+const OTHER_SHOT_WIDTH = 480
+const OTHER_SHOT_QUALITY = 65
 
 async function refreshScreenshot(sceneName: string, isLive: boolean) {
   if (!session.value || !agentStatus.value?.screenshots) return
@@ -293,10 +267,7 @@ const canForcePreview = computed(() =>
 const videoMixProjectorOpen = computed(() => !!agentStatus.value?.video_mix_projector_open)
 const videoMixProjectorTitle = computed(() => agentStatus.value?.video_mix_projector_title ?? null)
 
-// >>> Bitrate badge next to the live scene - red once OBS's own congestion
-// >>> signal says the network can't keep up (see localObs.js's
-// >>> CONGESTION_BAD_THRESHOLD), not a guessed kbps cutoff, since "good"
-// >>> bitrate varies a lot by resolution/codec/target.
+// >>> bitrate badge goes red off OBS's own congestion flag
 const bitrateLabel = computed(() => {
   if (!agentStatus.value?.streaming) return null
   const kbps = agentStatus.value.bitrate_kbps
@@ -311,15 +282,7 @@ const currentScene   = computed(() => agentStatus.value?.current_scene ?? '')
 const liveScene      = computed(() => scenes.value.find(s => s.sceneName === currentScene.value) ?? null)
 const nonLiveScenes  = computed(() => scenes.value.filter(s => s.sceneName !== currentScene.value))
 
-// >>> selectedScene (which scene's sources/mixer are shown, and which card
-// >>> gets the "picked" border) always follows whatever OBS reports as the
-// >>> live scene - clicking a card calls switchScene() which changes OBS's
-// >>> actual program scene either way, so there was never a legitimate case
-// >>> where they should diverge. Without this watcher selectedScene only ever
-// >>> moved when the USER clicked something on the site, so a scene change
-// >>> from OBS itself (hotkey, chat command, a rule firing) left the sources
-// >>> panel and the "picked" border stuck on the old scene until a click
-// >>> "refreshed" it - this is what actually keeps them in sync.
+// >>> keep selectedScene glued to what's actually live
 watch(currentScene, (name) => {
   if (!name) return
   selectedScene.value = name
@@ -338,7 +301,7 @@ const connStatusClass = computed(() => {
   return 'status-ready'
 })
 
-// --- load ---
+// vvv load vvv
 async function load() {
   if (!session.value) return
   loading.value = true
@@ -370,10 +333,7 @@ async function poll() {
       const d = await res.json() as AgentStatus
       const wasConnected = obsConnected.value
       agentStatus.value = d
-      // >>> When OBS goes offline clear our local scene/source caches so
-      // >>> isTargetMissing returns false (we can't know anything when OBS is
-      // >>> disconnected, so showing stale ! warnings would be misleading).
-      // >>> They repopulate automatically on the next refreshScenes() call.
+      // >>> OBS offline → clear cached scene/source so stale warnings disappear
       if (wasConnected && !d.obs_connected) {
         scenes.value       = []
         knownSources.value = []
@@ -385,7 +345,7 @@ async function poll() {
   } catch {}
 }
 
-// --- token ---
+// vvv token vvv
 async function generateToken() {
   if (!session.value || !isBroadcaster.value) return
   generatingToken.value = true
@@ -409,7 +369,7 @@ async function copyToken() {
   setTimeout(() => { tokenJustCopied.value = false }, 2000)
 }
 
-// --- scenes ---
+// vvv scenes vvv
 async function refreshScenes() {
   if (!session.value) return
   try {
@@ -417,17 +377,12 @@ async function refreshScenes() {
     if (res.ok) {
       const d = await res.json() as { scenes: SceneInfo[]; currentScene: string }
       scenes.value = d.scenes
-      // >>> Sync the live scene from OBS's own answer, not just whatever the
-      // >>> cached agent status happened to have - this is what makes the
-      // >>> "live" badge/border and the right scene's sources show up on page
-      // >>> load without having to click a scene first.
+      // >>> sync live scene from response, not cached status, so page shows correct scene on load
       if (d.currentScene && agentStatus.value) agentStatus.value.current_scene = d.currentScene
       if (!selectedScene.value) selectedScene.value = d.currentScene || scenes.value[0]?.sceneName || ''
       if (selectedScene.value) loadSources(selectedScene.value)
       restartShotLoop()
-      // >>> Pre-populate source names for ALL scenes so isTargetMissing works
-      // >>> on existing bindings immediately on page load - not just after the
-      // >>> user manually clicks each scene to load its sources.
+      // >>> preload all source names so isTargetMissing works across scenes
       for (const s of scenes.value) prefetchSourceNames(s.sceneName)
     }
   } catch {}
@@ -451,11 +406,8 @@ async function prefetchSourceNames(sceneName: string) {
 }
 
 async function switchScene(name: string) {
-  if (!session.value) return // backend enforces obs_edit permission; mods with it can switch scenes too
-  // Optimistic update BEFORE the request completes, not after - this is what
-  // makes the click feel instant: it flips currentScene right away, which the
-  // watch(currentScene, ...) above picks up immediately to select the card
-  // and load its sources, instead of waiting on a network round trip first.
+  if (!session.value) return
+
   if (agentStatus.value) agentStatus.value.current_scene = name
   try {
     await fetch(`${API}/obs/${session.value.channel}/scene`, {
@@ -466,7 +418,7 @@ async function switchScene(name: string) {
   } catch {}
 }
 
-// --- sources ---
+// vvv sources vvv
 async function loadSources(sceneName: string) {
   if (!session.value) return
   selectedScene.value  = sceneName
@@ -494,7 +446,6 @@ async function toggleSourceVisible(src: SourceInfo) {
       body: JSON.stringify({ scene: selectedScene.value, sceneItemId: src.sceneItemId, enabled: !src.visible }),
     })
   } catch {}
-  // reload ground truth to sync UI with actual OBS state
   if (selectedScene.value) await loadSources(selectedScene.value)
   const next_ = new Set(pendingSources.value); next_.delete(src.sceneItemId); pendingSources.value = next_
 }
@@ -513,13 +464,12 @@ async function toggleSourceMute(src: SourceInfo & { muted?: boolean }) {
   const next_ = new Set(pendingSources.value); next_.delete(src.sceneItemId); pendingSources.value = next_
 }
 
-// --- bindings ---
+// vvv bindings vvv
 async function saveBindings() {
   if (!session.value) return
   bindingsSaving.value = true
   try {
-    // >>> Drop blank command names so an emptied field actually disables that
-    // >>> generic command instead of saving "" as its trigger word.
+    // >>> drop blank cmd names so clearing field disables command, not saves empty
     const cleanedArgCommands: Record<string, ArgCommand> = {}
     for (const [action, entry] of Object.entries(argCommands.value)) {
       if (entry?.command && entry.command.trim()) {
@@ -541,10 +491,8 @@ async function saveBindings() {
   bindingsSaving.value = false
 }
 
-// --- command builder ---
-// Matches the table columns directly: trigger, action, a type badge (fixed vs
-// chat-arg), and a rendered target string - instead of one pre-joined label,
-// so the template can lay these out as real table cells.
+// vvv command builder vvv
+// >>> unified command model for the table
 interface UnifiedCommand {
   type: 'scene' | 'source' | 'arg'
   command: string
@@ -566,7 +514,7 @@ const unifiedCommands = computed<UnifiedCommand[]>(() => {
       type: 'scene', command: b.command, actionLabel: 'Switch scene',
       targetDisplay: b.scene, badgeText: 'fixed', badgeClass: 'fixed-type',
       access: b.access ?? 'everyone', index: i,
-      actionHint: '' // no chat argument for fixed scene binds
+      actionHint: ''
     })
   })
 
@@ -575,7 +523,6 @@ const unifiedCommands = computed<UnifiedCommand[]>(() => {
     const badgeClass = isVolArg ? 'arg-type' as const : 'fixed-type' as const
     const actionLabel = BUILDER_ACTION_LABEL[b.action] ?? b.action
 
-    // Determine hint based on action and whether it's an arg command
     let actionHint = ''
     if (isVolArg) {
       actionHint = ' <volume>' // fixed source, volume from chat
@@ -679,7 +626,7 @@ function cycleUnifiedAccess(item: UnifiedCommand) {
   saveBindings()
 }
 
-// --- rule builder ---
+// vvv rule builder vvv
 async function saveRules() {
   if (!session.value) return
   rulesSaving.value = true
@@ -721,7 +668,7 @@ function toggleRule(rule: ObsRule) {
   saveRules()
 }
 
-// --- audio mixer ---
+// vvv audio mixer vvv
 const audioSources = computed(() => (sources.value as any[]).filter(s => s.isAudioSource))
 
 function volumeToDb(percent: number | undefined): string {
@@ -730,9 +677,7 @@ function volumeToDb(percent: number | undefined): string {
   return (20 * Math.log10(mul)).toFixed(1)
 }
 
-// >>> Local override while a slider is being dragged/just-committed, so a
-// >>> stale/rounded value coming back from a poll-triggered loadSources()
-// >>> can't snap the handle backwards mid-interaction ("jumping").
+// >>> local slider override so the poll loop doesn't snap it back
 const sliderOverride = ref<Record<number, number>>({})
 
 function onVolumeInput(src: any, percent: number) {
@@ -759,7 +704,7 @@ async function setSourceVolume(src: any, percent: number) {
   if (selectedScene.value) await loadSources(selectedScene.value)
 }
 
-// --- force all previews button ---
+// vvv force all previews button vvv
 const forcePreviewLoading = ref(false)
 
 async function forceAllPreviews() {
@@ -774,7 +719,7 @@ async function forceAllPreviews() {
   forcePreviewLoading.value = false
 }
 
-// --- lifecycle ---
+// vvv lifecycle vvv
 onMounted(() => {
   load()
   loadExistingCmdNames()
@@ -817,15 +762,15 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
 
     <div class="obsconn-body">
 
-      <!-- LOADING (brief flash while the first status fetch is in flight) -->
+      <!-- loading -->
       <template v-if="loading">
         <div class="obc-loading">
           <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="loading" class="obc-loading-emote" />
         </div>
       </template>
 
-      <!-- SETUP PROMPT (shown until agent is connected + OBS is reachable) -->
-      <!-- Full setup instructions live in the gear panel now - broadcaster only -->
+      <!-- setup prompt, shown til agent + obs are both connected -->
+      <!-- full instructions live in the gear panel, broadcaster only -->
       <template v-else-if="!agentConnected || !obsConnected">
         <div class="obc-setup-card obc-setup-compact">
           <template v-if="isBroadcaster">
@@ -844,7 +789,7 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
         </div>
       </template>
 
-      <!-- LIVE CONTROLS (shown when agent + OBS both reachable) -->
+      <!-- live controls -->
       <template v-if="agentConnected && obsConnected">
 
         <!-- Scenes -->
@@ -918,8 +863,7 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
 
       </template>
 
-      <!-- Sources | Audio mixer | Command builder - the first two need a live scene,
-           the command builder just needs the agent paired (works while offline) -->
+      <!-- sources | audio mixer | command builder, builder still works if obs itself isn't connected -->
       <div
         v-if="(agentConnected && obsConnected) || agentStatus?.paired"
         class="obc-boxes-row"
@@ -1115,9 +1059,7 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
 
           </template>
 
-          <!-- Rule builder - bitrate-triggered, no chat command/access, evaluated
-               entirely on the agent from its own local cached copy (rules.js) so
-               a dropped relay connection can't delay or block a rule firing. -->
+          <!-- rule builder, bitrate is the trigger, runs agent-side -->
           <template v-else>
 
             <div class="obc-label-row">
@@ -1205,7 +1147,7 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
 
   </div>
 
-  <!-- SETTINGS PANEL - broadcaster only, mirrors PUT /obs/:ch/settings's own guard -->
+  <!-- settings panel, broadcaster only -->
   <Teleport to="body">
     <div v-if="showSettings && isBroadcaster" class="ep-overlay" v-bind="settingsOverlay.handlers(() => showSettings = false)">
       <div class="ep-panel obsconn-settings-panel">
@@ -1497,13 +1439,11 @@ color: rgb(from #e5c07b r g b / 80%);
 .obc-arg-label { width: 130px; flex: none; font-size: 11px; color: #999; }
 .obc-arg-usage { font-size: 10px; color: #444; font-family: 'Consolas','Fira Mono',monospace; }
 
-/* Vertically center the content of each field group within its box (matters
-   once boxes sit side by side and can end up with uneven heights) */
+/* center content, boxes end up different heights side by side */
 .ep-field-group { justify-content: center; }
 .obc-box { justify-content: flex-start; }
 
-/* Loading state - centered spinning brand emote instead of a flash of
-   "not set up yet" while the very first status fetch is in flight */
+/* loading spinner, avoids flashing "not set up" on first load */
 .obc-loading { display: flex; align-items: center; justify-content: center; padding: 48px 0; }
 .obc-loading-emote { width: 48px; height: 48px; image-rendering: pixelated; animation: obc-spin 1.1s linear infinite; }
 @keyframes obc-spin { to { transform: rotate(360deg); } }
@@ -1668,7 +1608,7 @@ color: rgb(from #e5c07b r g b / 80%);
 .obc-builder-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
 .obc-builder-tab:hover:not(.active) { color: #888; }
 
-/* Small toggle used in the rule table's "on" column */
+/* small toggle for the rule table's on column */
 .obc-toggle-sm { width: 26px; height: 15px; }
 .obc-toggle-sm .obc-toggle-knob { width: 9px; height: 9px; }
 .obc-toggle-sm.on .obc-toggle-knob { transform: translateX(11px); }
