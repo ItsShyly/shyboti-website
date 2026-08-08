@@ -869,16 +869,16 @@ watch(() => session.value?.channel, () => { load(); loadExistingCmdNames() })
               </div>
               <div class="obc-live-stats">
                 <div class="obc-live-stat" :class="{ bad: bitrateBad }">
-                  <span class="obc-live-stat-label">bandwidth</span>
+                  <span class="obc-live-stat-label">bitrate</span>
                   <span class="obc-live-stat-value">{{ bitrateLabel ?? 'not streaming' }}</span>
                 </div>
                 <div class="obc-live-stat">
                   <span class="obc-live-stat-label">preview size</span>
-                  <span class="obc-live-stat-value">{{ liveShotStats.kb != null ? liveShotStats.kb + ' kb' : agentStatus?.screenshots ? '…' : 'off' }}</span>
+                  <span class="obc-live-stat-value">{{ liveShotStats.kb != null ? liveShotStats.kb + ' kb' : agentStatus?.screenshots ? '--' : 'off' }}</span>
                 </div>
                 <div class="obc-live-stat">
                   <span class="obc-live-stat-label">preview cpu</span>
-                  <span class="obc-live-stat-value">{{ liveShotStats.cpuMs != null ? liveShotStats.cpuMs + ' ms' : agentStatus?.screenshots ? '…' : 'off' }}</span>
+                  <span class="obc-live-stat-value">{{ liveShotStats.cpuMs != null ? liveShotStats.cpuMs + ' ms' : agentStatus?.screenshots ? '--' : 'off' }}</span>
                 </div>
               </div>
             </div>
