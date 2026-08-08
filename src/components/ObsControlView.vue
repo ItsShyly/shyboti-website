@@ -68,7 +68,8 @@ const sourcesLoading = ref(false)
 // screenshot per scene name
 const shots        = ref<Record<string, string | null>>({})
 const shotPending  = ref<Record<string, boolean>>({})
-const shotCpuMs    = ref<Record<string, number | null>>({})
+const lastShotKb   = ref<Record<string, number>>({})
+const lastShotCpuMs = ref<Record<string, number | null>>({})
 
 // bindings state
 const sceneBindings  = ref<SceneBind[]>([])
@@ -245,11 +246,10 @@ async function fetchShot(sceneName: string) {
       { headers: authHeaders.value }
     )
     if (res.ok) {
-      const d = await res.json() as { imageData: string | null; cpuMs?: number | null }
-      if (d.imageData) {
-        shots.value     = { ...shots.value, [sceneName]: d.imageData }
-        shotCpuMs.value = { ...shotCpuMs.value, [sceneName]: d.cpuMs ?? null }
-      }
+      const d = await res.json() as { imageData: string | null; kb?: number; cpuMs?: number | null }
+      if (d.imageData) shots.value = { ...shots.value, [sceneName]: d.imageData }
+      if (d.kb    !== undefined) lastShotKb.value    = { ...lastShotKb.value,    [sceneName]: d.kb }
+      if (d.cpuMs !== undefined) lastShotCpuMs.value = { ...lastShotCpuMs.value, [sceneName]: d.cpuMs ?? null }
     }
   } catch {}
   shotPending.value = { ...shotPending.value, [sceneName]: false }
@@ -600,11 +600,10 @@ watch(() => session.value?.channel, () => load())
                 <svg viewBox="0 0 16 16" fill="none"><rect x="1" y="3" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M6 7h4M8 5v4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
               </div>
               <div v-if="s.sceneName === currentScene" class="obs-live-badge">
-                live
-                <span v-if="agentStatus?.bitrate_kbps != null" class="obs-live-stat">
-                  {{ agentStatus.bitrate_kbps }} kbps<span v-if="agentStatus.congested" class="obs-live-congested"> !</span>
-                </span>
-                <span v-if="shotCpuMs[s.sceneName] != null" class="obs-live-stat obs-live-cpu">{{ shotCpuMs[s.sceneName] }}ms</span>
+                <span class="obs-live-dot"></span>live
+                <span v-if="agentStatus?.bitrate_kbps != null" class="obs-live-stat" :class="{ 'obs-live-congested': agentStatus.congested }">{{ agentStatus.bitrate_kbps }}<span class="obs-live-unit">kbps</span></span>
+                <span v-if="lastShotKb[s.sceneName]" class="obs-live-stat obs-live-kb">{{ lastShotKb[s.sceneName] }}<span class="obs-live-unit">KB</span></span>
+                <span v-if="lastShotCpuMs[s.sceneName] != null" class="obs-live-stat obs-live-ms">{{ lastShotCpuMs[s.sceneName] }}<span class="obs-live-unit">ms</span></span>
               </div>
             </div>
             <div class="obs-scene-label">{{ s.sceneName }}</div>
@@ -870,9 +869,17 @@ watch(() => session.value?.channel, () => load())
 
 .obs-live-badge {
   position: absolute; top: 4px; left: 4px;
-  font-size: 8px; font-weight: 700; letter-spacing: .08em;
-  color: #fff; background: #f14949; padding: 1px 5px;
+  display: flex; align-items: center; gap: 4px;
+  font-size: 8px; font-weight: 700; letter-spacing: .06em;
+  color: #fff; background: rgba(0,0,0,.7); padding: 2px 5px;
+  max-width: calc(100% - 8px); overflow: hidden;
 }
+.obs-live-dot { width: 5px; height: 5px; border-radius: 50%; background: #f14949; flex-shrink: 0; animation: pulse 1.5s ease-in-out infinite; }
+.obs-live-stat { color: #aaa; font-size: 8px; font-weight: 400; white-space: nowrap; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; }
+.obs-live-unit { color: #666; margin-left: 1px; }
+.obs-live-congested { color: #f14949; font-weight: 700; }
+.obs-live-kb  { color: #23d18b; }
+.obs-live-ms  { color: #9d6cff; }
 .obs-scene-label {
   padding: 5px 8px; font-size: 11px; color: #888;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
