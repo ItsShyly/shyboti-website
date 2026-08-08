@@ -14,18 +14,22 @@
 // Usage in a template:
 //   <div class="panel-overlay" v-bind="overlay.handlers(() => editOpen = false)">
 export function useOverlayClose() {
-  let mousedownOnSelf = false
+  let mousedownOnSelf = false;
 
   function handlers(close: () => void) {
     return {
-      onMousedown: (e: MouseEvent) => { mousedownOnSelf = e.target === e.currentTarget },
-      onMouseup: (e: MouseEvent) => {
-        if (mousedownOnSelf && e.target === e.currentTarget) close()
-        mousedownOnSelf = false
+      onMousedown: (e: MouseEvent) => {
+        mousedownOnSelf = e.target === e.currentTarget;
       },
-      onMouseleave: () => { mousedownOnSelf = false },
-    }
+      onMouseup: (e: MouseEvent) => {
+        if (mousedownOnSelf && e.target === e.currentTarget) close();
+        mousedownOnSelf = false;
+      },
+      onMouseleave: () => {
+        mousedownOnSelf = false;
+      },
+    };
   }
 
-  return { handlers }
+  return { handlers };
 }

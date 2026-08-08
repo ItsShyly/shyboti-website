@@ -1,68 +1,97 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ShyBoti Dev - Access Required</title>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      background: #02030a;
-      color: #fff;
-      font-family: 'Courier New', Courier, monospace;
-      height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .card {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 20px;
-      text-align: center;
-      padding: 40px 32px;
-      border: 1px solid #1e1e24;
-      background: #0e0e12;
-      max-width: 400px;
-      width: 100%;
-    }
-    h1 { font-size: 1.4rem; font-weight: 700; color: #bf94ff; }
-    p  { font-size: 13px; color: #555; line-height: 1.7; }
-    .btn {
-      height: 40px; padding: 0 28px;
-      background: #6f2bff; border: none;
-      color: #fff; font-family: inherit;
-      font-size: 13px; font-weight: 600;
-      cursor: pointer; text-decoration: none;
-      display: inline-flex; align-items: center;
-      transition: background 0.15s;
-    }
-    .btn:hover { background: #7f3fff; }
-    .error { font-size: 12px; color: #ff6b6b; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>ShyBoti Dev</h1>
-    <p>Die Seite ist noch in Entwicklung.<br>Verifiziere dich mit deinem Twitch-Account um fortzufahren.</p>
-    <a class="btn" href="/api/auth/devgate">Mit Twitch verifizieren</a>
-    <p id="msg" class="error" style="display:none"></p>
-  </div>
-  <script>
-    const p = new URLSearchParams(location.search)
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ShyBoti Dev - Access Required</title>
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        background: #02030a;
+        color: #fff;
+        font-family: "Courier New", Courier, monospace;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .card {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 20px;
+        text-align: center;
+        padding: 40px 32px;
+        border: 1px solid #1e1e24;
+        background: #0e0e12;
+        max-width: 400px;
+        width: 100%;
+      }
+      h1 {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #bf94ff;
+      }
+      p {
+        font-size: 13px;
+        color: #555;
+        line-height: 1.7;
+      }
+      .btn {
+        height: 40px;
+        padding: 0 28px;
+        background: #6f2bff;
+        border: none;
+        color: #fff;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        transition: background 0.15s;
+      }
+      .btn:hover {
+        background: #7f3fff;
+      }
+      .error {
+        font-size: 12px;
+        color: #ff6b6b;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>ShyBoti Dev</h1>
+      <p>
+        Die Seite ist noch in Entwicklung.<br />Verifiziere dich mit deinem
+        Twitch-Account um fortzufahren.
+      </p>
+      <a class="btn" href="/api/auth/devgate">Mit Twitch verifizieren</a>
+      <p id="msg" class="error" style="display: none"></p>
+    </div>
+    <script>
+      const p = new URLSearchParams(location.search);
 
-    // Called after OAuth - token passed in URL, set as cookie, then redirect to app
-    if (p.has('t')) {
-      const token = p.get('t')
-      const maxAge = 60 * 60 * 24 * 7 // 7 days
-      document.cookie = `devgate=${token}; Path=/; Max-Age=${maxAge}; SameSite=Lax; Secure`
-      window.location.replace('/')
-    } else if (p.get('error') === 'unauthorized') {
-      const el = document.getElementById('msg')
-      el.textContent = 'Zugriff verweigert. Dieser Account hat keinen Zugang.'
-      el.style.display = 'block'
-    }
-  </script>
-</body>
+      // Called after OAuth - token passed in URL, set as cookie, then redirect to app
+      if (p.has("t")) {
+        const token = p.get("t");
+        const maxAge = 60 * 60 * 24 * 7; // 7 days
+        document.cookie = `devgate=${token}; Path=/; Max-Age=${maxAge}; SameSite=Lax; Secure`;
+        window.location.replace("/");
+      } else if (p.get("error") === "unauthorized") {
+        const el = document.getElementById("msg");
+        el.textContent =
+          "Zugriff verweigert. Dieser Account hat keinen Zugang.";
+        el.style.display = "block";
+      }
+    </script>
+  </body>
 </html>

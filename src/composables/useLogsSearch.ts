@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref } from "vue";
 
 // Shared reactive state - single instance across the whole app.
 //
@@ -15,44 +15,55 @@ import { ref } from 'vue'
 // index flow back out, and jump requests (id of the message to scroll to) flow in.
 
 export interface LogSearchResult {
-  id:    string  // message id, used to scroll/highlight
-  label: string  // username / display name
-  sub:   string  // message snippet around the match
+  id: string; // message id, used to scroll/highlight
+  label: string; // username / display name
+  sub: string; // message snippet around the match
 }
 
-const query       = ref('')                     // current search text while scoped to logs
-const results     = ref<LogSearchResult[]>([])   // written by LogsView, best match first
-const activeIndex = ref(0)                       // keyboard-highlighted row within `results`
-const matchCount  = ref(0)                       // number of matching messages currently available
-const matchIndex  = ref(0)                       // currently active match number (1-based) for the UI
+const query = ref(""); // current search text while scoped to logs
+const results = ref<LogSearchResult[]>([]); // written by LogsView, best match first
+const activeIndex = ref(0); // keyboard-highlighted row within `results`
+const matchCount = ref(0); // number of matching messages currently available
+const matchIndex = ref(0); // currently active match number (1-based) for the UI
 
-const jumpToken   = ref(0)                      // bumped whenever a jump should actually happen
-const jumpId      = ref<string | null>(null)    // id of the message to jump to
-const jumpDirection = ref(1)                    // direction for next/previous navigation
+const jumpToken = ref(0); // bumped whenever a jump should actually happen
+const jumpId = ref<string | null>(null); // id of the message to jump to
+const jumpDirection = ref(1); // direction for next/previous navigation
 
 // Called on Enter (jump to the currently highlighted result) or when a
 // result is clicked directly (jump to that specific id).
 function requestJump(target: number | string) {
-  if (typeof target === 'number') {
-    jumpDirection.value = target
-    jumpId.value = null
+  if (typeof target === "number") {
+    jumpDirection.value = target;
+    jumpId.value = null;
   } else {
-    jumpId.value = target
-    jumpDirection.value = 1
+    jumpId.value = target;
+    jumpDirection.value = 1;
   }
-  jumpToken.value++
+  jumpToken.value++;
 }
 
 function reset() {
-  query.value = ''
-  results.value = []
-  activeIndex.value = 0
-  matchCount.value = 0
-  matchIndex.value = 0
-  jumpDirection.value = 1
-  jumpId.value = null
+  query.value = "";
+  results.value = [];
+  activeIndex.value = 0;
+  matchCount.value = 0;
+  matchIndex.value = 0;
+  jumpDirection.value = 1;
+  jumpId.value = null;
 }
 
 export function useLogsSearch() {
-  return { query, results, activeIndex, matchCount, matchIndex, jumpToken, jumpId, jumpDirection, requestJump, reset }
+  return {
+    query,
+    results,
+    activeIndex,
+    matchCount,
+    matchIndex,
+    jumpToken,
+    jumpId,
+    jumpDirection,
+    requestJump,
+    reset,
+  };
 }

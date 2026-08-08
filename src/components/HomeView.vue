@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { useAuth } from '../auth'
-import { useI18n } from '../i18n'
+import { useAuth } from "../auth";
+import { useI18n } from "../i18n";
 
-const { login } = useAuth()
-const { t } = useI18n()
+const { login } = useAuth();
+const { t } = useI18n();
 </script>
 
 <template>
@@ -18,27 +18,70 @@ const { t } = useI18n()
           />
           ShyBoti
         </h1>
-        <p class="hero-sub" style="white-space: pre-line">{{ t('home.sub') }}</p>
-        <button class="hero-login" @click="login">{{ t('home.login') }}</button>
+        <p class="hero-sub" style="white-space: pre-line">
+          {{ t("home.sub") }}
+        </p>
+        <button class="hero-login" @click="login">{{ t("home.login") }}</button>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.home { display: flex; flex-direction: column; height: 100%; }
-.hero { flex: 1; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid #222; padding: 32px 0; }
-.hero-inner { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 20px; }
-.hero-title {
-  display: flex; align-items: center; gap: 18px;
-  font-size: clamp(40px, 5.5vw, 68px); font-weight: 700; color: #ffd569; line-height: 1;
+.home {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
-.hero-emote { width: clamp(64px, 8vw, 108px); height: clamp(64px, 8vw, 108px); image-rendering: pixelated; }
-.hero-sub { font-size: clamp(12px, 1.3vw, 15px); color: #666; line-height: 1.9; }
+.hero {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: 1px solid #222;
+  padding: 32px 0;
+}
+.hero-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 20px;
+}
+.hero-title {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: clamp(40px, 5.5vw, 68px);
+  font-weight: 700;
+  color: #ffd569;
+  line-height: 1;
+}
+.hero-emote {
+  width: clamp(64px, 8vw, 108px);
+  height: clamp(64px, 8vw, 108px);
+  image-rendering: pixelated;
+}
+.hero-sub {
+  font-size: clamp(12px, 1.3vw, 15px);
+  color: #666;
+  line-height: 1.9;
+}
 .hero-login {
-  margin-top: 8px; height: 44px; padding: 0 32px; border: none;
-  background: #6f2bff; color: #fff; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  margin-top: 8px;
+  height: 44px;
+  padding: 0 32px;
+  border: none;
+  background: #6f2bff;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
   transition: background 0.15s;
 }
-.hero-login:hover { background: #ffd569; color:#000; }
+.hero-login:hover {
+  background: #ffd569;
+  color: #000;
+}
 </style>
