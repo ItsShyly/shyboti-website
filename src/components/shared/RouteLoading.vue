@@ -8,13 +8,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { routeLoadSignal } from '../../composables/routeLoadSignal'
 
 const progress = ref(0)
 let raf: number | null = null
 let start = 0
+let done = false
 
 function tick(now: number) {
+  if (done) return
   const elapsed = now - start
   progress.value = 90 * (1 - Math.exp(-elapsed / 700))
   raf = requestAnimationFrame(tick)
@@ -26,6 +29,12 @@ onMounted(() => {
 })
 onUnmounted(() => {
   if (raf) cancelAnimationFrame(raf)
+})
+
+watch(routeLoadSignal, () => {
+  done = true
+  if (raf) cancelAnimationFrame(raf)
+  progress.value = 100
 })
 </script>
 

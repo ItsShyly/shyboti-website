@@ -2,11 +2,17 @@ import { createRouter, createWebHistory } from "vue-router";
 import { defineAsyncComponent } from "vue";
 
 import RouteLoading from "../components/shared/RouteLoading.vue";
+import { routeLoadSignal } from "../composables/routeLoadSignal";
 
 // >>> defineAsyncComponent for navigation
 function lazy(loader: () => Promise<any>) {
   return defineAsyncComponent({
-    loader,
+    loader: async () => {
+      const mod = await loader();
+      routeLoadSignal.value++;
+      await new Promise((r) => setTimeout(r, 100));
+      return mod;
+    },
     loadingComponent: RouteLoading,
     delay: 0,
   });
