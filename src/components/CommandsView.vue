@@ -111,48 +111,8 @@ function onEditSaved() {
 }
 
 function startCreate() {
-  creatingNew.value = true;
-  newCmdName.value = "";
-  newCmdError.value = "";
-  nextTick(() => newCmdInput.value?.focus());
-}
-
-function cancelCreate() {
-  creatingNew.value = false;
-  newCmdName.value = "";
-  newCmdError.value = "";
-}
-
-async function confirmCreate() {
-  const name = newCmdName.value.trim().toLowerCase().replace(/^\+/, "");
-  if (!name) {
-    newCmdError.value = "Enter a name";
-    return;
-  }
-  if (!/^[a-z0-9_]+$/.test(name)) {
-    newCmdError.value = "Only letters, numbers, _";
-    return;
-  }
-  if (customCommands.value.some((c) => c.name === name)) {
-    newCmdError.value = "Already exists";
-    return;
-  }
-  if (commands.value.some((c) => c.name === name)) {
-    newCmdError.value = "Name conflicts with a default command";
-    return;
-  }
-  if (!session.value) return;
-  creatingNew.value = false;
-  await fetch(`${API}/custom-commands/${session.value.channel}/${name}`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.value.token}`,
-    },
-    body: JSON.stringify({ response: "", rule: "", isActive: true }),
-  });
-  await fetchCustomCommands();
-  openEdit(name, false);
+  // >>> Open the edit panel immediately with an empty name.
+  openEdit('', false);
 }
 
 // >>>  Internal tab state
@@ -1049,7 +1009,7 @@ onUnmounted(() => {
                 <div class="arg-variant-usage">
                   <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{
                     v.usage.replace(/^<(\$[^>]+)>$/, "[$1]")
-                      }}</span>
+                  }}</span>
                 </div>
                 <div class="arg-variant-desc">{{ v.desc || "" }}</div>
               </div>
@@ -1080,35 +1040,11 @@ onUnmounted(() => {
             }}<span class="sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
           </button>
         </div>
-        <div v-if="!creatingNew">
+        <div>
           <button class="create-btn" :disabled="!canEdit" :class="{ 'create-btn-disabled': !canEdit }"
             @click="canEdit && startCreate()">
             {{ t("cmd.new") }}
           </button>
-        </div>
-        <div v-else class="new-cmd-row">
-          <span class="new-cmd-prefix">+</span>
-          <input ref="newCmdInput" v-model="newCmdName" class="new-cmd-input" :class="{
-            'new-cmd-input-conflict':
-              newCmdName &&
-              (commands.some(
-                (c) =>
-                  c.name ===
-                  newCmdName.trim().toLowerCase().replace(/^\+/, ''),
-              ) ||
-                customCommands.some(
-                  (c) =>
-                    c.name ===
-                    newCmdName.trim().toLowerCase().replace(/^\+/, ''),
-                )),
-          }" placeholder="commandname" maxlength="32" @keydown.enter="confirmCreate" @keydown.escape="cancelCreate" />
-          <button class="create-btn" @click="confirmCreate">
-            {{ t("cmd.create") }}
-          </button>
-          <button class="cancel-btn" @click="cancelCreate">✕</button>
-          <span v-if="newCmdError" class="new-cmd-error">{{
-            newCmdError
-            }}</span>
         </div>
       </div>
 
@@ -1161,14 +1097,14 @@ onUnmounted(() => {
           {{ t("cmd.sort.name")
           }}<span class="sort-arrow">{{
             sortField === "name" ? (sortDir === "asc" ? "↑" : "↓") : "↕"
-            }}</span>
+          }}</span>
         </div>
         <div>{{ t("cmd.sort.access") }}</div>
         <div class="sort-col" @click="setSort('cooldown')">
           {{ t("cmd.sort.gcd")
           }}<span class="sort-arrow">{{
             sortField === "cooldown" ? (sortDir === "asc" ? "↑" : "↓") : "↕"
-            }}</span>
+          }}</span>
         </div>
         <div>{{ t("cmd.header.ucd") }}</div>
         <div>{{ t("cmd.sort.actions") }}</div>

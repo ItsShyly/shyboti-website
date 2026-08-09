@@ -135,61 +135,26 @@ async function load() {
   loading.value = false;
 }
 
-// >>> new timer flow mirrors CommandsView's inline create row
 const creatingNew = ref(false);
-const newTimerName = ref("");
-const newTimerError = ref("");
 const newTimerInput = ref<HTMLInputElement | null>(null);
 
 function startCreate() {
-  creatingNew.value = true;
-  newTimerName.value = "";
-  newTimerError.value = "";
-  nextTick(() => newTimerInput.value?.focus());
-}
-function cancelCreate() {
-  creatingNew.value = false;
-  newTimerName.value = "";
-  newTimerError.value = "";
-}
-async function confirmCreate() {
-  const name = newTimerName.value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, "");
-  if (!name) {
-    newTimerError.value = "Enter a name";
-    return;
-  }
-  if (timers.value.some((ti) => ti.name === name)) {
-    newTimerError.value = "Already exists";
-    return;
-  }
-  if (!session.value) return;
-  creatingNew.value = false;
+  // >>> Open the edit panel directly with a blank timer
   const blank = {
-    name,
-    response: "",
+    name: '',
+    response: '',
     interval_sec: 300,
     min_messages: 0,
-    enabled_when: "always",
-    required_game: "",
-    condition: "",
+    enabled_when: 'always',
+    required_game: '',
+    condition: '',
     is_active: 1,
   };
-  try {
-    await fetch(`${API}/timers/${session.value.channel}/${name}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${session.value.token}`,
-      },
-      body: JSON.stringify(blank),
-    });
-  } catch {}
-  await load();
-  const created = timers.value.find((ti) => ti.name === name);
-  openEdit(created ?? { id: 0, last_fired: 0, ...blank });
+  openEdit({ id: 0, last_fired: 0, ...blank });
+}
+
+function cancelCreate() {
+  creatingNew.value = false;
 }
 
 function openEdit(timer: Timer) {
@@ -240,7 +205,7 @@ async function saveTimer() {
           method: "DELETE",
           headers: { Authorization: `Bearer ${session.value.token}` },
         },
-      ).catch(() => {});
+      ).catch(() => { });
     }
     showSuccess(t("timer.save") + "!");
     editOpen.value = false;
@@ -345,7 +310,7 @@ async function fetchSync() {
     const data = (await res.json()) as { sync: any };
     syncConf.value = data.sync;
     syncFrom.value = data.sync?.sync_from ?? "";
-  } catch {}
+  } catch { }
 }
 async function saveSync() {
   if (!session.value || !syncFrom.value) return;
@@ -430,54 +395,23 @@ watch(
           <div class="ep-view-sub">
             {{ t("timer.sub") }} #{{ session?.channel }}
           </div>
-          <button
-            v-if="syncConf?.is_active"
-            class="ep-sync-indicator"
-            @click="syncOpen = !syncOpen"
-            :title="`${t('timer.sync.active')} #${syncConf.sync_from}`"
-          >
+          <button v-if="syncConf?.is_active" class="ep-sync-indicator" @click="syncOpen = !syncOpen"
+            :title="`${t('timer.sync.active')} #${syncConf.sync_from}`">
             <span class="ep-sync-dot"></span>{{ t("timer.sync.active") }} #{{
               syncConf.sync_from
             }}
             <span class="ep-sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
           </button>
-          <button
-            v-else
-            class="ep-sync-config-btn"
-            @click="syncOpen = !syncOpen"
-          >
+          <button v-else class="ep-sync-config-btn" @click="syncOpen = !syncOpen">
             {{ t("timer.sync.config") }}
             <span class="ep-sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
           </button>
         </div>
       </div>
-      <div v-if="!creatingNew">
-        <button
-          class="ep-btn-new"
-          @click="canEdit && startCreate()"
-          :disabled="!canEdit"
-        >
+      <div>
+        <button class="ep-btn-new" @click="canEdit && startCreate()" :disabled="!canEdit">
           {{ t("timer.new") }}
         </button>
-      </div>
-      <div v-else class="new-timer-row">
-        <input
-          ref="newTimerInput"
-          v-model="newTimerName"
-          class="new-timer-input"
-          :class="{ 'new-timer-input-conflict': !!newTimerError }"
-          placeholder="timername"
-          maxlength="32"
-          @keydown.enter="confirmCreate"
-          @keydown.escape="cancelCreate"
-        />
-        <button class="ep-btn-new" @click="confirmCreate">
-          {{ t("cmd.create") }}
-        </button>
-        <button class="new-timer-cancel" @click="cancelCreate">✕</button>
-        <span v-if="newTimerError" class="new-timer-error">{{
-          newTimerError
-        }}</span>
       </div>
     </div>
 
@@ -492,21 +426,13 @@ watch(
                 : t("timer.sync.select")
             }}
           </option>
-          <option
-            v-for="ch in availableChannels.filter(
-              (c) => c !== session?.channel,
-            )"
-            :key="ch"
-            :value="ch"
-          >
+          <option v-for="ch in availableChannels.filter(
+            (c) => c !== session?.channel,
+          )" :key="ch" :value="ch">
             #{{ ch }}
           </option>
         </select>
-        <button
-          class="ep-sync-save-btn"
-          @click="saveSync"
-          :disabled="syncSaving || !syncFrom"
-        >
+        <button class="ep-sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">
           {{
             syncSaving
               ? "…"
@@ -515,11 +441,7 @@ watch(
                 : t("timer.sync.enable")
           }}
         </button>
-        <button
-          v-if="syncConf?.is_active"
-          class="ep-sync-stop-btn"
-          @click="stopSync"
-        >
+        <button v-if="syncConf?.is_active" class="ep-sync-stop-btn" @click="stopSync">
           {{ t("timer.sync.stop") }}
         </button>
       </div>
@@ -527,11 +449,7 @@ watch(
         {{ t("timer.sync.last") }}
         {{ new Date(syncConf.last_synced).toLocaleString() }}
       </div>
-      <div
-        v-if="syncMsg"
-        class="ep-sync-msg"
-        :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }"
-      >
+      <div v-if="syncMsg" class="ep-sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">
         {{ syncMsg }}
       </div>
     </div>
@@ -545,39 +463,21 @@ watch(
     </div>
 
     <div v-else class="ep-row-list">
-      <div
-        v-for="timer in timers"
-        :key="timer.id"
-        class="ep-list-row timer-row"
-        :class="{ inactive: !timer.is_active }"
-      >
+      <div v-for="timer in timers" :key="timer.id" class="ep-list-row timer-row"
+        :class="{ inactive: !timer.is_active }">
         <div class="timer-toggle-wrap">
-          <button
-            class="ep-toggle-btn"
-            :class="{ on: timer.is_active, disabled: !canToggle }"
-            @click="canToggle && toggleActive(timer)"
-            :title="timer.is_active ? 'Disable' : 'Enable'"
-          >
+          <button class="ep-toggle-btn" :class="{ on: timer.is_active, disabled: !canToggle }"
+            @click="canToggle && toggleActive(timer)" :title="timer.is_active ? 'Disable' : 'Enable'">
             <span class="ep-toggle-knob"></span>
           </button>
         </div>
         <div class="timer-info" @click="openEdit(timer)">
           <div class="timer-name">{{ timer.name }}</div>
           <div class="timer-meta">
-            <span class="ep-meta-pill interval"
-              >⏱ {{ fmtInterval(timer.interval_sec) }}</span
-            >
-            <span v-if="timer.min_messages" class="ep-meta-pill msgs"
-              >💬 {{ timer.min_messages }}+ msgs</span
-            >
-            <span
-              v-if="timer.enabled_when !== 'always'"
-              class="ep-meta-pill when"
-              >{{ timer.enabled_when }}</span
-            >
-            <span v-if="timer.required_game" class="ep-meta-pill game"
-              >🎮 {{ timer.required_game }}</span
-            >
+            <span class="ep-meta-pill interval">⏱ {{ fmtInterval(timer.interval_sec) }}</span>
+            <span v-if="timer.min_messages" class="ep-meta-pill msgs">💬 {{ timer.min_messages }}+ msgs</span>
+            <span v-if="timer.enabled_when !== 'always'" class="ep-meta-pill when">{{ timer.enabled_when }}</span>
+            <span v-if="timer.required_game" class="ep-meta-pill game">🎮 {{ timer.required_game }}</span>
             <span v-if="timer.condition" class="ep-meta-pill cond">if …</span>
           </div>
           <div class="timer-response">
@@ -589,26 +489,14 @@ watch(
           </div>
         </div>
         <div class="ep-row-actions">
-          <button
-            class="ep-btn-action edit"
-            @click.stop="canEdit && openEdit(timer)"
-            :class="{ disabled: !canEdit }"
-          >
+          <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(timer)" :class="{ disabled: !canEdit }">
             {{ canEdit ? t("timer.edit") : t("timer.view") }}
           </button>
-          <button
-            class="ep-btn-action share"
-            @click.stop="openShare(timer.name)"
-            :title="t('timer.share')"
-          >
+          <button class="ep-btn-action share" @click.stop="openShare(timer.name)" :title="t('timer.share')">
             ↪
           </button>
-          <button
-            v-if="canDelete"
-            class="ep-btn-action del"
-            @click.stop="deleteTimer(timer.name)"
-            :disabled="saving === timer.name"
-          >
+          <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteTimer(timer.name)"
+            :disabled="saving === timer.name">
             ✕
           </button>
         </div>
@@ -617,21 +505,13 @@ watch(
 
     <!-- Edit panel -->
     <Teleport to="body">
-      <div
-        v-if="editOpen"
-        class="ep-overlay"
-        v-bind="overlay.handlers(() => (editOpen = false))"
-      >
+      <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => (editOpen = false))">
         <div class="ep-panel">
           <div class="ep-panel-header">
             <div>
               <div class="ep-panel-title">
                 {{ t("timer.edit_title") }}
-                <EditableNameHeader
-                  v-model="editTimer.name"
-                  :orig-name="editOrigName"
-                  placeholder="welcome"
-                />
+                <EditableNameHeader v-model="editTimer.name" :orig-name="editOrigName" placeholder="welcome" />
               </div>
               <div class="ep-panel-sub">#{{ session?.channel }}</div>
             </div>
@@ -640,20 +520,12 @@ watch(
 
           <div class="ep-panel-body">
             <div class="ep-field-group">
-              <label class="ep-field-label"
-                >{{ t("timer.field.response") }}
+              <label class="ep-field-label">{{ t("timer.field.response") }}
                 <span class="ep-field-hint">{{
                   t("timer.field.resp_hint")
-                }}</span></label
-              >
-              <div
-                ref="editorRef"
-                class="ep-script-editor"
-                contenteditable="true"
-                spellcheck="false"
-                data-placeholder="Hello chat! $channel.viewers viewers right now."
-                @input="onEditorInput"
-              ></div>
+                  }}</span></label>
+              <div ref="editorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
+                data-placeholder="Hello chat! $channel.viewers viewers right now." @input="onEditorInput"></div>
               <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
             </div>
 
@@ -661,33 +533,19 @@ watch(
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("timer.field.interval")
-                }}</label>
+                  }}</label>
                 <div class="interval-row">
-                  <input
-                    v-model.number="editTimer.interval_sec"
-                    type="number"
-                    min="30"
-                    class="ep-field-input"
-                  />
-                  <span class="ep-field-hint"
-                    >{{ t("timer.field.interval_hint") }} ·
-                    {{ fmtInterval(editTimer.interval_sec ?? 300) }}</span
-                  >
+                  <input v-model.number="editTimer.interval_sec" type="number" min="30" class="ep-field-input" />
+                  <span class="ep-field-hint">{{ t("timer.field.interval_hint") }} ·
+                    {{ fmtInterval(editTimer.interval_sec ?? 300) }}</span>
                 </div>
               </div>
               <div class="ep-field-group">
-                <label class="ep-field-label"
-                  >{{ t("timer.field.min_msgs") }}
+                <label class="ep-field-label">{{ t("timer.field.min_msgs") }}
                   <span class="ep-field-hint">{{
                     t("timer.field.min_msgs_hint")
-                  }}</span></label
-                >
-                <input
-                  v-model.number="editTimer.min_messages"
-                  type="number"
-                  min="0"
-                  class="ep-field-input"
-                />
+                    }}</span></label>
+                <input v-model.number="editTimer.min_messages" type="number" min="0" class="ep-field-input" />
               </div>
             </div>
 
@@ -695,54 +553,35 @@ watch(
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("timer.field.active_when")
-                }}</label>
-                <select
-                  v-model="editTimer.enabled_when"
-                  class="ep-field-select"
-                >
+                  }}</label>
+                <select v-model="editTimer.enabled_when" class="ep-field-select">
                   <option value="always">{{ t("timer.when.always") }}</option>
                   <option value="online">{{ t("timer.when.online") }}</option>
                   <option value="offline">{{ t("timer.when.offline") }}</option>
                 </select>
               </div>
               <div class="ep-field-group">
-                <label class="ep-field-label"
-                  >{{ t("timer.field.game") }}
+                <label class="ep-field-label">{{ t("timer.field.game") }}
                   <span class="ep-field-hint">{{
                     t("timer.field.game_hint")
-                  }}</span></label
-                >
-                <input
-                  v-model="editTimer.required_game"
-                  class="ep-field-input"
-                  placeholder="Just Chatting"
-                />
+                    }}</span></label>
+                <input v-model="editTimer.required_game" class="ep-field-input" placeholder="Just Chatting" />
               </div>
             </div>
 
             <div class="ep-field-group">
-              <label class="ep-field-label"
-                >{{ t("timer.field.condition") }}
+              <label class="ep-field-label">{{ t("timer.field.condition") }}
                 <span class="ep-field-hint">{{
                   t("timer.field.cond_hint")
-                }}</span></label
-              >
-              <input
-                v-model="editTimer.condition"
-                class="ep-field-input ep-mono"
-                placeholder="$channel.viewers > 10"
-              />
+                  }}</span></label>
+              <input v-model="editTimer.condition" class="ep-field-input ep-mono" placeholder="$channel.viewers > 10" />
             </div>
 
             <div class="ep-panel-footer">
-              <button
-                v-if="canDelete"
-                class="ep-btn-delete"
-                @click="
-                  deleteTimer(editOrigName);
-                  editOpen = false;
-                "
-              >
+              <button v-if="canDelete" class="ep-btn-delete" @click="
+                deleteTimer(editOrigName);
+              editOpen = false;
+              ">
                 {{ t("timer.delete") }}
               </button>
               <div v-else></div>
@@ -750,11 +589,8 @@ watch(
                 <button class="ep-btn-cancel" @click="editOpen = false">
                   {{ t("timer.cancel") }}
                 </button>
-                <button
-                  class="ep-btn-save"
-                  @click="saveTimer"
-                  :disabled="!!saving || !editTimer.name || !editTimer.response"
-                >
+                <button class="ep-btn-save" @click="saveTimer"
+                  :disabled="!!saving || !editTimer.name || !editTimer.response">
                   {{ saving ? t("timer.saving") : t("timer.save") }}
                 </button>
               </div>
@@ -766,30 +602,18 @@ watch(
 
     <!-- Share modal -->
     <Teleport to="body">
-      <div
-        v-if="shareOpen"
-        class="ep-modal-overlay"
-        @click.self="shareOpen = false"
-      >
+      <div v-if="shareOpen" class="ep-modal-overlay" @click.self="shareOpen = false">
         <div class="ep-modal">
           <div class="ep-modal-title">
             {{ t("timer.share.title") }}
             <span class="ep-modal-name">{{ shareTimer }}</span>
           </div>
           <div class="ep-modal-sub">{{ t("timer.share.sub") }}</div>
-          <select
-            v-model="shareTarget"
-            class="ep-field-select-sm"
-            style="width: 100%; margin-top: 12px"
-          >
+          <select v-model="shareTarget" class="ep-field-select-sm" style="width: 100%; margin-top: 12px">
             <option value="">{{ t("timer.share.select") }}</option>
-            <option
-              v-for="ch in availableChannels.filter(
-                (c) => c !== session?.channel,
-              )"
-              :key="ch"
-              :value="ch"
-            >
+            <option v-for="ch in availableChannels.filter(
+              (c) => c !== session?.channel,
+            )" :key="ch" :value="ch">
               #{{ ch }}
             </option>
           </select>
@@ -801,11 +625,7 @@ watch(
             <button class="ep-btn-cancel" @click="shareOpen = false">
               {{ t("timer.cancel") }}
             </button>
-            <button
-              class="ep-btn-save"
-              @click="doShare"
-              :disabled="shareSaving || !shareTarget"
-            >
+            <button class="ep-btn-save" @click="doShare" :disabled="shareSaving || !shareTarget">
               {{
                 shareSaving ? t("timer.share.copying") : t("timer.share.btn")
               }}
@@ -828,23 +648,27 @@ watch(
 .timer-toggle-wrap {
   flex-shrink: 0;
 }
+
 .timer-info {
   flex: 1;
   cursor: pointer;
   min-width: 0;
 }
+
 .timer-name {
   font-size: 13px;
   font-weight: 600;
   color: #e0e0e0;
   margin-bottom: 4px;
 }
+
 .timer-meta {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
   margin-bottom: 4px;
 }
+
 .timer-response {
   font-size: 11px;
   color: #555;
@@ -853,32 +677,38 @@ watch(
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .timer-next {
   font-size: 10px;
   color: #9d6cff88;
   margin-top: 2px;
   font-family: "Consolas", "Fira Mono", monospace;
 }
+
 .ep-meta-pill.interval {
   color: #9d6cff;
   border-color: #9d6cff44;
   background: #9d6cff11;
 }
+
 .ep-meta-pill.msgs {
   color: #4ec9b0;
   border-color: #4ec9b044;
   background: #4ec9b011;
 }
+
 .ep-meta-pill.when {
   color: #e5c07b;
   border-color: #e5c07b44;
   background: #e5c07b11;
 }
+
 .ep-meta-pill.game {
   color: #23d18b;
   border-color: #23d18b44;
   background: #23d18b11;
 }
+
 .ep-meta-pill.cond {
   color: #c792ea;
   border-color: #c792ea44;
@@ -890,6 +720,7 @@ watch(
   align-items: center;
   gap: 8px;
 }
+
 .interval-row .ep-field-input {
   flex: 1;
 }
@@ -899,6 +730,7 @@ watch(
   align-items: center;
   gap: 6px;
 }
+
 .new-timer-input {
   height: 32px;
   padding: 0 10px;
@@ -910,13 +742,16 @@ watch(
   outline: none;
   width: 160px;
 }
+
 .new-timer-input:focus {
   border-color: #9d6cff;
 }
+
 .new-timer-input-conflict {
   border-color: #f1494966 !important;
   background: #1c1215 !important;
 }
+
 .new-timer-cancel {
   height: 32px;
   width: 32px;
@@ -926,10 +761,12 @@ watch(
   font-size: 12px;
   cursor: pointer;
 }
+
 .new-timer-cancel:hover {
   color: #e0e0e0;
   border-color: #555;
 }
+
 .new-timer-error {
   font-size: 11px;
   color: #f14949;
@@ -940,23 +777,29 @@ watch(
     flex-wrap: wrap;
     gap: 10px;
   }
+
   .ep-panel-body {
     padding: 14px 16px;
   }
+
   .timer-row {
     padding: 10px 10px;
     gap: 8px;
   }
+
   .ep-row-actions {
     gap: 4px;
   }
+
   .ep-btn-action {
     padding: 0 8px;
     font-size: 10px;
   }
+
   .ep-sync-row {
     flex-wrap: wrap;
   }
+
   .new-timer-input {
     width: 120px;
   }

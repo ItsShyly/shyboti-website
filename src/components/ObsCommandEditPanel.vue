@@ -306,6 +306,15 @@ const saveDisabled = computed(() => {
         </div>
 
         <div class="ep-panel-body">
+          <div class="ep-field-group">
+            <label class="ep-field-label">Chat command</label>
+            <div class="obs-cmd-input-wrap">
+              <span class="obs-cmd-prefix">{{ prefix }}</span>
+              <input v-model="fCommand" class="ep-field-input ep-mono obs-cmd-input" placeholder="scene" maxlength="32"
+                autofocus />
+            </div>
+          </div>
+
           <!-- command type tabs -->
           <div class="ep-field-group">
             <label class="ep-field-label">Type</label>

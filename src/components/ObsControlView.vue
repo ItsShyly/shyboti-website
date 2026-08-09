@@ -115,7 +115,7 @@ const BUILDER_ACTION_LABEL: Record<string, string> = Object.fromEntries(
 );
 
 // vvv state vvv
-const loading = ref(true);
+const loading = ref(false);
 const agentStatus = ref<AgentStatus | null>(null);
 
 const token = ref(""); // shown once after (re)generate
@@ -413,7 +413,6 @@ const connStatusClass = computed(() => {
 // vvv load vvv
 async function load() {
   if (!session.value) return;
-  loading.value = true;
   try {
     const res = await fetch(`${API}/obs/${session.value.channel}`, {
       headers: authHeaders.value,
@@ -437,8 +436,9 @@ async function load() {
       argCommands.value = normalizedArg;
     }
   } catch { }
-  loading.value = false;
   if (agentConnected.value && obsConnected.value) refreshScenes();
+  // >>> load command names in background
+  loadExistingCmdNames();
 }
 
 async function poll() {
@@ -922,7 +922,6 @@ async function forceAllPreviews() {
 // vvv lifecycle vvv
 onMounted(() => {
   load();
-  loadExistingCmdNames();
   pollTimer = setInterval(async () => {
     await poll();
     if (agentConnected.value && obsConnected.value && selectedScene.value)
@@ -939,7 +938,6 @@ watch(
   () => session.value?.channel,
   () => {
     load();
-    loadExistingCmdNames();
   },
 );
 </script>
@@ -1039,7 +1037,7 @@ watch(
                   <span class="obc-live-stat-label">bitrate</span>
                   <span class="obc-live-stat-value">{{
                     bitrateLabel ?? "not streaming"
-                  }}</span>
+                    }}</span>
                 </div>
                 <div class="obc-live-stat">
                   <span class="obc-live-stat-label">preview size</span>
@@ -1103,7 +1101,7 @@ watch(
             <label class="ep-field-label">sources
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obc-source-list">
               <div v-for="src in sources as any[]" :key="src.sceneItemId" class="obc-source-row">
                 <span class="obc-source-name">{{ src.sourceName }}</span>
@@ -1133,7 +1131,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obc-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obc-mixer-row">
                 <div class="obc-mixer-top">
@@ -1191,24 +1189,19 @@ watch(
           </div>
 
           <template v-if="builderView === 'command'">
-            <div class="obc-label-row">
-              <div class="obc-label-col">
-                <span class="obc-col-label">trigger</span>
-                <div class="obc-trigger-wrap">
-                  <span class="obc-bind-prefix">+</span>
-                  <input v-model="builderCmd" class="obc-trigger-input ep-mono" :class="{
-                    'obc-trigger-conflict': existingCmdNames.includes(
-                      builderCmd.trim().replace(/^\+/, '').toLowerCase(),
-                    ),
-                  }" placeholder="cmd" maxlength="20" :title="existingCmdNames.includes(
-                    builderCmd.trim().replace(/^\+/, '').toLowerCase(),
-                  )
-                    ? 'This name is already used by a custom command'
-                    : ''
-                    " @keydown.enter="!addDisabled && addBuilderCommand()" />
-                </div>
-              </div>
+            <!-- Chat command name -->
+            <div class="obc-cmd-name-row">
+              <span class="obc-cmd-name-prefix">+</span>
+              <input v-model="builderCmd" class="obc-cmd-name-input ep-mono"
+                :class="{ 'obc-trigger-conflict': existingCmdNames.includes(builderCmd.trim().replace(/^\+/, '').toLowerCase()) }"
+                placeholder="command name" maxlength="20"
+                :title="existingCmdNames.includes(builderCmd.trim().replace(/^\+/, '').toLowerCase()) ? 'This name is already used by another command' : ''"
+                @keydown.enter="!addDisabled && addBuilderCommand()" />
+              <span v-if="existingCmdNames.includes(builderCmd.trim().replace(/^\+/, '').toLowerCase())"
+                class="obc-cmd-name-conflict">already taken</span>
+            </div>
 
+            <div class="obc-label-row">
               <div class="obc-label-col">
                 <span class="obc-col-label">action</span>
                 <select v-model="builderAction" class="obc-action-select">
@@ -1258,7 +1251,7 @@ watch(
                 <!-- non-volume: chat arg -->
                 <span v-else-if="builderMode === 'argument'" class="obc-arg-badge">&lt;{{
                   builderAction === "scene" ? "scene" : "source"
-                  }}&gt;</span>
+                }}&gt;</span>
 
                 <!-- non-volume: preset scene - combo: type or pick -->
                 <template v-else-if="builderAction === 'scene'">
@@ -1318,7 +1311,7 @@ watch(
                       +{{ c.command }}
                       <span v-if="c.actionHint" class="cmd-usecase-arg">{{
                         c.actionHint
-                      }}</span>
+                        }}</span>
                     </td>
                     <td>
                       {{ c.actionLabel }}
@@ -1326,7 +1319,7 @@ watch(
                     <td>
                       <span class="obc-type-badge" :class="c.badgeClass">{{
                         c.badgeText
-                      }}</span>
+                        }}</span>
                     </td>
                     <td class="obc-td-target" :class="{
                       'obc-td-target-arg': c.badgeClass === 'arg-type',
@@ -2517,32 +2510,59 @@ watch(
   white-space: nowrap;
 }
 
-.obc-trigger-wrap {
+/* builder chat command name header */
+.obc-cmd-name-row {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 6px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #1e1e24;
 }
 
-.obc-trigger-input {
-  width: 74px;
-  height: 28px;
-  padding: 0 6px;
-  background: #0a0a0d;
-  border: 1px solid #2a2a30;
-  color: #c4a0ff;
+.obc-cmd-name-prefix {
+  font-size: 22px;
+  font-weight: 700;
+  color: #9d6cff;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.obc-cmd-name-input {
+  flex: 1;
+  max-width: 260px;
+  height: 36px;
+  padding: 0 8px;
+  font-size: 17px;
   font-weight: 600;
-  font-size: 12px;
-  transition: border-color 0.15s;
-}
-
-.obc-trigger-input:focus {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid #2a2a38;
+  color: #e0e0e0;
   outline: none;
-  border-color: #6f2bff88;
+  transition: border-color .15s;
 }
 
-.obc-trigger-conflict {
-  border-color: #f1494988 !important;
-  color: #f14949 !important;
+.obc-cmd-name-input::placeholder {
+  color: #2a2a3a;
+  font-weight: 400;
+}
+
+.obc-cmd-name-input:focus {
+  border-bottom-color: #9d6cff;
+}
+
+.obc-cmd-name-input.obc-trigger-conflict {
+  border-bottom-color: #f14949;
+  color: #f14949;
+}
+
+.obc-cmd-name-conflict {
+  font-size: 10px;
+  color: #f14949;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
 }
 
 .obc-action-select,
