@@ -25,7 +25,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.automations": "Automations",
     "nav.roles": "Roles",
     "nav.logs": "Logs",
-    "nav.more": "Tools",
+    "nav.uploads": "Tools",
     "nav.tools": "Tools",
     "nav.features": "Features",
     "nav.settings": "Settings",
@@ -551,15 +551,15 @@ const translations: Record<Locale, Record<string, string>> = {
     "settings.remove.done": "ShyBoti has left the channel.",
     "settings.remove.error": "Could not remove bot.",
 
-    // >>> More <<<
-    "more.images": "Images",
-    "more.images.sub": "Host images, share links",
-    "more.images.your": "Your Images",
-    "more.notes": "Notes",
-    "more.notes.sub": "Create and share text snippets",
-    "more.notes.your": "Your Notes",
-    "more.chatterino.header": "Chatterino setup",
-    "more.chatterino.bind_hint":
+    // >>> Uploads <<<
+    "uploads.images": "Images",
+    "uploads.images.sub": "Host images, share links",
+    "uploads.images.your": "Your Images",
+    "uploads.notes": "Notes",
+    "uploads.notes.sub": "Create and share text snippets",
+    "uploads.notes.your": "Your Notes",
+    "uploads.chatterino.header": "Chatterino setup",
+    "uploads.chatterino.bind_hint":
       "To bind uploads to your account (shows in gallery, counts toward your limit):",
 
     // >>> Images page <<<
@@ -720,7 +720,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.automations": "Automationen",
     "nav.roles": "Rollen",
     "nav.logs": "Logs",
-    "nav.more": "Tools",
+    "nav.uploads": "Tools",
     "nav.tools": "Tools",
     "nav.features": "Features",
     "nav.settings": "Einstellungen",
@@ -1262,15 +1262,15 @@ const translations: Record<Locale, Record<string, string>> = {
     "settings.remove.done": "ShyBoti hat den Channel verlassen.",
     "settings.remove.error": "Bot konnte nicht entfernt werden.",
 
-    // >>> More <<<
-    "more.images": "Bilder",
-    "more.images.sub": "Bilder hosten, Links teilen",
-    "more.images.your": "Deine Bilder",
-    "more.notes": "Notizen",
-    "more.notes.sub": "Texte erstellen und teilen",
-    "more.notes.your": "Deine Notizen",
-    "more.chatterino.header": "Chatterino-Einrichtung",
-    "more.chatterino.bind_hint":
+    // >>> Uploads <<<
+    "uploads.images": "Bilder",
+    "uploads.images.sub": "Bilder hosten, Links teilen",
+    "uploads.images.your": "Deine Bilder",
+    "uploads.notes": "Notizen",
+    "uploads.notes.sub": "Texte erstellen und teilen",
+    "uploads.notes.your": "Deine Notizen",
+    "uploads.chatterino.header": "Chatterino-Einrichtung",
+    "uploads.chatterino.bind_hint":
       "Um Uploads mit deinem Account zu verknüpfen (erscheint in der Galerie, zählt zu deinem Limit):",
 
     // >>> Images page <<<

@@ -13,22 +13,22 @@ interface ActivityEntry {
   id: number;
   channel: string;
   type:
-    | "cmd_added"
-    | "cmd_changed"
-    | "cmd_removed"
-    | "ban"
-    | "unban"
-    | "timeout"
-    | "timer_added"
-    | "timer_changed"
-    | "timer_removed"
-    | "timer_enabled"
-    | "timer_disabled"
-    | "trigger_added"
-    | "trigger_changed"
-    | "trigger_removed"
-    | "trigger_enabled"
-    | "trigger_disabled";
+  | "cmd_added"
+  | "cmd_changed"
+  | "cmd_removed"
+  | "ban"
+  | "unban"
+  | "timeout"
+  | "timer_added"
+  | "timer_changed"
+  | "timer_removed"
+  | "timer_enabled"
+  | "timer_disabled"
+  | "trigger_added"
+  | "trigger_changed"
+  | "trigger_removed"
+  | "trigger_enabled"
+  | "trigger_disabled";
   actor: string;
   target: string;
   detail: string;
@@ -224,7 +224,7 @@ async function startSSE() {
       // Ensure today is never collapsed when new entries arrive
       const todayLabel = fmtDate(Date.now());
       collapsedDays.value.delete(todayLabel);
-    } catch {}
+    } catch { }
   };
 }
 
@@ -350,12 +350,6 @@ function goToLogs(e: ActivityEntry) {
   router.push({ path: "/logs", query: { channel: ch, user } });
 }
 
-function goToMore(e: ActivityEntry) {
-  const ch = e.channel;
-  const user = e.target;
-  router.push({ path: "/more", query: { channel: ch, user } });
-}
-
 // >>> Navigate to automations for timer/trigger events
 function goToAutomations(e: ActivityEntry) {
   const tab = e.type.startsWith("timer") ? "timers" : "triggers";
@@ -385,7 +379,7 @@ function openUserPopup(username: string, channel: string, evt: MouseEvent) {
     .then((u) => {
       popupUser.value = u;
     })
-    .catch(() => {})
+    .catch(() => { })
     .finally(() => {
       popupLoading.value = false;
     });
@@ -508,38 +502,25 @@ function fmtActor(actor: string) {
         <div class="dash-title">{{ t("dash.title") }}</div>
         <div class="dash-sub">
           {{ t("dash.sub") }}
-          <select
-            class="chan-select"
-            v-model="viewChannel"
-            @change="fetchActivity"
-          >
+          <select class="chan-select" v-model="viewChannel" @change="fetchActivity">
             <option v-if="availableChannels.length > 1" :value="ALL_CHANNELS">
               {{ t("dash.all") }}
             </option>
-            <option
-              v-for="ch in availableChannels.length
-                ? availableChannels
-                : [session?.channel ?? '']"
-              :key="ch"
-              :value="ch"
-            >
+            <option v-for="ch in availableChannels.length
+              ? availableChannels
+              : [session?.channel ?? '']" :key="ch" :value="ch">
               #{{ ch }}
             </option>
           </select>
         </div>
       </div>
       <div class="dash-header-right">
-        <span
-          class="live-dot"
-          :class="liveStatus"
-          :title="
-            liveStatus === 'live'
-              ? 'Live'
-              : liveStatus === 'connecting'
-                ? 'Connecting…'
-                : 'Offline'
-          "
-        ></span>
+        <span class="live-dot" :class="liveStatus" :title="liveStatus === 'live'
+            ? 'Live'
+            : liveStatus === 'connecting'
+              ? 'Connecting…'
+              : 'Offline'
+          "></span>
         <button class="refresh-btn" @click="fetchActivity" :disabled="loading">
           {{ loading ? "…" : "↺" }}
         </button>
@@ -548,20 +529,11 @@ function fmtActor(actor: string) {
 
     <!-- Type filter chips grouped -->
     <div class="type-filters">
-      <button
-        v-for="group in TYPE_GROUPS"
-        :key="group.label"
-        class="group-chip"
-        :class="{ active: group.types.every((t) => activeTypes.has(t)) }"
-        @click="toggleGroup(group.types)"
-      >
+      <button v-for="group in TYPE_GROUPS" :key="group.label" class="group-chip"
+        :class="{ active: group.types.every((t) => activeTypes.has(t)) }" @click="toggleGroup(group.types)">
         {{ group.label }}
       </button>
-      <button
-        v-if="activeTypes.size > 0"
-        class="clear-chip"
-        @click="activeTypes = new Set()"
-      >
+      <button v-if="activeTypes.size > 0" class="clear-chip" @click="activeTypes = new Set()">
         {{ t("dash.filter.clear") }}
       </button>
     </div>
@@ -580,7 +552,7 @@ function fmtActor(actor: string) {
         <div class="feed-day-header" @click.stop="toggleDay(group.date)">
           <span class="day-chevron">{{
             collapsedDays.has(group.date) ? "▶" : "▼"
-          }}</span>
+            }}</span>
           <span class="day-label">{{ group.date }}</span>
           <span class="day-count">{{ group.entries.length }}</span>
         </div>
@@ -588,80 +560,48 @@ function fmtActor(actor: string) {
         <!-- Entries -->
         <template v-if="!collapsedDays.has(group.date)">
           <div v-for="e in group.entries" :key="e.id" class="feed-row">
-            <div
-              class="feed-icon"
-              :style="{
-                color: TYPE_META[e.type]?.color,
-                borderColor: TYPE_META[e.type]?.color + '44',
-              }"
-            >
+            <div class="feed-icon" :style="{
+              color: TYPE_META[e.type]?.color,
+              borderColor: TYPE_META[e.type]?.color + '44',
+            }">
               {{ TYPE_META[e.type]?.icon ?? "•" }}
             </div>
 
             <div class="feed-body">
-              <span
-                class="feed-type"
-                :style="{ color: TYPE_META[e.type]?.color }"
-                >{{ TYPE_META[e.type]?.label }}</span
-              >
+              <span class="feed-type" :style="{ color: TYPE_META[e.type]?.color }">{{ TYPE_META[e.type]?.label }}</span>
 
               <!-- Target: clickable to open user popup -->
-              <span
-                class="feed-target"
-                :class="{ 'mod-target': !!e.target }"
-                @click.stop="
-                  e.target && openUserPopup(e.target, e.channel, $event)
-                "
-                >{{ e.target }}</span
-              >
+              <span class="feed-target" :class="{ 'mod-target': !!e.target }" @click.stop="
+                e.target && openUserPopup(e.target, e.channel, $event)
+                ">{{ e.target }}</span>
 
               <!-- by actor (only if not 'mod' for cmd events) -->
-              <span class="feed-by" v-if="e.actor"
-                >by {{ fmtActor(e.actor) }}</span
-              >
+              <span class="feed-by" v-if="e.actor">by {{ fmtActor(e.actor) }}</span>
 
               <!-- detail (reason / duration) -->
-              <span v-if="fmtDetail(e)" class="feed-detail"
-                >· {{ fmtDetail(e) }}</span
-              >
+              <span v-if="fmtDetail(e)" class="feed-detail">· {{ fmtDetail(e) }}</span>
 
-              <span v-if="viewChannel === ALL_CHANNELS" class="feed-ch"
-                >#{{ e.channel }}</span
-              >
+              <span v-if="viewChannel === ALL_CHANNELS" class="feed-ch">#{{ e.channel }}</span>
             </div>
 
             <div class="feed-right">
               <!-- Action buttons -->
               <div class="feed-actions">
                 <!-- Log link for ban/timeout/unban -->
-                <button
-                  v-if="['ban', 'timeout', 'unban'].includes(e.type)"
-                  class="act-btn"
-                  title="View user logs"
-                  @click.stop="goToLogs(e)"
-                >
+                <button v-if="['ban', 'timeout', 'unban'].includes(e.type)" class="act-btn" title="View user logs"
+                  @click.stop="goToLogs(e)">
                   logs
                 </button>
                 <!-- Edit command for cmd events -->
-                <button
-                  v-if="
-                    ['cmd_added', 'cmd_changed', 'cmd_removed'].includes(e.type)
-                  "
-                  class="act-btn"
-                  title="Edit command"
-                  @click.stop="goToCommand(e)"
-                >
+                <button v-if="
+                  ['cmd_added', 'cmd_changed', 'cmd_removed'].includes(e.type)
+                " class="act-btn" title="Edit command" @click.stop="goToCommand(e)">
                   edit
                 </button>
                 <!-- Go to automations for timer/trigger events -->
-                <button
-                  v-if="
-                    e.type.startsWith('timer') || e.type.startsWith('trigger')
-                  "
-                  class="act-btn"
-                  title="View in Automations"
-                  @click.stop="goToAutomations(e)"
-                >
+                <button v-if="
+                  e.type.startsWith('timer') || e.type.startsWith('trigger')
+                " class="act-btn" title="View in Automations" @click.stop="goToAutomations(e)">
                   ↻ auto
                 </button>
               </div>
@@ -673,19 +613,10 @@ function fmtActor(actor: string) {
     </div>
 
     <!-- User popup -->
-    <div
-      v-if="popup"
-      class="user-popup"
-      :style="{ top: popup.y + 'px', left: popup.x + 'px' }"
-      @click.stop
-    >
+    <div v-if="popup" class="user-popup" :style="{ top: popup.y + 'px', left: popup.x + 'px' }" @click.stop>
       <div class="popup-header">
         <div class="popup-avatar-wrap">
-          <img
-            v-if="popupUser?.avatar"
-            :src="popupUser.avatar"
-            class="popup-avatar"
-          />
+          <img v-if="popupUser?.avatar" :src="popupUser.avatar" class="popup-avatar" />
           <div v-else class="popup-avatar-placeholder">
             {{ popup.entry.target[0]?.toUpperCase() }}
           </div>
@@ -713,34 +644,26 @@ function fmtActor(actor: string) {
             <div v-if="popupUser.ownFollowers !== null" class="popup-stat">
               <span class="stat-val">{{
                 fmtFollowers(popupUser.ownFollowers)
-              }}</span>
+                }}</span>
               <span class="stat-lbl">followers</span>
             </div>
           </div>
           <!-- Follow / Sub relationship rows -->
           <div class="popup-relations">
-            <div
-              class="popup-rel"
-              :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'"
-            >
+            <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">
               <span class="rel-icon">{{
                 popupUser.followedAt ? "♥" : "♥"
-              }}</span>
+                }}</span>
               <span class="rel-label">
-                <template v-if="popupUser.followedAt"
-                  >Following for
-                  {{ fmtDuration(popupUser.followedAt) }}</template
-                >
+                <template v-if="popupUser.followedAt">Following for
+                  {{ fmtDuration(popupUser.followedAt) }}</template>
                 <template v-else>Not following</template>
               </span>
             </div>
-            <div
-              class="popup-rel"
-              :class="popupUser.subbedSince ? 'rel-yes' : 'rel-no'"
-            >
+            <div class="popup-rel" :class="popupUser.subbedSince ? 'rel-yes' : 'rel-no'">
               <span class="rel-icon">{{
                 popupUser.subbedSince ? "★" : "★"
-              }}</span>
+                }}</span>
               <span class="rel-label">
                 <template v-if="popupUser.subbedSince">
                   {{ subTierLabel(popupUser.subTier ?? "1000") }} ·
@@ -755,26 +678,16 @@ function fmtActor(actor: string) {
           <div v-if="popupUser?.paint" class="popup-paint">
             <div class="popup-paint-label">7TV Paint</div>
             <div class="popup-paint-display">
-              <span
-                class="popup-paint-name"
-                :style="paintNameStyle(popupUser.paint)"
-                >{{ popupUser.paint.name }}</span
-              >
+              <span class="popup-paint-name" :style="paintNameStyle(popupUser.paint)">{{ popupUser.paint.name }}</span>
             </div>
           </div>
 
           <!-- Name history -->
           <div v-if="popupUser.nameHistory?.length" class="popup-names">
             <div class="popup-names-label">Previous names</div>
-            <div
-              v-for="n in popupUser.nameHistory"
-              :key="n.name"
-              class="popup-name-row"
-            >
+            <div v-for="n in popupUser.nameHistory" :key="n.name" class="popup-name-row">
               <span class="name-val">{{ n.name }}</span>
-              <span v-if="n.lastSeen" class="name-when"
-                >{{ fmtDuration(n.lastSeen) }} ago</span
-              >
+              <span v-if="n.lastSeen" class="name-when">{{ fmtDuration(n.lastSeen) }} ago</span>
             </div>
           </div>
         </template>
@@ -784,19 +697,13 @@ function fmtActor(actor: string) {
       </div>
 
       <div class="popup-actions">
-        <button
-          class="popup-btn"
-          @click="
-            goToLogs(popup.entry);
-            closePopup();
-          "
-        >
+        <button class="popup-btn" @click="
+          goToLogs(popup.entry);
+        closePopup();
+        ">
           Logs
         </button>
-        <button
-          class="popup-btn"
-          @click="openUsercardPopout(popup.entry.target, popup.entry.channel)"
-        >
+        <button class="popup-btn" @click="openUsercardPopout(popup.entry.target, popup.entry.channel)">
           ↗ Twitch
         </button>
       </div>
@@ -818,12 +725,14 @@ function fmtActor(actor: string) {
   align-items: flex-start;
   justify-content: space-between;
 }
+
 .dash-title {
   font-size: 18px;
   font-weight: 700;
   color: #e0e0e0;
   margin-bottom: 4px;
 }
+
 .dash-sub {
   font-size: 12px;
   color: #555;
@@ -831,6 +740,7 @@ function fmtActor(actor: string) {
   align-items: center;
   gap: 6px;
 }
+
 .chan-select {
   background: #111217;
   border: 1px solid #2a2a30;
@@ -847,32 +757,40 @@ function fmtActor(actor: string) {
   align-items: center;
   gap: 10px;
 }
+
 .live-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
 }
+
 .live-dot.live {
   background: #23d18b;
   box-shadow: 0 0 6px #23d18b88;
   animation: pulse-live 2s ease-in-out infinite;
 }
+
 .live-dot.connecting {
   background: #e5c07b;
 }
+
 .live-dot.off {
   background: #333;
 }
+
 @keyframes pulse-live {
+
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.4;
   }
 }
+
 .refresh-btn {
   height: 30px;
   padding: 0 12px;
@@ -883,10 +801,12 @@ function fmtActor(actor: string) {
   font-size: 13px;
   cursor: pointer;
 }
+
 .refresh-btn:hover:not(:disabled) {
   color: #fff;
   border-color: #555;
 }
+
 .refresh-btn:disabled {
   opacity: 0.3;
 }
@@ -897,6 +817,7 @@ function fmtActor(actor: string) {
   padding: 40px;
   text-align: center;
 }
+
 .feed-empty.err {
   color: #f14949;
 }
@@ -908,6 +829,7 @@ function fmtActor(actor: string) {
   padding: 2px 0 4px;
   flex-shrink: 0;
 }
+
 .group-chip {
   height: 26px;
   padding: 0 14px;
@@ -923,15 +845,18 @@ function fmtActor(actor: string) {
     border-color 0.15s,
     background 0.15s;
 }
+
 .group-chip:hover {
   color: #ccc;
   border-color: #555;
 }
+
 .group-chip.active {
   color: #9d6cff;
   border-color: #6f2bff88;
   background: #6f2bff15;
 }
+
 .clear-chip {
   height: 22px;
   padding: 0 9px;
@@ -944,6 +869,7 @@ function fmtActor(actor: string) {
   margin-left: 2px;
   transition: color 0.15s;
 }
+
 .clear-chip:hover {
   color: #aaa;
   border-color: #555;
@@ -973,17 +899,21 @@ function fmtActor(actor: string) {
   z-index: 2;
   transition: background 0.1s;
 }
+
 .feed-day-header:hover {
   background: #141418;
 }
+
 .feed-day-header:first-child {
   border-top: none;
 }
+
 .day-chevron {
   font-size: 9px;
   color: #444;
   width: 10px;
 }
+
 .day-label {
   font-size: 10px;
   color: #555;
@@ -991,6 +921,7 @@ function fmtActor(actor: string) {
   letter-spacing: 0.08em;
   flex: 1;
 }
+
 .day-count {
   font-size: 10px;
   color: #333;
@@ -1008,9 +939,11 @@ function fmtActor(actor: string) {
   border-bottom: 1px solid #1e1e1e;
   transition: background 0.1s;
 }
+
 .feed-row:hover {
   background: #1c1c20;
 }
+
 .feed-row:hover .feed-actions {
   opacity: 1;
 }
@@ -1035,6 +968,7 @@ function fmtActor(actor: string) {
   min-width: 0;
   flex-wrap: wrap;
 }
+
 .feed-type {
   font-size: 11px;
   font-weight: 700;
@@ -1042,27 +976,33 @@ function fmtActor(actor: string) {
   letter-spacing: 0.04em;
   flex-shrink: 0;
 }
+
 .feed-target {
   font-size: 12px;
   color: #e0e0e0;
   font-weight: 600;
 }
+
 .feed-target.mod-target {
   cursor: pointer;
   border-bottom: 1px dashed #444;
 }
+
 .feed-target.mod-target:hover {
   color: #9d6cff;
   border-bottom-color: #9d6cff;
 }
+
 .feed-by {
   font-size: 11px;
   color: #444;
 }
+
 .feed-detail {
   font-size: 11px;
   color: #555;
 }
+
 .feed-ch {
   font-size: 10px;
   color: #6f2bff;
@@ -1077,6 +1017,7 @@ function fmtActor(actor: string) {
   gap: 4px;
   flex-shrink: 0;
 }
+
 .feed-time {
   font-size: 10px;
   color: #444;
@@ -1088,6 +1029,7 @@ function fmtActor(actor: string) {
   opacity: 0;
   transition: opacity 0.15s;
 }
+
 .act-btn {
   height: 18px;
   padding: 0 7px;
@@ -1101,6 +1043,7 @@ function fmtActor(actor: string) {
     color 0.1s,
     border-color 0.1s;
 }
+
 .act-btn:hover {
   color: #9d6cff;
   border-color: #9d6cff44;
@@ -1117,6 +1060,7 @@ function fmtActor(actor: string) {
   transform: translate(-50%, 12px);
   overflow: hidden;
 }
+
 .popup-header {
   display: flex;
   align-items: center;
@@ -1124,9 +1068,11 @@ function fmtActor(actor: string) {
   padding: 12px 12px 10px;
   border-bottom: 1px solid #1e1e22;
 }
+
 .popup-avatar-wrap {
   flex-shrink: 0;
 }
+
 .popup-avatar {
   width: 40px;
   height: 40px;
@@ -1134,6 +1080,7 @@ function fmtActor(actor: string) {
   display: block;
   border: 2px solid #2a2a30;
 }
+
 .popup-avatar-placeholder {
   width: 40px;
   height: 40px;
@@ -1147,10 +1094,12 @@ function fmtActor(actor: string) {
   font-weight: 700;
   color: #9d6cff;
 }
+
 .popup-title-block {
   flex: 1;
   min-width: 0;
 }
+
 .popup-name {
   font-size: 13px;
   font-weight: 700;
@@ -1160,10 +1109,12 @@ function fmtActor(actor: string) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .popup-sub {
   font-size: 11px;
   color: #555;
 }
+
 .popup-close {
   background: none;
   border: none;
@@ -1174,9 +1125,11 @@ function fmtActor(actor: string) {
   line-height: 1;
   flex-shrink: 0;
 }
+
 .popup-close:hover {
   color: #aaa;
 }
+
 .popup-body {
   padding: 12px 14px;
   min-height: 72px;
@@ -1184,12 +1137,14 @@ function fmtActor(actor: string) {
   flex-direction: column;
   gap: 10px;
 }
+
 .popup-loading {
   font-size: 12px;
   color: #555;
   text-align: center;
   padding: 16px 0;
 }
+
 .popup-desc {
   font-size: 11px;
   color: #888;
@@ -1200,31 +1155,37 @@ function fmtActor(actor: string) {
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
+
 .popup-stats {
   display: flex;
   gap: 20px;
 }
+
 .popup-stat {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
+
 .stat-val {
   font-size: 13px;
   font-weight: 700;
   color: #e0e0e0;
 }
+
 .stat-lbl {
   font-size: 10px;
   color: #555;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
 .popup-relations {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+
 .popup-rel {
   display: flex;
   align-items: center;
@@ -1232,26 +1193,32 @@ function fmtActor(actor: string) {
   padding: 5px 8px;
   font-size: 12px;
 }
+
 .popup-rel.rel-yes {
   background: #1a2a1a;
   color: #23d18b;
 }
+
 .popup-rel.rel-no {
   background: #1e1e22;
   color: #444;
 }
+
 .rel-icon {
   font-size: 11px;
   flex-shrink: 0;
 }
+
 .rel-label {
   flex: 1;
 }
+
 .popup-names {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
+
 .popup-names-label {
   font-size: 10px;
   color: #555;
@@ -1259,6 +1226,7 @@ function fmtActor(actor: string) {
   letter-spacing: 0.05em;
   margin-bottom: 2px;
 }
+
 .popup-name-row {
   display: flex;
   justify-content: space-between;
@@ -1266,13 +1234,16 @@ function fmtActor(actor: string) {
   padding: 3px 0;
   border-bottom: 1px solid #1e1e22;
 }
+
 .popup-name-row:last-child {
   border-bottom: none;
 }
+
 .name-val {
   font-size: 12px;
   color: #aaa;
 }
+
 .name-when {
   font-size: 10px;
   color: #444;
@@ -1284,27 +1255,32 @@ function fmtActor(actor: string) {
   flex-direction: column;
   gap: 4px;
 }
+
 .popup-paint-label {
   font-size: 10px;
   color: #555;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
 .popup-paint-display {
   padding: 6px 8px;
   background: #111217;
   border: 1px solid #1e1e22;
 }
+
 .popup-paint-name {
   font-size: 14px;
   font-weight: 700;
   font-family: inherit;
 }
+
 .popup-actions {
   display: flex;
   gap: 1px;
   border-top: 1px solid #1e1e22;
 }
+
 .popup-btn {
   flex: 1;
   height: 32px;
@@ -1319,9 +1295,11 @@ function fmtActor(actor: string) {
     background 0.15s,
     color 0.15s;
 }
+
 .popup-btn:last-child {
   border-right: none;
 }
+
 .popup-btn:hover {
   background: #1e1e24;
   color: #9d6cff;
@@ -1332,15 +1310,19 @@ function fmtActor(actor: string) {
     flex-wrap: wrap;
     gap: 8px;
   }
+
   .type-filters {
     flex-wrap: wrap;
   }
+
   .feed-body {
     font-size: 11px;
   }
+
   .feed-right {
     align-items: flex-end;
   }
+
   .user-popup {
     width: calc(100vw - 20px);
     transform: translate(-50%, 10px);

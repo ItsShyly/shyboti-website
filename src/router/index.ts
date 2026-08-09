@@ -1,56 +1,80 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { defineAsyncComponent } from "vue";
 
-// >>> Eagerly import the most-visited routes to avoid navigation lag on first visit.
-// >>> Less-visited routes stay lazy so initial bundle stays small.
-import DashboardView from "../components/DashboardView.vue";
-import CommandsView from "../components/CommandsView.vue";
-import AutomationsView from "../components/AutomationsView.vue";
-import LogsView from "../components/LogsView.vue";
-import UploadsView from "../components/UploadsView.vue";
+import RouteLoading from "../components/shared/RouteLoading.vue";
+
+// >>> defineAsyncComponent for navigation
+function lazy(loader: () => Promise<any>) {
+  return defineAsyncComponent({
+    loader,
+    loadingComponent: RouteLoading,
+    delay: 0,
+  });
+}
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
-    { path: "/", component: () => import("../components/HomeView.vue") },
+    { path: "/", component: lazy(() => import("../components/HomeView.vue")) },
     { path: "/home", redirect: "/" },
-    { path: "/dashboard", component: DashboardView },
-    { path: "/commands", component: CommandsView },
-    // channel/user are now path segments (/logs/channel/user) instead of
-    // query params - shorter, easier to share/type. Both optional so /logs
-    // alone still works. Legacy ?channel=&user= links are still read by
-    // LogsView for backwards compatibility.
-    { path: "/logs/:channel?/:user?", component: LogsView },
-    { path: "/uploads", component: UploadsView },
-    { path: "/tools", component: () => import("../components/ToolsView.vue") },
-    { path: "/more", redirect: "/uploads" },
+    {
+      path: "/dashboard",
+      component: lazy(() => import("../components/DashboardView.vue")),
+    },
+    {
+      path: "/commands",
+      component: lazy(() => import("../components/CommandsView.vue")),
+    },
+
+    {
+      path: "/logs/:channel?/:user?",
+      component: lazy(() => import("../components/LogsView.vue")),
+    },
+    {
+      path: "/uploads",
+      component: lazy(() => import("../components/UploadsView.vue")),
+    },
+    {
+      path: "/tools",
+      component: lazy(() => import("../components/ToolsView.vue")),
+    },
     {
       path: "/images",
-      component: () => import("../components/ImagesView.vue"),
+      component: lazy(() => import("../components/ImagesView.vue")),
     },
     {
       path: "/obs-widgets",
-      component: () => import("../components/ObsView.vue"),
+      component: lazy(() => import("../components/ObsView.vue")),
     },
     {
       path: "/obs-control",
-      component: () => import("../components/ObsControlView.vue"),
+      component: lazy(() => import("../components/ObsControlView.vue")),
     },
-    { path: "/notes", component: () => import("../components/NotesView.vue") },
+    {
+      path: "/notes",
+      component: lazy(() => import("../components/NotesView.vue")),
+    },
     {
       path: "/moderation",
-      component: () => import("../components/ModerationView.vue"),
+      component: lazy(() => import("../components/ModerationView.vue")),
     },
-    { path: "/automations", component: AutomationsView },
+    {
+      path: "/automations",
+      component: lazy(() => import("../components/AutomationsView.vue")),
+    },
     { path: "/timers", redirect: "/automations?tab=timers" },
     { path: "/triggers", redirect: "/automations?tab=triggers" },
-    { path: "/roles", component: () => import("../components/RolesView.vue") },
+    {
+      path: "/roles",
+      component: lazy(() => import("../components/RolesView.vue")),
+    },
     {
       path: "/settings",
-      component: () => import("../components/SettingsView.vue"),
+      component: lazy(() => import("../components/SettingsView.vue")),
     },
     {
       path: "/privacy",
-      component: () => import("../components/PrivacyView.vue"),
+      component: lazy(() => import("../components/PrivacyView.vue")),
     },
     { path: "/:path(.*)", redirect: "/" },
   ],

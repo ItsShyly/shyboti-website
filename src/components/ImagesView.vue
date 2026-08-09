@@ -178,7 +178,7 @@ async function applyCrop() {
   );
 }
 
-// >>> If ?gallery=1 was passed from MoreView, open gallery directly
+// >>> If ?gallery=1 was passed from UploadsView, open gallery directly
 onMounted(() => {
   if (route.query.gallery) switchView("gallery");
 });
@@ -362,7 +362,7 @@ async function uploadFiles(files: File[]) {
 }
 
 async function copyLink(url: string) {
-  await navigator.clipboard.writeText(url).catch(() => {});
+  await navigator.clipboard.writeText(url).catch(() => { });
   lastCopied.value = true;
   setTimeout(() => (lastCopied.value = false), 1800);
 }
@@ -376,7 +376,7 @@ async function loadGallery() {
       headers["Authorization"] = `Bearer ${session.value.token}`;
     const res = await fetch(`${API}/images/my`, { headers });
     if (res.ok) images.value = (await res.json()) as UploadedImage[];
-  } catch {}
+  } catch { }
   galleryLoad.value = false;
 }
 
@@ -395,7 +395,7 @@ async function deleteImage(id: string) {
       headers["Authorization"] = `Bearer ${session.value.token}`;
     await fetch(`${API}/images/${id}`, { method: "DELETE", headers });
     images.value = images.value.filter((img) => img.id !== id);
-  } catch {}
+  } catch { }
 }
 
 function fmtSize(bytes: number) {
@@ -427,9 +427,7 @@ function switchView(v: "upload" | "gallery") {
           {{ t("images.back") }}
         </button>
         <div class="gallery-title">{{ t("images.your") }}</div>
-        <span class="gallery-count" v-if="images.length"
-          >{{ images.length }} / 100</span
-        >
+        <span class="gallery-count" v-if="images.length">{{ images.length }} / 100</span>
       </div>
       <div v-if="galleryLoad" class="gallery-empty">
         {{ t("images.loading") }}
@@ -439,27 +437,10 @@ function switchView(v: "upload" | "gallery") {
       </div>
       <div v-else class="gallery-grid">
         <div v-for="img in images" :key="img.id" class="gallery-item">
-          <a
-            :href="imageUrl(img.id)"
-            target="_blank"
-            rel="noopener"
-            class="gallery-thumb-wrap"
-          >
-            <video
-              v-if="img.mime?.startsWith('video/')"
-              :src="imageUrl(img.id)"
-              class="gallery-thumb"
-              muted
-              loop
-              preload="metadata"
-            />
-            <img
-              v-else
-              :src="imageUrl(img.id)"
-              :alt="img.filename"
-              class="gallery-thumb"
-              loading="lazy"
-            />
+          <a :href="imageUrl(img.id)" target="_blank" rel="noopener" class="gallery-thumb-wrap">
+            <video v-if="img.mime?.startsWith('video/')" :src="imageUrl(img.id)" class="gallery-thumb" muted loop
+              preload="metadata" />
+            <img v-else :src="imageUrl(img.id)" :alt="img.filename" class="gallery-thumb" loading="lazy" />
           </a>
           <div class="gallery-item-info">
             <div class="gallery-item-name">{{ img.filename }}</div>
@@ -473,11 +454,7 @@ function switchView(v: "upload" | "gallery") {
               </button>
             </div>
           </div>
-          <button
-            class="delete-btn"
-            :class="{ confirm: deleteId === img.id }"
-            @click="deleteImage(img.id)"
-          >
+          <button class="delete-btn" :class="{ confirm: deleteId === img.id }" @click="deleteImage(img.id)">
             {{ deleteId === img.id ? "?" : "✕" }}
           </button>
         </div>
@@ -493,23 +470,12 @@ function switchView(v: "upload" | "gallery") {
       </div>
 
       <!-- Drop zone -->
-      <div
-        class="dropzone"
-        :class="{ dragging: isDragging, has_link: !!lastLink }"
-        @dragenter="onDragEnter"
-        @dragleave="onDragLeave"
-        @dragover="onDragOver"
-        @drop="onDrop"
-        @click="!uploading && !lastLink && fileInputRef?.click()"
-      >
-        <input
-          ref="fileInputRef"
-          type="file"
-          accept="image/*,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/mpeg"
-          multiple
-          class="file-input-hidden"
-          @change="onFileInputChange"
-        />
+      <div class="dropzone" :class="{ dragging: isDragging, has_link: !!lastLink }" @dragenter="onDragEnter"
+        @dragleave="onDragLeave" @dragover="onDragOver" @drop="onDrop"
+        @click="!uploading && !lastLink && fileInputRef?.click()">
+        <input ref="fileInputRef" type="file"
+          accept="image/*,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/mpeg" multiple
+          class="file-input-hidden" @change="onFileInputChange" />
 
         <!-- Uploading state -->
         <div v-if="uploading" class="drop-state">
@@ -528,65 +494,25 @@ function switchView(v: "upload" | "gallery") {
               {{ lastCopied ? t("images.copied") : t("images.copy") }}
             </button>
           </div>
-          <div
-            class="drop-more-hint"
-            @click.stop="
-              lastLink = '';
-              uploadError = '';
-            "
-          >
+          <div class="drop-uploads-hint" @click.stop="
+            lastLink = '';
+          uploadError = '';
+          ">
             {{ t("images.drop") }}
           </div>
         </div>
 
         <!-- Idle state -->
         <div v-else class="drop-state">
-          <svg
-            class="drop-icon"
-            viewBox="0 0 64 64"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <rect
-              x="4"
-              y="10"
-              width="56"
-              height="44"
-              rx="5"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-dasharray="6 4"
-              opacity="0.45"
-            />
-            <path
-              d="M32 42V26"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-            />
-            <path
-              d="M24 34L32 26L40 34"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-            <circle
-              cx="20"
-              cy="24"
-              r="3.5"
-              stroke="currentColor"
-              stroke-width="2"
-              opacity="0.3"
-            />
-            <path
-              d="M8 46L20 32L28 40L38 28L56 46"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              opacity="0.25"
-            />
+          <svg class="drop-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="10" width="56" height="44" rx="5" stroke="currentColor" stroke-width="2.5"
+              stroke-dasharray="6 4" opacity="0.45" />
+            <path d="M32 42V26" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+            <path d="M24 34L32 26L40 34" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+              stroke-linejoin="round" />
+            <circle cx="20" cy="24" r="3.5" stroke="currentColor" stroke-width="2" opacity="0.3" />
+            <path d="M8 46L20 32L28 40L38 28L56 46" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round" opacity="0.25" />
           </svg>
           <div class="drop-label">{{ t("images.drop") }}</div>
           <div class="drop-hint">
@@ -601,18 +527,9 @@ function switchView(v: "upload" | "gallery") {
 
       <!-- Upload from URL -->
       <div class="url-bar">
-        <input
-          v-model="urlInput"
-          class="url-input"
-          placeholder="Paste any image URL to upload it…"
-          @keydown.enter="uploadFromUrl"
-          :disabled="urlUploading"
-        />
-        <button
-          class="url-go-btn"
-          @click="uploadFromUrl"
-          :disabled="urlUploading"
-        >
+        <input v-model="urlInput" class="url-input" placeholder="Paste any image URL to upload it…"
+          @keydown.enter="uploadFromUrl" :disabled="urlUploading" />
+        <button class="url-go-btn" @click="uploadFromUrl" :disabled="urlUploading">
           {{ urlUploading ? "…" : "↑" }}
         </button>
       </div>
@@ -621,48 +538,11 @@ function switchView(v: "upload" | "gallery") {
       <!-- Bottom bar -->
       <div class="bottom-bar">
         <button class="your-btn" @click.stop="switchView('gallery')">
-          <svg
-            viewBox="0 0 16 16"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            class="your-icon"
-          >
-            <rect
-              x="1"
-              y="1"
-              width="6"
-              height="6"
-              rx="0.8"
-              stroke="currentColor"
-              stroke-width="1.4"
-            />
-            <rect
-              x="9"
-              y="1"
-              width="6"
-              height="6"
-              rx="0.8"
-              stroke="currentColor"
-              stroke-width="1.4"
-            />
-            <rect
-              x="1"
-              y="9"
-              width="6"
-              height="6"
-              rx="0.8"
-              stroke="currentColor"
-              stroke-width="1.4"
-            />
-            <rect
-              x="9"
-              y="9"
-              width="6"
-              height="6"
-              rx="0.8"
-              stroke="currentColor"
-              stroke-width="1.4"
-            />
+          <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="your-icon">
+            <rect x="1" y="1" width="6" height="6" rx="0.8" stroke="currentColor" stroke-width="1.4" />
+            <rect x="9" y="1" width="6" height="6" rx="0.8" stroke="currentColor" stroke-width="1.4" />
+            <rect x="1" y="9" width="6" height="6" rx="0.8" stroke="currentColor" stroke-width="1.4" />
+            <rect x="9" y="9" width="6" height="6" rx="0.8" stroke="currentColor" stroke-width="1.4" />
           </svg>
           {{ t("images.your") }}
         </button>
@@ -680,21 +560,11 @@ function switchView(v: "upload" | "gallery") {
           <button class="crop-close" @click="cropOpen = false">✕</button>
         </div>
         <div class="crop-hint">Click and drag to select crop area</div>
-        <canvas
-          ref="cropCanvas"
-          class="crop-canvas"
-          @mousedown="cropMouseDown"
-          @mousemove="cropMouseMove"
-          @mouseup="cropMouseUp"
-          @mouseleave="cropMouseUp"
-        />
+        <canvas ref="cropCanvas" class="crop-canvas" @mousedown="cropMouseDown" @mousemove="cropMouseMove"
+          @mouseup="cropMouseUp" @mouseleave="cropMouseUp" />
         <div class="crop-actions">
           <button class="crop-cancel" @click="cropOpen = false">Cancel</button>
-          <button
-            class="crop-apply"
-            :disabled="cropApplying"
-            @click="applyCrop"
-          >
+          <button class="crop-apply" :disabled="cropApplying" @click="applyCrop">
             {{ cropApplying ? "Applying…" : "Apply Crop" }}
           </button>
         </div>
@@ -723,6 +593,7 @@ function switchView(v: "upload" | "gallery") {
   border-bottom: none;
   flex-shrink: 0;
 }
+
 .guest-icon {
   color: #e5c07b;
   font-size: 13px;
@@ -751,19 +622,23 @@ function switchView(v: "upload" | "gallery") {
   overflow: hidden;
   min-height: 300px;
 }
+
 .dropzone:hover {
   border-color: #6f2bff44;
   background: #13121a;
 }
+
 .dropzone.dragging {
   border-color: #9d6cff;
   background: #0e0d16;
 }
+
 .dropzone.has_link {
   cursor: default;
   border-style: solid;
   border-color: #2a2a30;
 }
+
 .file-input-hidden {
   display: none;
 }
@@ -779,6 +654,7 @@ function switchView(v: "upload" | "gallery") {
   height: 100%;
   pointer-events: none;
 }
+
 .drop-state.link-state {
   pointer-events: auto;
   gap: 16px;
@@ -791,9 +667,11 @@ function switchView(v: "upload" | "gallery") {
   color: #444;
   transition: color 0.2s;
 }
+
 .dropzone.dragging .drop-icon {
   color: #9d6cff;
 }
+
 .drop-label {
   font-size: 15px;
   font-weight: 600;
@@ -801,14 +679,17 @@ function switchView(v: "upload" | "gallery") {
   text-align: center;
   transition: color 0.2s;
 }
+
 .dropzone.dragging .drop-label {
   color: #9d6cff;
 }
+
 .drop-hint {
   font-size: 12px;
   color: #383838;
 }
-.drop-more-hint {
+
+.drop-uploads-hint {
   font-size: 11px;
   color: #444;
   cursor: pointer;
@@ -816,7 +697,8 @@ function switchView(v: "upload" | "gallery") {
   text-underline-offset: 3px;
   transition: color 0.15s;
 }
-.drop-more-hint:hover {
+
+.drop-uploads-hint:hover {
   color: #9d6cff;
 }
 
@@ -828,6 +710,7 @@ function switchView(v: "upload" | "gallery") {
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -850,6 +733,7 @@ function switchView(v: "upload" | "gallery") {
   padding: 8px 12px;
   width: min(500px, 90vw);
 }
+
 .link-label {
   font-size: 10px;
   font-weight: 700;
@@ -858,6 +742,7 @@ function switchView(v: "upload" | "gallery") {
   letter-spacing: 0.05em;
   flex-shrink: 0;
 }
+
 .link-code {
   flex: 1;
   font-family: "Consolas", "Fira Mono", monospace;
@@ -867,6 +752,7 @@ function switchView(v: "upload" | "gallery") {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .copy-btn {
   height: 28px;
   padding: 0 12px;
@@ -879,6 +765,7 @@ function switchView(v: "upload" | "gallery") {
   flex-shrink: 0;
   transition: background 0.15s;
 }
+
 .copy-btn:hover {
   background: #6f2bff30;
 }
@@ -908,6 +795,7 @@ function switchView(v: "upload" | "gallery") {
   border-top: 1px solid #1e1e24;
   flex-shrink: 0;
 }
+
 .your-btn {
   display: flex;
   align-items: center;
@@ -922,16 +810,19 @@ function switchView(v: "upload" | "gallery") {
   cursor: pointer;
   transition: all 0.15s;
 }
+
 .your-btn:hover {
   border-color: #9d6cff55;
   color: #9d6cff;
   background: rgba(111, 43, 255, 0.06);
 }
+
 .your-icon {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
 }
+
 .limit-hint {
   font-size: 10px;
   color: #383838;
@@ -944,6 +835,7 @@ function switchView(v: "upload" | "gallery") {
   border-top: 1px solid #1e1e24;
   flex-shrink: 0;
 }
+
 .url-input {
   flex: 1;
   height: 34px;
@@ -956,12 +848,15 @@ function switchView(v: "upload" | "gallery") {
   padding: 0 12px;
   outline: none;
 }
+
 .url-input::placeholder {
   color: #333;
 }
+
 .url-input:focus {
   background: #111217;
 }
+
 .url-go-btn {
   width: 40px;
   height: 34px;
@@ -973,6 +868,7 @@ function switchView(v: "upload" | "gallery") {
   flex-shrink: 0;
   transition: all 0.15s;
 }
+
 .url-go-btn:hover {
   background: #6f2bff18;
   color: #9d6cff;
@@ -984,6 +880,7 @@ function switchView(v: "upload" | "gallery") {
   height: 100%;
   min-height: 0;
 }
+
 .gallery-header {
   display: flex;
   align-items: center;
@@ -993,6 +890,7 @@ function switchView(v: "upload" | "gallery") {
   flex-shrink: 0;
   margin-bottom: 16px;
 }
+
 .back-btn {
   height: 28px;
   padding: 0 10px;
@@ -1003,20 +901,24 @@ function switchView(v: "upload" | "gallery") {
   font-size: 11px;
   cursor: pointer;
 }
+
 .back-btn:hover {
   color: #e0e0e0;
   border-color: #444;
 }
+
 .gallery-title {
   font-size: 16px;
   font-weight: 700;
   color: #e0e0e0;
   flex: 1;
 }
+
 .gallery-count {
   font-size: 11px;
   color: #555;
 }
+
 .gallery-empty {
   color: #444;
   font-size: 13px;
@@ -1031,6 +933,7 @@ function switchView(v: "upload" | "gallery") {
   overflow-y: auto;
   padding-bottom: 8px;
 }
+
 .gallery-item {
   position: relative;
   background: #141418;
@@ -1040,6 +943,7 @@ function switchView(v: "upload" | "gallery") {
   overflow: hidden;
   transition: border-color 0.15s;
 }
+
 .gallery-item:hover {
   border-color: #3a3a44;
 }
@@ -1050,6 +954,7 @@ function switchView(v: "upload" | "gallery") {
   overflow: hidden;
   background: #0d0d10;
 }
+
 .gallery-thumb {
   width: 100%;
   height: 100%;
@@ -1057,6 +962,7 @@ function switchView(v: "upload" | "gallery") {
   display: block;
   transition: opacity 0.15s;
 }
+
 .gallery-thumb-wrap:hover .gallery-thumb {
   opacity: 0.85;
 }
@@ -1068,6 +974,7 @@ function switchView(v: "upload" | "gallery") {
   gap: 3px;
   flex: 1;
 }
+
 .gallery-item-name {
   font-size: 12px;
   color: #ccc;
@@ -1075,16 +982,19 @@ function switchView(v: "upload" | "gallery") {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .gallery-item-meta {
   font-size: 10px;
   color: #444;
 }
+
 .gallery-item-link {
   display: flex;
   align-items: center;
   gap: 5px;
   margin-top: 2px;
 }
+
 .img-link-code {
   font-family: "Consolas", "Fira Mono", monospace;
   font-size: 10px;
@@ -1094,6 +1004,7 @@ function switchView(v: "upload" | "gallery") {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .copy-btn-sm {
   height: 20px;
   padding: 0 7px;
@@ -1106,6 +1017,7 @@ function switchView(v: "upload" | "gallery") {
   flex-shrink: 0;
   transition: background 0.1s;
 }
+
 .copy-btn-sm:hover {
   background: #6f2bff18;
 }
@@ -1129,12 +1041,15 @@ function switchView(v: "upload" | "gallery") {
     opacity 0.15s,
     background 0.15s;
 }
+
 .gallery-item:hover .delete-btn {
   opacity: 1;
 }
+
 .delete-btn:hover {
   background: rgba(241, 73, 73, 0.2);
 }
+
 .delete-btn.confirm {
   opacity: 1;
   border-color: #f14949;
@@ -1154,6 +1069,7 @@ function switchView(v: "upload" | "gallery") {
   flex-shrink: 0;
   transition: background 0.1s;
 }
+
 .crop-btn:hover {
   background: #6f2bff18;
 }
@@ -1176,6 +1092,7 @@ function switchView(v: "upload" | "gallery") {
   justify-content: center;
   z-index: 1000;
 }
+
 .crop-modal {
   background: #141418;
   border: 1px solid #2a2a30;
@@ -1184,6 +1101,7 @@ function switchView(v: "upload" | "gallery") {
   max-width: 90vw;
   max-height: 90vh;
 }
+
 .crop-header {
   display: flex;
   align-items: center;
@@ -1192,11 +1110,13 @@ function switchView(v: "upload" | "gallery") {
   border-bottom: 1px solid #1e1e24;
   flex-shrink: 0;
 }
+
 .crop-title {
   font-size: 13px;
   font-weight: 700;
   color: #e0e0e0;
 }
+
 .crop-close {
   background: none;
   border: none;
@@ -1209,9 +1129,11 @@ function switchView(v: "upload" | "gallery") {
   align-items: center;
   justify-content: center;
 }
+
 .crop-close:hover {
   color: #e0e0e0;
 }
+
 .crop-hint {
   font-size: 11px;
   color: #555;
@@ -1219,6 +1141,7 @@ function switchView(v: "upload" | "gallery") {
   border-bottom: 1px solid #1e1e24;
   flex-shrink: 0;
 }
+
 .crop-canvas {
   max-width: 85vw;
   max-height: 70vh;
@@ -1226,6 +1149,7 @@ function switchView(v: "upload" | "gallery") {
   cursor: crosshair;
   display: block;
 }
+
 .crop-actions {
   display: flex;
   gap: 8px;
@@ -1234,6 +1158,7 @@ function switchView(v: "upload" | "gallery") {
   flex-shrink: 0;
   justify-content: flex-end;
 }
+
 .crop-cancel {
   height: 28px;
   padding: 0 14px;
@@ -1244,10 +1169,12 @@ function switchView(v: "upload" | "gallery") {
   font-size: 11px;
   cursor: pointer;
 }
+
 .crop-cancel:hover {
   border-color: #3a3a44;
   color: #ccc;
 }
+
 .crop-apply {
   height: 28px;
   padding: 0 16px;
@@ -1260,9 +1187,11 @@ function switchView(v: "upload" | "gallery") {
   cursor: pointer;
   transition: background 0.15s;
 }
+
 .crop-apply:hover:not(:disabled) {
   background: #7f3fff;
 }
+
 .crop-apply:disabled {
   opacity: 0.5;
   cursor: default;

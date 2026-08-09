@@ -57,9 +57,7 @@ type NavItem =
   | "tools"
   | "settings";
 const activeRoute = computed(() => {
-  const p = route.path.replace("/", "") || "dashboard";
-  // >>> treat /more as /uploads (backwards compat)
-  return p === "more" ? "uploads" : p;
+  return route.path.replace("/", "") || "dashboard";
 });
 
 function nav(to: NavItem) {
