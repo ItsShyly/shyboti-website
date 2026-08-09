@@ -817,17 +817,6 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="obs-cmd-notice">
-    <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="obs-cmd-icon">
-      <rect x="1" y="2" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.3" />
-      <circle cx="8" cy="7" r="2.5" stroke="currentColor" stroke-width="1.3" />
-      <path d="M5 14h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
-    </svg>
-    OBS commands are also shown in the OBS tab above, but managed on the
-    <router-link to="/obs-control" class="obs-cmd-link">OBS Connection</router-link>
-    page.
-  </div>
-
   <div class="cmd-root">
     <div class="cmd-tabs">
       <button class="cmd-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">
@@ -955,7 +944,7 @@ onUnmounted(() => {
                   <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span>
                   <span class="arg-args">{{
                     v.usage.replace(/^<(\$[^>]+)>$/, "[$1]")
-                      }}</span>
+                  }}</span>
                 </div>
                 <div class="arg-variant-desc">{{ v.desc || "" }}</div>
               </div>
@@ -1016,7 +1005,7 @@ onUnmounted(() => {
           <button class="cancel-btn" @click="cancelCreate">✕</button>
           <span v-if="newCmdError" class="new-cmd-error">{{
             newCmdError
-            }}</span>
+          }}</span>
         </div>
       </div>
 
@@ -1071,14 +1060,14 @@ onUnmounted(() => {
           {{ t("cmd.sort.name") }}
           <span class="sort-arrow">{{
             sortField === "name" ? (sortDir === "asc" ? "↑" : "↓") : "↕"
-            }}</span>
+          }}</span>
         </div>
         <div>{{ t("cmd.sort.access") }}</div>
         <div class="sort-col" @click="setSort('cooldown')">
           {{ t("cmd.sort.gcd") }}
           <span class="sort-arrow">{{
             sortField === "cooldown" ? (sortDir === "asc" ? "↑" : "↓") : "↕"
-            }}</span>
+          }}</span>
         </div>
         <div>{{ t("cmd.header.ucd") }}</div>
         <div>{{ t("cmd.sort.actions") }}</div>
@@ -1205,44 +1194,8 @@ onUnmounted(() => {
           </template>
         </div>
       </template>
-    </template><!-- /Custom tab -->
+    </template>
 
-    <!-- Extras tab -->
-    <template v-if="activeTab === 'Extras'">
-      <div v-if="extrasLoading" class="state-msg">Loading…</div>
-      <template v-else>
-        <div class="extras-section">
-          <div class="extras-section-title">{{ t("cmd.extras.section") }}</div>
-
-          <!-- Mention trigger -->
-          <div class="extras-row">
-            <div class="extras-info">
-              <div class="extras-label">
-                {{ t("cmd.extras.mention_label") }}
-              </div>
-              <div class="extras-desc">{{ t("cmd.extras.mention_desc") }}</div>
-              <div v-if="!has7tvSet" class="extras-gate-note">
-                {{ t("cmd.extras.mention_needs_7tv") }}
-              </div>
-            </div>
-            <div class="extras-toggle" :class="{
-              on: mentionEnabled && has7tvSet,
-              disabled: !isBroadcaster || !has7tvSet,
-            }" @click="
-              isBroadcaster &&
-              has7tvSet &&
-              ((mentionEnabled = !mentionEnabled), saveExtras())
-              ">
-              <div class="extras-toggle-knob"></div>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="!isBroadcaster" class="extras-readonly-note">
-          {{ t("cmd.extras.readonly") }}
-        </div>
-      </template>
-    </template><!-- /Extras tab -->
 
     <!-- OBS tab -->
     <template v-if="activeTab === 'Obs'">
@@ -1254,7 +1207,7 @@ onUnmounted(() => {
           <div class="empty-title">OBS isn't set up yet</div>
           <div class="empty-sub">
             Set up the agent on the
-            <router-link to="/obs-control" class="obs-cmd-link">OBS Connection</router-link>
+            <router-link to="/obs-control" class="obs-cmd-link">OBS Control</router-link>
             page, then any scene/source commands you add will show up here too.
           </div>
         </div>
@@ -1266,18 +1219,13 @@ onUnmounted(() => {
           <div class="empty-title">No OBS commands yet</div>
           <div class="empty-sub">
             Add scene, source, or generic commands on the
-            <router-link to="/obs-control" class="obs-cmd-link">OBS Connection</router-link>
+            <router-link to="/obs-control" class="obs-cmd-link">OBS Control</router-link>
             page.
           </div>
         </div>
       </template>
 
       <template v-else>
-        <div class="obs-tab-header">
-          <span class="custom-count">{{ obsCommandCount }} OBS command{{ obsCommandCount !== 1 ? "s" : "" }}</span>
-          <router-link to="/obs-control" class="create-btn" style="text-decoration: none; display: inline-block">manage
-            on OBS Connection</router-link>
-        </div>
 
         <div class="table-header obs-table-header">
           <div>{{ t("cmd.header.name") }}</div>
@@ -1334,7 +1282,43 @@ onUnmounted(() => {
         </div>
       </template>
     </template>
-    <!-- /OBS tab -->
+
+    <!-- Extras tab -->
+    <template v-if="activeTab === 'Extras'">
+      <div v-if="extrasLoading" class="state-msg">Loading…</div>
+      <template v-else>
+        <div class="extras-section">
+          <div class="extras-section-title">{{ t("cmd.extras.section") }}</div>
+
+          <!-- Mention trigger -->
+          <div class="extras-row">
+            <div class="extras-info">
+              <div class="extras-label">
+                {{ t("cmd.extras.mention_label") }}
+              </div>
+              <div class="extras-desc">{{ t("cmd.extras.mention_desc") }}</div>
+              <div v-if="!has7tvSet" class="extras-gate-note">
+                {{ t("cmd.extras.mention_needs_7tv") }}
+              </div>
+            </div>
+            <div class="extras-toggle" :class="{
+              on: mentionEnabled && has7tvSet,
+              disabled: !isBroadcaster || !has7tvSet,
+            }" @click="
+              isBroadcaster &&
+              has7tvSet &&
+              ((mentionEnabled = !mentionEnabled), saveExtras())
+              ">
+              <div class="extras-toggle-knob"></div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="!isBroadcaster" class="extras-readonly-note">
+          {{ t("cmd.extras.readonly") }}
+        </div>
+      </template>
+    </template>
   </div>
   <CommandEditPanel :cmdName="editingCmd" :channel="session?.channel ?? ''" :open="editOpen" :isBuiltIn="editIsBuiltIn"
     :prefix="prefix" @close="editOpen = false" @saved="onEditSaved" />
