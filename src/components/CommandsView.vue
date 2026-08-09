@@ -13,6 +13,8 @@ import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import CommandEditPanel from "./CommandEditPanel.vue";
+import ObsCommandEditPanel from "./ObsCommandEditPanel.vue";
+import type { ObsSceneBind, ObsSourceBind, ObsArgEntry } from "./ObsCommandEditPanel.vue";
 
 const { session, channelRole } = useAuth();
 const { t } = useI18n();
@@ -97,7 +99,6 @@ const searchOpenEdit = inject<Ref<{ name: string; builtIn: boolean } | null>>(
 );
 watch(searchOpenEdit, (val) => {
   if (!val) return;
-  // Wait for the page to mount before opening the panel
   nextTick(() => {
     openEdit(val.name, val.builtIn);
     searchOpenEdit.value = null;
@@ -205,10 +206,7 @@ async function saveExtras() {
   extrasSaving.value = false;
 }
 
-// >>> OBS commands
-interface ObsSceneBind { command: string; scene: string; access?: string }
-interface ObsSourceBind { command: string; source: string; action: string; value?: number; access?: string }
-type ObsArgEntry = string | { command: string; access?: string }
+// >>> OBS commands - types imported from ObsCommandEditPanel.vue 
 
 const obsPaired = ref(false);
 const obsLoading = ref(false);
@@ -218,13 +216,22 @@ const obsArgCommands = ref<Record<string, ObsArgEntry>>({});
 const obsFetched = ref(false);
 
 const OBS_ACTION_LABEL: Record<string, string> = {
-  scene: "switch scene", show: "show source", hide: "hide source",
-  toggle: "toggle visibility", mute: "mute", unmute: "unmute",
-  mutetoggle: "toggle mute", volume: "set volume",
+  scene: "switch scene",
+  show: "show source",
+  hide: "hide source",
+  toggle: "toggle visibility",
+  mute: "mute",
+  unmute: "unmute",
+  mutetoggle: "toggle mute",
+  volume: "set volume",
 };
 
 function obsAccessLabel(access?: string): string {
-  return access === "broadcaster" ? t("cmd.access.bc") : access === "mod" ? t("cmd.access.mod") : t("cmd.access.everyone");
+  return access === "broadcaster"
+    ? t("cmd.access.bc")
+    : access === "mod"
+      ? t("cmd.access.mod")
+      : t("cmd.access.everyone");
 }
 
 async function fetchObsCommands() {
@@ -257,8 +264,6 @@ function obsArgCommand(entry: ObsArgEntry): string {
 function obsArgAccess(entry: ObsArgEntry): string | undefined {
   return typeof entry === "string" ? undefined : entry.access;
 }
-
-// >>> Written as a plain function returning the string, rather than an inline
 function obsArgUsage(action: string): string {
   if (action === "scene") return "<scene>";
   if (action === "volume") return "<source> <vol>";
@@ -266,8 +271,136 @@ function obsArgUsage(action: string): string {
 }
 
 const obsCommandCount = computed(
-  () => obsSceneBindings.value.length + obsSourceBindings.value.length + Object.keys(obsArgCommands.value).length,
+  () =>
+    obsSceneBindings.value.length +
+    obsSourceBindings.value.length +
+    Object.keys(obsArgCommands.value).length,
 );
+
+// >>> OBS edit panel
+const obsEditOpen = ref(false);
+const obsEditTarget = ref<{
+  kind: "scene" | "source" | "arg";
+  command: string;
+} | null>(null);
+const obsKnownScenes = ref<string[]>([]);
+const obsKnownSources = ref<string[]>([]);
+
+async function openObsEdit(target: typeof obsEditTarget.value) {
+  obsEditTarget.value = target;
+  if (
+    session.value &&
+    (!obsKnownScenes.value.length || !obsKnownSources.value.length)
+  ) {
+    try {
+      const r = await fetch(`${API}/obs/${session.value.channel}/scenes`, {
+        headers: { Authorization: `Bearer ${session.value.token}` },
+      });
+      if (r.ok) {
+        const d = (await r.json()) as { scenes: { sceneName: string }[] };
+        obsKnownScenes.value = d.scenes.map((s) => s.sceneName);
+        if (d.scenes[0]) {
+          const sr = await fetch(
+            `${API}/obs/${session.value.channel}/sources?scene=${encodeURIComponent(d.scenes[0].sceneName)}`,
+            { headers: { Authorization: `Bearer ${session.value.token}` } },
+          );
+          if (sr.ok) {
+            const sd = (await sr.json()) as {
+              sources: { sourceName: string }[];
+            };
+            obsKnownSources.value = sd.sources.map((s) => s.sourceName);
+          }
+        }
+      }
+    } catch { }
+  }
+  obsEditOpen.value = true;
+}
+
+function onObsSaved() {
+  fetchObsCommands();
+}
+
+// >>> OBS inline cooldown editing
+const obsCdTimers = ref<Record<string, ReturnType<typeof setTimeout>>>({});
+
+function onObsCooldownInput(
+  b: ObsSceneBind | ObsSourceBind,
+  field: "cooldown" | "userCooldown",
+  raw: string,
+) {
+  const val = parseInt(raw);
+  if (isNaN(val) || val < 0) return;
+  (b as any)[field] = val;
+  const key = `obs_${b.command}_${field}`;
+  clearTimeout(obsCdTimers.value[key]);
+  obsCdTimers.value[key] = setTimeout(() => saveObsBindings(), 600);
+}
+
+function onObsArgCooldownInput(
+  action: string,
+  field: "cooldown" | "userCooldown",
+  raw: string,
+) {
+  const val = parseInt(raw);
+  if (isNaN(val) || val < 0) return;
+  const entry = obsArgCommands.value[action];
+  if (!entry) return;
+  if (typeof entry === "string") {
+    obsArgCommands.value[action] = { command: entry, [field]: val };
+  } else {
+    (entry as any)[field] = val;
+  }
+  const key = `obs_arg_${action}_${field}`;
+  clearTimeout(obsCdTimers.value[key]);
+  obsCdTimers.value[key] = setTimeout(() => saveObsBindings(), 600);
+}
+
+async function saveObsBindings() {
+  if (!session.value) return;
+  await fetch(`${API}/obs/${session.value.channel}/bindings`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.value.token}`,
+    },
+    body: JSON.stringify({
+      scene_bindings: obsSceneBindings.value,
+      source_bindings: obsSourceBindings.value,
+      arg_commands: obsArgCommands.value,
+    }),
+  });
+}
+
+// >>> OBS delete
+const obsDeleteConfirm = ref<string | null>(null);
+
+function deleteObsBinding(kind: "scene" | "source" | "arg", key: string) {
+  const id = `${kind}:${key}`;
+  if (obsDeleteConfirm.value === id) {
+    doDeleteObsBinding(kind, key);
+  } else {
+    obsDeleteConfirm.value = id;
+    setTimeout(() => {
+      if (obsDeleteConfirm.value === id) obsDeleteConfirm.value = null;
+    }, 3000);
+  }
+}
+
+async function doDeleteObsBinding(kind: "scene" | "source" | "arg", key: string) {
+  if (!session.value) return;
+  obsDeleteConfirm.value = null;
+  if (kind === "scene") {
+    obsSceneBindings.value = obsSceneBindings.value.filter((b) => b.command !== key);
+  } else if (kind === "source") {
+    obsSourceBindings.value = obsSourceBindings.value.filter((b) => b.command !== key);
+  } else {
+    const next = { ...obsArgCommands.value };
+    delete next[key];
+    obsArgCommands.value = next;
+  }
+  await saveObsBindings();
+}
 
 const isBroadcaster = computed(() => channelRole.value?.role === "broadcaster");
 
@@ -286,20 +419,17 @@ function toggleExpandCustom(name: string) {
   expandedCustom.value = s;
 }
 
-// >>> Auto-detect whether a custom command uses arguments by scanning its response/rule
 function customHasArgs(cmd: CustomCommand): boolean {
   if (cmd.arg_descs?.length) return true;
-  const src = (cmd.response || "") + " " + (cmd.rule || "");
-  return /\$args|\$\d\b|\{args\}|\$args\./i.test(src);
+  return /\$args|\$\d\b|\{args\}|\$args\./i.test(
+    (cmd.response || "") + " " + (cmd.rule || ""),
+  );
 }
 
-// >>> Get arg variants for a custom command:
-// If the user has saved explicit arg_descs, use those; otherwise auto-generate a placeholder.
 function getCustomArgVariants(
   cmd: CustomCommand,
 ): { usage: string; desc: string }[] {
   if (cmd.arg_descs?.length) return cmd.arg_descs;
-  // Auto-detect: parse $args.1, $1, $2 etc. from response to generate placeholder usages
   const src = (cmd.response || "") + " " + (cmd.rule || "");
   const argNums = new Set<number>();
   for (const m of src.matchAll(/\$args\.(\d+)|\$(\d+)\b/g)) {
@@ -308,17 +438,17 @@ function getCustomArgVariants(
   }
   if (argNums.size > 0) {
     const max = Math.max(...argNums);
-    const placeholder = Array.from(
-      { length: max },
-      (_, i) => `<arg${i + 1}>`,
-    ).join(" ");
-    return [{ usage: placeholder, desc: "" }];
+    return [
+      {
+        usage: Array.from({ length: max }, (_, i) => `<arg${i + 1}>`).join(" "),
+        desc: "",
+      },
+    ];
   }
   if (/\{args\}|\$args\b/i.test(src)) return [{ usage: "<args>", desc: "" }];
   return [];
 }
 
-// >>> Sort state for custom commands
 const sortField = ref<"name" | "cooldown" | "isActive">("name");
 const sortDir = ref<"asc" | "desc">("asc");
 function setSort(field: typeof sortField.value) {
@@ -331,7 +461,6 @@ function setSort(field: typeof sortField.value) {
 }
 
 const BLOCKED = ["join", "leave", "pm2", "refresh", "whitelist", "git"];
-// Commands that must be at least mod - the cycle skips "everyone" for these
 const MINIMUM_MOD = new Set([
   "nuke",
   "pm2",
@@ -360,7 +489,6 @@ function inferCategory(name: string): string {
     "git",
     "cmd",
     "message",
-    "to",
   ];
   const chat = [
     "ask",
@@ -492,27 +620,22 @@ function cycleRestriction(cmd: Command | CustomCommand) {
   const isBC = MINIMUM_BC.has(name);
   const isMod = !isBC && MINIMUM_MOD.has(name);
   if (!c.modOnly && !c.broadcasterOnly) {
-    // everyone -> mod (always allowed)
     c.modOnly = true;
     c.broadcasterOnly = false;
   } else if (c.modOnly) {
-    // mod -> broadcaster
     c.modOnly = false;
     c.broadcasterOnly = true;
   } else {
-    // broadcaster -> everyone (only if not locked)
     if (isBC) {
       c.modOnly = false;
       c.broadcasterOnly = true;
-    } // stay at broadcaster
-    else if (isMod) {
+    } else if (isMod) {
       c.modOnly = true;
       c.broadcasterOnly = false;
-    } // back to mod
-    else {
+    } else {
       c.modOnly = false;
       c.broadcasterOnly = false;
-    } // allow everyone
+    }
   }
   if (customCommands.value.includes(cmd as CustomCommand))
     updateCustomActive(cmd as CustomCommand);
@@ -528,11 +651,9 @@ function restrictionLabel(cmd: {
   return t("cmd.access.everyone");
 }
 
-// >>>  Use i18n description if available, fall back to backend string, then '-'
 function cmdDesc(cmd: Command): string {
   const key = `cmddesc.${cmd.name}`;
   const translated = t(key);
-  // >>> t() returns the key itself if not found
   if (translated !== key) return translated;
   return cmd.description || "-";
 }
@@ -542,11 +663,9 @@ const deleteConfirmName = ref<string | null>(null);
 
 function deleteCustom(name: string) {
   if (deleteConfirmName.value === name) {
-    // >>> second click - confirmed
     doDeleteCustom(name);
   } else {
     deleteConfirmName.value = name;
-    // >>> auto-cancel after 3s
     setTimeout(() => {
       if (deleteConfirmName.value === name) deleteConfirmName.value = null;
     }, 3000);
@@ -743,7 +862,6 @@ async function runSync() {
 
 const { availableChannels } = useAuth();
 
-// >>> Reload button + SSE-based auto-refresh when commands change in another tab/session
 const reloading = ref(false);
 async function reloadAll() {
   reloading.value = true;
@@ -757,7 +875,6 @@ async function reloadAll() {
   reloading.value = false;
 }
 
-// >>> Auto-refresh via activity SSE
 let _sseSource: EventSource | null = null;
 function startCommandSSE() {
   _sseSource?.close();
@@ -836,12 +953,12 @@ onUnmounted(() => {
       </button>
     </div>
 
+    <!-- Default tab -->
     <template v-if="activeTab === 'Default'">
       <div v-if="loading" class="state-msg">{{ t("cmd.loading") }}</div>
       <div v-else-if="commands.length === 0" class="state-msg">
         {{ t("cmd.none") }} #{{ session?.channel }}
       </div>
-
       <template v-else>
         <div class="table-header">
           <div></div>
@@ -853,14 +970,12 @@ onUnmounted(() => {
           <div>{{ t("cmd.header.ucd") }}</div>
           <div>{{ t("cmd.header.feat") }}</div>
         </div>
-
         <div class="rows">
           <template v-for="cmd in filtered()" :key="cmd.name">
             <div class="table-row" :class="{
               saving: saving === cmd.name,
               expanded: expandedDefault.has(cmd.name),
             }">
-              <!-- Chevron: only visible if command has arg variants -->
               <div class="row-chevron-cell">
                 <button v-if="cmd.argVariants?.length" class="row-chevron"
                   :class="{ open: expandedDefault.has(cmd.name) }" @click.stop="toggleExpandDefault(cmd.name)"
@@ -868,21 +983,17 @@ onUnmounted(() => {
                   ▾
                 </button>
               </div>
-
               <div>
                 <div class="square" :class="[
                   cmd.isActive ? 'on' : 'off',
                   { disabled: !canToggle },
                 ]" @click="toggle(cmd, 'isActive')"></div>
               </div>
-
               <div class="cmd-name">
                 <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
                 {{ prefix }}{{ cmd.name }}
               </div>
-
               <div class="cmd-desc">{{ cmdDesc(cmd) }}</div>
-
               <div>
                 <button class="access-btn" :class="{
                   'access-mod': cmd.modOnly,
@@ -892,7 +1003,6 @@ onUnmounted(() => {
                   {{ restrictionLabel(cmd) }}
                 </button>
               </div>
-
               <div>
                 <div class="cd-input-wrap" :class="{ disabled: !canEdit }">
                   <input type="number" min="0" class="cd-input" :disabled="!canEdit" :value="cmd.cooldown" @change="
@@ -905,7 +1015,6 @@ onUnmounted(() => {
                   <span class="cd-unit">s</span>
                 </div>
               </div>
-
               <div>
                 <div class="cd-input-wrap user" :class="{ disabled: !canEdit }">
                   <input type="number" min="0" class="cd-input" :disabled="!canEdit" :value="cmd.userCooldown" @change="
@@ -918,7 +1027,6 @@ onUnmounted(() => {
                   <span class="cd-unit">s</span>
                 </div>
               </div>
-
               <div>
                 <button class="edit-btn" :class="{ blocked: BLOCKED.includes(cmd.name) || !canEdit }" @click="
                   canEdit &&
@@ -935,16 +1043,13 @@ onUnmounted(() => {
                 </button>
               </div>
             </div>
-
-            <!-- Arg variant rows -->
             <template v-if="expandedDefault.has(cmd.name) && cmd.argVariants?.length">
               <div v-for="(v, vi) in cmd.argVariants" :key="vi" class="arg-variant-row">
                 <div class="arg-variant-indent"></div>
                 <div class="arg-variant-usage">
-                  <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span>
-                  <span class="arg-args">{{
+                  <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{
                     v.usage.replace(/^<(\$[^>]+)>$/, "[$1]")
-                  }}</span>
+                      }}</span>
                 </div>
                 <div class="arg-variant-desc">{{ v.desc || "" }}</div>
               </div>
@@ -952,9 +1057,9 @@ onUnmounted(() => {
           </template>
         </div>
       </template>
-    </template><!-- /Default tab -->
+    </template>
 
-    <!-- Custom commands tab -->
+    <!-- Custom tab -->
     <template v-if="activeTab === 'Custom'">
       <div class="custom-header">
         <div class="custom-header-left">
@@ -964,17 +1069,15 @@ onUnmounted(() => {
                 ? t("cmd.count_plural")
                 : t("cmd.count")
             }}</span>
-          <!-- Sync indicator - always visible when active, click to expand -->
           <button v-if="syncConf?.is_active" class="sync-indicator" @click="syncOpen = !syncOpen"
             :title="`Syncing from #${syncConf.sync_from}`">
             <span class="sync-dot"></span>{{ t("cmd.sync.active") }} #{{
               syncConf.sync_from
-            }}
-            <span class="sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
+            }}<span class="sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
           </button>
           <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">
-            {{ t("cmd.sync.config") }}
-            <span class="sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
+            {{ t("cmd.sync.config")
+            }}<span class="sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
           </button>
         </div>
         <div v-if="!creatingNew">
@@ -1005,11 +1108,10 @@ onUnmounted(() => {
           <button class="cancel-btn" @click="cancelCreate">✕</button>
           <span v-if="newCmdError" class="new-cmd-error">{{
             newCmdError
-          }}</span>
+            }}</span>
         </div>
       </div>
 
-      <!-- Sync panel - compact dropdown -->
       <div v-if="syncOpen" class="sync-panel">
         <div class="sync-row">
           <select v-model="syncFrom" class="field-select-sm">
@@ -1053,28 +1155,26 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Custom tab header row with sort -->
       <div v-if="!customLoading && filteredCustom().length > 0" class="table-header custom-table-header">
         <div></div>
         <div class="sort-col" @click="setSort('name')">
-          {{ t("cmd.sort.name") }}
-          <span class="sort-arrow">{{
+          {{ t("cmd.sort.name")
+          }}<span class="sort-arrow">{{
             sortField === "name" ? (sortDir === "asc" ? "↑" : "↓") : "↕"
-          }}</span>
+            }}</span>
         </div>
         <div>{{ t("cmd.sort.access") }}</div>
         <div class="sort-col" @click="setSort('cooldown')">
-          {{ t("cmd.sort.gcd") }}
-          <span class="sort-arrow">{{
+          {{ t("cmd.sort.gcd")
+          }}<span class="sort-arrow">{{
             sortField === "cooldown" ? (sortDir === "asc" ? "↑" : "↓") : "↕"
-          }}</span>
+            }}</span>
         </div>
         <div>{{ t("cmd.header.ucd") }}</div>
         <div>{{ t("cmd.sort.actions") }}</div>
       </div>
 
       <div v-if="customLoading" class="state-msg">{{ t("cmd.loading") }}</div>
-
       <div v-else-if="filteredCustom().length === 0" class="custom-empty">
         <div class="empty-icon">✦</div>
         <div class="empty-title">{{ t("cmd.empty.title") }}</div>
@@ -1084,20 +1184,16 @@ onUnmounted(() => {
         </button>
       </div>
 
-      <!-- OBS commands live in their own table/page, not here -->
       <template v-else>
         <div class="rows">
           <template v-for="cmd in filteredCustom()" :key="cmd.name">
             <div class="table-row custom-row" :class="{ expanded: expandedCustom.has(cmd.name) }">
-              <!-- chevron -->
               <div class="row-chevron-cell">
                 <button v-if="customHasArgs(cmd)" class="row-chevron" :class="{ open: expandedCustom.has(cmd.name) }"
                   @click.stop="toggleExpandCustom(cmd.name)" title="Show argument variants">
                   ▾
                 </button>
               </div>
-
-              <!-- toggle - matches default command column 2 -->
               <div>
                 <div class="square" :class="[
                   cmd.isActive ? 'on' : 'off',
@@ -1107,18 +1203,15 @@ onUnmounted(() => {
                 updateCustomActive(cmd);
                 "></div>
               </div>
-
               <div class="cmd-name-col">
                 <div class="cmd-name">
-                  <span class="cmd-cat-dot" style="background: #9d6cff"></span>
-                  {{ prefix }}{{ cmd.name }}
-                  <span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
+                  <span class="cmd-cat-dot" style="background: #9d6cff"></span>{{ prefix }}{{ cmd.name
+                  }}<span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
                 </div>
                 <div v-if="cmd.description" class="cmd-desc-inline">
                   {{ cmd.description }}
                 </div>
               </div>
-
               <div>
                 <button class="access-btn" :class="{
                   'access-mod': cmd.modOnly,
@@ -1128,7 +1221,6 @@ onUnmounted(() => {
                   {{ restrictionLabel(cmd) }}
                 </button>
               </div>
-
               <div>
                 <div class="cd-input-wrap" :class="{ disabled: !canEdit }">
                   <input type="number" min="0" class="cd-input" :disabled="!canEdit" :value="cmd.cooldown" @change="
@@ -1141,7 +1233,6 @@ onUnmounted(() => {
                   <span class="cd-unit">s</span>
                 </div>
               </div>
-
               <div>
                 <div class="cd-input-wrap user" :class="{ disabled: !canEdit }">
                   <input type="number" min="0" class="cd-input" :disabled="!canEdit" :value="cmd.userCooldown" @change="
@@ -1154,7 +1245,6 @@ onUnmounted(() => {
                   <span class="cd-unit">s</span>
                 </div>
               </div>
-
               <div class="custom-actions">
                 <button class="edit-btn" :class="{ blocked: !canEdit }" @click="canEdit && openEdit(cmd.name, false)">
                   {{ canEdit ? t("cmd.edit") : t("cmd.view") }}
@@ -1179,14 +1269,11 @@ onUnmounted(() => {
                 </button>
               </div>
             </div>
-
-            <!-- Arg variant rows for custom -->
             <template v-if="expandedCustom.has(cmd.name)">
               <div v-for="(v, vi) in getCustomArgVariants(cmd)" :key="vi" class="arg-variant-row">
                 <div class="arg-variant-indent"></div>
                 <div class="arg-variant-usage">
-                  <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span>
-                  <span class="arg-args">{{ v.usage }}</span>
+                  <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{ v.usage }}</span>
                 </div>
                 <div class="arg-variant-desc">{{ v.desc || "" }}</div>
               </div>
@@ -1195,7 +1282,6 @@ onUnmounted(() => {
         </div>
       </template>
     </template>
-
 
     <!-- OBS tab -->
     <template v-if="activeTab === 'Obs'">
@@ -1207,79 +1293,156 @@ onUnmounted(() => {
           <div class="empty-title">OBS isn't set up yet</div>
           <div class="empty-sub">
             Set up the agent on the
-            <router-link to="/obs-control" class="obs-cmd-link">OBS Control</router-link>
-            page, then any scene/source commands you add will show up here too.
-          </div>
-        </div>
-      </template>
-
-      <template v-else-if="obsCommandCount === 0">
-        <div class="custom-empty">
-          <div class="empty-icon">✦</div>
-          <div class="empty-title">No OBS commands yet</div>
-          <div class="empty-sub">
-            Add scene, source, or generic commands on the
-            <router-link to="/obs-control" class="obs-cmd-link">OBS Control</router-link>
-            page.
+            <router-link to="/obs-connection" class="obs-cmd-link">OBS connection</router-link>
+            page, then commands you add here will appear.
           </div>
         </div>
       </template>
 
       <template v-else>
-
-        <div class="table-header obs-table-header">
-          <div>{{ t("cmd.header.name") }}</div>
-          <div>action</div>
-          <div>target</div>
-          <div>{{ t("cmd.header.access") }}</div>
+        <div class="custom-header">
+          <span class="custom-count">{{ obsCommandCount }} OBS
+            {{ obsCommandCount === 1 ? "command" : "commands" }}</span>
+          <button class="create-btn" @click="openObsEdit(null)">+ New</button>
         </div>
 
-        <div class="rows">
-          <div v-for="b in obsSceneBindings" :key="'sc' + b.command" class="table-row obs-row">
-            <div class="cmd-name">
-              <span class="cmd-cat-dot" style="background: #e5c07b"></span>
-              {{ prefix }}{{ b.command }}
-            </div>
-            <div class="cmd-desc">switch scene</div>
-            <div class="cmd-desc">{{ b.scene }}</div>
-            <div>
-              <span class="access-btn"
-                :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }">{{
-                  obsAccessLabel(b.access) }}</span>
-            </div>
-          </div>
-
-          <div v-for="b in obsSourceBindings" :key="'so' + b.command" class="table-row obs-row">
-            <div class="cmd-name">
-              <span class="cmd-cat-dot" style="background: #e5c07b"></span>
-              {{ prefix }}{{ b.command }}
-            </div>
-            <div class="cmd-desc">{{ OBS_ACTION_LABEL[b.action] ?? b.action }}</div>
-            <div class="cmd-desc">{{ b.source }}<span v-if="b.action === 'volume' && b.value !== undefined"> @ {{
-              b.value }}%</span></div>
-            <div>
-              <span class="access-btn"
-                :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }">{{
-                  obsAccessLabel(b.access) }}</span>
-            </div>
-          </div>
-
-          <div v-for="(entry, action) in obsArgCommands" :key="'arg' + action" class="table-row obs-row">
-            <div class="cmd-name">
-              <span class="cmd-cat-dot" style="background: #e5c07b"></span>
-              {{ prefix }}{{ obsArgCommand(entry) }}
-            </div>
-            <div class="cmd-desc">{{ OBS_ACTION_LABEL[action] ?? action }}</div>
-            <div class="cmd-desc">
-              <span class="obs-arg-badge">{{ obsArgUsage(action) }}</span>
-            </div>
-            <div>
-              <span class="access-btn"
-                :class="{ 'access-mod': obsArgAccess(entry) === 'mod', 'access-bc': obsArgAccess(entry) === 'broadcaster' }">{{
-                  obsAccessLabel(obsArgAccess(entry)) }}</span>
-            </div>
+        <div v-if="obsCommandCount === 0" class="custom-empty">
+          <div class="empty-icon">✦</div>
+          <div class="empty-title">No OBS commands yet</div>
+          <div class="empty-sub">
+            Click <strong>+ New</strong> to create your first scene or source
+            command.
           </div>
         </div>
+
+        <template v-else>
+          <div class="table-header obs-table-header">
+            <div>{{ t("cmd.header.name") }}</div>
+            <div>action</div>
+            <div>target</div>
+            <div>{{ t("cmd.header.access") }}</div>
+            <div>{{ t("cmd.header.gcd") }}</div>
+            <div>{{ t("cmd.header.ucd") }}</div>
+            <div></div>
+          </div>
+
+          <div class="rows">
+            <div v-for="b in obsSceneBindings" :key="'sc' + b.command" class="table-row obs-row">
+              <div class="cmd-name">
+                <span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{ b.command }}
+              </div>
+              <div class="cmd-desc">switch scene</div>
+              <div class="cmd-desc">{{ b.scene }}</div>
+              <div>
+                <button class="access-btn" :class="{
+                  'access-mod': b.access === 'mod',
+                  'access-bc': b.access === 'broadcaster',
+                }" @click="openObsEdit({ kind: 'scene', command: b.command })">
+                  {{ obsAccessLabel(b.access) }}
+                </button>
+              </div>
+              <div>
+                <div class="cd-input-wrap">
+                  <input type="number" min="0" class="cd-input" :value="b.cooldown ?? 0"
+                    @change="onObsCooldownInput(b, 'cooldown', ($event.target as HTMLInputElement).value)" />
+                  <span class="cd-unit">s</span>
+                </div>
+              </div>
+              <div>
+                <div class="cd-input-wrap user">
+                  <input type="number" min="0" class="cd-input" :value="b.userCooldown ?? 0"
+                    @change="onObsCooldownInput(b, 'userCooldown', ($event.target as HTMLInputElement).value)" />
+                  <span class="cd-unit">s</span>
+                </div>
+              </div>
+              <div class="custom-actions">
+                <button class="edit-btn" @click="openObsEdit({ kind: 'scene', command: b.command })">edit</button>
+                <button class="del-btn" :class="{ confirm: obsDeleteConfirm === 'scene:' + b.command }"
+                  @click="deleteObsBinding('scene', b.command)">
+                  {{ obsDeleteConfirm === 'scene:' + b.command ? t('cmd.delete_sure') : t('cmd.delete') }}
+                </button>
+              </div>
+            </div>
+
+            <div v-for="b in obsSourceBindings" :key="'so' + b.command" class="table-row obs-row">
+              <div class="cmd-name">
+                <span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{ b.command }}
+              </div>
+              <div class="cmd-desc">{{ OBS_ACTION_LABEL[b.action] ?? b.action }}</div>
+              <div class="cmd-desc">{{ b.source }}<span v-if="b.action === 'volume' && b.value !== undefined"> @ {{
+                b.value }}%</span></div>
+              <div>
+                <button class="access-btn" :class="{
+                  'access-mod': b.access === 'mod',
+                  'access-bc': b.access === 'broadcaster',
+                }" @click="openObsEdit({ kind: 'source', command: b.command })">
+                  {{ obsAccessLabel(b.access) }}
+                </button>
+              </div>
+              <div>
+                <div class="cd-input-wrap">
+                  <input type="number" min="0" class="cd-input" :value="b.cooldown ?? 0"
+                    @change="onObsCooldownInput(b, 'cooldown', ($event.target as HTMLInputElement).value)" />
+                  <span class="cd-unit">s</span>
+                </div>
+              </div>
+              <div>
+                <div class="cd-input-wrap user">
+                  <input type="number" min="0" class="cd-input" :value="b.userCooldown ?? 0"
+                    @change="onObsCooldownInput(b, 'userCooldown', ($event.target as HTMLInputElement).value)" />
+                  <span class="cd-unit">s</span>
+                </div>
+              </div>
+              <div class="custom-actions">
+                <button class="edit-btn" @click="openObsEdit({ kind: 'source', command: b.command })">edit</button>
+                <button class="del-btn" :class="{ confirm: obsDeleteConfirm === 'source:' + b.command }"
+                  @click="deleteObsBinding('source', b.command)">
+                  {{ obsDeleteConfirm === 'source:' + b.command ? t('cmd.delete_sure') : t('cmd.delete') }}
+                </button>
+              </div>
+            </div>
+
+            <div v-for="(entry, action) in obsArgCommands" :key="'arg' + action" class="table-row obs-row">
+              <div class="cmd-name">
+                <span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{ obsArgCommand(entry) }}
+              </div>
+              <div class="cmd-desc">{{ OBS_ACTION_LABEL[action] ?? action }}</div>
+              <div class="cmd-desc"><span class="obs-arg-badge">{{ obsArgUsage(action) }}</span></div>
+              <div>
+                <button class="access-btn" :class="{
+                  'access-mod': obsArgAccess(entry) === 'mod',
+                  'access-bc': obsArgAccess(entry) === 'broadcaster',
+                }" @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">
+                  {{ obsAccessLabel(obsArgAccess(entry)) }}
+                </button>
+              </div>
+              <div>
+                <div class="cd-input-wrap">
+                  <input type="number" min="0" class="cd-input"
+                    :value="typeof entry === 'string' ? 0 : ((entry as any).cooldown ?? 0)"
+                    @change="onObsArgCooldownInput(action, 'cooldown', ($event.target as HTMLInputElement).value)" />
+                  <span class="cd-unit">s</span>
+                </div>
+              </div>
+              <div>
+                <div class="cd-input-wrap user">
+                  <input type="number" min="0" class="cd-input"
+                    :value="typeof entry === 'string' ? 0 : ((entry as any).userCooldown ?? 0)"
+                    @change="onObsArgCooldownInput(action, 'userCooldown', ($event.target as HTMLInputElement).value)" />
+                  <span class="cd-unit">s</span>
+                </div>
+              </div>
+              <div class="custom-actions">
+                <button class="edit-btn"
+                  @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">edit</button>
+                <button class="del-btn" :class="{ confirm: obsDeleteConfirm === 'arg:' + action }"
+                  @click="deleteObsBinding('arg', action)">
+                  {{ obsDeleteConfirm === 'arg:' + action ? t('cmd.delete_sure') : t('cmd.delete') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </template>
       </template>
     </template>
 
@@ -1289,8 +1452,6 @@ onUnmounted(() => {
       <template v-else>
         <div class="extras-section">
           <div class="extras-section-title">{{ t("cmd.extras.section") }}</div>
-
-          <!-- Mention trigger -->
           <div class="extras-row">
             <div class="extras-info">
               <div class="extras-label">
@@ -1313,23 +1474,27 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-
         <div v-if="!isBroadcaster" class="extras-readonly-note">
           {{ t("cmd.extras.readonly") }}
         </div>
       </template>
     </template>
   </div>
+
   <CommandEditPanel :cmdName="editingCmd" :channel="session?.channel ?? ''" :open="editOpen" :isBuiltIn="editIsBuiltIn"
     :prefix="prefix" @close="editOpen = false" @saved="onEditSaved" />
+
+  <ObsCommandEditPanel :open="obsEditOpen" :channel="session?.channel ?? ''" :sceneBindings="obsSceneBindings"
+    :sourceBindings="obsSourceBindings" :argCommands="obsArgCommands" :editTarget="obsEditTarget" :prefix="prefix"
+    :scenes="obsKnownScenes" :sources="obsKnownSources" @close="obsEditOpen = false" @saved="onObsSaved" />
 
   <!-- Share modal -->
   <Teleport to="body">
     <div v-if="shareOpen" class="modal-overlay" @click.self="shareOpen = false">
       <div class="modal">
         <div class="modal-title">
-          {{ t("cmd.share.title") }}
-          <span class="modal-cmd">+{{ shareCmd }}</span>
+          {{ t("cmd.share.title")
+          }}<span class="modal-cmd">+{{ shareCmd }}</span>
         </div>
         <div class="modal-sub">{{ t("cmd.share.sub") }}</div>
         <select v-model="shareTarget" class="field-select-sm" style="width: 100%; margin-top: 12px">
@@ -1415,10 +1580,15 @@ onUnmounted(() => {
   align-items: center;
 }
 
-/* Custom commands use wider last column for 3 action buttons */
 .custom-table-header,
 .custom-row {
   grid-template-columns: 28px 32px 1fr 110px 90px 90px 150px;
+}
+
+/* OBS tab: name */
+.obs-table-header,
+.obs-row {
+  grid-template-columns: 160px 130px 1fr 100px 70px 70px 140px;
 }
 
 .sort-col {
@@ -1475,7 +1645,10 @@ onUnmounted(() => {
   border-bottom: none;
 }
 
-/* Chevron cell */
+.obs-row {
+  min-height: 48px;
+}
+
 .row-chevron-cell {
   display: flex;
   align-items: center;
@@ -1510,7 +1683,6 @@ onUnmounted(() => {
   color: #9d6cff;
 }
 
-/* Arg variant rows */
 .arg-variant-row {
   display: grid;
   grid-template-columns: 28px 1fr 1fr;
@@ -1569,28 +1741,6 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-/* Inline toggle for custom row (replaces the square; same visual) */
-.toggle-inline {
-  width: 24px;
-  height: 24px;
-  border: 2px solid #161616;
-  cursor: pointer;
-  transition: background 0.15s;
-  flex-shrink: 0;
-}
-
-.toggle-inline.on {
-  background: #6b35d4;
-}
-
-.toggle-inline.off {
-  background: #111217;
-}
-
-.toggle-inline:hover {
-  opacity: 0.8;
-}
-
 .square {
   width: 24px;
   height: 24px;
@@ -1612,11 +1762,6 @@ onUnmounted(() => {
 }
 
 .square.disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-.cooldown-box.disabled {
   opacity: 0.3;
   cursor: not-allowed;
 }
@@ -1764,20 +1909,24 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* Custom tab */
 .custom-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
+  padding: 10px 0;
   border-bottom: 1px solid #222;
-  padding: 10px 0 10px 0;
+  margin-bottom: 2px;
 }
 
 .custom-count {
   font-size: 11px;
   color: #555;
+}
+
+.custom-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .create-btn {
@@ -1954,7 +2103,6 @@ onUnmounted(() => {
   color: #f14949;
 }
 
-/* Share button */
 .share-btn {
   height: 34px;
   padding: 0 10px;
@@ -1969,13 +2117,6 @@ onUnmounted(() => {
 
 .share-btn:hover {
   background: rgba(78, 201, 176, 0.1);
-}
-
-/* Sync config */
-.custom-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 
 .sync-indicator {
@@ -1997,7 +2138,7 @@ onUnmounted(() => {
   background: rgba(35, 209, 139, 0.12);
 }
 
-.sync-indicator-dot {
+.sync-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -2005,11 +2146,6 @@ onUnmounted(() => {
   box-shadow: 0 0 4px #23d18b88;
   animation: pulse-live 2s ease-in-out infinite;
   flex-shrink: 0;
-}
-
-.sync-indicator-chevron {
-  font-size: 8px;
-  opacity: 0.6;
 }
 
 @keyframes pulse-live {
@@ -2039,6 +2175,11 @@ onUnmounted(() => {
 .sync-config-btn:hover {
   color: #9d6cff;
   border-color: #6f2bff44;
+}
+
+.sync-chevron {
+  font-size: 8px;
+  opacity: 0.6;
 }
 
 .sync-panel {
@@ -2236,26 +2377,6 @@ onUnmounted(() => {
   color: #e0e0e0;
 }
 
-/* OBS commands notice in Custom tab */
-.obs-cmd-notice {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 8px 12px;
-  background: #111217;
-  border: 1px solid #2a2a30;
-  font-size: 11px;
-  color: #555;
-}
-
-.obs-cmd-icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  color: #9d6cff55;
-}
-
 .obs-cmd-link {
   color: #9d6cff;
   text-decoration: none;
@@ -2263,25 +2384,6 @@ onUnmounted(() => {
 
 .obs-cmd-link:hover {
   text-decoration: underline;
-}
-
-/* OBS tab */
-.obs-tab-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-  padding: 10px 0;
-  border-bottom: 1px solid #222;
-}
-
-.obs-table-header,
-.obs-row {
-  grid-template-columns: 160px 150px 1fr 110px;
-}
-
-.obs-row {
-  min-height: 48px;
 }
 
 .obs-arg-badge {
@@ -2297,7 +2399,7 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-/*  Extras tab  */
+/* Extras tab */
 .extras-gate-note {
   font-size: 11px;
   color: #e5c07b;
@@ -2352,14 +2454,6 @@ onUnmounted(() => {
   line-height: 1.5;
 }
 
-.extras-code {
-  font-family: "Consolas", "Fira Mono", monospace;
-  font-size: 10px;
-  color: #9d6cff;
-  background: #9d6cff15;
-  padding: 1px 5px;
-}
-
 .extras-toggle {
   width: 42px;
   height: 22px;
@@ -2396,40 +2490,6 @@ onUnmounted(() => {
   background: #fff;
 }
 
-.extras-footer {
-  margin-top: 16px;
-  display: flex;
-  justify-content: flex-end;
-}
-
-.extras-save-btn {
-  height: 34px;
-  padding: 0 20px;
-  border: none;
-  background: #6f2bff;
-  color: #fff;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.extras-save-btn:hover:not(:disabled) {
-  background: #7f3fff;
-}
-
-.extras-save-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.extras-save-btn.saved {
-  background: #1a3d2a;
-  color: #23d18b;
-  cursor: default;
-}
-
 .extras-readonly-note {
   font-size: 11px;
   color: #555;
@@ -2437,10 +2497,8 @@ onUnmounted(() => {
   text-align: center;
 }
 
-/*  Responsive  */
+/* Responsive */
 @media (max-width: 680px) {
-
-  /* Commands table: toggle | name+desc | edit button. Hide cooldown columns. */
   .table-header {
     display: none;
   }
@@ -2454,39 +2512,6 @@ onUnmounted(() => {
     gap: 8px;
   }
 
-  .table-row>*:nth-child(1) {
-    flex-shrink: 0;
-  }
-
-  .table-row>*:nth-child(2) {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .table-row>*:nth-child(3) {
-    order: 10;
-    width: 100%;
-  }
-
-  /* access on second line */
-  .table-row>*:nth-child(4),
-  .table-row>*:nth-child(5) {
-    display: none;
-  }
-
-  /* hide CDs */
-  .table-row>*:nth-child(6) {
-    flex-shrink: 0;
-  }
-
-  /* edit button */
-  .table-row>*:nth-child(7) {
-    flex-shrink: 0;
-  }
-
-  /* desc col (7col layout) */
-
-  /* Custom row same treatment */
   .custom-row {
     display: flex;
     flex-wrap: wrap;
@@ -2501,12 +2526,6 @@ onUnmounted(() => {
     display: none;
   }
 
-  .custom-row>*:nth-child(3) {
-    order: 10;
-    width: 100%;
-  }
-
-  /* Custom header: stack instead of columns on mobile */
   .custom-header {
     flex-wrap: wrap;
     gap: 8px;
@@ -2517,17 +2536,14 @@ onUnmounted(() => {
     gap: 6px;
   }
 
-  /* Sync row: wrap */
   .sync-row {
     flex-wrap: wrap;
   }
 
-  /* New cmd input: shrink */
   .new-cmd-input {
     width: 120px;
   }
 
-  /* OBS tab: stack like the other tables on mobile */
   .obs-table-header {
     display: none;
   }
@@ -2538,11 +2554,6 @@ onUnmounted(() => {
     align-items: center;
     height: auto;
     padding: 10px 12px;
-    gap: 8px;
-  }
-
-  .obs-tab-header {
-    flex-wrap: wrap;
     gap: 8px;
   }
 }

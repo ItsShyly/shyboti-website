@@ -1,0 +1,554 @@
+<script setup lang="ts">
+import { ref, watch, computed } from "vue";
+import { API } from "../api";
+import { useAuth } from "../auth";
+import { useOverlayClose } from "../composables/useOverlayClose";
+
+export type ObsAccessLevel = "everyone" | "mod" | "broadcaster";
+
+export interface ObsSceneBind {
+  command: string;
+  scene: string;
+  access?: ObsAccessLevel;
+  cooldown?: number;
+  userCooldown?: number;
+}
+export interface ObsSourceBind {
+  command: string;
+  source: string;
+  action: string;
+  value?: number;
+  access?: ObsAccessLevel;
+  cooldown?: number;
+  userCooldown?: number;
+}
+export type ObsArgEntry =
+  | string
+  | {
+    command: string;
+    access?: ObsAccessLevel;
+    cooldown?: number;
+    userCooldown?: number;
+  };
+
+type BindKind = "scene" | "source" | "arg";
+
+interface Props {
+  open: boolean;
+  channel: string;
+  // >>> pass current bindings in so we can pre-populate the form
+  sceneBindings: ObsSceneBind[];
+  sourceBindings: ObsSourceBind[];
+  argCommands: Record<string, ObsArgEntry>;
+  // >>> which row to open for editing (null = create new)
+  editTarget: { kind: BindKind; command: string } | null;
+  prefix: string;
+  scenes: string[];
+  sources: string[];
+}
+
+const props = defineProps<Props>();
+const emit = defineEmits<{ (e: "close"): void; (e: "saved"): void }>();
+
+const { session } = useAuth();
+const overlay = useOverlayClose();
+const saving = ref(false);
+const saved = ref(false);
+const deleting = ref(false);
+const deleteConfirm = ref(false);
+
+// >>> form state
+const fKind = ref<BindKind>("scene");
+const fAction = ref("scene");
+const fCommand = ref("");
+const fTarget = ref("");
+const fValue = ref<number | "">("");
+const fAccess = ref<ObsAccessLevel>("everyone");
+const fCooldown = ref(0);
+const fUserCd = ref(0);
+
+const SOURCE_ACTIONS = [
+  { value: "show", label: "show source" },
+  { value: "hide", label: "hide source" },
+  { value: "toggle", label: "toggle visibility" },
+  { value: "mute", label: "mute source" },
+  { value: "unmute", label: "unmute source" },
+  { value: "mutetoggle", label: "toggle mute" },
+  { value: "volume", label: "set volume" },
+];
+
+const ARG_ACTIONS = [
+  { value: "scene", label: "switch scene", usage: "+cmd <scene name>" },
+  { value: "show", label: "show source", usage: "+cmd <source>" },
+  { value: "hide", label: "hide source", usage: "+cmd <source>" },
+  { value: "toggle", label: "toggle visibility", usage: "+cmd <source>" },
+  { value: "mute", label: "mute source", usage: "+cmd <source>" },
+  { value: "unmute", label: "unmute source", usage: "+cmd <source>" },
+  { value: "mutetoggle", label: "toggle mute", usage: "+cmd <source>" },
+  { value: "volume", label: "set volume", usage: "+cmd <source> <0-100>" },
+];
+
+const isEdit = computed(() => !!props.editTarget);
+const title = computed(() =>
+  isEdit.value ? "Edit OBS command" : "New OBS command",
+);
+
+// >>> populate form when opening
+watch(
+  () => props.open,
+  (open) => {
+    if (!open) return;
+    deleteConfirm.value = false;
+    saved.value = false;
+    if (!props.editTarget) {
+      // new
+      fKind.value = "scene";
+      fAction.value = "scene";
+      fCommand.value = "";
+      fTarget.value = "";
+      fValue.value = "";
+      fAccess.value = "everyone";
+      fCooldown.value = 0;
+      fUserCd.value = 0;
+      return;
+    }
+    const { kind, command } = props.editTarget;
+    fKind.value = kind;
+    fCommand.value = command;
+    if (kind === "scene") {
+      const b = props.sceneBindings.find((x) => x.command === command);
+      fAction.value = "scene";
+      fTarget.value = b?.scene ?? "";
+      fAccess.value = (b?.access as ObsAccessLevel) ?? "everyone";
+      fCooldown.value = b?.cooldown ?? 0;
+      fUserCd.value = b?.userCooldown ?? 0;
+      fValue.value = "";
+    } else if (kind === "source") {
+      const b = props.sourceBindings.find((x) => x.command === command);
+      fAction.value = b?.action ?? "show";
+      fTarget.value = b?.source ?? "";
+      fValue.value = b?.value ?? "";
+      fAccess.value = (b?.access as ObsAccessLevel) ?? "everyone";
+      fCooldown.value = b?.cooldown ?? 0;
+      fUserCd.value = b?.userCooldown ?? 0;
+    } else {
+      // arg - find which action maps to this command
+      const match = Object.entries(props.argCommands).find(
+        ([, e]) => (typeof e === "string" ? e : e.command) === command,
+      );
+      fAction.value = match?.[0] ?? "scene";
+      const e = match?.[1];
+      fAccess.value =
+        typeof e === "string"
+          ? "everyone"
+          : ((e?.access as ObsAccessLevel) ?? "everyone");
+      fCooldown.value = typeof e === "string" ? 0 : (e?.cooldown ?? 0);
+      fUserCd.value = typeof e === "string" ? 0 : (e?.userCooldown ?? 0);
+      fTarget.value = "";
+      fValue.value = "";
+    }
+  },
+);
+
+// >>> reset kind/action when kind tab changes
+watch(fKind, (k) => {
+  if (k === "scene") fAction.value = "scene";
+  if (k === "source") fAction.value = "show";
+  if (k === "arg") fAction.value = "scene";
+  fTarget.value = "";
+  fValue.value = "";
+});
+
+// --- save ---
+async function save() {
+  if (!session.value) return;
+  saving.value = true;
+  try {
+    // build new bindings by starting from current ones, mutating the relevant list
+    const newScenes = props.sceneBindings.map((b) => ({ ...b }));
+    const newSources = props.sourceBindings.map((b) => ({ ...b }));
+    const newArgs = { ...props.argCommands };
+
+    const cmd = fCommand.value.trim().replace(/^\+/, "").toLowerCase();
+
+    if (fKind.value === "scene") {
+      const idx = newScenes.findIndex(
+        (b) => b.command === (isEdit.value ? props.editTarget!.command : cmd),
+      );
+      const entry: ObsSceneBind = {
+        command: cmd,
+        scene: fTarget.value.trim(),
+        access: fAccess.value,
+        cooldown: fCooldown.value,
+        userCooldown: fUserCd.value,
+      };
+      if (idx >= 0) newScenes[idx] = entry;
+      else newScenes.push(entry);
+    } else if (fKind.value === "source") {
+      const idx = newSources.findIndex(
+        (b) => b.command === (isEdit.value ? props.editTarget!.command : cmd),
+      );
+      const entry: ObsSourceBind = {
+        command: cmd,
+        source: fTarget.value.trim(),
+        action: fAction.value,
+        access: fAccess.value,
+        cooldown: fCooldown.value,
+        userCooldown: fUserCd.value,
+      };
+      if (fAction.value === "volume" && fValue.value !== "")
+        entry.value = Number(fValue.value);
+      if (idx >= 0) newSources[idx] = entry;
+      else newSources.push(entry);
+    } else {
+      // arg - key is the action, value is { command, access, cooldown, userCooldown }
+      // if editing, remove the old key first (action may have changed)
+      if (isEdit.value) {
+        const oldKey = Object.entries(props.argCommands).find(
+          ([, e]) =>
+            (typeof e === "string" ? e : e.command) ===
+            props.editTarget!.command,
+        )?.[0];
+        if (oldKey) delete newArgs[oldKey];
+      }
+      newArgs[fAction.value] = {
+        command: cmd,
+        access: fAccess.value,
+        cooldown: fCooldown.value,
+        userCooldown: fUserCd.value,
+      };
+    }
+
+    await fetch(`${API}/obs/${props.channel}/bindings`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.value.token}`,
+      },
+      body: JSON.stringify({
+        scene_bindings: newScenes,
+        source_bindings: newSources,
+        arg_commands: newArgs,
+      }),
+    });
+    saved.value = true;
+    setTimeout(() => {
+      saved.value = false;
+    }, 2000);
+    emit("saved");
+  } catch { }
+  saving.value = false;
+}
+
+// >>> delete
+async function deleteCmd() {
+  if (!session.value || !isEdit.value) return;
+  if (!deleteConfirm.value) {
+    deleteConfirm.value = true;
+    setTimeout(() => {
+      deleteConfirm.value = false;
+    }, 3000);
+    return;
+  }
+  deleteConfirm.value = false;
+  deleting.value = true;
+  try {
+    const newScenes = props.sceneBindings.filter(
+      (b) => b.command !== props.editTarget!.command,
+    );
+    const newSources = props.sourceBindings.filter(
+      (b) => b.command !== props.editTarget!.command,
+    );
+    const newArgs = { ...props.argCommands };
+    const oldKey = Object.entries(props.argCommands).find(
+      ([, e]) =>
+        (typeof e === "string" ? e : e.command) === props.editTarget!.command,
+    )?.[0];
+    if (oldKey) delete newArgs[oldKey];
+
+    await fetch(`${API}/obs/${props.channel}/bindings`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.value.token}`,
+      },
+      body: JSON.stringify({
+        scene_bindings: newScenes,
+        source_bindings: newSources,
+        arg_commands: newArgs,
+      }),
+    });
+    emit("saved");
+    emit("close");
+  } catch { }
+  deleting.value = false;
+}
+
+// >>> validation
+const saveDisabled = computed(() => {
+  if (!fCommand.value.trim()) return true;
+  if (fKind.value === "scene" && !fTarget.value.trim()) return true;
+  if (fKind.value === "source" && !fTarget.value.trim()) return true;
+  return false;
+});
+</script>
+
+<template>
+  <Teleport to="body">
+    <div v-if="open" class="ep-overlay" v-bind="overlay.handlers(() => emit('close'))">
+      <div class="ep-panel obs-ep-panel">
+        <div class="ep-panel-header">
+          <div>
+            <div class="ep-panel-title">{{ title }}</div>
+            <div class="ep-panel-sub">#{{ channel }}</div>
+          </div>
+          <button class="ep-panel-close" @click="emit('close')">✕</button>
+        </div>
+
+        <div class="ep-panel-body">
+          <!-- command type tabs -->
+          <div class="ep-field-group">
+            <label class="ep-field-label">Type</label>
+            <div class="obs-kind-tabs">
+              <button class="obs-kind-tab" :class="{ active: fKind === 'scene' }" @click="fKind = 'scene'"
+                :disabled="isEdit">
+                fixed scene
+              </button>
+              <button class="obs-kind-tab" :class="{ active: fKind === 'source' }" @click="fKind = 'source'"
+                :disabled="isEdit">
+                fixed source
+              </button>
+              <button class="obs-kind-tab" :class="{ active: fKind === 'arg' }" @click="fKind = 'arg'"
+                :disabled="isEdit">
+                chat arg
+              </button>
+            </div>
+            <div class="ep-field-hint">
+              <template v-if="fKind === 'scene'">One command always switches to one specific scene.</template>
+              <template v-else-if="fKind === 'source'">One command always acts on one specific source.</template>
+              <template v-else>Chatter passes the scene/source name as part of the command —
+                e.g. <code class="ep-mono">+scene cam</code>.</template>
+            </div>
+          </div>
+
+          <!-- action (source + arg kinds) -->
+          <div v-if="fKind !== 'scene'" class="ep-field-group">
+            <label class="ep-field-label">Action</label>
+            <select v-model="fAction" class="ep-field-select">
+              <option v-if="fKind === 'source'" v-for="a in SOURCE_ACTIONS" :key="a.value" :value="a.value">
+                {{ a.label }}
+              </option>
+              <option v-if="fKind === 'arg'" v-for="a in ARG_ACTIONS" :key="a.value" :value="a.value">
+                {{ a.label }}
+              </option>
+            </select>
+          </div>
+
+          <!-- target (scene/source kinds only) -->
+          <div v-if="fKind !== 'arg'" class="ep-field-group">
+            <label class="ep-field-label">{{ fKind === "scene" ? "Scene" : "Source" }}
+              <span class="ep-field-hint">type or pick</span></label>
+            <input v-model="fTarget" class="ep-field-input ep-mono"
+              :placeholder="fKind === 'scene' ? 'Scene name' : 'Source name'"
+              :list="fKind === 'scene' ? 'obs-ep-scenes' : 'obs-ep-sources'" />
+            <datalist id="obs-ep-scenes">
+              <option v-for="s in scenes" :key="s" :value="s" />
+            </datalist>
+            <datalist id="obs-ep-sources">
+              <option v-for="s in sources" :key="s" :value="s" />
+            </datalist>
+          </div>
+
+          <!-- volume value (source kind, volume action) -->
+          <div v-if="fKind === 'source' && fAction === 'volume'" class="ep-field-group">
+            <label class="ep-field-label">Fixed volume
+              <span class="ep-field-hint">0–100, leave blank to take from chat</span></label>
+            <input v-model.number="fValue" type="number" min="0" max="100" class="ep-field-input"
+              placeholder="e.g. 50" />
+          </div>
+
+          <!-- usage preview for arg kind -->
+          <div v-if="fKind === 'arg'" class="ep-field-group">
+            <label class="ep-field-label">Usage</label>
+            <div class="obs-usage-preview ep-mono">
+              {{ prefix }}{{ fCommand || "cmd" }}
+              {{
+                ARG_ACTIONS.find((a) => a.value === fAction)?.usage.replace(
+                  "+cmd ",
+                  "",
+                )
+              }}
+            </div>
+          </div>
+
+          <!-- command name -->
+          <div class="ep-field-group">
+            <label class="ep-field-label">Chat command <span class="ep-field-hint">without +</span></label>
+            <div class="obs-cmd-input-wrap">
+              <span class="obs-cmd-prefix">{{ prefix }}</span>
+              <input v-model="fCommand" class="ep-field-input ep-mono obs-cmd-input" placeholder="scene"
+                maxlength="32" />
+            </div>
+          </div>
+
+          <!-- access -->
+          <div class="ep-field-group">
+            <label class="ep-field-label">Access</label>
+            <div class="obs-access-row">
+              <button class="obs-access-btn" :class="{ active: fAccess === 'everyone' }" @click="fAccess = 'everyone'">
+                everyone
+              </button>
+              <button class="obs-access-btn" :class="{ active: fAccess === 'mod' }" @click="fAccess = 'mod'">
+                mod+
+              </button>
+              <button class="obs-access-btn" :class="{ active: fAccess === 'broadcaster' }"
+                @click="fAccess = 'broadcaster'">
+                broadcaster
+              </button>
+            </div>
+          </div>
+
+          <!-- cooldowns -->
+          <div class="ep-row-3">
+            <div class="ep-field-group ep-sm">
+              <label class="ep-field-label">Global cooldown <span class="ep-field-hint">s</span></label>
+              <input v-model.number="fCooldown" type="number" min="0" class="ep-field-input" />
+            </div>
+            <div class="ep-field-group ep-sm">
+              <label class="ep-field-label">User cooldown <span class="ep-field-hint">s</span></label>
+              <input v-model.number="fUserCd" type="number" min="0" class="ep-field-input" />
+            </div>
+          </div>
+        </div>
+
+        <div class="ep-panel-footer">
+          <button v-if="isEdit" class="ep-btn-delete" :class="{ confirm: deleteConfirm }" :disabled="deleting"
+            @click="deleteCmd">
+            {{ deleting ? "…" : deleteConfirm ? "Sure?" : "Delete" }}
+          </button>
+          <div v-else></div>
+          <div class="ep-footer-right">
+            <button class="ep-btn-cancel" @click="emit('close')">Cancel</button>
+            <button class="ep-btn-save" :disabled="saving || saveDisabled" @click="save">
+              {{ saved ? "saved ✓" : saving ? "…" : "Save" }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+</template>
+
+<style scoped>
+.obs-ep-panel {
+  width: min(520px, 94vw);
+}
+
+.obs-kind-tabs {
+  display: flex;
+  gap: 0;
+}
+
+.obs-kind-tab {
+  flex: 1;
+  height: 32px;
+  border: 1px solid #2a2a30;
+  background: #0d0d10;
+  color: #555;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-right: -1px;
+}
+
+.obs-kind-tab:first-child {
+  border-radius: 0;
+}
+
+.obs-kind-tab.active {
+  border-color: #6f2bff88;
+  background: rgba(111, 43, 255, 0.12);
+  color: #c4a0ff;
+  z-index: 1;
+  position: relative;
+}
+
+.obs-kind-tab:hover:not(.active):not(:disabled) {
+  color: #aaa;
+  border-color: #3a3a44;
+}
+
+.obs-kind-tab:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.obs-usage-preview {
+  padding: 8px 12px;
+  background: #0a0a0d;
+  border: 1px solid #1e1e24;
+  color: #e5c07b;
+  font-size: 12px;
+}
+
+.obs-cmd-input-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.obs-cmd-prefix {
+  height: 36px;
+  padding: 0 8px;
+  background: #0a0a0d;
+  border: 1px solid #2a2a30;
+  border-right: none;
+  color: #9d6cff;
+  font-weight: 700;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.obs-cmd-input {
+  border-left: none !important;
+  flex: 1;
+}
+
+.obs-access-row {
+  display: flex;
+  gap: 0;
+}
+
+.obs-access-btn {
+  flex: 1;
+  height: 32px;
+  border: 1px solid #2a2a30;
+  background: #0d0d10;
+  color: #555;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-right: -1px;
+}
+
+.obs-access-btn.active {
+  border-color: #6f2bff88;
+  background: rgba(111, 43, 255, 0.12);
+  color: #c4a0ff;
+  z-index: 1;
+  position: relative;
+}
+
+.obs-access-btn:hover:not(.active) {
+  color: #aaa;
+}
+
+code.ep-mono {
+  font-family: "Consolas", "Fira Mono", monospace;
+  color: #9d6cff;
+  font-size: 11px;
+}
+</style>
