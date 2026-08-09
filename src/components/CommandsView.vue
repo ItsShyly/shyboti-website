@@ -246,35 +246,40 @@ const obsEditTarget = ref<{
 const obsKnownScenes = ref<string[]>([]);
 const obsKnownSources = ref<string[]>([]);
 
-async function openObsEdit(target: typeof obsEditTarget.value) {
+function openObsEdit(target: typeof obsEditTarget.value) {
   obsEditTarget.value = target;
+  obsEditOpen.value = true;
   if (
     session.value &&
     (!obsKnownScenes.value.length || !obsKnownSources.value.length)
   ) {
-    try {
-      const r = await fetch(`${API}/obs/${session.value.channel}/scenes`, {
-        headers: { Authorization: `Bearer ${session.value.token}` },
-      });
-      if (r.ok) {
-        const d = (await r.json()) as { scenes: { sceneName: string }[] };
-        obsKnownScenes.value = d.scenes.map((s) => s.sceneName);
-        if (d.scenes[0]) {
-          const sr = await fetch(
-            `${API}/obs/${session.value.channel}/sources?scene=${encodeURIComponent(d.scenes[0].sceneName)}`,
-            { headers: { Authorization: `Bearer ${session.value.token}` } },
-          );
-          if (sr.ok) {
-            const sd = (await sr.json()) as {
-              sources: { sourceName: string }[];
-            };
-            obsKnownSources.value = sd.sources.map((s) => s.sourceName);
-          }
+    fetchObsSceneSourceLists();
+  }
+}
+
+async function fetchObsSceneSourceLists() {
+  if (!session.value) return;
+  try {
+    const r = await fetch(`${API}/obs/${session.value.channel}/scenes`, {
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    if (r.ok) {
+      const d = (await r.json()) as { scenes: { sceneName: string }[] };
+      obsKnownScenes.value = d.scenes.map((s) => s.sceneName);
+      if (d.scenes[0]) {
+        const sr = await fetch(
+          `${API}/obs/${session.value.channel}/sources?scene=${encodeURIComponent(d.scenes[0].sceneName)}`,
+          { headers: { Authorization: `Bearer ${session.value.token}` } },
+        );
+        if (sr.ok) {
+          const sd = (await sr.json()) as {
+            sources: { sourceName: string }[];
+          };
+          obsKnownSources.value = sd.sources.map((s) => s.sourceName);
         }
       }
-    } catch { }
-  }
-  obsEditOpen.value = true;
+    }
+  } catch { }
 }
 
 function onObsSaved() {
@@ -1009,7 +1014,7 @@ onUnmounted(() => {
                 <div class="arg-variant-usage">
                   <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{
                     v.usage.replace(/^<(\$[^>]+)>$/, "[$1]")
-                  }}</span>
+                      }}</span>
                 </div>
                 <div class="arg-variant-desc">{{ v.desc || "" }}</div>
               </div>
@@ -1097,14 +1102,14 @@ onUnmounted(() => {
           {{ t("cmd.sort.name")
           }}<span class="sort-arrow">{{
             sortField === "name" ? (sortDir === "asc" ? "↑" : "↓") : "↕"
-          }}</span>
+            }}</span>
         </div>
         <div>{{ t("cmd.sort.access") }}</div>
         <div class="sort-col" @click="setSort('cooldown')">
           {{ t("cmd.sort.gcd")
           }}<span class="sort-arrow">{{
             sortField === "cooldown" ? (sortDir === "asc" ? "↑" : "↓") : "↕"
-          }}</span>
+            }}</span>
         </div>
         <div>{{ t("cmd.header.ucd") }}</div>
         <div>{{ t("cmd.sort.actions") }}</div>

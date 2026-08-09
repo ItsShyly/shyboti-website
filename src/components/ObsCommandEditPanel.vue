@@ -3,6 +3,7 @@ import { ref, watch, computed } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import EditableNameHeader from "./shared/EditableNameHeader.vue";
 
 export type ObsAccessLevel = "everyone" | "mod" | "broadcaster";
 
@@ -89,9 +90,6 @@ const ARG_ACTIONS = [
 ];
 
 const isEdit = computed(() => !!props.editTarget);
-const title = computed(() =>
-  isEdit.value ? "Edit OBS command" : "New OBS command",
-);
 
 // >>> populate form when opening
 watch(
@@ -299,22 +297,17 @@ const saveDisabled = computed(() => {
       <div class="ep-panel obs-ep-panel">
         <div class="ep-panel-header">
           <div>
-            <div class="ep-panel-title">{{ title }}</div>
+            <div class="ep-panel-title">
+              {{ isEdit ? "Edit" : "New" }}
+              <EditableNameHeader v-model="fCommand" :orig-name="editTarget?.command ?? ''" :prefix="prefix"
+                placeholder="scene" />
+            </div>
             <div class="ep-panel-sub">#{{ channel }}</div>
           </div>
           <button class="ep-panel-close" @click="emit('close')">✕</button>
         </div>
 
         <div class="ep-panel-body">
-          <div class="ep-field-group">
-            <label class="ep-field-label">Chat command</label>
-            <div class="obs-cmd-input-wrap">
-              <span class="obs-cmd-prefix">{{ prefix }}</span>
-              <input v-model="fCommand" class="ep-field-input ep-mono obs-cmd-input" placeholder="scene" maxlength="32"
-                autofocus />
-            </div>
-          </div>
-
           <!-- command type tabs -->
           <div class="ep-field-group">
             <label class="ep-field-label">Type</label>
@@ -387,16 +380,6 @@ const saveDisabled = computed(() => {
                   "",
                 )
               }}
-            </div>
-          </div>
-
-          <!-- command name -->
-          <div class="ep-field-group">
-            <label class="ep-field-label">Chat command <span class="ep-field-hint">without +</span></label>
-            <div class="obs-cmd-input-wrap">
-              <span class="obs-cmd-prefix">{{ prefix }}</span>
-              <input v-model="fCommand" class="ep-field-input ep-mono obs-cmd-input" placeholder="scene"
-                maxlength="32" />
             </div>
           </div>
 

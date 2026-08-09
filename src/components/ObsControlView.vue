@@ -7,6 +7,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import EditableNameHeader from "./shared/EditableNameHeader.vue";
 
 const { session, channelRole } = useAuth();
 const settingsOverlay = useOverlayClose();
