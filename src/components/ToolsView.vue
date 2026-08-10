@@ -151,29 +151,10 @@ async function addEntry() {
     <div class="service-card" @click="router.push('/obs-widgets')">
       <div class="card-icon obs-icon">
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect
-            x="4"
-            y="6"
-            width="40"
-            height="28"
-            rx="4"
-            stroke="currentColor"
-            stroke-width="2.5"
-          />
-          <path
-            d="M16 34v6M32 34v6M12 40h24"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-          />
+          <rect x="4" y="6" width="40" height="28" rx="4" stroke="currentColor" stroke-width="2.5" />
+          <path d="M16 34v6M32 34v6M12 40h24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
           <circle cx="36" cy="14" r="4" fill="#f14949" opacity="0.9" />
-          <path
-            d="M10 18h16M10 24h10"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            opacity="0.6"
-          />
+          <path d="M10 18h16M10 24h10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
         </svg>
       </div>
       <div class="card-body">
@@ -189,48 +170,16 @@ async function addEntry() {
     <div class="service-card" @click="openVars">
       <div class="card-icon vars-icon">
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect
-            x="4"
-            y="8"
-            width="18"
-            height="10"
-            rx="2"
-            stroke="currentColor"
-            stroke-width="2.5"
-          />
-          <rect
-            x="4"
-            y="26"
-            width="18"
-            height="10"
-            rx="2"
-            stroke="currentColor"
-            stroke-width="2.5"
-          />
-          <path
-            d="M26 13h18M26 31h12"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-          />
-          <path
-            d="M40 27l4 4-4 4"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
+          <rect x="4" y="8" width="18" height="10" rx="2" stroke="currentColor" stroke-width="2.5" />
+          <rect x="4" y="26" width="18" height="10" rx="2" stroke="currentColor" stroke-width="2.5" />
+          <path d="M26 13h18M26 31h12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
+          <path d="M40 27l4 4-4 4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+            stroke-linejoin="round" />
         </svg>
       </div>
       <div class="card-body">
         <div class="card-title">{{ t("feat.vars.title") }}</div>
         <div class="card-sub">{{ t("feat.vars.sub") }}</div>
-        <div class="card-url" v-if="totalCount > 0">
-          {{ totalCount }} entr{{ totalCount === 1 ? "y" : "ies" }}
-        </div>
-        <div class="card-url" v-else style="color: #444">
-          {{ t("feat.vars.none") }}
-        </div>
       </div>
     </div>
 
@@ -238,42 +187,17 @@ async function addEntry() {
     <div class="service-card" @click="session && router.push('/obs-control')">
       <div class="card-icon obsconn-icon">
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect
-            x="4"
-            y="10"
-            width="40"
-            height="26"
-            rx="3"
-            stroke="currentColor"
-            stroke-width="2.5"
-          />
-          <circle
-            cx="24"
-            cy="23"
-            r="7"
-            stroke="currentColor"
-            stroke-width="2.5"
-          />
-          <path
-            d="M14 40h20"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-          />
+          <rect x="4" y="10" width="40" height="26" rx="3" stroke="currentColor" stroke-width="2.5" />
+          <circle cx="24" cy="23" r="7" stroke="currentColor" stroke-width="2.5" />
+          <path d="M14 40h20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
           <circle cx="38" cy="10" r="7" fill="#9d6cff" opacity="0.9" />
-          <path
-            d="M35 10h6M38 7v6"
-            stroke="#141418"
-            stroke-width="1.8"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
+          <path d="M35 10h6M38 7v6" stroke="#141418" stroke-width="1.8" stroke-linecap="round"
+            stroke-linejoin="round" />
         </svg>
       </div>
       <div class="card-body">
         <div class="card-title">OBS Control</div>
         <div class="card-sub">Switch scenes and control sources from chat</div>
-        <div class="card-url">websocket, scenes, sources, commands</div>
       </div>
     </div>
   </div>
@@ -287,35 +211,19 @@ async function addEntry() {
           <button class="vars-close" @click="showVars = false">✕</button>
         </div>
         <div class="vars-tabs">
-          <button
-            class="vars-tab"
-            :class="{ active: varsTab === 'counters' }"
-            @click="varsTab = 'counters'"
-          >
+          <button class="vars-tab" :class="{ active: varsTab === 'counters' }" @click="varsTab = 'counters'">
             {{ t("feat.vars.tab.counters") }}
             <span v-if="counters.length">({{ counters.length }})</span>
           </button>
-          <button
-            class="vars-tab"
-            :class="{ active: varsTab === 'vars' }"
-            @click="varsTab = 'vars'"
-          >
+          <button class="vars-tab" :class="{ active: varsTab === 'vars' }" @click="varsTab = 'vars'">
             {{ t("feat.vars.tab.vars") }}
             <span v-if="vars.length">({{ vars.length }})</span>
           </button>
-          <button
-            class="vars-tab"
-            :class="{ active: varsTab === 'ucounters' }"
-            @click="varsTab = 'ucounters'"
-          >
+          <button class="vars-tab" :class="{ active: varsTab === 'ucounters' }" @click="varsTab = 'ucounters'">
             {{ t("feat.vars.tab.ucounters") }}
             <span v-if="ucounters.length">({{ ucounters.length }})</span>
           </button>
-          <button
-            class="vars-tab"
-            :class="{ active: varsTab === 'uvars' }"
-            @click="varsTab = 'uvars'"
-          >
+          <button class="vars-tab" :class="{ active: varsTab === 'uvars' }" @click="varsTab = 'uvars'">
             {{ t("feat.vars.tab.uvars") }}
             <span v-if="uvars.length">({{ uvars.length }})</span>
           </button>
@@ -347,18 +255,9 @@ async function addEntry() {
                 <td class="vars-name">$counter.{{ c.name }}</td>
                 <td>
                   <template v-if="editingKey === 'counter:' + c.name + ':'">
-                    <input
-                      class="vars-edit-input"
-                      v-model="editingVal"
-                      type="number"
-                      @keydown.enter="saveEdit('counter', c.name)"
-                      @keydown.esc="editingKey = ''"
-                    />
-                    <button
-                      class="vars-btn-sm save"
-                      @click="saveEdit('counter', c.name)"
-                      :disabled="varSaving"
-                    >
+                    <input class="vars-edit-input" v-model="editingVal" type="number"
+                      @keydown.enter="saveEdit('counter', c.name)" @keydown.esc="editingKey = ''" />
+                    <button class="vars-btn-sm save" @click="saveEdit('counter', c.name)" :disabled="varSaving">
                       {{ t("feat.vars.save") }}
                     </button>
                     <button class="vars-btn-sm" @click="editingKey = ''">
@@ -368,17 +267,11 @@ async function addEntry() {
                   <span v-else class="vars-val">{{ c.value }}</span>
                 </td>
                 <td style="white-space: nowrap">
-                  <button
-                    v-if="editingKey !== 'counter:' + c.name + ':'"
-                    class="vars-btn-sm"
-                    @click="startEdit('counter', c.name, c.value)"
-                  >
+                  <button v-if="editingKey !== 'counter:' + c.name + ':'" class="vars-btn-sm"
+                    @click="startEdit('counter', c.name, c.value)">
                     {{ t("feat.vars.edit") }}
                   </button>
-                  <button
-                    class="vars-btn-sm del"
-                    @click="deleteEntry('counter', c.name)"
-                  >
+                  <button class="vars-btn-sm del" @click="deleteEntry('counter', c.name)">
                     {{ t("feat.vars.delete") }}
                   </button>
                 </td>
@@ -404,17 +297,9 @@ async function addEntry() {
                 <td class="vars-name">$var.{{ v.name }}</td>
                 <td>
                   <template v-if="editingKey === 'var:' + v.name + ':'">
-                    <input
-                      class="vars-edit-input"
-                      v-model="editingVal"
-                      @keydown.enter="saveEdit('var', v.name)"
-                      @keydown.esc="editingKey = ''"
-                    />
-                    <button
-                      class="vars-btn-sm save"
-                      @click="saveEdit('var', v.name)"
-                      :disabled="varSaving"
-                    >
+                    <input class="vars-edit-input" v-model="editingVal" @keydown.enter="saveEdit('var', v.name)"
+                      @keydown.esc="editingKey = ''" />
+                    <button class="vars-btn-sm save" @click="saveEdit('var', v.name)" :disabled="varSaving">
                       {{ t("feat.vars.save") }}
                     </button>
                     <button class="vars-btn-sm" @click="editingKey = ''">
@@ -426,17 +311,11 @@ async function addEntry() {
                   }}</span>
                 </td>
                 <td style="white-space: nowrap">
-                  <button
-                    v-if="editingKey !== 'var:' + v.name + ':'"
-                    class="vars-btn-sm"
-                    @click="startEdit('var', v.name, v.value)"
-                  >
+                  <button v-if="editingKey !== 'var:' + v.name + ':'" class="vars-btn-sm"
+                    @click="startEdit('var', v.name, v.value)">
                     {{ t("feat.vars.edit") }}
                   </button>
-                  <button
-                    class="vars-btn-sm del"
-                    @click="deleteEntry('var', v.name)"
-                  >
+                  <button class="vars-btn-sm del" @click="deleteEntry('var', v.name)">
                     {{ t("feat.vars.delete") }}
                   </button>
                 </td>
@@ -463,23 +342,13 @@ async function addEntry() {
                 <td class="vars-name">$ucounter.{{ c.name }}</td>
                 <td style="color: #888; font-size: 11px">{{ c.username }}</td>
                 <td>
-                  <template
-                    v-if="
-                      editingKey === 'ucounter:' + c.name + ':' + c.username
-                    "
-                  >
-                    <input
-                      class="vars-edit-input"
-                      v-model="editingVal"
-                      type="number"
-                      @keydown.enter="saveEdit('ucounter', c.name, c.username)"
-                      @keydown.esc="editingKey = ''"
-                    />
-                    <button
-                      class="vars-btn-sm save"
-                      @click="saveEdit('ucounter', c.name, c.username)"
-                      :disabled="varSaving"
-                    >
+                  <template v-if="
+                    editingKey === 'ucounter:' + c.name + ':' + c.username
+                  ">
+                    <input class="vars-edit-input" v-model="editingVal" type="number"
+                      @keydown.enter="saveEdit('ucounter', c.name, c.username)" @keydown.esc="editingKey = ''" />
+                    <button class="vars-btn-sm save" @click="saveEdit('ucounter', c.name, c.username)"
+                      :disabled="varSaving">
                       {{ t("feat.vars.save") }}
                     </button>
                     <button class="vars-btn-sm" @click="editingKey = ''">
@@ -489,19 +358,12 @@ async function addEntry() {
                   <span v-else class="vars-val">{{ c.value }}</span>
                 </td>
                 <td style="white-space: nowrap">
-                  <button
-                    v-if="
-                      editingKey !== 'ucounter:' + c.name + ':' + c.username
-                    "
-                    class="vars-btn-sm"
-                    @click="startEdit('ucounter', c.name, c.value, c.username)"
-                  >
+                  <button v-if="
+                    editingKey !== 'ucounter:' + c.name + ':' + c.username
+                  " class="vars-btn-sm" @click="startEdit('ucounter', c.name, c.value, c.username)">
                     {{ t("feat.vars.edit") }}
                   </button>
-                  <button
-                    class="vars-btn-sm del"
-                    @click="deleteEntry('ucounter', c.name, c.username)"
-                  >
+                  <button class="vars-btn-sm del" @click="deleteEntry('ucounter', c.name, c.username)">
                     {{ t("feat.vars.delete") }}
                   </button>
                 </td>
@@ -528,20 +390,11 @@ async function addEntry() {
                 <td class="vars-name">$uvar.{{ v.name }}</td>
                 <td style="color: #888; font-size: 11px">{{ v.username }}</td>
                 <td>
-                  <template
-                    v-if="editingKey === 'uvar:' + v.name + ':' + v.username"
-                  >
-                    <input
-                      class="vars-edit-input"
-                      v-model="editingVal"
-                      @keydown.enter="saveEdit('uvar', v.name, v.username)"
-                      @keydown.esc="editingKey = ''"
-                    />
-                    <button
-                      class="vars-btn-sm save"
-                      @click="saveEdit('uvar', v.name, v.username)"
-                      :disabled="varSaving"
-                    >
+                  <template v-if="editingKey === 'uvar:' + v.name + ':' + v.username">
+                    <input class="vars-edit-input" v-model="editingVal"
+                      @keydown.enter="saveEdit('uvar', v.name, v.username)" @keydown.esc="editingKey = ''" />
+                    <button class="vars-btn-sm save" @click="saveEdit('uvar', v.name, v.username)"
+                      :disabled="varSaving">
                       {{ t("feat.vars.save") }}
                     </button>
                     <button class="vars-btn-sm" @click="editingKey = ''">
@@ -553,17 +406,11 @@ async function addEntry() {
                   }}</span>
                 </td>
                 <td style="white-space: nowrap">
-                  <button
-                    v-if="editingKey !== 'uvar:' + v.name + ':' + v.username"
-                    class="vars-btn-sm"
-                    @click="startEdit('uvar', v.name, v.value, v.username)"
-                  >
+                  <button v-if="editingKey !== 'uvar:' + v.name + ':' + v.username" class="vars-btn-sm"
+                    @click="startEdit('uvar', v.name, v.value, v.username)">
                     {{ t("feat.vars.edit") }}
                   </button>
-                  <button
-                    class="vars-btn-sm del"
-                    @click="deleteEntry('uvar', v.name, v.username)"
-                  >
+                  <button class="vars-btn-sm del" @click="deleteEntry('uvar', v.name, v.username)">
                     {{ t("feat.vars.delete") }}
                   </button>
                 </td>
@@ -574,15 +421,12 @@ async function addEntry() {
 
         <div class="vars-footer">
           <template v-if="!addingType">
-            <button
-              class="vars-add-btn"
-              @click="
-                addingType = varsTab
-                  .replace('s', '')
-                  .replace('counter', 'counter')
-                  .replace('var', 'var')
-              "
-            >
+            <button class="vars-add-btn" @click="
+              addingType = varsTab
+                .replace('s', '')
+                .replace('counter', 'counter')
+                .replace('var', 'var')
+              ">
               {{
                 varsTab === "counters"
                   ? t("feat.vars.add.counter")
@@ -595,33 +439,14 @@ async function addEntry() {
             </button>
           </template>
           <div v-else class="vars-add-form">
-            <input
-              class="vars-add-input"
-              v-model="addForm.name"
-              :placeholder="t('feat.vars.add.placeholder.name')"
-            />
-            <input
-              class="vars-add-input"
-              v-model="addForm.value"
-              :placeholder="
-                addingType.includes('counter')
-                  ? '0'
-                  : t('feat.vars.add.placeholder.value')
-              "
-              style="width: 100px"
-            />
-            <input
-              v-if="addingType.includes('u')"
-              class="vars-add-input"
-              v-model="addForm.username"
-              :placeholder="t('feat.vars.add.placeholder.user')"
-              style="width: 110px"
-            />
-            <button
-              class="vars-add-submit"
-              @click="addEntry"
-              :disabled="varSaving || !addForm.name.trim()"
-            >
+            <input class="vars-add-input" v-model="addForm.name" :placeholder="t('feat.vars.add.placeholder.name')" />
+            <input class="vars-add-input" v-model="addForm.value" :placeholder="addingType.includes('counter')
+              ? '0'
+              : t('feat.vars.add.placeholder.value')
+              " style="width: 100px" />
+            <input v-if="addingType.includes('u')" class="vars-add-input" v-model="addForm.username"
+              :placeholder="t('feat.vars.add.placeholder.user')" style="width: 110px" />
+            <button class="vars-add-submit" @click="addEntry" :disabled="varSaving || !addForm.name.trim()">
               {{ t("feat.vars.add.btn") }}
             </button>
             <button class="vars-add-cancel" @click="addingType = ''">
@@ -656,10 +481,12 @@ async function addEntry() {
     transform 0.15s;
   overflow: hidden;
 }
+
 .service-card:hover {
   border-color: #3a3a44;
   transform: translateY(-2px);
 }
+
 .service-card:active {
   transform: translateY(0);
 }
@@ -672,16 +499,20 @@ async function addEntry() {
   background: #111217;
   border-bottom: 1px solid #2a2a30;
 }
+
 .card-icon svg {
   width: 72px;
   height: 72px;
 }
+
 .obs-icon {
   color: #f14949;
 }
+
 .vars-icon {
   color: #e5c07b;
 }
+
 .obsconn-icon {
   color: #9d6cff;
 }
@@ -698,47 +529,57 @@ async function addEntry() {
   flex-direction: column;
   gap: 5px;
 }
+
 .card-title {
   font-size: 18px;
   font-weight: 700;
   color: #e0e0e0;
 }
+
 .card-sub {
   font-size: 12px;
   color: #555;
 }
+
 .card-url {
   font-family: "Consolas", "Fira Mono", monospace;
   font-size: 11px;
   color: #444;
   margin-top: 4px;
 }
+
 .obs-url-id {
   color: #f14949;
 }
+
 .obs-btn {
   border-color: #f1494944;
   color: #f14949;
   background: rgba(241, 73, 73, 0.06);
 }
+
 .obs-btn:hover {
   background: rgba(241, 73, 73, 0.16);
   border-color: #f1494988;
 }
+
 .vars-btn {
   border-color: #e5c07b44;
   color: #e5c07b;
   background: rgba(229, 192, 123, 0.06);
 }
+
 .vars-btn:hover {
   background: rgba(229, 192, 123, 0.16);
   border-color: #e5c07b88;
 }
+
 .obsconn-btn {
   border-color: #9d6cff44;
   color: #9d6cff;
   background: rgba(157, 108, 255, 0.06);
 }
+
 .obsconn-btn:hover {
   background: rgba(157, 108, 255, 0.16);
   border-color: #9d6cff88;
@@ -753,6 +594,7 @@ async function addEntry() {
   justify-content: center;
   z-index: 1000;
 }
+
 .vars-modal {
   background: #141418;
   border: 1px solid #2a2a30;
@@ -761,6 +603,7 @@ async function addEntry() {
   display: flex;
   flex-direction: column;
 }
+
 .vars-header {
   display: flex;
   align-items: center;
@@ -769,11 +612,13 @@ async function addEntry() {
   border-bottom: 1px solid #1e1e24;
   flex-shrink: 0;
 }
+
 .vars-title {
   font-size: 14px;
   font-weight: 700;
   color: #e0e0e0;
 }
+
 .vars-close {
   background: none;
   border: none;
@@ -786,14 +631,17 @@ async function addEntry() {
   align-items: center;
   justify-content: center;
 }
+
 .vars-close:hover {
   color: #e0e0e0;
 }
+
 .vars-tabs {
   display: flex;
   border-bottom: 1px solid #1e1e24;
   flex-shrink: 0;
 }
+
 .vars-tab {
   padding: 8px 16px;
   font-size: 11px;
@@ -806,22 +654,27 @@ async function addEntry() {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
 .vars-tab.active {
   color: #9d6cff;
   border-bottom-color: #9d6cff;
 }
+
 .vars-tab:hover:not(.active) {
   color: #888;
 }
+
 .vars-body {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
 }
+
 .vars-table {
   width: 100%;
   border-collapse: collapse;
 }
+
 .vars-table th {
   text-align: left;
   font-size: 10px;
@@ -835,23 +688,28 @@ async function addEntry() {
   position: sticky;
   top: 0;
 }
+
 .vars-table td {
   padding: 6px 14px;
   border-bottom: 1px solid #111317;
   font-size: 12px;
   color: #ccc;
 }
+
 .vars-table tr:hover td {
   background: #1a1a1e;
 }
+
 .vars-name {
   font-family: "Consolas", "Fira Mono", monospace;
   color: #9d6cff;
 }
+
 .vars-val {
   font-family: "Consolas", "Fira Mono", monospace;
   color: #e5c07b;
 }
+
 .vars-edit-input {
   background: #0d0d10;
   border: 1px solid #6f2bff55;
@@ -862,6 +720,7 @@ async function addEntry() {
   width: 120px;
   outline: none;
 }
+
 .vars-btn-sm {
   height: 22px;
   padding: 0 8px;
@@ -873,26 +732,31 @@ async function addEntry() {
   cursor: pointer;
   margin-left: 4px;
 }
+
 .vars-btn-sm:hover {
   border-color: #6f2bff44;
   color: #9d6cff;
   background: #6f2bff0c;
 }
+
 .vars-btn-sm.del:hover {
   border-color: #f1494944;
   color: #f14949;
   background: rgba(241, 73, 73, 0.06);
 }
+
 .vars-btn-sm.save {
   border-color: #6f2bff44;
   color: #9d6cff;
 }
+
 .vars-empty {
   padding: 32px;
   text-align: center;
   color: #444;
   font-size: 13px;
 }
+
 .vars-footer {
   padding: 10px 14px;
   border-top: 1px solid #1e1e24;
@@ -902,6 +766,7 @@ async function addEntry() {
   align-items: center;
   flex-wrap: wrap;
 }
+
 .vars-add-btn {
   height: 26px;
   padding: 0 12px;
@@ -912,15 +777,18 @@ async function addEntry() {
   font-size: 11px;
   cursor: pointer;
 }
+
 .vars-add-btn:hover {
   background: #6f2bff0c;
 }
+
 .vars-add-form {
   display: flex;
   gap: 6px;
   align-items: center;
   flex-wrap: wrap;
 }
+
 .vars-add-input {
   height: 26px;
   background: #0d0d10;
@@ -932,9 +800,11 @@ async function addEntry() {
   outline: none;
   width: 130px;
 }
+
 .vars-add-input:focus {
   border-color: #6f2bff55;
 }
+
 .vars-add-submit {
   height: 26px;
   padding: 0 12px;
@@ -946,10 +816,12 @@ async function addEntry() {
   font-weight: 700;
   cursor: pointer;
 }
+
 .vars-add-submit:disabled {
   opacity: 0.5;
   cursor: default;
 }
+
 .vars-add-cancel {
   height: 26px;
   padding: 0 10px;
@@ -965,6 +837,7 @@ async function addEntry() {
   .tools-view {
     gap: 14px;
   }
+
   .service-card {
     width: 100%;
   }
