@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from "vue";
+import { ref, computed, watch, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../i18n";
 import { useAuth } from "../auth";
@@ -37,12 +37,18 @@ const triggersRef = ref<any>(null);
 const countdownsRef = ref<any>(null);
 const obsRef = ref<any>(null);
 
-const activeChild = computed(() => {
-  if (activeTab.value === "timers") return timersRef.value;
-  if (activeTab.value === "triggers") return triggersRef.value;
-  if (activeTab.value === "obs") return obsRef.value;
-  return countdownsRef.value;
-});
+// >>> Snapshotted post-flush, NOT a computed read during render.
+const activeChild = ref<any>(null);
+watch(
+  [activeTab, timersRef, triggersRef, countdownsRef, obsRef],
+  ([tab]) => {
+    if (tab === "timers") activeChild.value = timersRef.value;
+    else if (tab === "triggers") activeChild.value = triggersRef.value;
+    else if (tab === "obs") activeChild.value = obsRef.value;
+    else activeChild.value = countdownsRef.value;
+  },
+  { immediate: true, flush: "post" },
+);
 
 // >>> Close any Teleport(to body) panel on outgoing tab before it unmounts.
 async function switchTab(tab: Tab) {
@@ -60,7 +66,7 @@ async function switchTab(tab: Tab) {
         <div class="ep-view-title">{{ t("auto.title") }}</div>
         <div class="ep-view-sub">
           <template v-if="activeChild?.header">{{ activeChild.header.count }} {{ activeChild.header.countLabel
-          }}</template>
+            }}</template>
           <template v-else>&mdash;</template>
         </div>
       </div>
