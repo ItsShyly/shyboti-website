@@ -313,12 +313,7 @@ async function controlCountdown(
 <template>
   <div class="ep-view">
     <div class="ep-view-header">
-      <div>
-        <div class="ep-view-title">{{ t("countdown.title") }}</div>
-        <div class="ep-view-sub">
-          {{ t("countdown.sub") }} #{{ session?.channel }}
-        </div>
-      </div>
+      <div class="ep-view-count">{{ countdowns.length }} countdown{{ countdowns.length === 1 ? '' : 's' }}</div>
       <button
         class="ep-btn-new"
         @click="(canEdit || isBroadcaster) && openNew()"

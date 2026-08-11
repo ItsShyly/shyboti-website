@@ -914,14 +914,65 @@ onUnmounted(() => {
           customCommands.length !== 1 ? t('cmd.count_plural') : t('cmd.count') }}</span>
         <span v-else-if="activeTab === 'Obs' && obsPaired" class="ep-view-count">{{ obsCommandCount }} OBS</span>
         <!-- sync (Custom tab only) -->
-        <button v-if="activeTab === 'Custom' && syncConf?.is_active" class="ep-sync-indicator"
-          @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from}`">
-          <span class="ep-sync-dot"></span>sync #{{ syncConf.sync_from }}<span class="ep-sync-chevron">{{ syncOpen ? '▲'
-            : '▼' }}</span>
-        </button>
-        <button v-else-if="activeTab === 'Custom'" class="ep-sync-config-btn" @click="syncOpen = !syncOpen">
-          {{ t('cmd.sync.config') }}<span class="ep-sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
-        </button>
+        <div class="ep-sync-wrap">
+          <button v-if="activeTab === 'Custom' && syncConf?.is_active" class="ep-sync-indicator"
+            @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from}`">
+            <span class="ep-sync-dot"></span>sync #{{ syncConf.sync_from }}<span class="ep-sync-chevron">{{ syncOpen ? '▲'
+              : '▼' }}</span>
+          </button>
+          <button v-else-if="activeTab === 'Custom'" class="ep-sync-config-btn" @click="syncOpen = !syncOpen">
+            {{ t('cmd.sync.config') }}<span class="ep-sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
+          </button>
+          <!-- sync dropdown panel - floats below the button now instead of pushing content down -->
+          <div v-if="syncOpen && activeTab === 'Custom'" class="ep-sync-panel">
+            <div class="ep-sync-modes">
+              <button class="ep-sync-mode-btn active">Sync (ongoing)</button>
+              <button class="ep-sync-mode-btn" @click="syncOpen = false" title="One-time copy, no ongoing config">Import (one-time)</button>
+            </div>
+            <div class="ep-sync-row">
+              <select v-model="syncFrom" class="field-select-sm">
+                <option value="">
+                  {{
+                    syncConf?.is_active
+                      ? t("cmd.sync.change")
+                      : t("cmd.sync.select")
+                  }}
+                </option>
+                <option v-for="ch in availableChannels.filter(
+                  (c) => c !== session?.channel,
+                )" :key="ch" :value="ch">
+                  #{{ ch }}
+                </option>
+              </select>
+              <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">
+                {{
+                  syncSaving
+                    ? "…"
+                    : syncConf?.is_active
+                      ? t("cmd.sync.update")
+                      : t("cmd.sync.enable")
+                }}
+              </button>
+            </div>
+            <div class="ep-sync-row">
+              <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">
+                {{ syncRunning ? "…" : t("cmd.sync.pull") }}
+              </button>
+              <button v-if="syncConf?.is_active" class="sync-stop-btn" @click="stopSync">
+                {{ t("cmd.sync.stop") }}
+              </button>
+            </div>
+            <div v-if="syncConf?.last_synced" class="ep-sync-last">
+              {{ t("cmd.sync.last") }}
+              {{ new Date(syncConf.last_synced).toLocaleString() }}
+            </div>
+            <div v-if="syncMsg" class="ep-sync-msg" :class="{
+              err: syncMsg.includes('fail') || syncMsg.includes('Error'),
+            }">
+              {{ syncMsg }}
+            </div>
+          </div>
+        </div>
         <!-- reload -->
         <button class="ep-btn-reload" @click="reloadAll" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
           }}</button>
@@ -933,17 +984,17 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <div class="cmd-tabs">
-      <button class="cmd-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">
+    <div class="ep-tabs">
+      <button class="ep-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">
         {{ t("cmd.title_default") }}
       </button>
-      <button class="cmd-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">
+      <button class="ep-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">
         {{ t("cmd.title_custom") }}
       </button>
-      <button class="cmd-tab" :class="{ active: activeTab === 'Extras' }" @click="activeTab = 'Extras'">
+      <button class="ep-tab" :class="{ active: activeTab === 'Extras' }" @click="activeTab = 'Extras'">
         {{ t("cmd.title_extras") }}
       </button>
-      <button v-if="canViewObs" class="cmd-tab" :class="{ active: activeTab === 'Obs' }" @click="activeTab = 'Obs'">
+      <button v-if="canViewObs" class="ep-tab" :class="{ active: activeTab === 'Obs' }" @click="activeTab = 'Obs'">
         OBS
       </button>
     </div>
@@ -1056,49 +1107,6 @@ onUnmounted(() => {
 
     <!-- Custom tab -->
     <template v-if="activeTab === 'Custom'">
-      <!-- sync dropdown panel -->
-      <div v-if="syncOpen" class="sync-panel">
-        <div class="sync-row">
-          <select v-model="syncFrom" class="field-select-sm">
-            <option value="">
-              {{
-                syncConf?.is_active
-                  ? t("cmd.sync.change")
-                  : t("cmd.sync.select")
-              }}
-            </option>
-            <option v-for="ch in availableChannels.filter(
-              (c) => c !== session?.channel,
-            )" :key="ch" :value="ch">
-              #{{ ch }}
-            </option>
-          </select>
-          <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">
-            {{
-              syncSaving
-                ? "…"
-                : syncConf?.is_active
-                  ? t("cmd.sync.update")
-                  : t("cmd.sync.enable")
-            }}
-          </button>
-          <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">
-            {{ syncRunning ? "…" : t("cmd.sync.pull") }}
-          </button>
-          <button v-if="syncConf?.is_active" class="sync-stop-btn" @click="stopSync">
-            {{ t("cmd.sync.stop") }}
-          </button>
-        </div>
-        <div v-if="syncConf?.last_synced" class="sync-last">
-          {{ t("cmd.sync.last") }}
-          {{ new Date(syncConf.last_synced).toLocaleString() }}
-        </div>
-        <div v-if="syncMsg" class="sync-msg" :class="{
-          err: syncMsg.includes('fail') || syncMsg.includes('Error'),
-        }">
-          {{ syncMsg }}
-        </div>
-      </div>
 
       <div v-if="!customLoading && filteredCustom().length > 0" class="table-header custom-table-header">
         <div></div>
@@ -1508,46 +1516,6 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
-.cmd-tabs {
-  display: flex;
-  border-bottom: 1px solid #222;
-  margin-bottom: 0;
-}
-
-.cmd-tab {
-  padding: 8px 20px;
-  border: none;
-  background: transparent;
-  color: #555;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 0.15s;
-}
-
-.cmd-tab:hover {
-  color: #aaa;
-}
-
-.cmd-tab.active {
-  color: #9d6cff;
-  border-bottom-color: #6f2bff;
-}
-
-.reload-tab {
-  margin-left: auto;
-  font-size: 14px;
-  padding: 4px 14px;
-}
-
-.reload-tab:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
 .state-msg {
   color: #555;
   padding: 40px;
@@ -1822,7 +1790,7 @@ onUnmounted(() => {
   width: 76px;
   height: 34px;
   border: 2px solid #6f2bff;
-  background: transparent;
+  background: #6f2bff2b;
   color: #ccc;
   font-family: inherit;
   font-size: 12px;
@@ -2072,100 +2040,6 @@ onUnmounted(() => {
 
 .share-btn:hover {
   background: rgba(78, 201, 176, 0.1);
-}
-
-.sync-indicator {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  height: 22px;
-  padding: 0 8px;
-  border: 1px solid #23d18b44;
-  background: rgba(35, 209, 139, 0.06);
-  color: #23d18b;
-  font-family: inherit;
-  font-size: 10px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.sync-indicator:hover {
-  background: rgba(35, 209, 139, 0.12);
-}
-
-.sync-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #23d18b;
-  box-shadow: 0 0 4px #23d18b88;
-  animation: pulse-live 2s ease-in-out infinite;
-  flex-shrink: 0;
-}
-
-@keyframes pulse-live {
-
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  50% {
-    opacity: 0.4;
-  }
-}
-
-.sync-config-btn {
-  height: 22px;
-  padding: 0 8px;
-  border: 1px solid #2a2a30;
-  background: transparent;
-  color: #555;
-  font-family: inherit;
-  font-size: 10px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.sync-config-btn:hover {
-  color: #9d6cff;
-  border-color: #6f2bff44;
-}
-
-.sync-chevron {
-  font-size: 8px;
-  opacity: 0.6;
-}
-
-.sync-panel {
-  background: #141418;
-  border: 1px solid #1e1e24;
-  border-top: none;
-  padding: 8px 10px;
-  margin-bottom: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.sync-row {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.sync-msg {
-  font-size: 10px;
-  color: #23d18b;
-}
-
-.sync-msg.err {
-  color: #f14949;
-}
-
-.sync-last {
-  font-size: 10px;
-  color: #444;
 }
 
 .sync-stop-btn {

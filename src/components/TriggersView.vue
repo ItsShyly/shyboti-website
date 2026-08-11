@@ -438,12 +438,9 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
 <template>
   <div class="ep-view">
     <div class="ep-view-header">
-      <div class="view-header-left">
-        <div>
-          <div class="ep-view-title">{{ t("trigger.title") }}</div>
-          <div class="ep-view-sub">
-            {{ t("trigger.sub") }} #{{ session?.channel }}
-          </div>
+      <div class="ep-view-count">{{ triggers.length }} trigger{{ triggers.length === 1 ? '' : 's' }}</div>
+      <div class="ep-view-header-right">
+        <div class="ep-sync-wrap">
           <button v-if="syncConf?.is_active" class="ep-sync-indicator" @click="syncOpen = !syncOpen"
             :title="`${t('trigger.sync.active')} #${syncConf.sync_from}`">
             <span class="ep-sync-dot"></span>{{ t("trigger.sync.active") }} #{{
@@ -455,48 +452,54 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
             {{ t("trigger.sync.config")
             }}<span class="ep-sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
           </button>
+          <div v-if="syncOpen" class="ep-sync-panel">
+            <div class="ep-sync-modes">
+              <button class="ep-sync-mode-btn active">Sync (ongoing)</button>
+              <button class="ep-sync-mode-btn" @click="syncOpen = false" title="One-time copy, no ongoing config">Import (one-time)</button>
+            </div>
+            <div class="ep-sync-row">
+              <select v-model="syncFrom" class="ep-field-select-sm">
+                <option value="">
+                  {{
+                    syncConf?.is_active
+                      ? t("trigger.sync.change")
+                      : t("trigger.sync.select")
+                  }}
+                </option>
+                <option v-for="ch in availableChannels.filter(
+                  (c) => c !== session?.channel,
+                )" :key="ch" :value="ch">
+                  #{{ ch }}
+                </option>
+              </select>
+              <button class="ep-sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">
+                {{
+                  syncSaving
+                    ? "…"
+                    : syncConf?.is_active
+                      ? t("trigger.sync.update")
+                      : t("trigger.sync.enable")
+                }}
+              </button>
+            </div>
+            <div v-if="syncConf?.is_active" class="ep-sync-row">
+              <button class="ep-sync-stop-btn" @click="stopSync">
+                {{ t("trigger.sync.stop") }}
+              </button>
+            </div>
+            <div v-if="syncConf?.last_synced" class="ep-sync-last">
+              {{ t("trigger.sync.last") }}
+              {{ new Date(syncConf.last_synced).toLocaleString() }}
+            </div>
+            <div v-if="syncMsg" class="ep-sync-msg"
+              :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">
+              {{ syncMsg }}
+            </div>
+          </div>
         </div>
-      </div>
-      <button class="ep-btn-new" @click="canEdit && openNew()" :disabled="!canEdit">
-        {{ t("trigger.new") }}
-      </button>
-    </div>
-
-    <div v-if="syncOpen" class="ep-sync-panel">
-      <div class="ep-sync-row">
-        <select v-model="syncFrom" class="ep-field-select-sm">
-          <option value="">
-            {{
-              syncConf?.is_active
-                ? t("trigger.sync.change")
-                : t("trigger.sync.select")
-            }}
-          </option>
-          <option v-for="ch in availableChannels.filter(
-            (c) => c !== session?.channel,
-          )" :key="ch" :value="ch">
-            #{{ ch }}
-          </option>
-        </select>
-        <button class="ep-sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">
-          {{
-            syncSaving
-              ? "…"
-              : syncConf?.is_active
-                ? t("trigger.sync.update")
-                : t("trigger.sync.enable")
-          }}
+        <button class="ep-btn-new" @click="canEdit && openNew()" :disabled="!canEdit">
+          {{ t("trigger.new") }}
         </button>
-        <button v-if="syncConf?.is_active" class="ep-sync-stop-btn" @click="stopSync">
-          {{ t("trigger.sync.stop") }}
-        </button>
-      </div>
-      <div v-if="syncConf?.last_synced" class="ep-sync-last">
-        {{ t("trigger.sync.last") }}
-        {{ new Date(syncConf.last_synced).toLocaleString() }}
-      </div>
-      <div v-if="syncMsg" class="ep-sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">
-        {{ syncMsg }}
       </div>
     </div>
 

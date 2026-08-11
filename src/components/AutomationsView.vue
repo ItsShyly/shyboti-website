@@ -48,17 +48,17 @@ watch(
       </div>
     </div>
 
-    <div class="auto-tabs">
-      <button class="auto-tab" :class="{ active: activeTab === 'timers' }" @click="activeTab = 'timers'">
+    <div class="ep-tabs">
+      <button class="ep-tab" :class="{ active: activeTab === 'timers' }" @click="activeTab = 'timers'">
         {{ t("auto.timers") }}
       </button>
-      <button class="auto-tab" :class="{ active: activeTab === 'triggers' }" @click="activeTab = 'triggers'">
+      <button class="ep-tab" :class="{ active: activeTab === 'triggers' }" @click="activeTab = 'triggers'">
         {{ t("auto.triggers") }}
       </button>
-      <button class="auto-tab" :class="{ active: activeTab === 'countdowns' }" @click="activeTab = 'countdowns'">
+      <button class="ep-tab" :class="{ active: activeTab === 'countdowns' }" @click="activeTab = 'countdowns'">
         {{ t("auto.countdowns") }}
       </button>
-      <button v-if="canViewObs" class="auto-tab" :class="{ active: activeTab === 'obs' }" @click="activeTab = 'obs'">
+      <button v-if="canViewObs" class="ep-tab" :class="{ active: activeTab === 'obs' }" @click="activeTab = 'obs'">
         OBS
       </button>
     </div>
@@ -106,47 +106,6 @@ watch(
 .ep-btn-reload:hover {
   color: #9d6cff;
   border-color: #6f2bff44;
-}
-
-.auto-tabs {
-  display: flex;
-  border-bottom: 1px solid #222;
-  flex-shrink: 0;
-  margin-bottom: 16px;
-}
-
-.auto-tab {
-  padding: 8px 20px;
-  border: none;
-  background: transparent;
-  color: #555;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 0.15s;
-}
-
-.auto-tab:hover {
-  color: #aaa;
-}
-
-.auto-tab.active {
-  color: #9d6cff;
-  border-bottom-color: #6f2bff;
-}
-
-.reload-tab {
-  margin-left: auto;
-  font-size: 14px;
-  padding: 4px 14px;
-}
-
-.reload-tab:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 
 .auto-body {

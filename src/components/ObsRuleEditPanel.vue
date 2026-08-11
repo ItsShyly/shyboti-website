@@ -387,7 +387,7 @@ const saveDisabled = computed(() => {
 
           <!-- volume value -->
           <div v-if="fAction === 'volume'" class="ep-field-group">
-            <label class="ep-field-label">Volume <span class="ep-field-hint">0–100</span></label>
+            <label class="ep-field-label">Volume <span class="ep-field-hint">0-100</span></label>
             <input v-model.number="fValue" type="number" min="0" max="100" class="ep-field-input"
               placeholder="e.g. 50" />
           </div>
@@ -403,7 +403,6 @@ const saveDisabled = computed(() => {
             </div>
             <textarea v-if="fChatMsgEnabled" v-model="fChatMsg" class="ep-field-input obs-chat-msg-input" rows="2"
               placeholder="Scene changed to $scene"></textarea>
-            <span v-if="fChatMsgEnabled" class="ep-field-hint">$scene and $category get filled in automatically</span>
           </div>
 
           <!-- enabled -->

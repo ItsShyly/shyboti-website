@@ -159,14 +159,7 @@ onMounted(() => {
 <template>
   <div class="ep-view">
     <div class="ep-view-header">
-      <div class="view-header-left">
-        <div>
-          <div class="ep-view-title">OBS Automations</div>
-          <div class="ep-view-sub">
-            OBS Automations · #{{ session?.channel }}
-          </div>
-        </div>
-      </div>
+      <div class="ep-view-count">{{ rules.length }} rule{{ rules.length === 1 ? '' : 's' }}</div>
       <div>
         <button class="ep-btn-new" @click="canEdit && openEdit(null)" :disabled="!canEdit || !paired">
           + New
@@ -180,47 +173,44 @@ onMounted(() => {
       <router-link to="/obs-control" class="obs-rule-link">OBS control</router-link> page first.
     </div>
     <template v-else>
-      <div v-if="!hasCategoryScope && hasCategoryRule" class="obs-scope-warning">
-        Your stored Twitch token doesn't have permission to change the category, so any
-        category-related rule below silently won't fire. <a href="/auth/add" class="obs-rule-link">Re-authorize</a>
-        to grant it.
-      </div>
       <div v-if="!rules.length" class="ep-empty">
         No obs automations yet. Create one to get started.
       </div>
 
-    <div v-else class="ep-row-list">
-      <div v-for="rule in rules" :key="rule.id" class="ep-list-row" :class="{ inactive: !rule.enabled }">
-        <div class="timer-toggle-wrap">
-          <button class="ep-toggle-btn" :class="{ on: rule.enabled, disabled: !canEdit }"
-            @click="canEdit && toggleRule(rule)" :title="rule.enabled ? 'Disable' : 'Enable'">
-            <span class="ep-toggle-knob"></span>
-          </button>
-        </div>
-        <div class="timer-info" @click="canEdit && openEdit(rule.id)">
-          <div class="timer-name">{{ ruleTitle(rule) }}</div>
-          <div class="timer-meta">
-            <span class="ep-meta-pill interval">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
-            <span class="ep-meta-pill when">{{ rule.target }}<template
-                v-if="rule.action === 'volume' && rule.value !== undefined"> @ {{ rule.value }}%</template></span>
+      <div v-else class="ep-row-list">
+        <div v-for="rule in rules" :key="rule.id" class="ep-list-row" :class="{ inactive: !rule.enabled }">
+          <div class="timer-toggle-wrap">
+            <button class="ep-toggle-btn" :class="{ on: rule.enabled, disabled: !canEdit }"
+              @click="canEdit && toggleRule(rule)" :title="rule.enabled ? 'Disable' : 'Enable'">
+              <span class="ep-toggle-knob"></span>
+            </button>
+          </div>
+          <div class="timer-info" @click="canEdit && openEdit(rule.id)">
+            <div class="timer-name">{{ ruleTitle(rule) }}</div>
+            <div class="timer-meta">
+              <span class="ep-meta-pill interval">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
+              <span class="ep-meta-pill when">{{ rule.target }}<template
+                  v-if="rule.action === 'volume' && rule.value !== undefined"> @ {{ rule.value }}%</template></span>
+            </div>
+          </div>
+          <div class="ep-row-actions">
+            <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(rule.id)"
+              :class="{ disabled: !canEdit }">
+              {{ canEdit ? "edit" : "view" }}
+            </button>
+            <button v-if="canEdit" class="ep-btn-action del" @click.stop="deleteRule(rule.id)"
+              :disabled="saving === rule.id">
+              ✕
+            </button>
           </div>
         </div>
-        <div class="ep-row-actions">
-          <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(rule.id)" :class="{ disabled: !canEdit }">
-            {{ canEdit ? "edit" : "view" }}
-          </button>
-          <button v-if="canEdit" class="ep-btn-action del" @click.stop="deleteRule(rule.id)"
-            :disabled="saving === rule.id">
-            ✕
-          </button>
-        </div>
       </div>
-    </div>
     </template>
   </div>
 
   <ObsRuleEditPanel :open="editOpen" :channel="session?.channel ?? ''" :rules="rules" :editTarget="editTarget"
-    :scenes="scenes" :sources="sources" :hasCategoryScope="hasCategoryScope" @close="editOpen = false" @saved="onSaved" />
+    :scenes="scenes" :sources="sources" :hasCategoryScope="hasCategoryScope" @close="editOpen = false"
+    @saved="onSaved" />
 </template>
 
 <style scoped>

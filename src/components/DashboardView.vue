@@ -502,24 +502,19 @@ function fmtActor(actor: string) {
         <div class="dash-title">{{ t("dash.title") }}</div>
         <div class="dash-sub">
           {{ t("dash.sub") }}
-          <select class="chan-select" v-model="viewChannel" @change="fetchActivity">
-            <option v-if="availableChannels.length > 1" :value="ALL_CHANNELS">
-              {{ t("dash.all") }}
-            </option>
-            <option v-for="ch in availableChannels.length
-              ? availableChannels
-              : [session?.channel ?? '']" :key="ch" :value="ch">
-              #{{ ch }}
-            </option>
+          <select v-if="availableChannels.length > 1" v-model="viewChannel" class="chan-select">
+            <option v-for="ch in availableChannels" :key="ch" :value="ch">#{{ ch }}</option>
+            <option :value="ALL_CHANNELS">All channels</option>
           </select>
+          <span v-else class="chan-fixed">#{{ session?.channel }}</span>
         </div>
       </div>
       <div class="dash-header-right">
         <span class="live-dot" :class="liveStatus" :title="liveStatus === 'live'
-            ? 'Live'
-            : liveStatus === 'connecting'
-              ? 'Connecting…'
-              : 'Offline'
+          ? 'Live'
+          : liveStatus === 'connecting'
+            ? 'Connecting…'
+            : 'Offline'
           "></span>
         <button class="refresh-btn" @click="fetchActivity" :disabled="loading">
           {{ loading ? "…" : "↺" }}
@@ -750,6 +745,11 @@ function fmtActor(actor: string) {
   padding: 2px 6px;
   outline: none;
   cursor: pointer;
+}
+
+.chan-fixed {
+  color: #9d6cff;
+  font-weight: 600;
 }
 
 .dash-header-right {

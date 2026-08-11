@@ -390,7 +390,7 @@ onUnmounted(() => { _sseSource?.close() });
           <template v-else>{{ nukes.length }} {{ t('cmd.count_plural') }}</template>
         </span>
         <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
-          }}</button>
+        }}</button>
         <button class="ep-btn-new" @click="
           activeTab === 'blocked' ? openNewBlocked() :
             activeTab === 'spam' ? openNewSpam() : openNewNuke()
@@ -403,8 +403,8 @@ onUnmounted(() => { _sseSource?.close() });
     <div v-if="error" class="ep-toast error">{{ error }}</div>
     <div v-if="success" class="ep-toast success">{{ success }}</div>
 
-    <div class="mod-tabs">
-      <button v-for="tab in ['blocked', 'spam', 'nukes'] as Tab[]" :key="tab" class="mod-tab"
+    <div class="ep-tabs">
+      <button v-for="tab in ['blocked', 'spam', 'nukes'] as Tab[]" :key="tab" class="ep-tab"
         :class="{ active: activeTab === tab }" @click="activeTab = tab">
         {{ tab === 'blocked' ? t('mod.tab.blocked') : tab === 'spam' ? t('mod.tab.spam') : t('mod.tab.nukes') }}
       </button>
@@ -426,7 +426,7 @@ onUnmounted(() => { _sseSource?.close() });
           <span v-if="term.action !== 'delete'" class="item-dur">{{ fmtDur(term.duration) }}</span>
           <div class="ep-row-actions">
             <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
-              }}</button>
+            }}</button>
           </div>
         </div>
       </div>
@@ -455,8 +455,6 @@ onUnmounted(() => { _sseSource?.close() });
 
     <!-- Nukes list -->
     <template v-else-if="activeTab === 'nukes'">
-      <div class="nuke-hint">{{ t("mod.nuke.hint") }} <strong>{{ t("mod.nuke.stay") }}</strong> - {{ t("mod.nuke.hint2")
-        }}</div>
       <div v-if="!nukes.length" class="ep-empty">{{ t("mod.empty.nukes") }}</div>
       <div v-else class="ep-row-list">
         <div v-for="n in nukes" :key="n.id" class="ep-list-row nuke-item-row">
@@ -708,7 +706,7 @@ onUnmounted(() => { _sseSource?.close() });
             </div>
             <div v-if="fNukeExpiry && fNukeStay" class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.nuke.expiry") }} <span class="ep-field-hint">{{ t("mod.nuke.min")
-                  }}</span></label>
+              }}</span></label>
               <input v-model.number="fNukeExpiryMins" type="number" min="1" class="ep-field-input" />
             </div>
           </template>
@@ -774,45 +772,6 @@ onUnmounted(() => { _sseSource?.close() });
 .ep-btn-reload:disabled {
   opacity: .4;
   cursor: not-allowed;
-}
-
-.mod-tabs {
-  display: flex;
-  border-bottom: 1px solid #222;
-}
-
-.mod-tab {
-  padding: 8px 20px;
-  border: none;
-  background: transparent;
-  color: #555;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  transition: color 0.15s;
-}
-
-.mod-tab:hover {
-  color: #aaa
-}
-
-.mod-tab.active {
-  color: #9d6cff;
-  border-bottom-color: #6f2bff
-}
-
-.reload-tab {
-  margin-left: auto;
-  font-size: 14px;
-  padding: 4px 14px
-}
-
-.reload-tab:disabled {
-  opacity: 0.4;
-  cursor: not-allowed
 }
 
 .nuke-hint {
@@ -1068,7 +1027,7 @@ onUnmounted(() => { _sseSource?.close() });
 }
 
 @media (max-width: 680px) {
-  .mod-tabs {
+  .ep-tabs {
     overflow-x: auto
   }
 

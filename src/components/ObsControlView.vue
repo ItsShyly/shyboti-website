@@ -76,7 +76,7 @@ interface ObsRule {
   bitrate_kbps: number;
   action: string;
   target: string;
-  value?: number; // only for action 'volume'
+  value?: number;
   enabled: boolean;
 }
 
@@ -149,8 +149,7 @@ const ruleTarget = ref("");
 const ruleValue = ref(50);
 const ruleAddDisabled = computed(() => {
   if (!ruleBitrate.value || ruleBitrate.value <= 0) return true;
-  if (ruleAction.value !== "volume" && !ruleTarget.value.trim()) return true;
-  if (ruleAction.value === "volume" && !ruleTarget.value.trim()) return true;
+  if (!ruleTarget.value.trim()) return true;
   return false;
 });
 
@@ -438,8 +437,6 @@ async function load() {
     }
   } catch { }
   if (agentConnected.value && obsConnected.value) refreshScenes();
-  // >>> load command names in background
-  loadExistingCmdNames();
 }
 
 async function poll() {
@@ -820,50 +817,6 @@ function cycleUnifiedAccess(item: UnifiedCommand) {
   saveBindings();
 }
 
-// vvv rule builder vvv
-async function saveRules() {
-  if (!session.value) return;
-  rulesSaving.value = true;
-  try {
-    await fetch(`${API}/obs/${session.value.channel}/rules`, {
-      method: "PUT",
-      headers: { ...authHeaders.value, "Content-Type": "application/json" },
-      body: JSON.stringify({ rules: rules.value }),
-    });
-    rulesSaved.value = true;
-    setTimeout(() => {
-      rulesSaved.value = false;
-    }, 2000);
-  } catch { }
-  rulesSaving.value = false;
-}
-
-function addRule() {
-  if (ruleAddDisabled.value) return;
-  const rule: ObsRule = {
-    id: crypto.randomUUID(),
-    condition: ruleCondition.value,
-    bitrate_kbps: ruleBitrate.value,
-    action: ruleAction.value,
-    target: ruleTarget.value.trim(),
-    enabled: true,
-  };
-  if (ruleAction.value === "volume") rule.value = ruleValue.value;
-  rules.value = [...rules.value, rule];
-  ruleTarget.value = "";
-  saveRules();
-}
-
-function removeRule(id: string) {
-  rules.value = rules.value.filter((r) => r.id !== id);
-  saveRules();
-}
-
-function toggleRule(rule: ObsRule) {
-  rule.enabled = !rule.enabled;
-  saveRules();
-}
-
 // vvv audio mixer vvv
 const audioSources = computed(() =>
   (sources.value as any[]).filter((s) => s.isAudioSource),
@@ -1038,7 +991,7 @@ watch(
                   <span class="obs-live-stat-label">bitrate</span>
                   <span class="obs-live-stat-value">{{
                     bitrateLabel ?? "not streaming"
-                    }}</span>
+                  }}</span>
                 </div>
                 <div class="obs-live-stat">
                   <span class="obs-live-stat-label">preview size</span>
@@ -1102,7 +1055,7 @@ watch(
             <label class="ep-field-label">sources
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-                }}</span></label>
+              }}</span></label>
             <div class="obs-source-list">
               <div v-for="src in sources as any[]" :key="src.sceneItemId" class="obs-source-row">
                 <span class="obs-source-name">{{ src.sourceName }}</span>
@@ -1132,7 +1085,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-                }}</span></label>
+              }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row">
                 <div class="obs-mixer-top">
@@ -1178,284 +1131,7 @@ watch(
 
         <!-- Command builder / Rule builder -->
         <div v-if="agentStatus?.paired" class="ep-field-group obs-box obs-box-builder">
-          <div class="obs-builder-tabs">
-            <button type="button" class="obs-builder-tab" :class="{ active: builderView === 'command' }"
-              @click="builderView = 'command'">
-              command builder
-            </button>
-            <button type="button" class="obs-builder-tab" :class="{ active: builderView === 'rule' }"
-              @click="builderView = 'rule'">
-              rule builder
-            </button>
-          </div>
-
-          <template v-if="builderView === 'command'">
-            <!-- Chat command name -->
-            <div class="obs-cmd-name-row">
-              <span class="obs-cmd-name-prefix">+</span>
-              <input v-model="builderCmd" class="obs-cmd-name-input ep-mono"
-                :class="{ 'obs-trigger-conflict': existingCmdNames.includes(builderCmd.trim().replace(/^\+/, '').toLowerCase()) }"
-                placeholder="command name" maxlength="20"
-                :title="existingCmdNames.includes(builderCmd.trim().replace(/^\+/, '').toLowerCase()) ? 'This name is already used by another command' : ''"
-                @keydown.enter="!addDisabled && addBuilderCommand()" />
-              <span v-if="existingCmdNames.includes(builderCmd.trim().replace(/^\+/, '').toLowerCase())"
-                class="obs-cmd-name-conflict">already taken</span>
-            </div>
-
-            <div class="obs-label-row">
-              <div class="obs-label-col">
-                <span class="obs-col-label">action</span>
-                <select v-model="builderAction" class="ep-field-select obs-action-select">
-                  <option v-for="a in BUILDER_ACTIONS" :key="a.value" :value="a.value">
-                    {{ a.label }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="obs-label-col">
-                <span class="obs-col-label">target type</span>
-                <div class="obs-mode-seg" v-if="builderAction === 'volume'">
-                  <button type="button" class="obs-mode-seg-btn" :class="{ active: builderVolMode === 'both' }"
-                    @click="builderVolMode = 'both'">
-                    src+vol
-                  </button>
-                  <button type="button" class="obs-mode-seg-btn" :class="{ active: builderVolMode === 'vol_only' }"
-                    @click="builderVolMode = 'vol_only'">
-                    vol only
-                  </button>
-                </div>
-                <div class="obs-mode-seg" v-else>
-                  <button type="button" class="obs-mode-seg-btn" :class="{ active: builderMode === 'specific' }"
-                    @click="builderMode = 'specific'">
-                    preset
-                  </button>
-                  <button type="button" class="obs-mode-seg-btn" :class="{ active: builderMode === 'argument' }"
-                    @click="builderMode = 'argument'">
-                    chat arg
-                  </button>
-                </div>
-              </div>
-
-              <div class="obs-label-col">
-                <span class="obs-col-label">target</span>
-
-                <!-- volume: src+vol -> both come from chat -->
-                <span v-if="builderAction === 'volume' && builderVolMode === 'both'"
-                  class="obs-arg-badge">&lt;source&gt; &lt;vol&gt;</span>
-
-                <!-- volume: vol only -> fixed source, number from chat -->
-                <template v-else-if="builderAction === 'volume'">
-                  <input v-model="builderTarget" list="obs-src-names" class="ep-field-input obs-target-input"
-                    placeholder="source name" />
-                </template>
-
-                <!-- non-volume: chat arg -->
-                <span v-else-if="builderMode === 'argument'" class="obs-arg-badge">&lt;{{
-                  builderAction === "scene" ? "scene" : "source"
-                  }}&gt;</span>
-
-                <!-- non-volume: preset scene -->
-                <template v-else-if="builderAction === 'scene'">
-                  <input v-model="builderTarget" list="obs-scene-names" class="ep-field-input obs-target-input"
-                    placeholder="scene name" />
-                  <datalist id="obs-scene-names">
-                    <option v-for="s in scenes" :key="s.sceneName" :value="s.sceneName" />
-                  </datalist>
-                </template>
-
-                <!-- non-volume: preset source -->
-                <input v-else v-model="builderTarget" list="obs-src-names" class="ep-field-input obs-target-input"
-                  placeholder="source name" />
-              </div>
-
-              <div class="obs-label-col">
-                <span class="obs-col-label">access</span>
-                <button type="button" class="access-btn" :class="{
-                  'access-mod': builderAccess === 'mod',
-                  'access-bc': builderAccess === 'broadcaster',
-                }" @click="builderAccess = nextAccess(builderAccess)">
-                  <span class="access-arrow">⤹</span>{{ accessLabel(builderAccess)
-                  }}<span class="access-arrow">⤴︎</span>
-                </button>
-              </div>
-
-              <div class="obs-label-col obs-label-col-end">
-                <button class="obs-add-btn" :disabled="addDisabled" @click="addBuilderCommand">
-                  add
-                </button>
-              </div>
-            </div>
-            <datalist id="obs-src-names">
-              <option v-for="n in knownSources" :key="n" :value="n" />
-            </datalist>
-
-            <div class="obs-table-wrap">
-              <table class="obs-table">
-                <thead>
-                  <tr>
-                    <th>trigger</th>
-                    <th>action</th>
-                    <th>type</th>
-                    <th>target</th>
-                    <th>access</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-if="!unifiedCommands.length">
-                    <td colspan="6" class="obs-table-empty">
-                      no commands set up yet
-                    </td>
-                  </tr>
-                  <tr v-for="c in unifiedCommands" :key="c.type + (c.index ?? c.action)">
-                    <td class="obs-td-trigger ep-mono">
-                      +{{ c.command }}
-                      <span v-if="c.actionHint" class="cmd-usecase-arg">{{
-                        c.actionHint
-                        }}</span>
-                    </td>
-                    <td>
-                      {{ c.actionLabel }}
-                    </td>
-                    <td>
-                      <span class="obs-type-badge" :class="c.badgeClass">{{
-                        c.badgeText
-                        }}</span>
-                    </td>
-                    <td class="obs-td-target" :class="{
-                      'obs-td-target-arg': c.badgeClass === 'arg-type',
-                    }">
-                      {{ c.targetDisplay }}
-                      <span v-if="isTargetMissing(c)" class="obs-target-warn"
-                        title="Not found in OBS right now - check the name">!</span>
-                    </td>
-                    <td>
-                      <button class="access-btn access-btn-sm" :class="{
-                        'access-mod': c.access === 'mod',
-                        'access-bc': c.access === 'broadcaster',
-                      }" @click="cycleUnifiedAccess(c)">
-                        <span class="access-arrow">⤹</span>{{ accessLabel(c.access)
-                        }}<span class="access-arrow">⤴︎</span>
-                      </button>
-                    </td>
-                    <td class="obs-td-delete" @click="removeUnifiedCommand(c)">
-                      ×
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div v-if="builderCmd" class="cmd-usecase">
-              <span>+{{ builderCmd }}</span>
-              <template v-if="builderMode === 'argument' || builderAction === 'volume'">
-                <template v-if="builderAction === 'volume'">
-                  <span v-if="builderVolMode === 'both'" class="cmd-usecase-arg">
-                    &lt;source&gt; &lt;vol&gt;</span>
-                  <span v-else class="cmd-usecase-arg"> &lt;volume&gt;</span>
-                </template>
-
-                <span v-else class="cmd-usecase-arg">
-                  &lt;{{
-                    builderAction === "scene" ? "scene" : "source"
-                  }}&gt;</span>
-              </template>
-            </div>
-          </template>
-
-          <!-- rule builder, bitrate is the trigger, runs agent-side -->
-          <template v-else>
-            <div class="obs-label-row">
-              <div class="obs-label-col">
-                <span class="obs-col-label">condition</span>
-                <div class="obs-mode-seg">
-                  <button type="button" class="obs-mode-seg-btn" :class="{ active: ruleCondition === 'below' }"
-                    @click="ruleCondition = 'below'">
-                    below
-                  </button>
-                  <button type="button" class="obs-mode-seg-btn" :class="{ active: ruleCondition === 'above' }"
-                    @click="ruleCondition = 'above'">
-                    above
-                  </button>
-                </div>
-              </div>
-
-              <div class="obs-label-col">
-                <span class="obs-col-label">bitrate (kbps)</span>
-                <input v-model.number="ruleBitrate" type="number" min="1" class="ep-field-input obs-target-input"
-                  style="width: 90px" />
-              </div>
-
-              <div class="obs-label-col">
-                <span class="obs-col-label">action</span>
-                <select v-model="ruleAction" class="ep-field-select obs-action-select">
-                  <option v-for="a in BUILDER_ACTIONS" :key="a.value" :value="a.value">
-                    {{ a.label }}
-                  </option>
-                </select>
-              </div>
-
-              <div class="obs-label-col">
-                <span class="obs-col-label">target</span>
-                <input v-model="ruleTarget" :list="ruleAction === 'scene' ? 'obs-scene-names' : 'obs-src-names'
-                  " class="ep-field-input obs-target-input" :placeholder="ruleAction === 'scene' ? 'scene name' : 'source name'
-                    " />
-              </div>
-
-              <div v-if="ruleAction === 'volume'" class="obs-label-col">
-                <span class="obs-col-label">volume %</span>
-                <input v-model.number="ruleValue" type="number" min="0" max="100"
-                  class="ep-field-input obs-target-input" style="width: 60px" />
-              </div>
-
-              <div class="obs-label-col obs-label-col-end">
-                <button class="obs-add-btn" :disabled="ruleAddDisabled" @click="addRule">
-                  add
-                </button>
-              </div>
-            </div>
-
-            <div class="obs-table-wrap">
-              <table class="obs-table">
-                <thead>
-                  <tr>
-                    <th>condition</th>
-                    <th>action</th>
-                    <th>target</th>
-                    <th>on</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-if="!rules.length">
-                    <td colspan="5" class="obs-table-empty">
-                      no rules set up yet
-                    </td>
-                  </tr>
-                  <tr v-for="r in rules" :key="r.id">
-                    <td class="ep-mono">
-                      {{ r.condition }} {{ r.bitrate_kbps }} kbps
-                    </td>
-                    <td>{{ BUILDER_ACTION_LABEL[r.action] ?? r.action }}</td>
-                    <td class="obs-td-target">
-                      {{ r.target
-                      }}<span v-if="r.action === 'volume'">
-                        @ {{ r.value }}%</span>
-                    </td>
-                    <td>
-                      <button class="obs-toggle obs-toggle-sm" :class="{ on: r.enabled }" @click="toggleRule(r)">
-                        <span class="obs-toggle-knob"></span>
-                      </button>
-                    </td>
-                    <td class="obs-td-delete" @click="removeRule(r.id)">×</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <div v-if="rulesSaving || rulesSaved" class="obsconn-autosave" style="align-self: flex-start">
-              {{ rulesSaving ? "saving…" : "saved" }}
-            </div>
-          </template>
+          <!-- @TODO: Maybe Command builder / Rule builder buttons to link to it? -->
         </div>
       </div>
     </div>
