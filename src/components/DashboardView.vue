@@ -70,6 +70,8 @@ const popupUser = ref<TwitchUser | null>(null);
 const popupLoading = ref(false);
 
 let sseSource: EventSource | null = null;
+// >>> fetchActivity()/startSSE() cross an await 
+let disposed = false;
 
 const TYPE_GROUPS = computed(() => [
   {
@@ -174,9 +176,10 @@ async function fetchActivity() {
 }
 
 onMounted(() => {
-  fetchActivity().then(() => startSSE());
+  fetchActivity().then(() => { if (!disposed) startSSE(); });
 });
 onUnmounted(() => {
+  disposed = true;
   sseSource?.close();
   sseSource = null;
 });
@@ -201,6 +204,7 @@ async function startSSE() {
     liveStatus.value = "off";
     return;
   }
+  if (disposed) return;
 
   const ch = viewChannel.value === ALL_CHANNELS ? "" : viewChannel.value;
   const es = new EventSource(
@@ -538,7 +542,7 @@ function fmtActor(actor: string) {
         <div class="feed-day-header" @click.stop="toggleDay(group.date)">
           <span class="day-chevron">{{
             collapsedDays.has(group.date) ? "▶" : "▼"
-            }}</span>
+          }}</span>
           <span class="day-label">{{ group.date }}</span>
           <span class="day-count">{{ group.entries.length }}</span>
         </div>
@@ -630,7 +634,7 @@ function fmtActor(actor: string) {
             <div v-if="popupUser.ownFollowers !== null" class="popup-stat">
               <span class="stat-val">{{
                 fmtFollowers(popupUser.ownFollowers)
-                }}</span>
+              }}</span>
               <span class="stat-lbl">followers</span>
             </div>
           </div>
@@ -639,7 +643,7 @@ function fmtActor(actor: string) {
             <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">
               <span class="rel-icon">{{
                 popupUser.followedAt ? "♥" : "♥"
-                }}</span>
+              }}</span>
               <span class="rel-label">
                 <template v-if="popupUser.followedAt">Following for
                   {{ fmtDuration(popupUser.followedAt) }}</template>
@@ -649,7 +653,7 @@ function fmtActor(actor: string) {
             <div class="popup-rel" :class="popupUser.subbedSince ? 'rel-yes' : 'rel-no'">
               <span class="rel-icon">{{
                 popupUser.subbedSince ? "★" : "★"
-                }}</span>
+              }}</span>
               <span class="rel-label">
                 <template v-if="popupUser.subbedSince">
                   {{ subTierLabel(popupUser.subTier ?? "1000") }} ·

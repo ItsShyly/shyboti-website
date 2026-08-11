@@ -380,24 +380,27 @@ const reloading = ref(false);
 async function reload() { reloading.value = true; await load(); reloading.value = false }
 
 let _sseSource: EventSource | null = null;
+// >>> startModSSE()'s fetch crosses an await 
+let _sseDisposed = false;
 function startModSSE() {
   _sseSource?.close();
   if (!session.value?.token) return;
   fetch(`${API}/activity/sse-ticket`, { method: "POST", headers: { Authorization: `Bearer ${session.value.token}` } })
     .then(r => r.ok ? (r.json() as Promise<{ ticket: string }>) : Promise.reject())
     .then(({ ticket }) => {
+      if (_sseDisposed) return;
       const ch = session.value?.channel ?? "";
       const es = new EventSource(`${API}/activity/stream?ticket=${ticket}&channel=${ch}`);
       _sseSource = es;
       es.onmessage = (e) => {
         try { const ev = JSON.parse(e.data) as { type: string }; if (["ban", "timeout", "unban"].includes(ev.type)) load() } catch { }
       };
-      es.onerror = () => { es.close(); setTimeout(startModSSE, 10_000) };
+      es.onerror = () => { es.close(); if (!_sseDisposed) setTimeout(startModSSE, 10_000) };
     }).catch(() => { });
 }
 
 onMounted(() => { load(); startModSSE() });
-onUnmounted(() => { _sseSource?.close() });
+onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 </script>
 
 <template>
@@ -413,7 +416,7 @@ onUnmounted(() => { _sseSource?.close() });
       </div>
       <div class="ep-view-header-right">
         <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
-          }}</button>
+        }}</button>
         <button class="ep-btn-new" @click="
           activeTab === 'blocked' ? openNewBlocked() :
             activeTab === 'spam' ? openNewSpam() : openNewNuke()
@@ -449,7 +452,7 @@ onUnmounted(() => { _sseSource?.close() });
           <span v-if="term.action !== 'delete'" class="item-dur">{{ fmtDur(term.duration) }}</span>
           <div class="ep-row-actions">
             <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
-              }}</button>
+            }}</button>
             <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('blocked', term.id)">✕</button>
           </div>
         </div>
@@ -732,7 +735,7 @@ onUnmounted(() => { _sseSource?.close() });
             </div>
             <div v-if="fNukeExpiry && fNukeStay" class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.nuke.expiry") }} <span class="ep-field-hint">{{ t("mod.nuke.min")
-                  }}</span></label>
+              }}</span></label>
               <input v-model.number="fNukeExpiryMins" type="number" min="1" class="ep-field-input" />
             </div>
           </template>

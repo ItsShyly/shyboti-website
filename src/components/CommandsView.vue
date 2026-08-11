@@ -843,6 +843,8 @@ async function reloadAll() {
 }
 
 let _sseSource: EventSource | null = null;
+// >>> startCommandSSE()'s fetch crosses an await 
+let _sseDisposed = false;
 function startCommandSSE() {
   _sseSource?.close();
   if (!session.value?.token) return;
@@ -854,6 +856,7 @@ function startCommandSSE() {
       r.ok ? (r.json() as Promise<{ ticket: string }>) : Promise.reject(),
     )
     .then(({ ticket }) => {
+      if (_sseDisposed) return;
       const ch = session.value?.channel ?? "";
       const es = new EventSource(
         `${API}/activity/stream?ticket=${ticket}&channel=${ch}`,
@@ -870,7 +873,7 @@ function startCommandSSE() {
       };
       es.onerror = () => {
         es.close();
-        setTimeout(startCommandSSE, 10_000);
+        if (!_sseDisposed) setTimeout(startCommandSSE, 10_000);
       };
     })
     .catch(() => { });
@@ -896,6 +899,7 @@ watch(
   },
 );
 onUnmounted(() => {
+  _sseDisposed = true;
   _sseSource?.close();
 });
 </script>
@@ -911,7 +915,7 @@ onUnmounted(() => {
           <template v-else-if="activeTab === 'Custom'">{{ customCommands.length }} {{ customCommands.length !== 1 ?
             t('cmd.count_plural') : t('cmd.count') }}</template>
           <template v-else-if="activeTab === 'Obs' && obsPaired">{{ obsCommandCount }} OBS {{ t('cmd.count_plural')
-          }}</template>
+            }}</template>
           <template v-else>&mdash;</template>
         </div>
       </div>
@@ -948,7 +952,7 @@ onUnmounted(() => {
                 syncRunning
                   ? '…' : t('cmd.sync.pull') }}</button>
               <button v-if="syncConf?.is_active" class="ep-sync-stop-btn" @click="stopSync">{{ t('cmd.sync.stop')
-              }}</button>
+                }}</button>
             </div>
             <div v-if="syncConf?.last_synced" class="ep-sync-last">{{ t('cmd.sync.last') }} {{ new
               Date(syncConf.last_synced).toLocaleString() }}</div>
@@ -958,13 +962,13 @@ onUnmounted(() => {
           </div>
         </div>
         <button class="ep-btn-reload" @click="reloadAll" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
-        }}</button>
+          }}</button>
         <button v-if="activeTab === 'Custom'" class="ep-btn-new" :disabled="!canEdit"
           @click="canEdit && startCreate()">{{
             t('cmd.new') }}</button>
         <button v-else-if="activeTab === 'Obs' && obsPaired" class="ep-btn-new" @click="openObsEdit(null)">{{
           t('cmd.new')
-        }}</button>
+          }}</button>
       </div>
     </div>
 
@@ -1083,7 +1087,7 @@ onUnmounted(() => {
                   <div class="arg-variant-usage">
                     <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{
                       v.usage.replace(/^<(\$[^>]+)>$/, "[$1]")
-                        }}</span>
+                    }}</span>
                   </div>
                   <div class="arg-variant-desc">{{ v.desc || "" }}</div>
                 </div>
@@ -1136,9 +1140,9 @@ onUnmounted(() => {
                     cmd.isActive ? 'on' : 'off',
                     { disabled: !canToggle },
                   ]" @click="
-                  cmd.isActive = !cmd.isActive;
-                updateCustomActive(cmd);
-                "></div>
+                    cmd.isActive = !cmd.isActive;
+                  updateCustomActive(cmd);
+                  "></div>
                 </div>
                 <div class="cmd-name">
                   <span class="cmd-cat-dot" style="background: #9d6cff"></span>{{ prefix }}{{ cmd.name
@@ -1190,9 +1194,9 @@ onUnmounted(() => {
                     confirm: deleteConfirmName === cmd.name,
                     deleting: deletingName === cmd.name,
                   }" @click="deleteCustom(cmd.name)" :title="deleteConfirmName === cmd.name
-                  ? 'Click again to confirm'
-                  : 'Delete'
-                  ">
+                    ? 'Click again to confirm'
+                    : 'Delete'
+                    ">
                     {{
                       deletingName === cmd.name
                         ? "…"
@@ -1208,7 +1212,7 @@ onUnmounted(() => {
                   <div class="arg-variant-indent"></div>
                   <div class="arg-variant-usage">
                     <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{ v.usage
-                      }}</span>
+                    }}</span>
                   </div>
                   <div class="arg-variant-desc">{{ v.desc || "" }}</div>
                 </div>
@@ -1406,10 +1410,10 @@ onUnmounted(() => {
                 on: mentionEnabled && has7tvSet,
                 disabled: !isBroadcaster || !has7tvSet,
               }" @click="
-              isBroadcaster &&
-              has7tvSet &&
-              ((mentionEnabled = !mentionEnabled), saveExtras())
-              ">
+                isBroadcaster &&
+                has7tvSet &&
+                ((mentionEnabled = !mentionEnabled), saveExtras())
+                ">
                 <div class="extras-toggle-knob"></div>
               </div>
             </div>
