@@ -246,7 +246,7 @@ async function saveCountdown() {
           method: "DELETE",
           headers: { Authorization: `Bearer ${session.value.token}` },
         },
-      ).catch(() => {});
+      ).catch(() => { });
     }
     showSuccess(t("countdown.save") + "!");
     editOpen.value = false;
@@ -306,32 +306,26 @@ async function controlCountdown(
           data.started_at ?? (action === "start" ? Date.now() : null);
       }
     }
-  } catch {}
+  } catch { }
 }
+
+// >>> Header (title/count/create) lives in AutomationsView.vue - expose what it needs
+defineExpose({
+  header: computed(() => ({
+    count: countdowns.value.length,
+    countLabel: t("auto.countdowns"),
+    createLabel: t("countdown.new"),
+    canCreate: canEdit.value || isBroadcaster.value,
+  })),
+  reload: load,
+  create: () => {
+    (canEdit.value || isBroadcaster.value) && openNew();
+  },
+});
 </script>
 
 <template>
   <div class="ep-view">
-    <div class="ep-view-header">
-      <div>
-        <div class="ep-view-title">{{ t("countdown.title") }}</div>
-        <div class="ep-view-sub">
-          <span class="ep-view-count">{{ countdowns.length }}</span>
-          {{ t("countdown.sub") }}
-        </div>
-      </div>
-      <div class="ep-view-header-right">
-        <button class="ep-btn-reload" @click="load" title="Reload">↺</button>
-        <button
-          class="ep-btn-new"
-          @click="(canEdit || isBroadcaster) && openNew()"
-          :disabled="!canEdit && !isBroadcaster"
-        >
-          {{ t("countdown.new") }}
-        </button>
-      </div>
-    </div>
-
     <div v-if="success" class="ep-toast success">{{ success }}</div>
     <div v-if="error" class="ep-toast error">{{ error }}</div>
 
@@ -341,12 +335,7 @@ async function controlCountdown(
     </div>
 
     <div v-else class="ep-row-list">
-      <div
-        v-for="cd in countdowns"
-        :key="cd.id"
-        class="ep-list-row countdown-row"
-        :class="{ inactive: !cd.is_active }"
-      >
+      <div v-for="cd in countdowns" :key="cd.id" class="ep-list-row countdown-row" :class="{ inactive: !cd.is_active }">
         <!-- Status indicator -->
         <div class="cd-status-dot" :class="cd.status ?? 'idle'"></div>
 
@@ -354,28 +343,17 @@ async function controlCountdown(
         <div class="cd-info" @click="openEdit(cd)">
           <div class="cd-name">{{ cd.name }}</div>
           <div class="cd-meta">
-            <span class="ep-meta-pill dur"
-              >⏱ {{ fmtDuration(cd.duration_sec) }}</span
-            >
-            <span v-if="cd.tick_every_sec" class="ep-meta-pill tick"
-              >↻ {{ t("countdown.field.tick_every") }}
-              {{ cd.tick_every_sec }}s</span
-            >
-            <span
-              v-if="cd.enabled_when !== 'always'"
-              class="ep-meta-pill when"
-              >{{ cd.enabled_when }}</span
-            >
+            <span class="ep-meta-pill dur">⏱ {{ fmtDuration(cd.duration_sec) }}</span>
+            <span v-if="cd.tick_every_sec" class="ep-meta-pill tick">↻ {{ t("countdown.field.tick_every") }}
+              {{ cd.tick_every_sec }}s</span>
+            <span v-if="cd.enabled_when !== 'always'" class="ep-meta-pill when">{{ cd.enabled_when }}</span>
             <span v-if="cd.condition" class="ep-meta-pill cond">if …</span>
           </div>
           <!-- Running countdown: show live remaining -->
           <div v-if="cd.status === 'running'" class="cd-remaining">
             {{ fmtRemaining(cd) }} {{ t("countdown.status.running") }}
           </div>
-          <div
-            v-else-if="cd.status === 'finished'"
-            class="cd-remaining finished"
-          >
+          <div v-else-if="cd.status === 'finished'" class="cd-remaining finished">
             {{ t("countdown.status.finished") }}
           </div>
           <div v-else class="cd-remaining idle">
@@ -385,53 +363,34 @@ async function controlCountdown(
 
         <!-- Controls -->
         <div class="cd-controls">
-          <button
-            v-if="canToggle"
-            class="ctrl-btn start"
-            :class="{ active: cd.status === 'running' }"
-            @click.stop="
-              controlCountdown(
-                cd.name,
-                cd.status === 'running' ? 'stop' : 'start',
-              )
-            "
-            :title="
-              cd.status === 'running'
+          <button v-if="canToggle" class="ctrl-btn start" :class="{ active: cd.status === 'running' }" @click.stop="
+            controlCountdown(
+              cd.name,
+              cd.status === 'running' ? 'stop' : 'start',
+            )
+            " :title="cd.status === 'running'
                 ? t('countdown.action.stop')
                 : t('countdown.action.start')
-            "
-          >
+              ">
             {{
               cd.status === "running"
                 ? t("countdown.action.stop")
                 : t("countdown.action.start")
             }}
           </button>
-          <button
-            v-if="canToggle"
-            class="ctrl-btn reset"
-            @click.stop="controlCountdown(cd.name, 'reset')"
-            :title="t('countdown.action.reset')"
-          >
+          <button v-if="canToggle" class="ctrl-btn reset" @click.stop="controlCountdown(cd.name, 'reset')"
+            :title="t('countdown.action.reset')">
             {{ t("countdown.action.reset") }}
           </button>
         </div>
 
         <!-- Edit / Delete -->
         <div class="ep-row-actions">
-          <button
-            class="ep-btn-action edit"
-            @click.stop="canEdit && openEdit(cd)"
-            :class="{ disabled: !canEdit }"
-          >
+          <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(cd)" :class="{ disabled: !canEdit }">
             {{ canEdit ? t("countdown.edit") : t("countdown.view") }}
           </button>
-          <button
-            v-if="canDelete"
-            class="ep-btn-action del"
-            @click.stop="deleteCountdown(cd.name)"
-            :disabled="saving === cd.name"
-          >
+          <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteCountdown(cd.name)"
+            :disabled="saving === cd.name">
             ✕
           </button>
         </div>
@@ -440,11 +399,7 @@ async function controlCountdown(
 
     <!-- >>> Edit panel <<< -->
     <Teleport to="body">
-      <div
-        v-if="editOpen"
-        class="ep-overlay"
-        v-bind="overlay.handlers(() => (editOpen = false))"
-      >
+      <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => (editOpen = false))">
         <div class="ep-panel">
           <div class="ep-panel-header">
             <div>
@@ -452,11 +407,7 @@ async function controlCountdown(
                 <template v-if="isNew">{{ t("countdown.edit_new") }}</template>
                 <template v-else>
                   {{ t("countdown.edit_title") }}
-                  <EditableNameHeader
-                    v-model="editCountdown.name"
-                    :orig-name="editOrigName"
-                    placeholder="hype"
-                  />
+                  <EditableNameHeader v-model="editCountdown.name" :orig-name="editOrigName" placeholder="hype" />
                 </template>
               </div>
               <div class="ep-panel-sub">#{{ session?.channel }}</div>
@@ -468,127 +419,75 @@ async function controlCountdown(
             <!-- Name (new only - existing countdowns are renamed via the clickable header title above) + Duration -->
             <div class="ep-row-2">
               <div v-if="isNew" class="ep-field-group">
-                <label class="ep-field-label"
-                  >{{ t("countdown.field.name") }}
+                <label class="ep-field-label">{{ t("countdown.field.name") }}
                   <span class="ep-field-hint">{{
                     t("countdown.field.name_hint")
-                  }}</span></label
-                >
-                <input
-                  v-model="editCountdown.name"
-                  class="ep-field-input"
-                  placeholder="hype"
-                />
+                    }}</span></label>
+                <input v-model="editCountdown.name" class="ep-field-input" placeholder="hype" />
               </div>
               <div class="ep-field-group">
-                <label class="ep-field-label"
-                  >{{ t("countdown.field.seconds") }}
+                <label class="ep-field-label">{{ t("countdown.field.seconds") }}
                   <span class="ep-field-hint">{{
                     t("countdown.field.secs_hint")
-                  }}</span></label
-                >
+                    }}</span></label>
                 <div class="dur-row">
-                  <input
-                    v-model.number="editCountdown.duration_sec"
-                    type="number"
-                    min="1"
-                    class="ep-field-input"
-                  />
-                  <span class="ep-field-hint"
-                    >= {{ fmtDuration(editCountdown.duration_sec ?? 60) }}</span
-                  >
+                  <input v-model.number="editCountdown.duration_sec" type="number" min="1" class="ep-field-input" />
+                  <span class="ep-field-hint">= {{ fmtDuration(editCountdown.duration_sec ?? 60) }}</span>
                 </div>
               </div>
             </div>
 
             <!-- On start message -->
             <div class="ep-field-group">
-              <label class="ep-field-label"
-                >{{ t("countdown.field.msg_start") }}
+              <label class="ep-field-label">{{ t("countdown.field.msg_start") }}
                 <span class="ep-field-hint">{{
                   t("countdown.field.resp_hint")
-                }}</span></label
-              >
-              <div
-                ref="startEditorRef"
-                class="ep-script-editor"
-                contenteditable="true"
-                spellcheck="false"
+                  }}</span></label>
+              <div ref="startEditorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
                 data-placeholder="Countdown gestartet! $countdown.hype.remaining Sekunden verbleiben."
-                @focus="activeField = 'msg_start'"
-                @input="onEditorInput(startEditorRef, 'msg_start')"
-              ></div>
+                @focus="activeField = 'msg_start'" @input="onEditorInput(startEditorRef, 'msg_start')"></div>
             </div>
 
             <!-- Tick -->
             <div class="ep-row-2">
               <div class="ep-field-group">
-                <label class="ep-field-label"
-                  >{{ t("countdown.field.msg_tick") }}
+                <label class="ep-field-label">{{ t("countdown.field.msg_tick") }}
                   <span class="ep-field-hint">{{
                     t("countdown.field.tick_hint")
-                  }}</span></label
-                >
-                <div
-                  ref="tickEditorRef"
-                  class="ep-script-editor"
-                  contenteditable="true"
-                  spellcheck="false"
-                  data-placeholder="Noch $countdown.hype.remaining Sekunden!"
-                  @focus="activeField = 'msg_tick'"
-                  @input="onEditorInput(tickEditorRef, 'msg_tick')"
-                ></div>
+                    }}</span></label>
+                <div ref="tickEditorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
+                  data-placeholder="Noch $countdown.hype.remaining Sekunden!" @focus="activeField = 'msg_tick'"
+                  @input="onEditorInput(tickEditorRef, 'msg_tick')"></div>
               </div>
               <div class="ep-field-group ep-sm">
-                <label class="ep-field-label"
-                  >{{ t("countdown.field.tick_every") }}
-                  <span class="ep-field-hint">s</span></label
-                >
-                <input
-                  v-model.number="editCountdown.tick_every_sec"
-                  type="number"
-                  min="1"
-                  class="ep-field-input"
-                />
+                <label class="ep-field-label">{{ t("countdown.field.tick_every") }}
+                  <span class="ep-field-hint">s</span></label>
+                <input v-model.number="editCountdown.tick_every_sec" type="number" min="1" class="ep-field-input" />
               </div>
             </div>
 
             <!-- On finish message -->
             <div class="ep-field-group">
-              <label class="ep-field-label"
-                >{{ t("countdown.field.msg_end") }}
+              <label class="ep-field-label">{{ t("countdown.field.msg_end") }}
                 <span class="ep-field-hint">{{
                   t("countdown.field.resp_hint")
-                }}</span></label
-              >
-              <div
-                ref="endEditorRef"
-                class="ep-script-editor"
-                contenteditable="true"
-                spellcheck="false"
-                data-placeholder="Zeit ist abgelaufen! PogChamp"
-                @focus="activeField = 'msg_end'"
-                @input="onEditorInput(endEditorRef, 'msg_end')"
-              ></div>
+                  }}</span></label>
+              <div ref="endEditorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
+                data-placeholder="Zeit ist abgelaufen! PogChamp" @focus="activeField = 'msg_end'"
+                @input="onEditorInput(endEditorRef, 'msg_end')"></div>
             </div>
 
             <!-- Variable reference - inserts into whichever message field was last focused -->
-            <RefPanel
-              :title="`${t('edit.var_ref')} · → ${activeField.replace('msg_', '')}`"
-              context="countdown"
-              @insert="insertRefToken"
-            />
+            <RefPanel :title="`${t('edit.var_ref')} · → ${activeField.replace('msg_', '')}`" context="countdown"
+              @insert="insertRefToken" />
 
             <!-- Conditions -->
             <div class="ep-row-2">
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("countdown.field.active_when")
-                }}</label>
-                <select
-                  v-model="editCountdown.enabled_when"
-                  class="ep-field-select"
-                >
+                  }}</label>
+                <select v-model="editCountdown.enabled_when" class="ep-field-select">
                   <option value="always">
                     {{ t("countdown.when.always") }}
                   </option>
@@ -601,29 +500,20 @@ async function controlCountdown(
                 </select>
               </div>
               <div class="ep-field-group">
-                <label class="ep-field-label"
-                  >{{ t("countdown.field.condition") }}
+                <label class="ep-field-label">{{ t("countdown.field.condition") }}
                   <span class="ep-field-hint">{{
                     t("countdown.field.cond_hint")
-                  }}</span></label
-                >
-                <input
-                  v-model="editCountdown.condition"
-                  class="ep-field-input ep-mono"
-                  placeholder="$channel.viewers > 10"
-                />
+                    }}</span></label>
+                <input v-model="editCountdown.condition" class="ep-field-input ep-mono"
+                  placeholder="$channel.viewers > 10" />
               </div>
             </div>
 
             <div class="ep-panel-footer">
-              <button
-                v-if="!isNew && canDelete"
-                class="ep-btn-delete"
-                @click="
-                  deleteCountdown(editOrigName);
-                  editOpen = false;
-                "
-              >
+              <button v-if="!isNew && canDelete" class="ep-btn-delete" @click="
+                deleteCountdown(editOrigName);
+              editOpen = false;
+              ">
                 {{ t("countdown.delete") }}
               </button>
               <div v-else></div>
@@ -631,11 +521,7 @@ async function controlCountdown(
                 <button class="ep-btn-cancel" @click="editOpen = false">
                   {{ t("countdown.cancel") }}
                 </button>
-                <button
-                  class="ep-btn-save"
-                  @click="saveCountdown"
-                  :disabled="!!saving || !editCountdown.name"
-                >
+                <button class="ep-btn-save" @click="saveCountdown" :disabled="!!saving || !editCountdown.name">
                   {{ saving ? t("countdown.saving") : t("countdown.save") }}
                 </button>
               </div>
@@ -656,22 +542,28 @@ async function controlCountdown(
   background: #333;
   transition: background 0.3s;
 }
+
 .cd-status-dot.running {
   background: #23d18b;
   box-shadow: 0 0 6px #23d18b88;
   animation: pulse-dot 1.2s ease-in-out infinite;
 }
+
 .cd-status-dot.finished {
   background: #f14949;
 }
+
 .cd-status-dot.idle {
   background: #444;
 }
+
 @keyframes pulse-dot {
+
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.4;
   }
@@ -682,26 +574,31 @@ async function controlCountdown(
   cursor: pointer;
   min-width: 0;
 }
+
 .cd-name {
   font-size: 13px;
   font-weight: 600;
   color: #e0e0e0;
   margin-bottom: 4px;
 }
+
 .cd-meta {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
   margin-bottom: 4px;
 }
+
 .cd-remaining {
   font-size: 11px;
   font-family: "Consolas", "Fira Mono", monospace;
   color: #555;
 }
+
 .cd-remaining.finished {
   color: #f14949;
 }
+
 .cd-remaining.idle {
   color: #444;
 }
@@ -711,16 +608,19 @@ async function controlCountdown(
   border-color: #9d6cff44;
   background: #9d6cff11;
 }
+
 .ep-meta-pill.tick {
   color: #4ec9b0;
   border-color: #4ec9b044;
   background: #4ec9b011;
 }
+
 .ep-meta-pill.when {
   color: #e5c07b;
   border-color: #e5c07b44;
   background: #e5c07b11;
 }
+
 .ep-meta-pill.cond {
   color: #c792ea;
   border-color: #c792ea44;
@@ -732,6 +632,7 @@ async function controlCountdown(
   gap: 5px;
   flex-shrink: 0;
 }
+
 .ctrl-btn {
   height: 28px;
   padding: 0 10px;
@@ -743,25 +644,31 @@ async function controlCountdown(
   cursor: pointer;
   transition: all 0.15s;
 }
+
 .ctrl-btn.start {
   border-color: #23d18b44;
   color: #23d18b;
 }
+
 .ctrl-btn.start:hover {
   background: rgba(35, 209, 139, 0.1);
 }
+
 .ctrl-btn.start.active {
   border-color: #f1494944;
   color: #f14949;
   background: rgba(241, 73, 73, 0.08);
 }
+
 .ctrl-btn.start.active:hover {
   background: rgba(241, 73, 73, 0.18);
 }
+
 .ctrl-btn.reset {
   border-color: #e5c07b33;
   color: #888;
 }
+
 .ctrl-btn.reset:hover {
   border-color: #e5c07b66;
   color: #e5c07b;
@@ -773,6 +680,7 @@ async function controlCountdown(
   align-items: center;
   gap: 8px;
 }
+
 .dur-row .ep-field-input {
   flex: 1;
 }
@@ -782,6 +690,7 @@ async function controlCountdown(
     flex-wrap: wrap;
     gap: 8px;
   }
+
   .cd-controls {
     gap: 4px;
   }

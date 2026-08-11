@@ -71,7 +71,7 @@ async function load() {
     });
     if (res.ok)
       widgets.value = ((await res.json()) as { widgets: Widget[] }).widgets;
-  } catch {}
+  } catch { }
   loading.value = false;
 }
 
@@ -177,7 +177,7 @@ async function previewContent() {
         previewValue.value =
           ((await r2.json()) as { value: string }).value || "(empty)";
     }
-  } catch {}
+  } catch { }
   previewing.value = false;
 }
 
@@ -214,7 +214,7 @@ async function save() {
           method: "DELETE",
           headers: { Authorization: `Bearer ${session.value.token}` },
         },
-      ).catch(() => {});
+      ).catch(() => { });
     }
     saveSuccess.value = "Saved!";
     setTimeout(() => (saveSuccess.value = ""), 2000);
@@ -247,7 +247,7 @@ async function deleteWidget(id: string, name: string) {
 }
 
 function copyUrl(id: string, key: string) {
-  navigator.clipboard.writeText(widgetUrl(id)).catch(() => {});
+  navigator.clipboard.writeText(widgetUrl(id)).catch(() => { });
   copied.value = key;
   setTimeout(() => {
     if (copied.value === key) copied.value = "";
@@ -305,11 +305,14 @@ watch(() => session.value?.channel, load);
     <div class="ep-view-header">
       <div>
         <div class="ep-view-title">{{ t("obs.title") }}</div>
-        <div class="ep-view-sub">Live widgets for #{{ session?.channel }}</div>
+        <div class="ep-view-sub">{{ widgets.length }} widget{{ widgets.length === 1 ? '' : 's' }}</div>
       </div>
-      <button class="ep-btn-new" @click="openNew" :disabled="!canEdit">
-        {{ t("obs.new") }}
-      </button>
+      <div class="ep-view-header-right">
+        <button class="ep-btn-reload" @click="load" title="Reload">↺</button>
+        <button class="ep-btn-new" @click="openNew" :disabled="!canEdit">
+          {{ t("obs.new") }}
+        </button>
+      </div>
     </div>
 
     <div v-if="saveSuccess" class="ep-toast success">{{ saveSuccess }}</div>
@@ -323,34 +326,15 @@ watch(() => session.value?.channel, load);
     <div v-else class="ep-row-list">
       <div v-for="w in widgets" :key="w.id" class="ep-list-row widget-row">
         <div class="widget-icon">
-          <svg
-            viewBox="0 0 20 20"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <rect
-              x="1"
-              y="3"
-              width="18"
-              height="12"
-              rx="2"
-              stroke="currentColor"
-              stroke-width="1.5"
-            />
-            <path
-              d="M7 18h6M10 15v3"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-            />
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="1" y="3" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.5" />
+            <path d="M7 18h6M10 15v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
           </svg>
         </div>
         <div class="widget-info" @click="canEdit && openEdit(w)">
           <div class="widget-name">{{ w.name }}</div>
-          <code class="widget-content"
-            >{{ w.content.slice(0, 60)
-            }}{{ w.content.length > 60 ? "…" : "" }}</code
-          >
+          <code class="widget-content">{{ w.content.slice(0, 60)
+          }}{{ w.content.length > 60 ? "…" : "" }}</code>
           <div class="widget-meta">
             ↻ every {{ w.refresh_ms / 1000 }}s · {{ fmtDate(w.created_at) }}
           </div>
@@ -366,11 +350,8 @@ watch(() => session.value?.channel, load);
             <button class="ep-btn-action edit" @click="canEdit && openEdit(w)">
               {{ t("obs.edit") }}
             </button>
-            <button
-              class="ep-btn-action del"
-              :class="{ confirm: deleteId === w.id }"
-              @click="deleteWidget(w.id, w.name)"
-            >
+            <button class="ep-btn-action del" :class="{ confirm: deleteId === w.id }"
+              @click="deleteWidget(w.id, w.name)">
               {{ deleteId === w.id ? t("obs.delete.confirm") : "✕" }}
             </button>
           </div>
@@ -380,11 +361,7 @@ watch(() => session.value?.channel, load);
 
     <!-- Edit panel -->
     <Teleport to="body">
-      <div
-        v-if="editOpen"
-        class="ep-overlay"
-        v-bind="overlay.handlers(() => (editOpen = false))"
-      >
+      <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => (editOpen = false))">
         <div class="ep-panel">
           <div class="ep-panel-header">
             <div>
@@ -392,11 +369,7 @@ watch(() => session.value?.channel, load);
                 <template v-if="isNew">{{ t("obs.panel.new") }}</template>
                 <template v-else>
                   {{ t("obs.panel.edit") }}
-                  <EditableNameHeader
-                    v-model="form.name"
-                    :orig-name="editOrigName"
-                    placeholder="kills-counter"
-                  />
+                  <EditableNameHeader v-model="form.name" :orig-name="editOrigName" placeholder="kills-counter" />
                 </template>
               </div>
               <div class="ep-panel-sub">#{{ session?.channel }}</div>
@@ -407,33 +380,21 @@ watch(() => session.value?.channel, load);
           <div class="ep-panel-body">
             <!-- Name (new only - existing widgets are renamed via the clickable header title above) -->
             <div v-if="isNew" class="ep-field-group">
-              <label class="ep-field-label"
-                >{{ t("obs.panel.name") }}
+              <label class="ep-field-label">{{ t("obs.panel.name") }}
                 <span class="ep-field-hint">{{
                   t("obs.panel.name.hint")
-                }}</span></label
-              >
-              <input
-                v-model="form.name"
-                class="ep-field-input"
-                placeholder="kills-counter"
-              />
+                  }}</span></label>
+              <input v-model="form.name" class="ep-field-input" placeholder="kills-counter" />
             </div>
 
             <!-- Content -->
             <div class="ep-field-group">
-              <label class="ep-field-label"
-                >{{ t("obs.panel.content") }}
+              <label class="ep-field-label">{{ t("obs.panel.content") }}
                 <span class="ep-field-hint">{{
                   t("obs.panel.content.hint")
-                }}</span></label
-              >
-              <input
-                ref="contentInputEl"
-                v-model="form.content"
-                class="ep-field-input ep-mono"
-                placeholder="$counter.kills.get"
-              />
+                  }}</span></label>
+              <input ref="contentInputEl" v-model="form.content" class="ep-field-input ep-mono"
+                placeholder="$counter.kills.get" />
             </div>
 
             <!-- Variable Reference - shared list, click a row to insert into Content above -->
@@ -443,11 +404,7 @@ watch(() => session.value?.channel, load);
             <div class="preview-section">
               <div class="preview-bar">
                 <span class="ep-field-label">{{ t("obs.panel.preview") }}</span>
-                <button
-                  class="preview-btn"
-                  @click="previewContent"
-                  :disabled="previewing || !form.content.trim()"
-                >
+                <button class="preview-btn" @click="previewContent" :disabled="previewing || !form.content.trim()">
                   {{
                     previewing
                       ? t("obs.panel.preview.eval")
@@ -455,10 +412,7 @@ watch(() => session.value?.channel, load);
                   }}
                 </button>
               </div>
-              <div
-                class="preview-box"
-                :style="{ background: form.style.background || '#111217' }"
-              >
+              <div class="preview-box" :style="{ background: form.style.background || '#111217' }">
                 <div class="preview-val" :style="previewStyle">
                   {{ previewValue }}
                 </div>
@@ -469,21 +423,11 @@ watch(() => session.value?.channel, load);
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("obs.panel.refresh") }}</label>
               <div class="refresh-row">
-                <button
-                  v-for="ms in [1000, 2000, 5000, 10000, 30000]"
-                  :key="ms"
-                  class="ms-btn"
-                  :class="{ active: form.refresh_ms === ms }"
-                  @click="form.refresh_ms = ms"
-                >
+                <button v-for="ms in [1000, 2000, 5000, 10000, 30000]" :key="ms" class="ms-btn"
+                  :class="{ active: form.refresh_ms === ms }" @click="form.refresh_ms = ms">
                   {{ ms >= 1000 ? `${ms / 1000}s` : `${ms}ms` }}
                 </button>
-                <input
-                  v-model.number="form.refresh_ms"
-                  type="number"
-                  min="500"
-                  class="ep-field-input ms-custom"
-                />
+                <input v-model.number="form.refresh_ms" type="number" min="500" class="ep-field-input ms-custom" />
               </div>
             </div>
 
@@ -496,45 +440,24 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.size")
-                  }}</label>
-                  <input
-                    v-model.number="form.style.fontSize"
-                    type="number"
-                    min="8"
-                    max="200"
-                    class="ep-field-input"
-                  />
+                    }}</label>
+                  <input v-model.number="form.style.fontSize" type="number" min="8" max="200" class="ep-field-input" />
                 </div>
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.color")
-                  }}</label>
+                    }}</label>
                   <div class="color-row">
-                    <input
-                      type="color"
-                      v-model="form.style.color"
-                      class="color-pick"
-                    />
-                    <input
-                      v-model="form.style.color"
-                      class="ep-field-input"
-                      placeholder="#ffffff"
-                    />
+                    <input type="color" v-model="form.style.color" class="color-pick" />
+                    <input v-model="form.style.color" class="ep-field-input" placeholder="#ffffff" />
                   </div>
                 </div>
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.font")
-                  }}</label>
-                  <select
-                    v-model="form.style.fontFamily"
-                    class="ep-field-select"
-                  >
-                    <option
-                      v-for="f in FONT_FAMILIES"
-                      :key="f.value"
-                      :value="f.value"
-                    >
+                    }}</label>
+                  <select v-model="form.style.fontFamily" class="ep-field-select">
+                    <option v-for="f in FONT_FAMILIES" :key="f.value" :value="f.value">
                       {{ f.label }}
                     </option>
                   </select>
@@ -542,11 +465,8 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.weight")
-                  }}</label>
-                  <select
-                    v-model="form.style.fontWeight"
-                    class="ep-field-select"
-                  >
+                    }}</label>
+                  <select v-model="form.style.fontWeight" class="ep-field-select">
                     <option value="normal">
                       {{ t("obs.panel.weight.normal") }}
                     </option>
@@ -561,11 +481,8 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.align")
-                  }}</label>
-                  <select
-                    v-model="form.style.textAlign"
-                    class="ep-field-select"
-                  >
+                    }}</label>
+                  <select v-model="form.style.textAlign" class="ep-field-select">
                     <option value="left">
                       {{ t("obs.panel.align.left") }}
                     </option>
@@ -580,51 +497,27 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.padding")
-                  }}</label>
-                  <input
-                    v-model.number="form.style.padding"
-                    type="number"
-                    min="0"
-                    class="ep-field-input"
-                  />
+                    }}</label>
+                  <input v-model.number="form.style.padding" type="number" min="0" class="ep-field-input" />
                 </div>
               </div>
               <div class="toggle-row">
-                <label class="toggle-label"
-                  ><input type="checkbox" v-model="form.style.stroke" />
-                  {{ t("obs.panel.stroke") }}</label
-                >
-                <input
-                  v-if="form.style.stroke"
-                  type="color"
-                  v-model="form.style.strokeColor"
-                  class="color-pick"
-                />
+                <label class="toggle-label"><input type="checkbox" v-model="form.style.stroke" />
+                  {{ t("obs.panel.stroke") }}</label>
+                <input v-if="form.style.stroke" type="color" v-model="form.style.strokeColor" class="color-pick" />
               </div>
               <div class="toggle-row">
-                <label class="toggle-label"
-                  ><input type="checkbox" v-model="form.style.shadow" />
-                  {{ t("obs.panel.shadow") }}</label
-                >
+                <label class="toggle-label"><input type="checkbox" v-model="form.style.shadow" />
+                  {{ t("obs.panel.shadow") }}</label>
               </div>
               <div class="ep-field-group">
-                <label class="ep-field-label"
-                  >{{ t("obs.panel.bg") }}
+                <label class="ep-field-label">{{ t("obs.panel.bg") }}
                   <span class="ep-field-hint">{{
                     t("obs.panel.bg.hint")
-                  }}</span></label
-                >
+                    }}</span></label>
                 <div class="color-row">
-                  <input
-                    type="color"
-                    v-model="form.style.background"
-                    class="color-pick"
-                  />
-                  <input
-                    v-model="form.style.background"
-                    class="ep-field-input"
-                    placeholder="transparent"
-                  />
+                  <input type="color" v-model="form.style.background" class="color-pick" />
+                  <input v-model="form.style.background" class="ep-field-input" placeholder="transparent" />
                   <button class="clear-btn" @click="form.style.background = ''">
                     {{ t("obs.panel.bg.clear") }}
                   </button>
@@ -641,11 +534,7 @@ watch(() => session.value?.channel, load);
               <button class="ep-btn-cancel" @click="editOpen = false">
                 {{ t("obs.panel.cancel") }}
               </button>
-              <button
-                class="ep-btn-save"
-                @click="save"
-                :disabled="saving || !form.name.trim() || !form.content.trim()"
-              >
+              <button class="ep-btn-save" @click="save" :disabled="saving || !form.name.trim() || !form.content.trim()">
                 {{ saving ? t("obs.panel.saving") : t("obs.panel.save") }}
               </button>
             </div>
@@ -668,21 +557,25 @@ watch(() => session.value?.channel, load);
   color: #9d6cff;
   opacity: 0.7;
 }
+
 .widget-icon svg {
   width: 22px;
   height: 22px;
 }
+
 .widget-info {
   flex: 1;
   cursor: pointer;
   min-width: 0;
 }
+
 .widget-name {
   font-size: 13px;
   font-weight: 600;
   color: #e0e0e0;
   margin-bottom: 3px;
 }
+
 .widget-content {
   font-family: "Consolas", "Fira Mono", monospace;
   font-size: 11px;
@@ -690,10 +583,12 @@ watch(() => session.value?.channel, load);
   display: block;
   margin-bottom: 3px;
 }
+
 .widget-meta {
   font-size: 10px;
   color: #444;
 }
+
 .widget-actions {
   display: flex;
   flex-direction: column;
@@ -701,16 +596,19 @@ watch(() => session.value?.channel, load);
   align-items: flex-end;
   flex-shrink: 0;
 }
+
 .url-row {
   display: flex;
   align-items: center;
   gap: 6px;
 }
+
 .widget-url {
   font-family: "Consolas", "Fira Mono", monospace;
   font-size: 10px;
   color: #555;
 }
+
 .copy-btn {
   height: 22px;
   padding: 0 10px;
@@ -722,9 +620,11 @@ watch(() => session.value?.channel, load);
   cursor: pointer;
   white-space: nowrap;
 }
+
 .copy-btn:hover {
   background: #6f2bff18;
 }
+
 .row-btns {
   display: flex;
   gap: 5px;
@@ -741,11 +641,13 @@ watch(() => session.value?.channel, load);
   flex-direction: column;
   gap: 6px;
 }
+
 .preview-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
+
 .preview-btn {
   height: 24px;
   padding: 0 12px;
@@ -756,13 +658,16 @@ watch(() => session.value?.channel, load);
   font-size: 11px;
   cursor: pointer;
 }
+
 .preview-btn:hover:not(:disabled) {
   background: #6f2bff18;
 }
+
 .preview-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
 .preview-box {
   min-height: 52px;
   padding: 12px;
@@ -770,6 +675,7 @@ watch(() => session.value?.channel, load);
   align-items: center;
   border: 1px solid #2a2a30;
 }
+
 .preview-val {
   max-width: 100%;
   word-break: break-word;
@@ -782,6 +688,7 @@ watch(() => session.value?.channel, load);
   gap: 5px;
   flex-wrap: wrap;
 }
+
 .ms-btn {
   height: 30px;
   padding: 0 10px;
@@ -792,15 +699,18 @@ watch(() => session.value?.channel, load);
   font-size: 11px;
   cursor: pointer;
 }
+
 .ms-btn:hover {
   border-color: #6f2bff44;
   color: #9d6cff;
 }
+
 .ms-btn.active {
   border-color: #6f2bff;
   color: #9d6cff;
   background: #6f2bff18;
 }
+
 .ms-custom {
   width: 70px;
   flex-shrink: 0;
@@ -815,6 +725,7 @@ watch(() => session.value?.channel, load);
   background: #111217;
   border: 1px solid #1e1e24;
 }
+
 .style-title {
   font-size: 10px;
   font-weight: 700;
@@ -822,16 +733,19 @@ watch(() => session.value?.channel, load);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
+
 .style-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
 }
+
 .color-row {
   display: flex;
   align-items: center;
   gap: 6px;
 }
+
 .color-pick {
   width: 32px;
   height: 32px;
@@ -841,14 +755,17 @@ watch(() => session.value?.channel, load);
   cursor: pointer;
   flex-shrink: 0;
 }
+
 .color-row .ep-field-input {
   flex: 1;
 }
+
 .toggle-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
+
 .toggle-label {
   display: flex;
   align-items: center;
@@ -858,12 +775,14 @@ watch(() => session.value?.channel, load);
   cursor: pointer;
   user-select: none;
 }
+
 .toggle-label input[type="checkbox"] {
   width: 14px;
   height: 14px;
   accent-color: #9d6cff;
   cursor: pointer;
 }
+
 .clear-btn {
   height: 32px;
   padding: 0 10px;
@@ -875,6 +794,7 @@ watch(() => session.value?.channel, load);
   cursor: pointer;
   flex-shrink: 0;
 }
+
 .clear-btn:hover {
   color: #e0e0e0;
   border-color: #444;
@@ -893,9 +813,11 @@ watch(() => session.value?.channel, load);
   .style-grid {
     grid-template-columns: 1fr;
   }
+
   .widget-row {
     flex-wrap: wrap;
   }
+
   .widget-actions {
     align-items: flex-start;
     width: 100%;

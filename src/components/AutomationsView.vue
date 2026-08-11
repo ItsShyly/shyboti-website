@@ -24,7 +24,6 @@ function parseTab(v: unknown): Tab {
 }
 
 const activeTab = ref<Tab>(parseTab(route.query.tab));
-const reloadKey = ref(0);
 
 watch(activeTab, (tab) => {
   router.replace({ path: "/automations", query: { tab } });
@@ -33,18 +32,40 @@ watch(
   () => route.query.tab,
   (tab) => { activeTab.value = parseTab(tab); },
 );
+
+// >>> Each sub-view exposes { header, reload, create } via defineExpose - the header
+// row here (count/reload/new) just delegates to whichever one is currently mounted,
+// same way CommandsView's single header adapts to its active tab.
+const timersRef = ref<any>(null);
+const triggersRef = ref<any>(null);
+const countdownsRef = ref<any>(null);
+const obsRef = ref<any>(null);
+
+const activeChild = computed(() => {
+  if (activeTab.value === "timers") return timersRef.value;
+  if (activeTab.value === "triggers") return triggersRef.value;
+  if (activeTab.value === "obs") return obsRef.value;
+  return countdownsRef.value;
+});
 </script>
 
 <template>
-  <div class="automations">
+  <div class="automations ep-view">
 
     <div class="ep-view-header">
       <div>
         <div class="ep-view-title">{{ t("auto.title") }}</div>
-        <div class="ep-view-sub">{{ t('auto.' + activeTab) }}</div>
+        <div class="ep-view-sub">
+          <template v-if="activeChild?.header">{{ activeChild.header.count }} {{ activeChild.header.countLabel }}</template>
+          <template v-else>&mdash;</template>
+        </div>
       </div>
       <div class="ep-view-header-right">
-        <button class="ep-btn-reload" @click="reloadKey++" title="Reload">↺</button>
+        <div id="auto-sync-slot"></div>
+        <button class="ep-btn-reload" @click="activeChild?.reload?.()" title="Reload">↺</button>
+        <button class="ep-btn-new" :disabled="!activeChild?.header?.canCreate" @click="activeChild?.create?.()">
+          {{ activeChild?.header?.createLabel ?? '+ New' }}
+        </button>
       </div>
     </div>
 
@@ -64,24 +85,18 @@ watch(
     </div>
 
     <div class="auto-body">
-      <TimersView v-if="activeTab === 'timers'" :key="'timers-' + reloadKey" />
-      <TriggersView v-else-if="activeTab === 'triggers'" :key="'triggers-' + reloadKey" />
-      <ObsAutomationsView v-else-if="activeTab === 'obs'" :key="'obs-' + reloadKey" />
-      <CountdownView v-else :key="'countdowns-' + reloadKey" />
+      <TimersView v-if="activeTab === 'timers'" ref="timersRef" />
+      <TriggersView v-else-if="activeTab === 'triggers'" ref="triggersRef" />
+      <ObsAutomationsView v-else-if="activeTab === 'obs'" ref="obsRef" />
+      <CountdownView v-else ref="countdownsRef" />
     </div>
 
   </div>
 </template>
 
 <style scoped>
-.automations {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  gap: 0;
-}
-
-/* header-right / reload button come from the shared edit-panel.css */
+/* .automations layout (flex column, gap, height) comes from the shared .ep-view class.
+   header-right / reload button also come from edit-panel.css */
 
 .auto-body {
   flex: 1;

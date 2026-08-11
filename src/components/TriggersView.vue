@@ -433,82 +433,59 @@ function matchLabel(v: string) {
 }
 
 const needsPattern = (ev: string) => ["message", "command"].includes(ev);
+
+// >>> Header (title/count/create) lives in AutomationsView.vue - expose what it needs
+defineExpose({
+  header: computed(() => ({
+    count: triggers.value.length,
+    countLabel: t("auto.triggers"),
+    createLabel: t("trigger.new"),
+    canCreate: canEdit.value,
+  })),
+  reload: () => {
+    load();
+    fetchSync();
+  },
+  create: () => {
+    canEdit.value && openNew();
+  },
+});
 </script>
 
 <template>
   <div class="ep-view">
-    <div class="ep-view-header">
-      <div>
-        <div class="ep-view-title">{{ t("trigger.title") }}</div>
-        <div class="ep-view-sub">
-          <span class="ep-view-count">{{ triggers.length }}</span>
-          {{ t("trigger.sub") }}
-          <button v-if="syncConf?.is_active" class="ep-sync-indicator" @click="syncOpen = !syncOpen"
-            :title="`${t('trigger.sync.active')} #${syncConf.sync_from}`">
-            <span class="ep-sync-dot"></span>{{ t("trigger.sync.active") }} #{{
-              syncConf.sync_from
-            }}
-            <span class="ep-sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
-          </button>
-          <button v-else class="ep-sync-config-btn" @click="syncOpen = !syncOpen">
-            {{ t("trigger.sync.config")
-            }}<span class="ep-sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
-          </button>
-        </div>
-      </div>
-      <div class="ep-view-header-right">
-        <div class="ep-sync-wrap">
-          <div v-if="syncOpen" class="ep-sync-panel">
-            <div class="ep-sync-modes">
-              <button class="ep-sync-mode-btn active">Sync (ongoing)</button>
-              <button class="ep-sync-mode-btn" @click="syncOpen = false" title="One-time copy, no ongoing config">Import (one-time)</button>
-            </div>
-            <div class="ep-sync-row">
-              <select v-model="syncFrom" class="ep-field-select-sm">
-                <option value="">
-                  {{
-                    syncConf?.is_active
-                      ? t("trigger.sync.change")
-                      : t("trigger.sync.select")
-                  }}
-                </option>
-                <option v-for="ch in availableChannels.filter(
-                  (c) => c !== session?.channel,
-                )" :key="ch" :value="ch">
-                  #{{ ch }}
-                </option>
-              </select>
-              <button class="ep-sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">
-                {{
-                  syncSaving
-                    ? "…"
-                    : syncConf?.is_active
-                      ? t("trigger.sync.update")
-                      : t("trigger.sync.enable")
-                }}
-              </button>
-            </div>
-            <div v-if="syncConf?.is_active" class="ep-sync-row">
-              <button class="ep-sync-stop-btn" @click="stopSync">
-                {{ t("trigger.sync.stop") }}
-              </button>
-            </div>
-            <div v-if="syncConf?.last_synced" class="ep-sync-last">
-              {{ t("trigger.sync.last") }}
-              {{ new Date(syncConf.last_synced).toLocaleString() }}
-            </div>
-            <div v-if="syncMsg" class="ep-sync-msg"
-              :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">
-              {{ syncMsg }}
-            </div>
-          </div>
-        </div>
-        <button class="ep-btn-reload" @click="load(); fetchSync()" title="Reload">↺</button>
-        <button class="ep-btn-new" @click="canEdit && openNew()" :disabled="!canEdit">
-          {{ t("trigger.new") }}
+    <Teleport to="#auto-sync-slot">
+      <div class="ep-sync-wrap">
+        <button v-if="syncConf?.is_active" class="ep-sync-indicator" @click="syncOpen = !syncOpen"
+          :title="`${t('trigger.sync.active')} #${syncConf.sync_from}`">
+          <span class="ep-sync-dot"></span>{{ t("trigger.sync.active") }} #{{ syncConf.sync_from }}
+          <span class="ep-sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
         </button>
+        <button v-else class="ep-sync-config-btn" @click="syncOpen = !syncOpen">
+          {{ t("trigger.sync.config") }} <span class="ep-sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
+        </button>
+        <div v-if="syncOpen" class="ep-sync-panel">
+          <div class="ep-sync-modes">
+            <button class="ep-sync-mode-btn active">Sync (ongoing)</button>
+            <button class="ep-sync-mode-btn" @click="syncOpen = false">Import (one-time)</button>
+          </div>
+          <div class="ep-sync-row">
+            <select v-model="syncFrom" class="ep-field-select-sm">
+              <option value="">{{ syncConf?.is_active ? t("trigger.sync.change") : t("trigger.sync.select") }}</option>
+              <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
+            </select>
+            <button class="ep-sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">
+              {{ syncSaving ? '…' : syncConf?.is_active ? t('trigger.sync.update') : t('trigger.sync.enable') }}
+            </button>
+          </div>
+          <div v-if="syncConf?.is_active" class="ep-sync-row">
+            <button class="ep-sync-stop-btn" @click="stopSync">{{ t("trigger.sync.stop") }}</button>
+          </div>
+          <div v-if="syncConf?.last_synced" class="ep-sync-last">{{ t("trigger.sync.last") }} {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
+          <div v-if="syncMsg" class="ep-sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{ syncMsg }}</div>
+        </div>
       </div>
-    </div>
+    </Teleport>
 
     <div v-if="success" class="ep-toast success">{{ success }}</div>
     <div v-if="error" class="ep-toast error">{{ error }}</div>
@@ -877,11 +854,6 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
 }
 
 @media (max-width: 680px) {
-  .ep-view-header {
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
   .ep-panel-body {
     padding: 14px 16px;
   }

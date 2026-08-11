@@ -154,26 +154,24 @@ onMounted(() => {
   fetchRules();
   fetchCategoryScope();
 });
+
+// >>> Header (title/count/create) lives in AutomationsView.vue - expose what it needs
+defineExpose({
+  header: computed(() => ({
+    count: rules.value.length,
+    countLabel: "OBS rules",
+    createLabel: "+ New rule",
+    canCreate: canEdit.value && paired.value,
+  })),
+  reload: fetchRules,
+  create: () => {
+    canEdit.value && paired.value && openEdit(null);
+  },
+});
 </script>
 
 <template>
   <div class="ep-view">
-    <div class="ep-view-header">
-      <div>
-        <div class="ep-view-title">OBS Automations</div>
-        <div class="ep-view-sub">
-          <span class="ep-view-count">{{ rules.length }}</span>
-          rule{{ rules.length === 1 ? '' : 's' }} that react to stream events
-        </div>
-      </div>
-      <div class="ep-view-header-right">
-        <button class="ep-btn-reload" @click="fetchRules" title="Reload">↺</button>
-        <button class="ep-btn-new" @click="canEdit && openEdit(null)" :disabled="!canEdit || !paired">
-          + New rule
-        </button>
-      </div>
-    </div>
-
     <div v-if="loading" class="ep-empty">loading…</div>
     <div v-else-if="!paired" class="ep-empty">
       OBS isn't set up yet - set up the agent on the

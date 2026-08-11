@@ -899,7 +899,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="cmd-root">
+  <div class="cmd-root ep-view">
 
     <div class="ep-view-header">
       <div>
@@ -992,6 +992,7 @@ onUnmounted(() => {
           <div></div>
           <div>{{ t("cmd.header.onoff") }}</div>
           <div>{{ t("cmd.header.name") }}</div>
+          <div>{{ t("cmd.header.desc") }}</div>
           <div>{{ t("cmd.header.access") }}</div>
           <div>{{ t("cmd.header.gcd") }}</div>
           <div>{{ t("cmd.header.ucd") }}</div>
@@ -1016,13 +1017,11 @@ onUnmounted(() => {
                   { disabled: !canToggle },
                 ]" @click="toggle(cmd, 'isActive')"></div>
               </div>
-              <div class="cmd-name-col">
-                <div class="cmd-name">
-                  <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
-                  {{ prefix }}{{ cmd.name }}
-                </div>
-                <div v-if="cmdDesc(cmd) !== '-'" class="cmd-desc-inline">{{ cmdDesc(cmd) }}</div>
+              <div class="cmd-name">
+                <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
+                {{ prefix }}{{ cmd.name }}
               </div>
+              <div class="cmd-desc">{{ cmdDesc(cmd) }}</div>
               <div>
                 <button class="access-btn" :class="{
                   'access-mod': cmd.modOnly,
@@ -1096,6 +1095,7 @@ onUnmounted(() => {
         <div>{{ t("cmd.header.onoff") }}</div>
         <div class="sort-col" @click="setSort('name')">{{ t("cmd.sort.name") }}<span class="sort-arrow">{{ sortField ===
           'name' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span></div>
+        <div>{{ t("cmd.header.desc") }}</div>
         <div>{{ t("cmd.sort.access") }}</div>
         <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.sort.gcd") }}<span class="sort-arrow">{{ sortField
           === 'cooldown' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span></div>
@@ -1132,15 +1132,11 @@ onUnmounted(() => {
                 updateCustomActive(cmd);
                 "></div>
               </div>
-              <div class="cmd-name-col">
-                <div class="cmd-name">
-                  <span class="cmd-cat-dot" style="background: #9d6cff"></span>{{ prefix }}{{ cmd.name
-                  }}<span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
-                </div>
-                <div v-if="cmd.description" class="cmd-desc-inline">
-                  {{ cmd.description }}
-                </div>
+              <div class="cmd-name">
+                <span class="cmd-cat-dot" style="background: #9d6cff"></span>{{ prefix }}{{ cmd.name
+                }}<span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
               </div>
+              <div class="cmd-desc">{{ cmd.description }}</div>
               <div>
                 <button class="access-btn" :class="{
                   'access-mod': cmd.modOnly,
@@ -1245,6 +1241,7 @@ onUnmounted(() => {
             <div></div>
             <div>{{ t("cmd.header.onoff") }}</div>
             <div>{{ t("cmd.header.name") }}</div>
+            <div>{{ t("cmd.header.desc") }}</div>
             <div>{{ t("cmd.header.access") }}</div>
             <div>{{ t("cmd.header.gcd") }}</div>
             <div>{{ t("cmd.header.ucd") }}</div>
@@ -1257,11 +1254,9 @@ onUnmounted(() => {
               <div>
                 <div class="square on"></div>
               </div>
-              <div class="cmd-name-col">
-                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
-                  b.command }}</div>
-                <div class="cmd-desc-inline">switch scene · {{ b.scene }}</div>
-              </div>
+              <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
+                b.command }}</div>
+              <div class="cmd-desc">switch scene · {{ b.scene }}</div>
               <div>
                 <button class="access-btn" :class="{
                   'access-mod': b.access === 'mod',
@@ -1298,12 +1293,10 @@ onUnmounted(() => {
               <div>
                 <div class="square on"></div>
               </div>
-              <div class="cmd-name-col">
-                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
-                  b.command }}</div>
-                <div class="cmd-desc-inline">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} · {{ b.source }}<template
-                    v-if="b.action === 'volume' && b.value !== undefined"> @ {{ b.value }}%</template>
-                </div>
+              <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
+                b.command }}</div>
+              <div class="cmd-desc">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} · {{ b.source }}<template
+                  v-if="b.action === 'volume' && b.value !== undefined"> @ {{ b.value }}%</template>
               </div>
               <div>
                 <button class="access-btn" :class="{
@@ -1341,13 +1334,10 @@ onUnmounted(() => {
               <div>
                 <div class="square on"></div>
               </div>
-              <div class="cmd-name-col">
-                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
-                  obsArgCommand(entry) }}</div>
-                <div class="cmd-desc-inline">{{ OBS_ACTION_LABEL[action] ?? action }} · <span
-                    class="obs-arg-usage-inline">{{
-                      obsArgUsage(action) }}</span></div>
-              </div>
+              <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
+                obsArgCommand(entry) }}</div>
+              <div class="cmd-desc">{{ OBS_ACTION_LABEL[action] ?? action }} · <span class="obs-arg-usage-inline">{{
+                  obsArgUsage(action) }}</span></div>
               <div>
                 <button class="access-btn" :class="{
                   'access-mod': obsArgAccess(entry) === 'mod',
@@ -1461,12 +1451,8 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.cmd-root {
-  display: flex;
-  flex-direction: column;
-}
-
-/* header-right cluster, reload, sync controls, and tabs now come from the shared edit-panel.css */
+/* .cmd-root layout (flex column, gap, height) comes from the shared .ep-view class.
+   header-right cluster, reload, sync controls, and tabs also come from edit-panel.css */
 
 .state-msg {
   color: #555;
@@ -1478,13 +1464,13 @@ onUnmounted(() => {
 .table-header,
 .table-row {
   display: grid;
-  grid-template-columns: 28px 32px 1fr 110px 90px 90px 110px;
+  grid-template-columns: 28px 50px 140px 1fr 110px 90px 90px 110px;
   align-items: center;
 }
 
 .custom-table-header,
 .custom-row {
-  grid-template-columns: 28px 32px 1fr 110px 90px 90px 150px;
+  grid-template-columns: 28px 50px 140px 1fr 110px 90px 90px 150px;
 }
 
 .sort-col {
@@ -1861,19 +1847,12 @@ onUnmounted(() => {
   margin-left: 6px;
 }
 
-.cmd-name-col {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.cmd-desc-inline {
-  font-size: 10px;
+.cmd-desc {
+  font-size: 11px;
   color: #8d8d8d;
-  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .del-btn {
@@ -2233,7 +2212,7 @@ onUnmounted(() => {
   }
 
   .custom-row>*:nth-child(4),
-  .custom-row>*:nth-child(5) {
+  .custom-row>*:nth-child(6) {
     display: none;
   }
 

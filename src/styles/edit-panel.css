@@ -479,14 +479,6 @@
   gap: 8px;
   flex-wrap: wrap;
 }
-.ep-view-count {
-  font-size: 11px;
-  color: #444;
-  background: #1a1a1e;
-  border: 1px solid #2a2a30;
-  padding: 1px 7px;
-  white-space: nowrap;
-}
 /* right-side cluster of the ep-view-header: sync/reload/new */
 .ep-view-header-right {
   display: flex;

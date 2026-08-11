@@ -382,9 +382,9 @@ onUnmounted(() => { _sseSource?.close() });
       <div>
         <div class="ep-view-title">{{ t("mod.title") }}</div>
         <div class="ep-view-sub">
-          <template v-if="activeTab === 'blocked'"><span class="ep-view-count">{{ blockedTerms.length }}</span> {{ t('mod.tab.blocked') }}</template>
-          <template v-else-if="activeTab === 'spam'"><span class="ep-view-count">{{ spamFilters.length }}</span> {{ t('mod.tab.spam') }}</template>
-          <template v-else><span class="ep-view-count">{{ nukes.length }}</span> {{ t('mod.tab.nukes') }}</template>
+          <template v-if="activeTab === 'blocked'">{{ blockedTerms.length }} {{ t('mod.tab.blocked') }}</template>
+          <template v-else-if="activeTab === 'spam'">{{ spamFilters.length }} {{ t('mod.tab.spam') }}</template>
+          <template v-else>{{ nukes.length }} {{ t('mod.tab.nukes') }}</template>
         </div>
       </div>
       <div class="ep-view-header-right">
