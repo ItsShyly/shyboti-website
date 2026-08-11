@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import ObsRuleEditPanel from "./ObsRuleEditPanel.vue";
@@ -154,6 +154,14 @@ onMounted(() => {
   fetchRules();
   fetchCategoryScope();
 });
+// >>> session and channelRole 
+watch(
+  [() => session.value?.channel, canView],
+  () => {
+    fetchRules();
+    fetchCategoryScope();
+  },
+);
 
 // >>> Header (title/count/create) lives in AutomationsView.vue - expose what it needs
 defineExpose({
@@ -248,18 +256,6 @@ defineExpose({
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-}
-
-.ep-meta-pill.interval {
-  color: #9d6cff;
-  border-color: #9d6cff44;
-  background: #9d6cff11;
-}
-
-.ep-meta-pill.when {
-  color: #e5c07b;
-  border-color: #e5c07b44;
-  background: #e5c07b11;
 }
 
 .obs-rule-link {

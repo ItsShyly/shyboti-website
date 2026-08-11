@@ -74,6 +74,10 @@ function fmtDur(s: number) {
 }
 
 const ACTION_COLORS: Record<string, string> = { delete: "#e5c07b", timeout: "#c792ea", ban: "#f14949" };
+function actionPillStyle(action: string) {
+  const c = ACTION_COLORS[action] ?? "#888";
+  return { color: c, borderColor: c + "44", background: c + "11" };
+}
 
 
 // >>> Edit panel state
@@ -288,6 +292,26 @@ async function deleteFromPanel() {
   saving.value = false;
 }
 
+// >>> quick delete straight from the row
+async function deleteRow(kind: Tab, id: number) {
+  if (!session.value) return;
+  try {
+    const h = { Authorization: `Bearer ${session.value.token}` };
+    const ch = session.value.channel;
+    if (kind === "blocked") {
+      await fetch(`${API}/moderation/${ch}/blocked-terms/${id}`, { method: "DELETE", headers: h });
+      blockedTerms.value = blockedTerms.value.filter(t => t.id !== id);
+    } else if (kind === "spam") {
+      await fetch(`${API}/moderation/${ch}/spam-filters/${id}`, { method: "DELETE", headers: h });
+      spamFilters.value = spamFilters.value.filter(f => f.id !== id);
+    } else {
+      await fetch(`${API}/moderation/${ch}/nukes/${id}`, { method: "DELETE", headers: h });
+      nukes.value = nukes.value.filter(n => n.id !== id);
+    }
+    showSuccess(t("mod.success.removed"));
+  } catch { error.value = t("mod.error.remove") }
+}
+
 const deleteConfirmPanel = ref(false);
 function requestDelete() {
   if (!deleteConfirmPanel.value) {
@@ -388,7 +412,8 @@ onUnmounted(() => { _sseSource?.close() });
         </div>
       </div>
       <div class="ep-view-header-right">
-        <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺' }}</button>
+        <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
+          }}</button>
         <button class="ep-btn-new" @click="
           activeTab === 'blocked' ? openNewBlocked() :
             activeTab === 'spam' ? openNewSpam() : openNewNuke()
@@ -417,14 +442,15 @@ onUnmounted(() => { _sseSource?.close() });
         <div v-for="term in blockedTerms" :key="term.id" class="ep-list-row mod-item-row">
           <span v-if="term.is_regex" class="item-badge regex-badge">{{ t("mod.badge.regex") }}</span>
           <span class="item-term">{{ term.term }}</span>
-          <span class="item-action" :style="{ color: ACTION_COLORS[term.action] }">
+          <span class="item-action ep-meta-pill" :style="actionPillStyle(term.action)">
             {{ term.action === 'delete' ? t('mod.action.delete') : term.action === 'timeout' ? t('mod.action.timeout') :
               t('mod.action.ban') }}
           </span>
           <span v-if="term.action !== 'delete'" class="item-dur">{{ fmtDur(term.duration) }}</span>
           <div class="ep-row-actions">
             <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
-            }}</button>
+              }}</button>
+            <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('blocked', term.id)">✕</button>
           </div>
         </div>
       </div>
@@ -439,13 +465,14 @@ onUnmounted(() => { _sseSource?.close() });
             <span class="spam-name">{{ spamLabel(f).name }}</span>
             <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
           </div>
-          <span class="item-action" :style="{ color: ACTION_COLORS[f.action] }">
+          <span class="item-action ep-meta-pill" :style="actionPillStyle(f.action)">
             {{ f.action === 'delete' ? t('mod.action.delete') : f.action === 'timeout' ? t('mod.action.timeout') :
               t('mod.action.ban') }}
           </span>
           <span v-if="f.action !== 'delete'" class="item-dur">{{ fmtDur(f.duration) }}</span>
           <div class="ep-row-actions">
             <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit") }}</button>
+            <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)">✕</button>
           </div>
         </div>
       </div>
@@ -501,6 +528,7 @@ onUnmounted(() => { _sseSource?.close() });
               {{ nukeConfirm === n.id ? t("mod.nuke.sure") : t("mod.nuke.fire") }}
             </button>
             <button v-if="canManage" class="ep-btn-action edit" @click="openEditNuke(n)">{{ t("mod.edit") }}</button>
+            <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('nukes', n.id)">✕</button>
           </div>
         </div>
       </div>
@@ -704,7 +732,7 @@ onUnmounted(() => { _sseSource?.close() });
             </div>
             <div v-if="fNukeExpiry && fNukeStay" class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.nuke.expiry") }} <span class="ep-field-hint">{{ t("mod.nuke.min")
-              }}</span></label>
+                  }}</span></label>
               <input v-model.number="fNukeExpiryMins" type="number" min="1" class="ep-field-input" />
             </div>
           </template>

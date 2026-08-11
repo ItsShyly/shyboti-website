@@ -21,8 +21,6 @@ export interface RolePermissions {
   automations_toggle: boolean;
   automations_edit: boolean;
   automations_delete: boolean;
-  // Logs
-  logs_view: boolean;
   // Moderation
   moderation_view: boolean;
   moderation_manage: boolean;

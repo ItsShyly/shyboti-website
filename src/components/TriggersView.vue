@@ -544,11 +544,8 @@ defineExpose({
           <div class="ep-panel-header">
             <div>
               <div class="ep-panel-title">
-                <template v-if="isNew">{{ t("trigger.edit_new") }}</template>
-                <template v-else>
-                  {{ t("trigger.edit_title") }}
-                  <EditableNameHeader v-model="editTrigger.name" :orig-name="editOrigName" placeholder="hype-train" />
-                </template>
+                {{ isNew ? t("trigger.edit_new") : t("trigger.edit_title") }}
+                <EditableNameHeader v-model="editTrigger.name" :orig-name="editOrigName" placeholder="hype-train" />
               </div>
               <div class="ep-panel-sub">#{{ session?.channel }}</div>
             </div>
@@ -556,14 +553,6 @@ defineExpose({
           </div>
 
           <div class="ep-panel-body">
-            <!-- Name (new only - existing triggers are renamed via the clickable header title above) -->
-            <div v-if="isNew" class="ep-field-group">
-              <label class="ep-field-label">{{
-                t("trigger.field.name")
-                }}</label>
-              <input v-model="editTrigger.name" class="ep-field-input" placeholder="hype-train" />
-            </div>
-
             <!-- Event type -->
             <div class="ep-field-group">
               <label class="ep-field-label">{{
@@ -773,18 +762,6 @@ defineExpose({
 }
 
 .ep-meta-pill.action {
-  color: #23d18b;
-  border-color: #23d18b44;
-  background: #23d18b11;
-}
-
-.ep-meta-pill.when {
-  color: #e5c07b;
-  border-color: #e5c07b44;
-  background: #e5c07b11;
-}
-
-.ep-meta-pill.game {
   color: #4ec9b0;
   border-color: #4ec9b044;
   background: #4ec9b011;

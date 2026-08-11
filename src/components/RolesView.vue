@@ -71,16 +71,6 @@ const PERM_GROUPS = computed(() => [
     ],
   },
   {
-    label: t("perm.group.logs"),
-    perms: [
-      {
-        key: "logs_view" as keyof Omit<RolePermissions, "modsEnabled">,
-        label: t("perm.logs_view"),
-        desc: t("perm.logs_view.desc"),
-      },
-    ],
-  },
-  {
     label: t("perm.group.moderation"),
     perms: [
       {
@@ -127,7 +117,6 @@ const DEFAULT_PERMS: Omit<RolePermissions, "modsEnabled"> = {
   automations_toggle: true,
   automations_edit: false,
   automations_delete: false,
-  logs_view: true,
   moderation_view: true,
   moderation_manage: false,
   obs_view: true,

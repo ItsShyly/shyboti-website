@@ -404,11 +404,8 @@ defineExpose({
           <div class="ep-panel-header">
             <div>
               <div class="ep-panel-title">
-                <template v-if="isNew">{{ t("countdown.edit_new") }}</template>
-                <template v-else>
-                  {{ t("countdown.edit_title") }}
-                  <EditableNameHeader v-model="editCountdown.name" :orig-name="editOrigName" placeholder="hype" />
-                </template>
+                {{ isNew ? t("countdown.edit_new") : t("countdown.edit_title") }}
+                <EditableNameHeader v-model="editCountdown.name" :orig-name="editOrigName" placeholder="hype" />
               </div>
               <div class="ep-panel-sub">#{{ session?.channel }}</div>
             </div>
@@ -416,24 +413,14 @@ defineExpose({
           </div>
 
           <div class="ep-panel-body">
-            <!-- Name (new only - existing countdowns are renamed via the clickable header title above) + Duration -->
-            <div class="ep-row-2">
-              <div v-if="isNew" class="ep-field-group">
-                <label class="ep-field-label">{{ t("countdown.field.name") }}
-                  <span class="ep-field-hint">{{
-                    t("countdown.field.name_hint")
-                    }}</span></label>
-                <input v-model="editCountdown.name" class="ep-field-input" placeholder="hype" />
-              </div>
-              <div class="ep-field-group">
-                <label class="ep-field-label">{{ t("countdown.field.seconds") }}
-                  <span class="ep-field-hint">{{
-                    t("countdown.field.secs_hint")
-                    }}</span></label>
-                <div class="dur-row">
-                  <input v-model.number="editCountdown.duration_sec" type="number" min="1" class="ep-field-input" />
-                  <span class="ep-field-hint">= {{ fmtDuration(editCountdown.duration_sec ?? 60) }}</span>
-                </div>
+            <div class="ep-field-group">
+              <label class="ep-field-label">{{ t("countdown.field.seconds") }}
+                <span class="ep-field-hint">{{
+                  t("countdown.field.secs_hint")
+                  }}</span></label>
+              <div class="dur-row">
+                <input v-model.number="editCountdown.duration_sec" type="number" min="1" class="ep-field-input" />
+                <span class="ep-field-hint">= {{ fmtDuration(editCountdown.duration_sec ?? 60) }}</span>
               </div>
             </div>
 
@@ -603,28 +590,10 @@ defineExpose({
   color: #444;
 }
 
-.ep-meta-pill.dur {
-  color: #9d6cff;
-  border-color: #9d6cff44;
-  background: #9d6cff11;
-}
-
 .ep-meta-pill.tick {
   color: #4ec9b0;
   border-color: #4ec9b044;
   background: #4ec9b011;
-}
-
-.ep-meta-pill.when {
-  color: #e5c07b;
-  border-color: #e5c07b44;
-  background: #e5c07b11;
-}
-
-.ep-meta-pill.cond {
-  color: #c792ea;
-  border-color: #c792ea44;
-  background: #c792ea11;
 }
 
 .cd-controls {

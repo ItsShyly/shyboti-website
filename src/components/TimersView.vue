@@ -669,34 +669,10 @@ defineExpose({
   font-family: "Consolas", "Fira Mono", monospace;
 }
 
-.ep-meta-pill.interval {
-  color: #9d6cff;
-  border-color: #9d6cff44;
-  background: #9d6cff11;
-}
-
 .ep-meta-pill.msgs {
   color: #4ec9b0;
   border-color: #4ec9b044;
   background: #4ec9b011;
-}
-
-.ep-meta-pill.when {
-  color: #e5c07b;
-  border-color: #e5c07b44;
-  background: #e5c07b11;
-}
-
-.ep-meta-pill.game {
-  color: #23d18b;
-  border-color: #23d18b44;
-  background: #23d18b11;
-}
-
-.ep-meta-pill.cond {
-  color: #c792ea;
-  border-color: #c792ea44;
-  background: #c792ea11;
 }
 
 .interval-row {
