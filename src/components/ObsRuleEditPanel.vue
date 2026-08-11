@@ -3,13 +3,25 @@ import { ref, watch, computed } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import TypeaheadInput from "./shared/TypeaheadInput.vue";
+import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
+
 
 export interface ObsRule {
   id: string;
-  condition: "below" | "above";
-  bitrate_kbps: number;
+  trigger_type?: "bitrate" | "category" | "scene";
+  // bitrate trigger
+  condition?: "below" | "above";
+  bitrate_kbps?: number;
+  // category trigger
+  category_id?: string;
+  category_name?: string;
+  // scene trigger
+  trigger_scene?: string;
+
   action: string;
   target: string;
+  target_category_id?: string;
   value?: number;
   enabled: boolean;
 }
@@ -35,7 +47,13 @@ const saved = ref(false);
 const deleting = ref(false);
 const deleteConfirm = ref(false);
 
-const RULE_ACTIONS = [
+const TRIGGER_TABS: { value: "bitrate" | "category" | "scene"; label: string }[] = [
+  { value: "bitrate", label: "bitrate" },
+  { value: "category", label: "category" },
+  { value: "scene", label: "scene" },
+];
+
+const SOURCE_ACTIONS = [
   { value: "scene", label: "switch scene" },
   { value: "show", label: "show source" },
   { value: "hide", label: "hide source" },
@@ -46,15 +64,47 @@ const RULE_ACTIONS = [
   { value: "volume", label: "set volume" },
 ];
 
+const RULE_ACTIONS = computed(() =>
+  fTriggerType.value === "scene"
+    ? [...SOURCE_ACTIONS, { value: "category", label: "change category" }]
+    : SOURCE_ACTIONS,
+);
+
 const isEdit = computed(() => !!props.editTarget);
 
 // >>> form state
+const fTriggerType = ref<"bitrate" | "category" | "scene">("bitrate");
 const fCondition = ref<"below" | "above">("below");
 const fBitrate = ref(2500);
+const fCategoryId = ref("");
+const fCategoryName = ref("");
+const fTriggerScene = ref("");
 const fAction = ref("scene");
 const fTarget = ref("");
+const fTargetCategoryId = ref("");
+const fTargetCategoryName = ref("");
 const fValue = ref<number | "">("");
 const fEnabled = ref(true);
+
+// >>> whether the broadcaster's stored token can actually change the category
+const scopeChecked = ref(false);
+const hasScope = ref(true);
+async function checkScope() {
+  if (!session.value || scopeChecked.value) return;
+  try {
+    const res = await fetch(`${API}/obs/${props.channel}/category-scope-status`, {
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    if (res.ok) {
+      const d = (await res.json()) as { hasScope: boolean };
+      hasScope.value = d.hasScope;
+    }
+  } catch { }
+  scopeChecked.value = true;
+}
+watch(fAction, (a) => {
+  if (a === "category") checkScope();
+});
 
 // >>> populate form when opening
 watch(
@@ -63,30 +113,78 @@ watch(
     if (!open) return;
     deleteConfirm.value = false;
     saved.value = false;
+    scopeChecked.value = false;
     if (!props.editTarget) {
+      fTriggerType.value = "bitrate";
       fCondition.value = "below";
       fBitrate.value = 2500;
+      fCategoryId.value = "";
+      fCategoryName.value = "";
+      fTriggerScene.value = "";
       fAction.value = "scene";
       fTarget.value = "";
+      fTargetCategoryId.value = "";
+      fTargetCategoryName.value = "";
       fValue.value = "";
       fEnabled.value = true;
       return;
     }
     const r = props.rules.find((x) => x.id === props.editTarget);
     if (!r) return;
-    fCondition.value = r.condition;
-    fBitrate.value = r.bitrate_kbps;
+    fTriggerType.value = r.trigger_type ?? "bitrate";
+    fCondition.value = r.condition ?? "below";
+    fBitrate.value = r.bitrate_kbps ?? 2500;
+    fCategoryId.value = r.category_id ?? "";
+    fCategoryName.value = r.category_name ?? "";
+    fTriggerScene.value = r.trigger_scene ?? "";
     fAction.value = r.action;
-    fTarget.value = r.target;
+    fTargetCategoryId.value = r.action === "category" ? (r.target_category_id ?? "") : "";
+    fTargetCategoryName.value = r.action === "category" ? r.target : "";
+    fTarget.value = r.action === "category" ? "" : r.target;
     fValue.value = r.value ?? "";
     fEnabled.value = r.enabled;
   },
 );
 
-watch(fAction, () => {
+
+watch(fTriggerType, () => {
+  fAction.value = "scene";
+  fTarget.value = "";
+});
+watch(fAction, (a) => {
   fTarget.value = "";
   fValue.value = "";
+  if (a !== "category") {
+    fTargetCategoryId.value = "";
+    fTargetCategoryName.value = "";
+  }
 });
+
+function onCategorySelect(item: TypeaheadItem) {
+  fCategoryId.value = item.id ?? "";
+  fCategoryName.value = item.label;
+}
+function onTargetCategorySelect(item: TypeaheadItem) {
+  fTargetCategoryId.value = item.id ?? "";
+  fTargetCategoryName.value = item.label;
+}
+
+async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
+  if (!session.value) return [];
+  try {
+    const res = await fetch(
+      `${API}/obs/twitch/categories?q=${encodeURIComponent(query)}`,
+      { headers: { Authorization: `Bearer ${session.value.token}` } },
+    );
+    if (!res.ok) return [];
+    const d = (await res.json()) as {
+      categories: { id: string; name: string; box_art_url: string }[];
+    };
+    return d.categories.map((c) => ({ id: c.id, label: c.name, iconUrl: c.box_art_url }));
+  } catch {
+    return [];
+  }
+}
 
 // >>> save
 async function save() {
@@ -96,12 +194,21 @@ async function save() {
     const newRules = props.rules.map((r) => ({ ...r }));
     const entry: ObsRule = {
       id: isEdit.value ? props.editTarget! : crypto.randomUUID(),
-      condition: fCondition.value,
-      bitrate_kbps: fBitrate.value,
+      trigger_type: fTriggerType.value,
       action: fAction.value,
-      target: fTarget.value.trim(),
+      target: fAction.value === "category" ? fTargetCategoryName.value.trim() : fTarget.value.trim(),
       enabled: fEnabled.value,
     };
+    if (fTriggerType.value === "bitrate") {
+      entry.condition = fCondition.value;
+      entry.bitrate_kbps = fBitrate.value;
+    } else if (fTriggerType.value === "category") {
+      entry.category_id = fCategoryId.value;
+      entry.category_name = fCategoryName.value;
+    } else if (fTriggerType.value === "scene") {
+      entry.trigger_scene = fTriggerScene.value.trim();
+    }
+    if (fAction.value === "category") entry.target_category_id = fTargetCategoryId.value;
     if (fAction.value === "volume" && fValue.value !== "")
       entry.value = Number(fValue.value);
 
@@ -156,8 +263,11 @@ async function deleteRule() {
 
 // >>> validation
 const saveDisabled = computed(() => {
-  if (!fBitrate.value || fBitrate.value <= 0) return true;
-  if (!fTarget.value.trim()) return true;
+  if (fTriggerType.value === "bitrate" && (!fBitrate.value || fBitrate.value <= 0)) return true;
+  if (fTriggerType.value === "category" && !fCategoryId.value) return true;
+  if (fTriggerType.value === "scene" && !fTriggerScene.value.trim()) return true;
+  if (fAction.value === "category" && !fTargetCategoryId.value) return true;
+  if (fAction.value !== "category" && !fTarget.value.trim()) return true;
   return false;
 });
 </script>
@@ -169,29 +279,55 @@ const saveDisabled = computed(() => {
         <div class="ep-panel-header">
           <div>
             <div class="ep-panel-title">{{ isEdit ? "Edit Rule" : "New Rule" }}</div>
-            <div class="ep-panel-sub">#{{ channel }} · bitrate-triggered</div>
+            <div class="ep-panel-sub">#{{ channel }} · {{ fTriggerType }}-triggered</div>
           </div>
           <button class="ep-panel-close" @click="emit('close')">✕</button>
         </div>
 
         <div class="ep-panel-body">
-          <!-- condition -->
+          <!-- trigger type -->
           <div class="ep-field-group">
-            <label class="ep-field-label">Condition</label>
+            <label class="ep-field-label">Trigger</label>
             <div class="obs-kind-tabs">
-              <button class="obs-kind-tab" :class="{ active: fCondition === 'below' }" @click="fCondition = 'below'">
-                below
-              </button>
-              <button class="obs-kind-tab" :class="{ active: fCondition === 'above' }" @click="fCondition = 'above'">
-                above
+              <button v-for="t in TRIGGER_TABS" :key="t.value" class="obs-kind-tab"
+                :class="{ active: fTriggerType === t.value }" @click="fTriggerType = t.value">
+                {{ t.label }}
               </button>
             </div>
           </div>
 
-          <!-- bitrate threshold -->
-          <div class="ep-field-group">
-            <label class="ep-field-label">Bitrate threshold <span class="ep-field-hint">kbps</span></label>
-            <input v-model.number="fBitrate" type="number" min="1" class="ep-field-input" />
+          <!-- bitrate trigger -->
+          <template v-if="fTriggerType === 'bitrate'">
+            <div class="ep-field-group">
+              <label class="ep-field-label">Condition</label>
+              <div class="obs-kind-tabs">
+                <button class="obs-kind-tab" :class="{ active: fCondition === 'below' }" @click="fCondition = 'below'">
+                  below
+                </button>
+                <button class="obs-kind-tab" :class="{ active: fCondition === 'above' }" @click="fCondition = 'above'">
+                  above
+                </button>
+              </div>
+            </div>
+            <div class="ep-field-group">
+              <label class="ep-field-label">Bitrate threshold <span class="ep-field-hint">kbps</span></label>
+              <input v-model.number="fBitrate" type="number" min="1" class="ep-field-input" />
+            </div>
+          </template>
+
+          <!-- category trigger -->
+          <div v-else-if="fTriggerType === 'category'" class="ep-field-group">
+            <label class="ep-field-label">Category <span class="ep-field-hint">fires when the stream switches to
+                this</span></label>
+            <TypeaheadInput v-model="fCategoryName" :fetch-items="fetchCategories" :min-chars="1"
+              placeholder="Search a Twitch category..." @select="onCategorySelect" />
+          </div>
+
+          <!-- scene trigger -->
+          <div v-else class="ep-field-group">
+            <label class="ep-field-label">Scene <span class="ep-field-hint">fires when OBS switches to
+                this</span></label>
+            <TypeaheadInput v-model="fTriggerScene" :items="scenes" placeholder="Scene name" mono />
           </div>
 
           <!-- action -->
@@ -202,19 +338,24 @@ const saveDisabled = computed(() => {
             </select>
           </div>
 
-          <!-- target -->
-          <div class="ep-field-group">
+          <!-- category action target -->
+          <div v-if="fAction === 'category'" class="ep-field-group">
+            <label class="ep-field-label">New category</label>
+            <TypeaheadInput v-model="fTargetCategoryName" :fetch-items="fetchCategories" :min-chars="1"
+              placeholder="Search a Twitch category..." @select="onTargetCategorySelect" />
+            <div v-if="scopeChecked && !hasScope" class="obs-scope-warning">
+              This channel's stored login doesn't have permission to change category yet.
+              <a href="/auth/add" class="obs-rule-link">Sign in again</a> to grant it, or this rule just won't do
+              anything.
+            </div>
+          </div>
+
+          <!-- scene/source action target -->
+          <div v-else class="ep-field-group">
             <label class="ep-field-label">{{ fAction === "scene" ? "Scene" : "Source" }}
               <span class="ep-field-hint">type or pick</span></label>
-            <input v-model="fTarget" class="ep-field-input ep-mono"
-              :placeholder="fAction === 'scene' ? 'Scene name' : 'Source name'"
-              :list="fAction === 'scene' ? 'obs-rule-scenes' : 'obs-rule-sources'" />
-            <datalist id="obs-rule-scenes">
-              <option v-for="s in scenes" :key="s" :value="s" />
-            </datalist>
-            <datalist id="obs-rule-sources">
-              <option v-for="s in sources" :key="s" :value="s" />
-            </datalist>
+            <TypeaheadInput v-model="fTarget" :items="fAction === 'scene' ? scenes : sources"
+              :placeholder="fAction === 'scene' ? 'Scene name' : 'Source name'" mono />
           </div>
 
           <!-- volume value -->
@@ -300,6 +441,20 @@ const saveDisabled = computed(() => {
 .obs-toggle-label {
   font-size: 11px;
   color: #888;
+}
+
+.obs-scope-warning {
+  font-size: 10px;
+  color: #e5c07b;
+  background: rgba(229, 192, 123, 0.08);
+  border-left: 2px solid #e5c07b;
+  padding: 6px 8px;
+  margin-top: 6px;
+  line-height: 1.5;
+}
+
+.obs-rule-link {
+  color: #9d6cff;
 }
 
 code.ep-mono {

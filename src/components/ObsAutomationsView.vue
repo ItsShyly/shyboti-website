@@ -31,7 +31,16 @@ const RULE_ACTION_LABEL: Record<string, string> = {
   unmute: "unmute",
   mutetoggle: "mute toggle",
   volume: "volume",
+  category: "category",
 };
+
+// >>> trigger_type absent
+function ruleTitle(rule: ObsRule): string {
+  const type = rule.trigger_type ?? "bitrate";
+  if (type === "bitrate") return `${rule.condition} ${rule.bitrate_kbps} kbps`;
+  if (type === "category") return `category -> ${rule.category_name}`;
+  return `scene -> ${rule.trigger_scene}`;
+}
 
 async function fetchRules() {
   if (!session.value || !canView.value) return;
@@ -161,7 +170,7 @@ onMounted(fetchRules);
           </button>
         </div>
         <div class="timer-info" @click="canEdit && openEdit(rule.id)">
-          <div class="timer-name">{{ rule.condition }} {{ rule.bitrate_kbps }} kbps</div>
+          <div class="timer-name">{{ ruleTitle(rule) }}</div>
           <div class="timer-meta">
             <span class="ep-meta-pill interval">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
             <span class="ep-meta-pill when">{{ rule.target }}<template

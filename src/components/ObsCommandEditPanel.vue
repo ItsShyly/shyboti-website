@@ -4,6 +4,7 @@ import { API } from "../api";
 import { useAuth } from "../auth";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
+import TypeaheadInput from "./shared/TypeaheadInput.vue";
 
 export type ObsAccessLevel = "everyone" | "mod" | "broadcaster";
 
@@ -350,15 +351,8 @@ const saveDisabled = computed(() => {
           <div v-if="fKind !== 'arg'" class="ep-field-group">
             <label class="ep-field-label">{{ fKind === "scene" ? "Scene" : "Source" }}
               <span class="ep-field-hint">type or pick</span></label>
-            <input v-model="fTarget" class="ep-field-input ep-mono"
-              :placeholder="fKind === 'scene' ? 'Scene name' : 'Source name'"
-              :list="fKind === 'scene' ? 'obs-ep-scenes' : 'obs-ep-sources'" />
-            <datalist id="obs-ep-scenes">
-              <option v-for="s in scenes" :key="s" :value="s" />
-            </datalist>
-            <datalist id="obs-ep-sources">
-              <option v-for="s in sources" :key="s" :value="s" />
-            </datalist>
+            <TypeaheadInput v-model="fTarget" :items="fKind === 'scene' ? scenes : sources"
+              :placeholder="fKind === 'scene' ? 'Scene name' : 'Source name'" mono />
           </div>
 
           <!-- volume value (source kind, volume action) -->
