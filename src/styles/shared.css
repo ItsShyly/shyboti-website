@@ -1,17 +1,3 @@
-/* ==========================================================================
-   Shared "edit panel" styling - used by every script editor: custom commands,
-   OBS widgets, triggers, timers, countdowns.
-
-   These were previously copy-pasted (with tiny drifted variations) into each
-   view's <style scoped> block. Pulled out here as a single global stylesheet
-   so a tweak (spacing, color, a new state) only has to happen once. Classes
-   are prefixed `ep-` (edit-panel) so they can't collide with any unrelated
-   component's own class names.
-
-   Imported once, globally, in main.ts.
-   ========================================================================== */
-
-/* Slide-in panel + backdrop */
 .ep-overlay {
   position: fixed;
   inset: 0;
@@ -497,14 +483,16 @@
   font-family: inherit;
   font-size: 13px;
   cursor: pointer;
-  transition: color .15s, border-color .15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 .ep-btn-reload:hover {
   color: #9d6cff;
   border-color: #6f2bff44;
 }
 .ep-btn-reload:disabled {
-  opacity: .4;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 .ep-empty {
@@ -799,7 +787,9 @@
   font-family: inherit;
   font-size: 11px;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
 }
 .ep-sync-config-btn:hover {
   color: #9d6cff;

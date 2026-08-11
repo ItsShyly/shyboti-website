@@ -500,14 +500,6 @@ function fmtActor(actor: string) {
     <div class="dash-header">
       <div>
         <div class="dash-title">{{ t("dash.title") }}</div>
-        <div class="dash-sub">
-          {{ t("dash.sub") }}
-          <select v-if="availableChannels.length > 1" v-model="viewChannel" class="chan-select">
-            <option v-for="ch in availableChannels" :key="ch" :value="ch">#{{ ch }}</option>
-            <option :value="ALL_CHANNELS">All channels</option>
-          </select>
-          <span v-else class="chan-fixed">#{{ session?.channel }}</span>
-        </div>
       </div>
       <div class="dash-header-right">
         <span class="live-dot" :class="liveStatus" :title="liveStatus === 'live'
@@ -516,9 +508,8 @@ function fmtActor(actor: string) {
             ? 'Connecting…'
             : 'Offline'
           "></span>
-        <button class="refresh-btn" @click="fetchActivity" :disabled="loading">
-          {{ loading ? "…" : "↺" }}
-        </button>
+        <button class="ep-btn-reload" @click="fetchActivity" title="Reload">↺</button>
+
       </div>
     </div>
 
@@ -789,26 +780,6 @@ function fmtActor(actor: string) {
   50% {
     opacity: 0.4;
   }
-}
-
-.refresh-btn {
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid #2a2a30;
-  background: transparent;
-  color: #666;
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.refresh-btn:hover:not(:disabled) {
-  color: #fff;
-  border-color: #555;
-}
-
-.refresh-btn:disabled {
-  opacity: 0.3;
 }
 
 .feed-empty {

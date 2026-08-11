@@ -33,9 +33,7 @@ watch(
   (tab) => { activeTab.value = parseTab(tab); },
 );
 
-// >>> Each sub-view exposes { header, reload, create } via defineExpose - the header
-// row here (count/reload/new) just delegates to whichever one is currently mounted,
-// same way CommandsView's single header adapts to its active tab.
+// >>> Each sub-view exposes { header, reload, create } via defineExpose
 const timersRef = ref<any>(null);
 const triggersRef = ref<any>(null);
 const countdownsRef = ref<any>(null);
@@ -56,7 +54,8 @@ const activeChild = computed(() => {
       <div>
         <div class="ep-view-title">{{ t("auto.title") }}</div>
         <div class="ep-view-sub">
-          <template v-if="activeChild?.header">{{ activeChild.header.count }} {{ activeChild.header.countLabel }}</template>
+          <template v-if="activeChild?.header">{{ activeChild.header.count }} {{ activeChild.header.countLabel
+          }}</template>
           <template v-else>&mdash;</template>
         </div>
       </div>
@@ -85,18 +84,17 @@ const activeChild = computed(() => {
     </div>
 
     <div class="auto-body">
-      <TimersView v-if="activeTab === 'timers'" ref="timersRef" />
-      <TriggersView v-else-if="activeTab === 'triggers'" ref="triggersRef" />
-      <ObsAutomationsView v-else-if="activeTab === 'obs'" ref="obsRef" />
-      <CountdownView v-else ref="countdownsRef" />
+      <TimersView v-if="activeTab === 'timers'" key="timers" ref="timersRef" />
+      <TriggersView v-else-if="activeTab === 'triggers'" key="triggers" ref="triggersRef" />
+      <ObsAutomationsView v-else-if="activeTab === 'obs'" key="obs" ref="obsRef" />
+      <CountdownView v-else key="countdowns" ref="countdownsRef" />
     </div>
 
   </div>
 </template>
 
 <style scoped>
-/* .automations layout (flex column, gap, height) comes from the shared .ep-view class.
-   header-right / reload button also come from edit-panel.css */
+/* .automations layout (flex column, gap, height) comes from shared.css */
 
 .auto-body {
   flex: 1;

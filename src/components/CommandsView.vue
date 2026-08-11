@@ -909,7 +909,7 @@ onUnmounted(() => {
           <template v-else-if="activeTab === 'Custom'">{{ customCommands.length }} {{ customCommands.length !== 1 ?
             t('cmd.count_plural') : t('cmd.count') }}</template>
           <template v-else-if="activeTab === 'Obs' && obsPaired">{{ obsCommandCount }} OBS {{ t('cmd.count_plural')
-          }}</template>
+            }}</template>
           <template v-else>&mdash;</template>
         </div>
       </div>
@@ -946,7 +946,7 @@ onUnmounted(() => {
                 syncRunning
                   ? '…' : t('cmd.sync.pull') }}</button>
               <button v-if="syncConf?.is_active" class="ep-sync-stop-btn" @click="stopSync">{{ t('cmd.sync.stop')
-              }}</button>
+                }}</button>
             </div>
             <div v-if="syncConf?.last_synced" class="ep-sync-last">{{ t('cmd.sync.last') }} {{ new
               Date(syncConf.last_synced).toLocaleString() }}</div>
@@ -956,13 +956,13 @@ onUnmounted(() => {
           </div>
         </div>
         <button class="ep-btn-reload" @click="reloadAll" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
-        }}</button>
+          }}</button>
         <button v-if="activeTab === 'Custom'" class="ep-btn-new" :disabled="!canEdit"
           @click="canEdit && startCreate()">{{
             t('cmd.new') }}</button>
         <button v-else-if="activeTab === 'Obs' && obsPaired" class="ep-btn-new" @click="openObsEdit(null)">{{
           t('cmd.new')
-        }}</button>
+          }}</button>
       </div>
     </div>
 
@@ -1077,7 +1077,7 @@ onUnmounted(() => {
                 <div class="arg-variant-usage">
                   <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{
                     v.usage.replace(/^<(\$[^>]+)>$/, "[$1]")
-                      }}</span>
+                  }}</span>
                 </div>
                 <div class="arg-variant-desc">{{ v.desc || "" }}</div>
               </div>
@@ -1337,7 +1337,7 @@ onUnmounted(() => {
               <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
                 obsArgCommand(entry) }}</div>
               <div class="cmd-desc">{{ OBS_ACTION_LABEL[action] ?? action }} · <span class="obs-arg-usage-inline">{{
-                  obsArgUsage(action) }}</span></div>
+                obsArgUsage(action) }}</span></div>
               <div>
                 <button class="access-btn" :class="{
                   'access-mod': obsArgAccess(entry) === 'mod',
@@ -1452,7 +1452,7 @@ onUnmounted(() => {
 
 <style scoped>
 /* .cmd-root layout (flex column, gap, height) comes from the shared .ep-view class.
-   header-right cluster, reload, sync controls, and tabs also come from edit-panel.css */
+   header-right cluster, reload, sync controls, and tabs also come from styles/shared.css */
 
 .state-msg {
   color: #555;
@@ -1955,9 +1955,7 @@ onUnmounted(() => {
   background: rgba(78, 201, 176, 0.1);
 }
 
-/* select/save/stop for sync now come from ep-field-select-sm / ep-sync-save-btn /
-   ep-sync-stop-btn in the shared edit-panel.css. sync-run-btn ("pull now") is
-   Commands-only, kept local. */
+/* select/save/stop for sync now come from shared.css.  */
 .sync-run-btn {
   height: 32px;
   padding: 0 12px;
