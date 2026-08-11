@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from "vue";
+import { ref, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../i18n";
 import { useAuth } from "../auth";
@@ -23,15 +23,13 @@ function parseTab(v: unknown): Tab {
   return "timers";
 }
 
-const activeTab = ref<Tab>(parseTab(route.query.tab));
-
-watch(activeTab, (tab) => {
-  router.replace({ path: "/automations", query: { tab } });
+// >>> Derived directly from the route on every read/write
+const activeTab = computed<Tab>({
+  get: () => parseTab(route.query.tab),
+  set: (tab) => {
+    router.replace({ path: "/automations", query: { tab } });
+  },
 });
-watch(
-  () => route.query.tab,
-  (tab) => { activeTab.value = parseTab(tab); },
-);
 
 // >>> Each sub-view exposes { header, reload, create } via defineExpose
 const timersRef = ref<any>(null);
@@ -55,7 +53,7 @@ const activeChild = computed(() => {
         <div class="ep-view-title">{{ t("auto.title") }}</div>
         <div class="ep-view-sub">
           <template v-if="activeChild?.header">{{ activeChild.header.count }} {{ activeChild.header.countLabel
-          }}</template>
+            }}</template>
           <template v-else>&mdash;</template>
         </div>
       </div>
