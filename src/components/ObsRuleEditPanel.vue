@@ -86,38 +86,17 @@ const fTargetCategoryName = ref("");
 const fValue = ref<number | "">("");
 const fEnabled = ref(true);
 
-// >>> whether the broadcaster's stored token can actually change the category
-const scopeChecked = ref(false);
-const hasScope = ref(true);
-async function checkScope() {
-  if (!session.value || scopeChecked.value) return;
-  try {
-    const res = await fetch(`${API}/obs/${props.channel}/category-scope-status`, {
-      headers: { Authorization: `Bearer ${session.value.token}` },
-    });
-    if (res.ok) {
-      const d = (await res.json()) as { hasScope: boolean };
-      hasScope.value = d.hasScope;
-    }
-  } catch { }
-  scopeChecked.value = true;
-}
-
-// >>> True for the moment the form is being bulk-filled from a saved rule (or
-// >>> reset to blank for a new one). Every watcher below that reacts to a
-// >>> single field changing needs to check this and bail, because setting
-// >>> several refs in a row during populate ALSO triggers those same
-// >>> watchers - and since watch() runs post-flush (after the populate
-// >>> function has already finished setting the real saved values), an
-// >>> unguarded watcher fires afterward and silently overwrites them back to
-// >>> whatever "a fresh field just changed" would normally reset them to.
-// >>> That's not hypothetical here: without this guard, opening the edit
-// >>> panel on any existing scene/category-action rule blanks its saved
-// >>> target out right as it opens.
+// guard: suppress field-change watchers while populate() is bulk-filling the form
 let populating = false;
 
 watch(fAction, (a) => {
-  if (a === "category") checkScope();
+  if (populating) return;
+  fTarget.value = "";
+  fValue.value = "";
+  if (a !== "category") {
+    fTargetCategoryId.value = "";
+    fTargetCategoryName.value = "";
+  }
 });
 
 // >>> populate form when opening
@@ -128,7 +107,6 @@ watch(
     populating = true;
     deleteConfirm.value = false;
     saved.value = false;
-    scopeChecked.value = false;
     if (!props.editTarget) {
       fTriggerType.value = "bitrate";
       fCondition.value = "below";
@@ -364,11 +342,6 @@ const saveDisabled = computed(() => {
             <label class="ep-field-label">New category</label>
             <TypeaheadInput v-model="fTargetCategoryName" :fetch-items="fetchCategories" :min-chars="1"
               placeholder="Search a Twitch category..." @select="onTargetCategorySelect" />
-            <div v-if="scopeChecked && !hasScope" class="obs-scope-warning">
-              This channel's stored login doesn't have permission to change category yet.
-              <a href="/auth/add" class="obs-rule-link">Sign in again</a> to grant it, or this rule just won't do
-              anything.
-            </div>
           </div>
 
           <!-- scene/source action target -->
