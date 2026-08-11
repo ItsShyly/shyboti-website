@@ -66,7 +66,7 @@ async function switchTab(tab: Tab) {
         <div class="ep-view-title">{{ t("auto.title") }}</div>
         <div class="ep-view-sub">
           <template v-if="activeChild?.header">{{ activeChild.header.count }} {{ activeChild.header.countLabel
-            }}</template>
+          }}</template>
           <template v-else>&mdash;</template>
         </div>
       </div>
@@ -97,10 +97,13 @@ async function switchTab(tab: Tab) {
     </div>
 
     <div class="auto-body">
-      <TimersView v-if="activeTab === 'timers'" key="timers" ref="timersRef" />
-      <TriggersView v-else-if="activeTab === 'triggers'" key="triggers" ref="triggersRef" />
-      <ObsAutomationsView v-else-if="activeTab === 'obs'" key="obs" ref="obsRef" />
-      <CountdownView v-else key="countdowns" ref="countdownsRef" />
+      <!-- KeepAlive -->
+      <KeepAlive>
+        <TimersView v-if="activeTab === 'timers'" key="timers" ref="timersRef" />
+        <TriggersView v-else-if="activeTab === 'triggers'" key="triggers" ref="triggersRef" />
+        <ObsAutomationsView v-else-if="activeTab === 'obs'" key="obs" ref="obsRef" />
+        <CountdownView v-else key="countdowns" ref="countdownsRef" />
+      </KeepAlive>
     </div>
 
   </div>
