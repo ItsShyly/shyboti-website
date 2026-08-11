@@ -438,9 +438,11 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
 <template>
   <div class="ep-view">
     <div class="ep-view-header">
-      <div class="ep-view-count">{{ triggers.length }} trigger{{ triggers.length === 1 ? '' : 's' }}</div>
-      <div class="ep-view-header-right">
-        <div class="ep-sync-wrap">
+      <div>
+        <div class="ep-view-title">{{ t("trigger.title") }}</div>
+        <div class="ep-view-sub">
+          <span class="ep-view-count">{{ triggers.length }}</span>
+          {{ t("trigger.sub") }}
           <button v-if="syncConf?.is_active" class="ep-sync-indicator" @click="syncOpen = !syncOpen"
             :title="`${t('trigger.sync.active')} #${syncConf.sync_from}`">
             <span class="ep-sync-dot"></span>{{ t("trigger.sync.active") }} #{{
@@ -452,6 +454,10 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
             {{ t("trigger.sync.config")
             }}<span class="ep-sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
           </button>
+        </div>
+      </div>
+      <div class="ep-view-header-right">
+        <div class="ep-sync-wrap">
           <div v-if="syncOpen" class="ep-sync-panel">
             <div class="ep-sync-modes">
               <button class="ep-sync-mode-btn active">Sync (ongoing)</button>
@@ -497,6 +503,7 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
             </div>
           </div>
         </div>
+        <button class="ep-btn-reload" @click="load(); fetchSync()" title="Reload">↺</button>
         <button class="ep-btn-new" @click="canEdit && openNew()" :disabled="!canEdit">
           {{ t("trigger.new") }}
         </button>

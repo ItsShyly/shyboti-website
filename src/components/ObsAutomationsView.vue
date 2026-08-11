@@ -159,10 +159,17 @@ onMounted(() => {
 <template>
   <div class="ep-view">
     <div class="ep-view-header">
-      <div class="ep-view-count">{{ rules.length }} rule{{ rules.length === 1 ? '' : 's' }}</div>
       <div>
+        <div class="ep-view-title">OBS Automations</div>
+        <div class="ep-view-sub">
+          <span class="ep-view-count">{{ rules.length }}</span>
+          rule{{ rules.length === 1 ? '' : 's' }} that react to stream events
+        </div>
+      </div>
+      <div class="ep-view-header-right">
+        <button class="ep-btn-reload" @click="fetchRules" title="Reload">↺</button>
         <button class="ep-btn-new" @click="canEdit && openEdit(null)" :disabled="!canEdit || !paired">
-          + New
+          + New rule
         </button>
       </div>
     </div>

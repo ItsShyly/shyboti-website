@@ -313,14 +313,23 @@ async function controlCountdown(
 <template>
   <div class="ep-view">
     <div class="ep-view-header">
-      <div class="ep-view-count">{{ countdowns.length }} countdown{{ countdowns.length === 1 ? '' : 's' }}</div>
-      <button
-        class="ep-btn-new"
-        @click="(canEdit || isBroadcaster) && openNew()"
-        :disabled="!canEdit && !isBroadcaster"
-      >
-        {{ t("countdown.new") }}
-      </button>
+      <div>
+        <div class="ep-view-title">{{ t("countdown.title") }}</div>
+        <div class="ep-view-sub">
+          <span class="ep-view-count">{{ countdowns.length }}</span>
+          {{ t("countdown.sub") }}
+        </div>
+      </div>
+      <div class="ep-view-header-right">
+        <button class="ep-btn-reload" @click="load" title="Reload">↺</button>
+        <button
+          class="ep-btn-new"
+          @click="(canEdit || isBroadcaster) && openNew()"
+          :disabled="!canEdit && !isBroadcaster"
+        >
+          {{ t("countdown.new") }}
+        </button>
+      </div>
     </div>
 
     <div v-if="success" class="ep-toast success">{{ success }}</div>

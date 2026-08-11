@@ -1,0 +1,7 @@
+/* shared ModerationView overrides — minimal, the rest comes from global ep-* classes */
+
+/* header right cluster */
+.ep-view-header-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.ep-btn-reload { height: 28px; padding: 0 10px; border: 1px solid #2a2a30; background: transparent; color: #555; font-family: inherit; font-size: 13px; cursor: pointer; transition: color .15s; }
+.ep-btn-reload:hover { color: #9d6cff; border-color: #6f2bff44; }
+.ep-btn-reload:disabled { opacity: .4; cursor: not-allowed; }

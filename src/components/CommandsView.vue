@@ -904,83 +904,65 @@ onUnmounted(() => {
     <div class="ep-view-header">
       <div>
         <div class="ep-view-title">{{ t("cmd.title") }}</div>
-        <div class="ep-view-sub"><span class="chan">#{{ session?.channel }}</span></div>
+        <div class="ep-view-sub">
+          <template v-if="activeTab === 'Default'">{{ filtered().length }} {{ t('cmd.count_plural') }}</template>
+          <template v-else-if="activeTab === 'Custom'">{{ customCommands.length }} {{ customCommands.length !== 1 ?
+            t('cmd.count_plural') : t('cmd.count') }}</template>
+          <template v-else-if="activeTab === 'Obs' && obsPaired">{{ obsCommandCount }} OBS {{ t('cmd.count_plural')
+          }}</template>
+          <template v-else>&mdash;</template>
+        </div>
       </div>
       <div class="ep-view-header-right">
-        <!-- count badge -->
-        <span v-if="activeTab === 'Default'" class="ep-view-count">{{ filtered().length }} {{ t('cmd.count_plural')
-          }}</span>
-        <span v-else-if="activeTab === 'Custom'" class="ep-view-count">{{ customCommands.length }} {{
-          customCommands.length !== 1 ? t('cmd.count_plural') : t('cmd.count') }}</span>
-        <span v-else-if="activeTab === 'Obs' && obsPaired" class="ep-view-count">{{ obsCommandCount }} OBS</span>
         <!-- sync (Custom tab only) -->
         <div class="ep-sync-wrap">
           <button v-if="activeTab === 'Custom' && syncConf?.is_active" class="ep-sync-indicator"
             @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from}`">
-            <span class="ep-sync-dot"></span>sync #{{ syncConf.sync_from }}<span class="ep-sync-chevron">{{ syncOpen ? '▲'
+            <span class="ep-sync-dot"></span>sync #{{ syncConf.sync_from }}<span class="ep-sync-chevron">{{ syncOpen ?
+              '▲'
               : '▼' }}</span>
           </button>
           <button v-else-if="activeTab === 'Custom'" class="ep-sync-config-btn" @click="syncOpen = !syncOpen">
             {{ t('cmd.sync.config') }}<span class="ep-sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
           </button>
-          <!-- sync dropdown panel - floats below the button now instead of pushing content down -->
           <div v-if="syncOpen && activeTab === 'Custom'" class="ep-sync-panel">
             <div class="ep-sync-modes">
               <button class="ep-sync-mode-btn active">Sync (ongoing)</button>
-              <button class="ep-sync-mode-btn" @click="syncOpen = false" title="One-time copy, no ongoing config">Import (one-time)</button>
+              <button class="ep-sync-mode-btn" @click="syncOpen = false">Import (one-time)</button>
             </div>
             <div class="ep-sync-row">
-              <select v-model="syncFrom" class="field-select-sm">
-                <option value="">
-                  {{
-                    syncConf?.is_active
-                      ? t("cmd.sync.change")
-                      : t("cmd.sync.select")
-                  }}
-                </option>
-                <option v-for="ch in availableChannels.filter(
-                  (c) => c !== session?.channel,
-                )" :key="ch" :value="ch">
-                  #{{ ch }}
+              <select v-model="syncFrom" class="ep-field-select-sm">
+                <option value="">{{ syncConf?.is_active ? t("cmd.sync.change") : t("cmd.sync.select") }}</option>
+                <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{
+                  ch }}
                 </option>
               </select>
-              <button class="sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">
-                {{
-                  syncSaving
-                    ? "…"
-                    : syncConf?.is_active
-                      ? t("cmd.sync.update")
-                      : t("cmd.sync.enable")
-                }}
+              <button class="ep-sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">
+                {{ syncSaving ? '…' : syncConf?.is_active ? t('cmd.sync.update') : t('cmd.sync.enable') }}
               </button>
             </div>
             <div class="ep-sync-row">
-              <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">
-                {{ syncRunning ? "…" : t("cmd.sync.pull") }}
-              </button>
-              <button v-if="syncConf?.is_active" class="sync-stop-btn" @click="stopSync">
-                {{ t("cmd.sync.stop") }}
-              </button>
+              <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">{{
+                syncRunning
+                  ? '…' : t('cmd.sync.pull') }}</button>
+              <button v-if="syncConf?.is_active" class="ep-sync-stop-btn" @click="stopSync">{{ t('cmd.sync.stop')
+              }}</button>
             </div>
-            <div v-if="syncConf?.last_synced" class="ep-sync-last">
-              {{ t("cmd.sync.last") }}
-              {{ new Date(syncConf.last_synced).toLocaleString() }}
-            </div>
-            <div v-if="syncMsg" class="ep-sync-msg" :class="{
-              err: syncMsg.includes('fail') || syncMsg.includes('Error'),
-            }">
-              {{ syncMsg }}
-            </div>
+            <div v-if="syncConf?.last_synced" class="ep-sync-last">{{ t('cmd.sync.last') }} {{ new
+              Date(syncConf.last_synced).toLocaleString() }}</div>
+            <div v-if="syncMsg" class="ep-sync-msg"
+              :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{
+                syncMsg }}</div>
           </div>
         </div>
-        <!-- reload -->
         <button class="ep-btn-reload" @click="reloadAll" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
-          }}</button>
-        <!-- new -->
+        }}</button>
         <button v-if="activeTab === 'Custom'" class="ep-btn-new" :disabled="!canEdit"
-          @click="canEdit && startCreate()">{{ t('cmd.new') }}</button>
+          @click="canEdit && startCreate()">{{
+            t('cmd.new') }}</button>
         <button v-else-if="activeTab === 'Obs' && obsPaired" class="ep-btn-new" @click="openObsEdit(null)">{{
-          t('cmd.new') }}</button>
+          t('cmd.new')
+        }}</button>
       </div>
     </div>
 
@@ -1010,7 +992,6 @@ onUnmounted(() => {
           <div></div>
           <div>{{ t("cmd.header.onoff") }}</div>
           <div>{{ t("cmd.header.name") }}</div>
-          <div>{{ t("cmd.header.desc") }}</div>
           <div>{{ t("cmd.header.access") }}</div>
           <div>{{ t("cmd.header.gcd") }}</div>
           <div>{{ t("cmd.header.ucd") }}</div>
@@ -1035,11 +1016,13 @@ onUnmounted(() => {
                   { disabled: !canToggle },
                 ]" @click="toggle(cmd, 'isActive')"></div>
               </div>
-              <div class="cmd-name">
-                <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
-                {{ prefix }}{{ cmd.name }}
+              <div class="cmd-name-col">
+                <div class="cmd-name">
+                  <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
+                  {{ prefix }}{{ cmd.name }}
+                </div>
+                <div v-if="cmdDesc(cmd) !== '-'" class="cmd-desc-inline">{{ cmdDesc(cmd) }}</div>
               </div>
-              <div class="cmd-desc">{{ cmdDesc(cmd) }}</div>
               <div>
                 <button class="access-btn" :class="{
                   'access-mod': cmd.modOnly,
@@ -1110,19 +1093,12 @@ onUnmounted(() => {
 
       <div v-if="!customLoading && filteredCustom().length > 0" class="table-header custom-table-header">
         <div></div>
-        <div class="sort-col" @click="setSort('name')">
-          {{ t("cmd.sort.name")
-          }}<span class="sort-arrow">{{
-            sortField === "name" ? (sortDir === "asc" ? "↑" : "↓") : "↕"
-            }}</span>
-        </div>
+        <div>{{ t("cmd.header.onoff") }}</div>
+        <div class="sort-col" @click="setSort('name')">{{ t("cmd.sort.name") }}<span class="sort-arrow">{{ sortField ===
+          'name' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span></div>
         <div>{{ t("cmd.sort.access") }}</div>
-        <div class="sort-col" @click="setSort('cooldown')">
-          {{ t("cmd.sort.gcd")
-          }}<span class="sort-arrow">{{
-            sortField === "cooldown" ? (sortDir === "asc" ? "↑" : "↓") : "↕"
-            }}</span>
-        </div>
+        <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.sort.gcd") }}<span class="sort-arrow">{{ sortField
+          === 'cooldown' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span></div>
         <div>{{ t("cmd.header.ucd") }}</div>
         <div>{{ t("cmd.sort.actions") }}</div>
       </div>
@@ -1265,10 +1241,10 @@ onUnmounted(() => {
         </div>
 
         <template v-else>
-          <div class="table-header obs-table-header">
+          <div class="table-header custom-table-header">
+            <div></div>
+            <div>{{ t("cmd.header.onoff") }}</div>
             <div>{{ t("cmd.header.name") }}</div>
-            <div>action</div>
-            <div>target</div>
             <div>{{ t("cmd.header.access") }}</div>
             <div>{{ t("cmd.header.gcd") }}</div>
             <div>{{ t("cmd.header.ucd") }}</div>
@@ -1276,12 +1252,16 @@ onUnmounted(() => {
           </div>
 
           <div class="rows">
-            <div v-for="b in obsSceneBindings" :key="'sc' + b.command" class="table-row obs-row">
-              <div class="cmd-name">
-                <span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{ b.command }}
+            <div v-for="b in obsSceneBindings" :key="'sc' + b.command" class="table-row custom-row">
+              <div class="row-chevron-cell"></div>
+              <div>
+                <div class="square on"></div>
               </div>
-              <div class="cmd-desc">switch scene</div>
-              <div class="cmd-desc">{{ b.scene }}</div>
+              <div class="cmd-name-col">
+                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
+                  b.command }}</div>
+                <div class="cmd-desc-inline">switch scene · {{ b.scene }}</div>
+              </div>
               <div>
                 <button class="access-btn" :class="{
                   'access-mod': b.access === 'mod',
@@ -1313,13 +1293,18 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <div v-for="b in obsSourceBindings" :key="'so' + b.command" class="table-row obs-row">
-              <div class="cmd-name">
-                <span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{ b.command }}
+            <div v-for="b in obsSourceBindings" :key="'so' + b.command" class="table-row custom-row">
+              <div class="row-chevron-cell"></div>
+              <div>
+                <div class="square on"></div>
               </div>
-              <div class="cmd-desc">{{ OBS_ACTION_LABEL[b.action] ?? b.action }}</div>
-              <div class="cmd-desc">{{ b.source }}<span v-if="b.action === 'volume' && b.value !== undefined"> @ {{
-                b.value }}%</span></div>
+              <div class="cmd-name-col">
+                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
+                  b.command }}</div>
+                <div class="cmd-desc-inline">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} · {{ b.source }}<template
+                    v-if="b.action === 'volume' && b.value !== undefined"> @ {{ b.value }}%</template>
+                </div>
+              </div>
               <div>
                 <button class="access-btn" :class="{
                   'access-mod': b.access === 'mod',
@@ -1351,12 +1336,18 @@ onUnmounted(() => {
               </div>
             </div>
 
-            <div v-for="(entry, action) in obsArgCommands" :key="'arg' + action" class="table-row obs-row">
-              <div class="cmd-name">
-                <span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{ obsArgCommand(entry) }}
+            <div v-for="(entry, action) in obsArgCommands" :key="'arg' + action" class="table-row custom-row">
+              <div class="row-chevron-cell"></div>
+              <div>
+                <div class="square on"></div>
               </div>
-              <div class="cmd-desc">{{ OBS_ACTION_LABEL[action] ?? action }}</div>
-              <div class="cmd-desc"><span class="obs-arg-badge">{{ obsArgUsage(action) }}</span></div>
+              <div class="cmd-name-col">
+                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
+                  obsArgCommand(entry) }}</div>
+                <div class="cmd-desc-inline">{{ OBS_ACTION_LABEL[action] ?? action }} · <span
+                    class="obs-arg-usage-inline">{{
+                      obsArgUsage(action) }}</span></div>
+              </div>
               <div>
                 <button class="access-btn" :class="{
                   'access-mod': obsArgAccess(entry) === 'mod',
@@ -1446,7 +1437,7 @@ onUnmounted(() => {
           }}<span class="modal-cmd">+{{ shareCmd }}</span>
         </div>
         <div class="modal-sub">{{ t("cmd.share.sub") }}</div>
-        <select v-model="shareTarget" class="field-select-sm" style="width: 100%; margin-top: 12px">
+        <select v-model="shareTarget" class="ep-field-select-sm" style="width: 100%; margin-top: 12px">
           <option value="">{{ t("cmd.share.select") }}</option>
           <option v-for="ch in availableChannels.filter(
             (c) => c !== session?.channel,
@@ -1475,46 +1466,7 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-.chan {
-  color: #9d6cff;
-}
-
-/* page header right-side cluster */
-.ep-view-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.ep-view-count {
-  font-size: 11px;
-  color: #555;
-  white-space: nowrap;
-}
-
-.ep-btn-reload {
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid #2a2a30;
-  background: transparent;
-  color: #555;
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  transition: color .15s;
-}
-
-.ep-btn-reload:hover {
-  color: #9d6cff;
-  border-color: #6f2bff44;
-}
-
-.ep-btn-reload:disabled {
-  opacity: .4;
-  cursor: not-allowed;
-}
+/* header-right cluster, reload, sync controls, and tabs now come from the shared edit-panel.css */
 
 .state-msg {
   color: #555;
@@ -1526,19 +1478,13 @@ onUnmounted(() => {
 .table-header,
 .table-row {
   display: grid;
-  grid-template-columns: 28px 50px 140px 1fr 110px 90px 90px 110px;
+  grid-template-columns: 28px 32px 1fr 110px 90px 90px 110px;
   align-items: center;
 }
 
 .custom-table-header,
 .custom-row {
   grid-template-columns: 28px 32px 1fr 110px 90px 90px 150px;
-}
-
-/* OBS tab: name */
-.obs-table-header,
-.obs-row {
-  grid-template-columns: 160px 130px 1fr 100px 70px 70px 140px;
 }
 
 .sort-col {
@@ -1593,10 +1539,6 @@ onUnmounted(() => {
 
 .table-row.expanded {
   border-bottom: none;
-}
-
-.obs-row {
-  min-height: 48px;
 }
 
 .row-chevron-cell {
@@ -1919,14 +1861,6 @@ onUnmounted(() => {
   margin-left: 6px;
 }
 
-.cmd-desc {
-  font-size: 11px;
-  color: #8d8d8d;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .cmd-name-col {
   display: flex;
   flex-direction: column;
@@ -2042,53 +1976,9 @@ onUnmounted(() => {
   background: rgba(78, 201, 176, 0.1);
 }
 
-.sync-stop-btn {
-  height: 28px;
-  padding: 0 8px;
-  border: 1px solid #f1494944;
-  background: transparent;
-  color: #f14949;
-  font-family: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.sync-stop-btn:hover {
-  background: rgba(241, 73, 73, 0.1);
-}
-
-.field-select-sm {
-  background: #0d0d10;
-  border: 1px solid #2a2a30;
-  color: #e0e0e0;
-  font-family: inherit;
-  font-size: 12px;
-  padding: 6px 8px;
-  outline: none;
-  cursor: pointer;
-}
-
-.sync-save-btn {
-  height: 32px;
-  padding: 0 12px;
-  border: none;
-  background: #6f2bff;
-  color: #fff;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.sync-save-btn:hover:not(:disabled) {
-  background: #7f3fff;
-}
-
-.sync-save-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
+/* select/save/stop for sync now come from ep-field-select-sm / ep-sync-save-btn /
+   ep-sync-stop-btn in the shared edit-panel.css. sync-run-btn ("pull now") is
+   Commands-only, kept local. */
 .sync-run-btn {
   height: 32px;
   padding: 0 12px;
@@ -2215,17 +2105,9 @@ onUnmounted(() => {
   text-decoration: underline;
 }
 
-.obs-arg-badge {
-  display: inline-flex;
-  align-items: center;
-  height: 22px;
-  padding: 0 8px;
-  background: #e5c07b0e;
-  border: 1px dashed #e5c07b55;
+.obs-arg-usage-inline {
   color: #e5c07b;
   font-family: "Consolas", "Fira Mono", monospace;
-  font-size: 10px;
-  white-space: nowrap;
 }
 
 /* Extras tab */
@@ -2371,19 +2253,6 @@ onUnmounted(() => {
 
   .new-cmd-input {
     width: 120px;
-  }
-
-  .obs-table-header {
-    display: none;
-  }
-
-  .obs-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    height: auto;
-    padding: 10px 12px;
-    gap: 8px;
   }
 }
 </style>

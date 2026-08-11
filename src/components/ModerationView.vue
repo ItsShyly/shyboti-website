@@ -381,16 +381,14 @@ onUnmounted(() => { _sseSource?.close() });
     <div class="ep-view-header">
       <div>
         <div class="ep-view-title">{{ t("mod.title") }}</div>
-        <div class="ep-view-sub">{{ t("mod.sub") }} <span class="chan">#{{ session?.channel }}</span></div>
+        <div class="ep-view-sub">
+          <template v-if="activeTab === 'blocked'"><span class="ep-view-count">{{ blockedTerms.length }}</span> {{ t('mod.tab.blocked') }}</template>
+          <template v-else-if="activeTab === 'spam'"><span class="ep-view-count">{{ spamFilters.length }}</span> {{ t('mod.tab.spam') }}</template>
+          <template v-else><span class="ep-view-count">{{ nukes.length }}</span> {{ t('mod.tab.nukes') }}</template>
+        </div>
       </div>
       <div class="ep-view-header-right">
-        <span class="ep-view-count">
-          <template v-if="activeTab === 'blocked'">{{ blockedTerms.length }} {{ t('cmd.count_plural') }}</template>
-          <template v-else-if="activeTab === 'spam'">{{ spamFilters.length }} {{ t('cmd.count_plural') }}</template>
-          <template v-else>{{ nukes.length }} {{ t('cmd.count_plural') }}</template>
-        </span>
-        <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
-        }}</button>
+        <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺' }}</button>
         <button class="ep-btn-new" @click="
           activeTab === 'blocked' ? openNewBlocked() :
             activeTab === 'spam' ? openNewSpam() : openNewNuke()
@@ -735,43 +733,6 @@ onUnmounted(() => { _sseSource?.close() });
 <style scoped>
 .chan {
   color: #9d6cff
-}
-
-/* header right cluster - same pattern as CommandsView */
-.ep-view-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.ep-view-count {
-  font-size: 11px;
-  color: #555;
-  white-space: nowrap;
-}
-
-.ep-btn-reload {
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid #2a2a30;
-  background: transparent;
-  color: #555;
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  transition: color .15s;
-}
-
-.ep-btn-reload:hover {
-  color: #9d6cff;
-  border-color: #6f2bff44;
-}
-
-.ep-btn-reload:disabled {
-  opacity: .4;
-  cursor: not-allowed;
 }
 
 .nuke-hint {

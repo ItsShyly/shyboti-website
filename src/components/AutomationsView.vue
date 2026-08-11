@@ -12,7 +12,7 @@ type Tab = "timers" | "triggers" | "countdowns" | "obs";
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
-const { session, channelRole } = useAuth();
+const { channelRole } = useAuth();
 
 const canViewObs = computed(
   () => channelRole.value?.permissions?.obs_view ?? false,
@@ -41,7 +41,7 @@ watch(
     <div class="ep-view-header">
       <div>
         <div class="ep-view-title">{{ t("auto.title") }}</div>
-        <div class="ep-view-sub"><span class="chan">#{{ session?.channel }}</span></div>
+        <div class="ep-view-sub">{{ t('auto.' + activeTab) }}</div>
       </div>
       <div class="ep-view-header-right">
         <button class="ep-btn-reload" @click="reloadKey++" title="Reload">↺</button>
@@ -81,32 +81,7 @@ watch(
   gap: 0;
 }
 
-.chan {
-  color: #9d6cff;
-}
-
-.ep-view-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ep-btn-reload {
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid #2a2a30;
-  background: transparent;
-  color: #555;
-  font-family: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  transition: color .15s;
-}
-
-.ep-btn-reload:hover {
-  color: #9d6cff;
-  border-color: #6f2bff44;
-}
+/* header-right / reload button come from the shared edit-panel.css */
 
 .auto-body {
   flex: 1;
