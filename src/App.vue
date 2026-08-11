@@ -399,7 +399,7 @@ async function loadDynamic(): Promise<SearchResult[]> {
         });
       }
     }
-  } catch {}
+  } catch { }
   _dynamicCache = results;
   return results;
 }
@@ -613,7 +613,7 @@ function addBot() {
   window.location.href = `${API}/auth/add`;
 }
 
-const KEEP_ALIVE_ROUTES = ["LogsView"];
+const KEEP_ALIVE_ROUTES = ["LogsView", "AutomationsView"];
 
 // >>> provide nextActiveTab + searchOpenEdit for CommandsView
 provide("nextActiveTab", nextActiveTab);
@@ -636,234 +636,126 @@ provide("searchOpenTrigger", searchOpenTrigger);
 <template>
   <div class="page">
     <div class="topbar">
-      <div
-        class="topbar-brand"
-        @click="session ? router.push('/dashboard') : router.push('/')"
-        style="cursor: pointer"
-      >
-        <img
-          src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif"
-          alt="shy"
-          class="brand-emote"
-        />
+      <div class="topbar-brand" @click="session ? router.push('/dashboard') : router.push('/')" style="cursor: pointer">
+        <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
         <span class="brand-name">ShyBoti</span>
       </div>
 
       <!-- Universal search bar - desktop only -->
-      <div
-        class="search-wrap hide-mobile"
-        :class="{
-          open: searchOpen && searchResults.length > 0,
-          'has-chip': showLogsChip,
-        }"
-      >
-        <svg
-          v-if="!showLogsChip"
-          class="search-icon"
-          viewBox="0 0 16 16"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <circle
-            cx="7"
-            cy="7"
-            r="4.5"
-            stroke="currentColor"
-            stroke-width="1.5"
-          />
-          <path
-            d="M10.5 10.5L14 14"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-          />
+      <div class="search-wrap hide-mobile" :class="{
+        open: searchOpen && searchResults.length > 0,
+        'has-chip': showLogsChip,
+      }">
+        <svg v-if="!showLogsChip" class="search-icon" viewBox="0 0 16 16" fill="none"
+          xmlns="http://www.w3.org/2000/svg">
+          <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5" />
+          <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
         </svg>
         <span v-if="showLogsChip" class="search-scope-chip">
           in logs
-          <button
-            class="chip-x"
-            @mousedown.prevent="dismissLogsChip"
-            title="Search everywhere instead"
-          >
+          <button class="chip-x" @mousedown.prevent="dismissLogsChip" title="Search everywhere instead">
             ✕
           </button>
         </span>
-        <input
-          ref="searchInputDesktop"
-          v-model="searchQuery"
-          class="search-input"
-          :placeholder="
-            showLogsChip ? 'Find in loaded messages…' : 'Search… (Ctrl+F)'
-          "
-          @input="onSearchInput"
-          @keydown="onSearchKeydown"
-          @focus="onSearchFocus"
-          @blur="onSearchBlur"
-          autocomplete="off"
-          spellcheck="false"
-        />
+        <input ref="searchInputDesktop" v-model="searchQuery" class="search-input" :placeholder="showLogsChip ? 'Find in loaded messages…' : 'Search… (Ctrl+F)'
+          " @input="onSearchInput" @keydown="onSearchKeydown" @focus="onSearchFocus" @blur="onSearchBlur"
+          autocomplete="off" spellcheck="false" />
         <span v-if="showLogsChip && logsQuery" class="search-match-nav">
           <span class="search-match-count">{{
             logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0 matches"
-          }}</span>
-          <button
-            v-if="logsMatchCount"
-            class="search-match-step"
-            title="Previous match (Shift+Enter)"
-            @mousedown.prevent="logsRequestJump(-1)"
-          >
+            }}</span>
+          <button v-if="logsMatchCount" class="search-match-step" title="Previous match (Shift+Enter)"
+            @mousedown.prevent="logsRequestJump(-1)">
             ▲
           </button>
-          <button
-            v-if="logsMatchCount"
-            class="search-match-step"
-            title="Next match (Enter)"
-            @mousedown.prevent="logsRequestJump(1)"
-          >
+          <button v-if="logsMatchCount" class="search-match-step" title="Next match (Enter)"
+            @mousedown.prevent="logsRequestJump(1)">
             ▼
           </button>
         </span>
-        <kbd v-if="!searchQuery && !showLogsChip" class="search-kbd"
-          >Ctrl+F</kbd
-        >
-        <button
-          v-if="searchQuery"
-          class="search-clear"
-          @mousedown.prevent="
-            searchQuery = '';
-            logsQuery = '';
-            searchResults = [];
-            searchOpen = false;
-          "
-        >
+        <kbd v-if="!searchQuery && !showLogsChip" class="search-kbd">Ctrl+F</kbd>
+        <button v-if="searchQuery" class="search-clear" @mousedown.prevent="
+          searchQuery = '';
+        logsQuery = '';
+        searchResults = [];
+        searchOpen = false;
+        ">
           ✕
         </button>
 
         <!-- Results dropdown -->
-        <div
-          v-if="showLogsChip && searchOpen && logsSearchResults.length > 0"
-          class="search-results"
-        >
+        <div v-if="showLogsChip && searchOpen && logsSearchResults.length > 0" class="search-results">
           <div class="result-group-label">Messages</div>
-          <button
-            v-for="(r, idx) in logsSearchResults"
-            :key="r.id"
-            class="result-item"
-            :class="{ active: logsActiveIndex === idx }"
-            @mousedown.prevent="selectLogsResult(r)"
-          >
+          <button v-for="(r, idx) in logsSearchResults" :key="r.id" class="result-item"
+            :class="{ active: logsActiveIndex === idx }" @mousedown.prevent="selectLogsResult(r)">
             <span class="result-label">{{ r.label }}</span>
             <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
           </button>
         </div>
-        <div
-          v-else-if="
-            showLogsChip &&
-            searchOpen &&
-            searchQuery.trim() &&
-            !logsSearchResults.length
-          "
-          class="search-results search-empty"
-        >
+        <div v-else-if="
+          showLogsChip &&
+          searchOpen &&
+          searchQuery.trim() &&
+          !logsSearchResults.length
+        " class="search-results search-empty">
           No matching messages in the loaded logs
         </div>
-        <div
-          v-else-if="!showLogsChip && searchOpen && flatResults.length > 0"
-          class="search-results"
-        >
+        <div v-else-if="!showLogsChip && searchOpen && flatResults.length > 0" class="search-results">
           <template v-for="(items, category) in groupedResults" :key="category">
             <div class="result-group-label">{{ category }}</div>
-            <button
-              v-for="(r, idx) in items"
-              :key="r.label + idx"
-              class="result-item"
-              :class="{ active: flatResults.indexOf(r) === searchIndex }"
-              @mousedown.prevent="selectResult(r)"
-            >
+            <button v-for="(r, idx) in items" :key="r.label + idx" class="result-item"
+              :class="{ active: flatResults.indexOf(r) === searchIndex }" @mousedown.prevent="selectResult(r)">
               <span class="result-icon">{{ r.icon }}</span>
               <span class="result-label">{{ r.label }}</span>
               <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
             </button>
           </template>
         </div>
-        <div
-          v-else-if="
-            !showLogsChip &&
-            searchOpen &&
-            searchQuery.trim() &&
-            !flatResults.length
-          "
-          class="search-results search-empty"
-        >
+        <div v-else-if="
+          !showLogsChip &&
+          searchOpen &&
+          searchQuery.trim() &&
+          !flatResults.length
+        " class="search-results search-empty">
           No results for "{{ searchQuery }}"
         </div>
       </div>
 
       <div class="topbar-right">
         <div class="lang-switcher">
-          <button
-            class="lang-opt"
-            :class="{ active: locale === 'en' }"
-            @click="setLocale('en')"
-          >
+          <button class="lang-opt" :class="{ active: locale === 'en' }" @click="setLocale('en')">
             EN
           </button>
           <span class="lang-sep">|</span>
-          <button
-            class="lang-opt"
-            :class="{ active: locale === 'de' }"
-            @click="setLocale('de')"
-          >
+          <button class="lang-opt" :class="{ active: locale === 'de' }" @click="setLocale('de')">
             DE
           </button>
         </div>
         <template v-if="session">
           <div class="channel-switcher" v-if="availableChannels.length > 1">
-            <button
-              class="channel-btn"
-              @click="showChannelMenu = !showChannelMenu"
-            >
+            <button class="channel-btn" @click="showChannelMenu = !showChannelMenu">
               #{{ session.channel }} ▾
             </button>
             <div v-if="showChannelMenu" class="channel-menu">
-              <button
-                v-for="ch in availableChannels"
-                :key="ch"
-                class="channel-menu-item"
-                :class="{ active: ch === session.channel }"
-                @click="selectChannel(ch)"
-              >
+              <button v-for="ch in availableChannels" :key="ch" class="channel-menu-item"
+                :class="{ active: ch === session.channel }" @click="selectChannel(ch)">
                 #{{ ch }}
               </button>
             </div>
           </div>
-          <span v-else class="logged-in-as hide-mobile"
-            >#{{ session.channel }}</span
-          >
-          <button
-            class="auth-btn logout-btn hide-mobile"
-            @click="
-              logout();
-              router.push('/');
-            "
-          >
+          <span v-else class="logged-in-as hide-mobile">#{{ session.channel }}</span>
+          <button class="auth-btn logout-btn hide-mobile" @click="
+            logout();
+          router.push('/');
+          ">
             {{ t("nav.logout") }}
           </button>
         </template>
-        <button
-          v-else
-          class="auth-btn login-btn"
-          :class="{ shake: loginShaking }"
-          @click="login"
-        >
+        <button v-else class="auth-btn login-btn" :class="{ shake: loginShaking }" @click="login">
           <span class="hide-mobile">{{ t("nav.login") }}</span>
           <span class="show-mobile">{{ t("nav.login_short") }}</span>
         </button>
-        <button
-          class="hamburger show-mobile"
-          @click="sidebarOpen = !sidebarOpen"
-          :class="{ open: sidebarOpen }"
-        >
+        <button class="hamburger show-mobile" @click="sidebarOpen = !sidebarOpen" :class="{ open: sidebarOpen }">
           <span></span><span></span><span></span>
         </button>
       </div>
@@ -880,262 +772,153 @@ provide("searchOpenTrigger", searchOpenTrigger);
     </div>
 
     <div class="body">
-      <div
-        v-if="sidebarOpen"
-        class="sidebar-overlay"
-        @click="sidebarOpen = false"
-      ></div>
+      <div v-if="sidebarOpen" class="sidebar-overlay" @click="sidebarOpen = false"></div>
 
       <aside class="sidebar" :class="{ 'sidebar-open': sidebarOpen }">
         <div class="sidebar-mobile-header show-mobile">
           <template v-if="session">
             <span class="sidebar-user">#{{ session.channel }}</span>
-            <button
-              class="sidebar-logout"
-              @click="
-                logout();
-                router.push('/');
-                sidebarOpen = false;
-              "
-            >
+            <button class="sidebar-logout" @click="
+              logout();
+            router.push('/');
+            sidebarOpen = false;
+            ">
               {{ t("nav.logout") }}
             </button>
           </template>
         </div>
 
         <!-- Search bar inside sidebar - mobile only -->
-        <div
-          class="sidebar-search show-mobile"
-          :class="{
-            open: searchOpen && searchResults.length > 0,
-            'has-chip': showLogsChip,
-          }"
-        >
-          <svg
-            v-if="!showLogsChip"
-            class="search-icon"
-            viewBox="0 0 16 16"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <circle
-              cx="7"
-              cy="7"
-              r="4.5"
-              stroke="currentColor"
-              stroke-width="1.5"
-            />
-            <path
-              d="M10.5 10.5L14 14"
-              stroke="currentColor"
-              stroke-width="1.5"
-              stroke-linecap="round"
-            />
+        <div class="sidebar-search show-mobile" :class="{
+          open: searchOpen && searchResults.length > 0,
+          'has-chip': showLogsChip,
+        }">
+          <svg v-if="!showLogsChip" class="search-icon" viewBox="0 0 16 16" fill="none"
+            xmlns="http://www.w3.org/2000/svg">
+            <circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5" />
+            <path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
           </svg>
           <span v-if="showLogsChip" class="search-scope-chip">
             in logs
-            <button
-              class="chip-x"
-              @mousedown.prevent="dismissLogsChip"
-              title="Search everywhere instead"
-            >
+            <button class="chip-x" @mousedown.prevent="dismissLogsChip" title="Search everywhere instead">
               ✕
             </button>
           </span>
-          <input
-            ref="searchInputMobile"
-            v-model="searchQuery"
-            class="search-input"
-            :placeholder="showLogsChip ? 'Find in loaded messages…' : 'Search…'"
-            @input="onSearchInput"
-            @keydown="onSearchKeydown"
-            @focus="onSearchFocus"
-            @blur="onSearchBlur"
-            autocomplete="off"
-            spellcheck="false"
-          />
+          <input ref="searchInputMobile" v-model="searchQuery" class="search-input"
+            :placeholder="showLogsChip ? 'Find in loaded messages…' : 'Search…'" @input="onSearchInput"
+            @keydown="onSearchKeydown" @focus="onSearchFocus" @blur="onSearchBlur" autocomplete="off"
+            spellcheck="false" />
           <span v-if="showLogsChip && logsQuery" class="search-match-nav">
             <span class="search-match-count">{{
               logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0"
-            }}</span>
-            <button
-              v-if="logsMatchCount"
-              class="search-match-step"
-              title="Previous match"
-              @mousedown.prevent="logsRequestJump(-1)"
-            >
+              }}</span>
+            <button v-if="logsMatchCount" class="search-match-step" title="Previous match"
+              @mousedown.prevent="logsRequestJump(-1)">
               ▲
             </button>
-            <button
-              v-if="logsMatchCount"
-              class="search-match-step"
-              title="Next match"
-              @mousedown.prevent="logsRequestJump(1)"
-            >
+            <button v-if="logsMatchCount" class="search-match-step" title="Next match"
+              @mousedown.prevent="logsRequestJump(1)">
               ▼
             </button>
           </span>
-          <button
-            v-if="searchQuery"
-            class="search-clear"
-            @mousedown.prevent="
-              searchQuery = '';
-              logsQuery = '';
-              searchResults = [];
-              searchOpen = false;
-            "
-          >
+          <button v-if="searchQuery" class="search-clear" @mousedown.prevent="
+            searchQuery = '';
+          logsQuery = '';
+          searchResults = [];
+          searchOpen = false;
+          ">
             ✕
           </button>
           <!-- Results dropdown -->
-          <div
-            v-if="showLogsChip && searchOpen && logsSearchResults.length > 0"
-            class="search-results"
-          >
+          <div v-if="showLogsChip && searchOpen && logsSearchResults.length > 0" class="search-results">
             <div class="result-group-label">Messages</div>
-            <button
-              v-for="(r, idx) in logsSearchResults"
-              :key="r.id"
-              class="result-item"
-              :class="{ active: logsActiveIndex === idx }"
-              @mousedown.prevent="
+            <button v-for="(r, idx) in logsSearchResults" :key="r.id" class="result-item"
+              :class="{ active: logsActiveIndex === idx }" @mousedown.prevent="
                 selectLogsResult(r);
-                sidebarOpen = false;
-              "
-            >
+              sidebarOpen = false;
+              ">
               <span class="result-label">{{ r.label }}</span>
               <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
             </button>
           </div>
-          <div
-            v-else-if="
-              showLogsChip &&
-              searchOpen &&
-              searchQuery.trim() &&
-              !logsSearchResults.length
-            "
-            class="search-results search-empty"
-          >
+          <div v-else-if="
+            showLogsChip &&
+            searchOpen &&
+            searchQuery.trim() &&
+            !logsSearchResults.length
+          " class="search-results search-empty">
             No matching messages in the loaded logs
           </div>
-          <div
-            v-else-if="!showLogsChip && searchOpen && flatResults.length > 0"
-            class="search-results"
-          >
-            <template
-              v-for="(items, category) in groupedResults"
-              :key="category"
-            >
+          <div v-else-if="!showLogsChip && searchOpen && flatResults.length > 0" class="search-results">
+            <template v-for="(items, category) in groupedResults" :key="category">
               <div class="result-group-label">{{ category }}</div>
-              <button
-                v-for="(r, idx) in items"
-                :key="r.label + idx"
-                class="result-item"
-                :class="{ active: flatResults.indexOf(r) === searchIndex }"
-                @mousedown.prevent="
+              <button v-for="(r, idx) in items" :key="r.label + idx" class="result-item"
+                :class="{ active: flatResults.indexOf(r) === searchIndex }" @mousedown.prevent="
                   selectResult(r);
-                  sidebarOpen = false;
-                "
-              >
+                sidebarOpen = false;
+                ">
                 <span class="result-icon">{{ r.icon }}</span>
                 <span class="result-label">{{ r.label }}</span>
                 <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
               </button>
             </template>
           </div>
-          <div
-            v-else-if="
-              !showLogsChip &&
-              searchOpen &&
-              searchQuery.trim() &&
-              !flatResults.length
-            "
-            class="search-results search-empty"
-          >
+          <div v-else-if="
+            !showLogsChip &&
+            searchOpen &&
+            searchQuery.trim() &&
+            !flatResults.length
+          " class="search-results search-empty">
             No results for "{{ searchQuery }}"
           </div>
         </div>
 
-        <button
-          class="sidebar-btn"
-          :class="{ active: activeRoute === 'dashboard', locked: !session }"
-          @click="nav('dashboard')"
-        >
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'dashboard', locked: !session }"
+          @click="nav('dashboard')">
           {{ t("nav.dashboard") }}
           <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <button
-          class="sidebar-btn"
-          :class="{ active: activeRoute === 'commands', locked: !session }"
-          @click="nav('commands')"
-        >
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'commands', locked: !session }"
+          @click="nav('commands')">
           {{ t("nav.commands") }}
           <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <button
-          class="sidebar-btn"
-          :class="{ active: activeRoute === 'moderation', locked: !session }"
-          @click="nav('moderation')"
-        >
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'moderation', locked: !session }"
+          @click="nav('moderation')">
           {{ t("nav.moderation") }}
           <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <button
-          class="sidebar-btn"
-          :class="{ active: activeRoute === 'automations', locked: !session }"
-          @click="nav('automations')"
-        >
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'automations', locked: !session }"
+          @click="nav('automations')">
           {{ t("nav.automations") }}
           <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <button
-          v-if="!session || channelRole?.role === 'broadcaster'"
-          class="sidebar-btn"
-          :class="{ active: activeRoute === 'roles', locked: !session }"
-          @click="nav('roles')"
-        >
+        <button v-if="!session || channelRole?.role === 'broadcaster'" class="sidebar-btn"
+          :class="{ active: activeRoute === 'roles', locked: !session }" @click="nav('roles')">
           {{ t("nav.roles") }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <button
-          class="sidebar-btn"
-          :class="{ active: activeRoute === 'tools', locked: !session }"
-          @click="nav('tools')"
-        >
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'tools', locked: !session }"
+          @click="nav('tools')">
           Tools <span v-if="!session" class="lock-icon">🔒</span>
         </button>
 
         <div class="sidebar-divider"></div>
 
-        <button
-          class="sidebar-btn"
-          :class="{ active: activeRoute === 'logs' }"
-          @click="nav('logs')"
-        >
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
           {{ t("nav.logs") }}
         </button>
-        <button
-          class="sidebar-btn"
-          :class="{ active: activeRoute === 'uploads' }"
-          @click="nav('uploads')"
-        >
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'uploads' }" @click="nav('uploads')">
           Uploads
         </button>
 
         <div class="sidebar-spacer"></div>
 
-        <button
-          v-if="!session || channelRole?.role === 'broadcaster'"
-          class="sidebar-btn"
-          :class="{ active: activeRoute === 'settings', locked: !session }"
-          @click="nav('settings')"
-        >
+        <button v-if="!session || channelRole?.role === 'broadcaster'" class="sidebar-btn"
+          :class="{ active: activeRoute === 'settings', locked: !session }" @click="nav('settings')">
           {{ t("nav.settings") }}
           <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <div
-          v-if="session && !availableChannels.includes(session.login)"
-          class="sidebar-bottom"
-        >
+        <div v-if="session && !availableChannels.includes(session.login)" class="sidebar-bottom">
           <button class="bot-btn add" @click="addBot">
             {{ t("nav.add_channel") }}
           </button>
@@ -1155,7 +938,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span class="footer-sep">|</span>
           <router-link to="/privacy" class="footer-link">{{
             t("footer.privacy")
-          }}</router-link>
+            }}</router-link>
         </footer>
       </main>
     </div>
@@ -1165,6 +948,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
 
 <style>
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap");
+
 *,
 *::before,
 *::after {
@@ -1172,17 +956,20 @@ provide("searchOpenTrigger", searchOpenTrigger);
   margin: 0;
   padding: 0;
 }
+
 html,
 body {
   height: 100%;
   overflow: hidden;
 }
+
 body {
   background: #0e0e12;
   color: #fff;
   font-family: "JetBrains Mono", monospace;
   font-size: 13px;
 }
+
 .page {
   height: 100vh;
   display: flex;
@@ -1208,6 +995,7 @@ body.snippet-dragging * {
   gap: 10px;
   position: relative;
 }
+
 .topbar-brand {
   display: flex;
   align-items: center;
@@ -1215,12 +1003,14 @@ body.snippet-dragging * {
   flex-shrink: 0;
   min-width: 0;
 }
+
 .brand-emote {
   width: 36px;
   height: 36px;
   flex-shrink: 0;
   image-rendering: pixelated;
 }
+
 .brand-name {
   font-size: 1rem;
   font-weight: 700;
@@ -1228,6 +1018,7 @@ body.snippet-dragging * {
   letter-spacing: 0.04em;
   white-space: nowrap;
 }
+
 .topbar-right {
   display: flex;
   align-items: center;
@@ -1235,12 +1026,14 @@ body.snippet-dragging * {
   flex-shrink: 0;
   margin-left: auto;
 }
+
 .logged-in-as {
   font-size: 12px;
   color: #9d6cff;
   font-weight: 600;
   white-space: nowrap;
 }
+
 .logged-in-float {
   position: fixed;
   bottom: 36px;
@@ -1273,9 +1066,11 @@ body.snippet-dragging * {
   transition: border-color 0.15s;
   z-index: 10;
 }
+
 .search-wrap:focus-within {
   border-color: #6f2bff66;
 }
+
 .search-icon {
   position: absolute;
   left: 9px;
@@ -1285,6 +1080,7 @@ body.snippet-dragging * {
   pointer-events: none;
   flex-shrink: 0;
 }
+
 .search-input {
   flex: 1;
   height: 100%;
@@ -1297,9 +1093,11 @@ body.snippet-dragging * {
   padding: 0 8px 0 30px;
   min-width: 0;
 }
+
 .search-input::placeholder {
   color: #444;
 }
+
 .search-kbd {
   font-size: 9px;
   color: #333;
@@ -1310,6 +1108,7 @@ body.snippet-dragging * {
   pointer-events: none;
   background: #111217;
 }
+
 .search-clear {
   background: transparent;
   border: none;
@@ -1320,6 +1119,7 @@ body.snippet-dragging * {
   height: 100%;
   flex-shrink: 0;
 }
+
 .search-clear:hover {
   color: #e0e0e0;
 }
@@ -1328,6 +1128,7 @@ body.snippet-dragging * {
 .search-wrap.has-chip .search-input {
   padding-left: 8px;
 }
+
 .search-scope-chip {
   display: flex;
   align-items: center;
@@ -1345,6 +1146,7 @@ body.snippet-dragging * {
   flex-shrink: 0;
   white-space: nowrap;
 }
+
 .chip-x {
   background: transparent;
   border: none;
@@ -1354,9 +1156,11 @@ body.snippet-dragging * {
   padding: 0 2px;
   line-height: 1;
 }
+
 .chip-x:hover {
   color: #fff;
 }
+
 .search-match-nav {
   display: flex;
   align-items: center;
@@ -1364,11 +1168,13 @@ body.snippet-dragging * {
   margin-right: 4px;
   flex-shrink: 0;
 }
+
 .search-match-count {
   font-size: 10px;
   color: #666;
   white-space: nowrap;
 }
+
 .search-match-step {
   display: flex;
   align-items: center;
@@ -1383,6 +1189,7 @@ body.snippet-dragging * {
   cursor: pointer;
   line-height: 1;
 }
+
 .search-match-step:hover {
   color: #c9aaff;
 }
@@ -1400,9 +1207,11 @@ body.snippet-dragging * {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
   scrollbar-width: none;
 }
+
 .search-results::-webkit-scrollbar {
   display: none;
 }
+
 .search-empty {
   padding: 14px 16px;
   color: #555;
@@ -1418,6 +1227,7 @@ body.snippet-dragging * {
   color: #555;
   border-top: 1px solid #1e1e24;
 }
+
 .result-group-label:first-child {
   border-top: none;
 }
@@ -1437,11 +1247,13 @@ body.snippet-dragging * {
   cursor: pointer;
   transition: background 0.1s;
 }
+
 .result-item:hover,
 .result-item.active {
   background: #6f2bff18;
   color: #e0e0e0;
 }
+
 .result-icon {
   width: 16px;
   flex-shrink: 0;
@@ -1449,10 +1261,12 @@ body.snippet-dragging * {
   font-size: 11px;
   color: #9d6cff;
 }
+
 .result-label {
   font-weight: 600;
   flex-shrink: 0;
 }
+
 .result-sub {
   font-size: 10px;
   color: #555;
@@ -1466,6 +1280,7 @@ body.snippet-dragging * {
 .channel-switcher {
   position: relative;
 }
+
 .channel-btn {
   height: 30px;
   padding: 0 12px;
@@ -1477,10 +1292,12 @@ body.snippet-dragging * {
   font-weight: 600;
   cursor: pointer;
 }
+
 .channel-btn:hover {
   background: #252530;
   border-color: #6f2bff55;
 }
+
 .channel-menu {
   position: absolute;
   top: calc(100% + 6px);
@@ -1493,6 +1310,7 @@ body.snippet-dragging * {
   flex-direction: column;
   box-shadow: 0 8px 24px #00000066;
 }
+
 .channel-menu-item {
   padding: 9px 16px;
   border: none;
@@ -1503,10 +1321,12 @@ body.snippet-dragging * {
   text-align: left;
   cursor: pointer;
 }
+
 .channel-menu-item:hover {
   background: #222;
   color: #fff;
 }
+
 .channel-menu-item.active {
   color: #9d6cff;
   font-weight: 700;
@@ -1523,12 +1343,14 @@ body.snippet-dragging * {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .toast-float {
   position: fixed;
   bottom: 68px;
   right: 10px;
   z-index: 61;
 }
+
 .auth-btn {
   height: 34px;
   padding: 0 14px;
@@ -1539,22 +1361,27 @@ body.snippet-dragging * {
   cursor: pointer;
   white-space: nowrap;
 }
+
 .login-btn {
   background: #6f2bff;
   color: #fff;
 }
+
 .login-btn:hover {
   background: #7f3fff;
 }
+
 .logout-btn {
   background: #2c2c2e;
   color: #aaa;
   border: 1px solid #333;
 }
+
 .logout-btn:hover {
   background: #3a3a3e;
   color: #fff;
 }
+
 .lang-switcher {
   display: flex;
   align-items: center;
@@ -1564,10 +1391,12 @@ body.snippet-dragging * {
   padding: 0 2px;
   height: 28px;
 }
+
 .lang-sep {
   color: #333;
   font-size: 10px;
 }
+
 .lang-opt {
   height: 22px;
   padding: 0 7px;
@@ -1580,39 +1409,50 @@ body.snippet-dragging * {
   cursor: pointer;
   letter-spacing: 0.04em;
 }
+
 .lang-opt:hover {
   color: #aaa;
 }
+
 .lang-opt.active {
   color: #9d6cff;
   background: #6f2bff18;
 }
+
 @keyframes shake {
   0% {
     transform: translateX(0);
   }
+
   15% {
     transform: translateX(-5px);
   }
+
   30% {
     transform: translateX(5px);
   }
+
   45% {
     transform: translateX(-4px);
   }
+
   60% {
     transform: translateX(4px);
   }
+
   75% {
     transform: translateX(-2px);
   }
+
   90% {
     transform: translateX(2px);
   }
+
   100% {
     transform: translateX(0);
   }
 }
+
 .shake {
   animation: shake 0.6s ease;
 }
@@ -1631,6 +1471,7 @@ body.snippet-dragging * {
   cursor: pointer;
   flex-shrink: 0;
 }
+
 .hamburger span {
   display: block;
   height: 2px;
@@ -1640,13 +1481,16 @@ body.snippet-dragging * {
     opacity 0.2s,
     background 0.2s;
 }
+
 .hamburger.open span:nth-child(1) {
   transform: translateY(7px) rotate(45deg);
   background: #9d6cff;
 }
+
 .hamburger.open span:nth-child(2) {
   opacity: 0;
 }
+
 .hamburger.open span:nth-child(3) {
   transform: translateY(-7px) rotate(-45deg);
   background: #9d6cff;
@@ -1665,12 +1509,14 @@ body.snippet-dragging * {
   color: #ccc;
   flex-shrink: 0;
 }
+
 .banner-actions {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }
+
 .banner-btn.add {
   height: 30px;
   padding: 0 12px;
@@ -1681,9 +1527,11 @@ body.snippet-dragging * {
   font-size: 11px;
   cursor: pointer;
 }
+
 .banner-btn.add:hover {
   background: #7f3fff;
 }
+
 .banner-dismiss {
   background: transparent;
   border: none;
@@ -1692,6 +1540,7 @@ body.snippet-dragging * {
   cursor: pointer;
   padding: 0 4px;
 }
+
 .banner-dismiss:hover {
   color: #aaa;
 }
@@ -1704,6 +1553,7 @@ body.snippet-dragging * {
   overflow: hidden;
   position: relative;
 }
+
 .sidebar-overlay {
   position: fixed;
   inset: 0;
@@ -1724,12 +1574,15 @@ body.snippet-dragging * {
   scrollbar-width: none;
   transition: transform 0.25s ease;
 }
+
 .sidebar::-webkit-scrollbar {
   display: none;
 }
+
 .sidebar-spacer {
   flex: 1;
 }
+
 .sidebar-btn {
   display: flex;
   align-items: center;
@@ -1748,36 +1601,44 @@ body.snippet-dragging * {
     background 0.1s;
   letter-spacing: 0.01em;
 }
+
 .sidebar-btn:hover {
   color: #fff;
   background: #16161a;
 }
+
 .sidebar-btn.active {
   color: #9d6cff;
   font-weight: 700;
   background: rgba(111, 43, 255, 0.08);
   border-left: 2px solid #6f2bff;
 }
+
 .sidebar-btn.locked {
   opacity: 0.45;
 }
+
 .sidebar-btn.locked:hover {
   opacity: 0.75;
 }
+
 .lock-icon {
   font-size: 10px;
   opacity: 0.6;
 }
+
 .sidebar-divider {
   height: 1px;
   background: #1e1e24;
   margin: 6px 14px;
   flex-shrink: 0;
 }
+
 .sidebar-bottom {
   padding: 12px 16px;
   border-top: 1px solid #1e1e24;
 }
+
 .bot-btn {
   width: 100%;
   height: 32px;
@@ -1786,17 +1647,20 @@ body.snippet-dragging * {
   font-size: 12px;
   cursor: pointer;
 }
+
 .bot-btn.add {
   background: #6f2bff;
   color: #fff;
 }
+
 .bot-btn.add:hover {
   background: #7f3fff;
 }
 
 /* Mobile search in sidebar */
 .sidebar-search {
-  display: none; /* shown via show-mobile */
+  display: none;
+  /* shown via show-mobile */
   position: relative;
   margin: 8px 12px 4px;
   height: 36px;
@@ -1804,9 +1668,11 @@ body.snippet-dragging * {
   border: 1px solid #2a2a30;
   align-items: center;
 }
+
 .sidebar-search:focus-within {
   border-color: #6f2bff66;
 }
+
 .sidebar-search .search-icon {
   position: absolute;
   left: 9px;
@@ -1815,6 +1681,7 @@ body.snippet-dragging * {
   color: #555;
   pointer-events: none;
 }
+
 .sidebar-search .search-input {
   flex: 1;
   height: 100%;
@@ -1826,15 +1693,19 @@ body.snippet-dragging * {
   font-size: 12px;
   padding: 0 8px 0 28px;
 }
+
 .sidebar-search.has-chip .search-input {
   padding-left: 8px;
 }
+
 .sidebar-search .search-scope-chip {
   margin-left: 6px;
 }
+
 .sidebar-search .search-input::placeholder {
   color: #444;
 }
+
 .sidebar-search .search-clear {
   background: transparent;
   border: none;
@@ -1844,9 +1715,11 @@ body.snippet-dragging * {
   padding: 0 8px;
   height: 100%;
 }
+
 .sidebar-search .search-clear:hover {
   color: #e0e0e0;
 }
+
 .sidebar-search .search-results {
   position: absolute;
   top: calc(100% + 2px);
@@ -1860,6 +1733,7 @@ body.snippet-dragging * {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   scrollbar-width: none;
 }
+
 .sidebar-search .search-results::-webkit-scrollbar {
   display: none;
 }
@@ -1873,11 +1747,13 @@ body.snippet-dragging * {
   border-bottom: 1px solid #1e1e24;
   margin-bottom: 4px;
 }
+
 .sidebar-user {
   font-size: 12px;
   color: #9d6cff;
   font-weight: 600;
 }
+
 .sidebar-logout {
   background: transparent;
   border: 1px solid #333;
@@ -1887,6 +1763,7 @@ body.snippet-dragging * {
   padding: 4px 10px;
   cursor: pointer;
 }
+
 .sidebar-logout:hover {
   color: #fff;
   border-color: #555;
@@ -1904,6 +1781,7 @@ body.snippet-dragging * {
   min-width: 0;
   scrollbar-width: none;
 }
+
 .main-panel::-webkit-scrollbar {
   display: none;
 }
@@ -1918,21 +1796,24 @@ body.snippet-dragging * {
   gap: 8px;
   flex-shrink: 0;
 }
+
 .footer-sep {
   color: #2a2a30;
 }
+
 .footer-link {
   color: #555;
   text-decoration: none;
   transition: color 0.15s;
 }
+
 .footer-link:hover {
   color: #9d6cff;
 }
 
 /* responsive */
-.hide-mobile {
-}
+.hide-mobile {}
+
 .show-mobile {
   display: none;
 }
@@ -1942,6 +1823,7 @@ body.snippet-dragging * {
     overflow: hidden !important;
     height: 100dvh !important;
   }
+
   body.logs-open .page {
     overflow: hidden !important;
     height: 100dvh !important;
@@ -1949,6 +1831,7 @@ body.snippet-dragging * {
     display: flex;
     flex-direction: column;
   }
+
   body.logs-open .main-panel {
     overflow: hidden !important;
     height: calc(100dvh - 52px) !important;
@@ -1959,39 +1842,49 @@ body.snippet-dragging * {
 }
 
 @media (max-width: 680px) {
+
   html,
   body {
     overflow: auto;
   }
+
   .page {
     height: auto;
     min-height: 100vh;
     overflow: visible;
   }
+
   .topbar {
     padding: 0 10px;
     gap: 6px;
   }
+
   .brand-name {
     font-size: 13px;
   }
+
   .hide-mobile {
     display: none !important;
   }
+
   .show-mobile {
     display: flex !important;
   }
+
   .add-banner {
     padding: 8px 14px;
     font-size: 11px;
   }
+
   .body {
     overflow: visible;
     flex-direction: column;
   }
+
   .search-kbd {
     display: none;
   }
+
   .sidebar {
     position: fixed;
     top: 52px;
@@ -2003,15 +1896,18 @@ body.snippet-dragging * {
     border-left: 1px solid #2a2a30;
     box-shadow: -4px 0 24px #00000066;
   }
+
   .sidebar.sidebar-open {
     transform: translateX(0);
   }
+
   .main-panel {
     padding: 14px;
     flex: none;
     min-height: calc(100dvh - 52px);
     padding-bottom: 38px;
   }
+
   .site-footer {
     position: fixed;
     bottom: 0;
@@ -2031,16 +1927,20 @@ body.snippet-dragging * {
     padding: 0 12px;
     gap: 8px;
   }
+
   .sidebar {
     width: 170px;
   }
+
   .sidebar-btn {
     padding: 10px 14px;
     font-size: 12px;
   }
+
   .main-panel {
     padding: 16px;
   }
+
   .search-wrap {
     max-width: 300px;
   }
