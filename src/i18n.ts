@@ -83,6 +83,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "type.countdown_stopped": "Countdown stopped",
 
     // >>> Commands <<<
+    "cmd.title": "Commands",
     "cmd.title_default": "Default",
     "cmd.title_custom": "Custom",
     "cmd.title_extras": "Extras",
@@ -194,6 +195,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "auto.timers": "Timers",
     "auto.triggers": "Triggers",
     "auto.countdowns": "Countdowns",
+    "auto.title": "Automations",
 
     // >>> Timers
     "timer.title": "Timers",
@@ -332,8 +334,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "mod.tab.spam": "Spam Filters",
     "mod.tab.nukes": "Nukes",
     "mod.loading": "Loading…",
-    "mod.add": "+ Add",
-    "mod.create": "+ Create",
+    "mod.add": "Add",
+    "mod.create": "Create",
     "mod.empty.blocked": "No blocked terms yet.",
     "mod.empty.spam": "No spam filters yet.",
     "mod.empty.nukes": "No nukes configured.",
@@ -791,6 +793,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "type.countdown_stopped": "Countdown gestoppt",
 
     // >>> Commands <<<
+    "cmd.title": "Befehle",
     "cmd.title_default": "Default",
     "cmd.title_custom": "Eigene",
     "cmd.title_extras": "Extras",
@@ -904,6 +907,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "auto.timers": "Timer",
     "auto.triggers": "Trigger",
     "auto.countdowns": "Countdowns",
+    "auto.title": "Automationen",
 
     // >>> Timers <<<
     "timer.title": "Timer",

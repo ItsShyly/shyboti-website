@@ -900,6 +900,14 @@ onUnmounted(() => {
 
 <template>
   <div class="cmd-root">
+
+    <div class="ep-view-header">
+      <div>
+        <div class="ep-view-title">{{ t("cmd.title") }}</div>
+        <div class="ep-view-sub"><span class="chan">#{{ session?.channel }}</span></div>
+      </div>
+    </div>
+
     <div class="cmd-tabs">
       <button class="cmd-tab" :class="{ active: activeTab === 'Default' }" @click="activeTab = 'Default'">
         {{ t("cmd.title_default") }}
@@ -1046,7 +1054,7 @@ onUnmounted(() => {
           </button>
         </div>
         <div>
-          <button class="create-btn" :disabled="!canEdit" :class="{ 'create-btn-disabled': !canEdit }"
+          <button class="ep-btn-new" :disabled="!canEdit"
             @click="canEdit && startCreate()">
             {{ t("cmd.new") }}
           </button>
@@ -1120,7 +1128,7 @@ onUnmounted(() => {
         <div class="empty-icon">✦</div>
         <div class="empty-title">{{ t("cmd.empty.title") }}</div>
         <div class="empty-sub">{{ t("cmd.empty.sub") }}</div>
-        <button class="create-btn mt" @click="startCreate">
+        <button class="ep-btn-new" @click="startCreate">
           {{ t("cmd.new") }}
         </button>
       </div>
@@ -1244,7 +1252,7 @@ onUnmounted(() => {
         <div class="custom-header">
           <span class="custom-count">{{ obsCommandCount }} OBS
             {{ obsCommandCount === 1 ? "command" : "commands" }}</span>
-          <button class="create-btn" @click="openObsEdit(null)">+ New</button>
+          <button class="ep-btn-new" @click="openObsEdit(null)">+ New</button>
         </div>
 
         <div v-if="obsCommandCount === 0" class="custom-empty">
@@ -1466,10 +1474,11 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
 }
+.chan { color: #9d6cff; }
 
 .cmd-tabs {
   display: flex;
-  gap: 0;
+  border-bottom: 1px solid #222;
   margin-bottom: 0;
 }
 
@@ -1487,14 +1496,8 @@ onUnmounted(() => {
   transition: color 0.15s;
 }
 
-.cmd-tab:hover {
-  color: #aaa;
-}
-
-.cmd-tab.active {
-  color: #9d6cff;
-  border-bottom-color: #6f2bff;
-}
+.cmd-tab:hover { color: #aaa; }
+.cmd-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
 
 .reload-tab {
   margin-left: auto;
@@ -1548,33 +1551,32 @@ onUnmounted(() => {
 }
 
 .table-header {
-  padding: 10px 16px 10px;
-  color: #666;
+  padding: 8px 16px;
+  color: #555;
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid #222;
+  margin-top: 12px;
 }
 
 .rows {
   display: flex;
   flex-direction: column;
   gap: 0;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .table-row {
-  min-height: 60px;
+  min-height: 48px;
   padding: 0 16px 0 8px;
-  background: #2c2c2e;
-  border-top: 1px solid #222;
-  transition:
-    background 0.1s,
-    opacity 0.2s;
+  background: #141418;
+  border-bottom: 1px solid #1e1e1e;
+  transition: background 0.1s, opacity 0.2s;
 }
 
 .table-row:hover {
-  background: #313135;
+  background: #1c1c20;
 }
 
 .table-row.saving {
@@ -1868,33 +1870,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.create-btn {
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid #6f2bff66;
-  background: transparent;
-  color: #9d6cff;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.create-btn:hover {
-  background: #6f2bff22;
-}
-
-.create-btn-disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-.create-btn.mt {
-  margin-top: 16px;
 }
 
 .custom-empty {

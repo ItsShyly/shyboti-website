@@ -8,12 +8,11 @@ import TriggersView from "./TriggersView.vue";
 import CountdownView from "./CountdownView.vue";
 import ObsAutomationsView from "./ObsAutomationsView.vue";
 
-// >>> Tab type extended with countdown + obs <<<
 type Tab = "timers" | "triggers" | "countdowns" | "obs";
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
-const { channelRole } = useAuth();
+const { session, channelRole } = useAuth();
 
 const canViewObs = computed(
   () => channelRole.value?.permissions?.obs_view ?? false,
@@ -32,60 +31,43 @@ watch(activeTab, (tab) => {
 });
 watch(
   () => route.query.tab,
-  (tab) => {
-    activeTab.value = parseTab(tab);
-  },
+  (tab) => { activeTab.value = parseTab(tab); },
 );
 </script>
 
 <template>
   <div class="automations">
+
+    <div class="ep-view-header">
+      <div>
+        <div class="ep-view-title">{{ t("auto.title") }}</div>
+        <div class="ep-view-sub"><span class="chan">#{{ session?.channel }}</span></div>
+      </div>
+    </div>
+
     <div class="auto-tabs">
-      <button
-        class="auto-tab"
-        :class="{ active: activeTab === 'timers' }"
-        @click="activeTab = 'timers'"
-      >
+      <button class="auto-tab" :class="{ active: activeTab === 'timers' }" @click="activeTab = 'timers'">
         {{ t("auto.timers") }}
       </button>
-      <button
-        class="auto-tab"
-        :class="{ active: activeTab === 'triggers' }"
-        @click="activeTab = 'triggers'"
-      >
+      <button class="auto-tab" :class="{ active: activeTab === 'triggers' }" @click="activeTab = 'triggers'">
         {{ t("auto.triggers") }}
       </button>
-      <button
-        class="auto-tab"
-        :class="{ active: activeTab === 'countdowns' }"
-        @click="activeTab = 'countdowns'"
-      >
+      <button class="auto-tab" :class="{ active: activeTab === 'countdowns' }" @click="activeTab = 'countdowns'">
         {{ t("auto.countdowns") }}
       </button>
-      <button
-        v-if="canViewObs"
-        class="auto-tab"
-        :class="{ active: activeTab === 'obs' }"
-        @click="activeTab = 'obs'"
-      >
+      <button v-if="canViewObs" class="auto-tab" :class="{ active: activeTab === 'obs' }" @click="activeTab = 'obs'">
         OBS
       </button>
-      <button class="auto-tab reload-tab" @click="reloadKey++" title="Reload">
-        ↺
-      </button>
+      <button class="auto-tab reload-tab" @click="reloadKey++" title="Reload">↺</button>
     </div>
+
     <div class="auto-body">
       <TimersView v-if="activeTab === 'timers'" :key="'timers-' + reloadKey" />
-      <TriggersView
-        v-else-if="activeTab === 'triggers'"
-        :key="'triggers-' + reloadKey"
-      />
-      <ObsAutomationsView
-        v-else-if="activeTab === 'obs'"
-        :key="'obs-' + reloadKey"
-      />
+      <TriggersView v-else-if="activeTab === 'triggers'" :key="'triggers-' + reloadKey" />
+      <ObsAutomationsView v-else-if="activeTab === 'obs'" :key="'obs-' + reloadKey" />
       <CountdownView v-else :key="'countdowns-' + reloadKey" />
     </div>
+
   </div>
 </template>
 
@@ -94,7 +76,9 @@ watch(
   display: flex;
   flex-direction: column;
   height: 100%;
+  gap: 0;
 }
+.chan { color: #9d6cff; }
 .auto-tabs {
   display: flex;
   border-bottom: 1px solid #222;
@@ -102,30 +86,22 @@ watch(
   margin-bottom: 16px;
 }
 .auto-tab {
-  padding: 8px 24px;
+  padding: 8px 20px;
   border: none;
   background: transparent;
   color: #555;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
   transition: color 0.15s;
 }
-.auto-tab:hover {
-  color: #aaa;
-}
-.auto-tab.active {
-  color: #9d6cff;
-  border-bottom-color: #6f2bff;
-}
-.reload-tab {
-  margin-left: auto;
-  font-size: 14px;
-  padding: 4px 14px;
-}
+.auto-tab:hover { color: #aaa; }
+.auto-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
+.reload-tab { margin-left: auto; font-size: 14px; padding: 4px 14px; }
+.reload-tab:disabled { opacity: 0.4; cursor: not-allowed; }
 .auto-body {
   flex: 1;
   display: flex;
