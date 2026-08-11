@@ -1038,7 +1038,7 @@ watch(
                   <span class="obs-live-stat-label">bitrate</span>
                   <span class="obs-live-stat-value">{{
                     bitrateLabel ?? "not streaming"
-                  }}</span>
+                    }}</span>
                 </div>
                 <div class="obs-live-stat">
                   <span class="obs-live-stat-label">preview size</span>
@@ -1102,7 +1102,7 @@ watch(
             <label class="ep-field-label">sources
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obs-source-list">
               <div v-for="src in sources as any[]" :key="src.sceneItemId" class="obs-source-row">
                 <span class="obs-source-name">{{ src.sourceName }}</span>
@@ -1132,7 +1132,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row">
                 <div class="obs-mixer-top">
@@ -1205,7 +1205,7 @@ watch(
             <div class="obs-label-row">
               <div class="obs-label-col">
                 <span class="obs-col-label">action</span>
-                <select v-model="builderAction" class="obs-action-select">
+                <select v-model="builderAction" class="ep-field-select obs-action-select">
                   <option v-for="a in BUILDER_ACTIONS" :key="a.value" :value="a.value">
                     {{ a.label }}
                   </option>
@@ -1245,7 +1245,7 @@ watch(
 
                 <!-- volume: vol only -> fixed source, number from chat -->
                 <template v-else-if="builderAction === 'volume'">
-                  <input v-model="builderTarget" list="obs-src-names" class="obs-target-input"
+                  <input v-model="builderTarget" list="obs-src-names" class="ep-field-input obs-target-input"
                     placeholder="source name" />
                 </template>
 
@@ -1254,17 +1254,17 @@ watch(
                   builderAction === "scene" ? "scene" : "source"
                   }}&gt;</span>
 
-                <!-- non-volume: preset scene - combo: type or pick -->
+                <!-- non-volume: preset scene -->
                 <template v-else-if="builderAction === 'scene'">
-                  <input v-model="builderTarget" list="obs-scene-names" class="obs-target-input"
+                  <input v-model="builderTarget" list="obs-scene-names" class="ep-field-input obs-target-input"
                     placeholder="scene name" />
                   <datalist id="obs-scene-names">
                     <option v-for="s in scenes" :key="s.sceneName" :value="s.sceneName" />
                   </datalist>
                 </template>
 
-                <!-- non-volume: preset source - combo: type or pick -->
-                <input v-else v-model="builderTarget" list="obs-src-names" class="obs-target-input"
+                <!-- non-volume: preset source -->
+                <input v-else v-model="builderTarget" list="obs-src-names" class="ep-field-input obs-target-input"
                   placeholder="source name" />
               </div>
 
@@ -1312,7 +1312,7 @@ watch(
                       +{{ c.command }}
                       <span v-if="c.actionHint" class="cmd-usecase-arg">{{
                         c.actionHint
-                      }}</span>
+                        }}</span>
                     </td>
                     <td>
                       {{ c.actionLabel }}
@@ -1320,7 +1320,7 @@ watch(
                     <td>
                       <span class="obs-type-badge" :class="c.badgeClass">{{
                         c.badgeText
-                      }}</span>
+                        }}</span>
                     </td>
                     <td class="obs-td-target" :class="{
                       'obs-td-target-arg': c.badgeClass === 'arg-type',
@@ -1382,13 +1382,13 @@ watch(
 
               <div class="obs-label-col">
                 <span class="obs-col-label">bitrate (kbps)</span>
-                <input v-model.number="ruleBitrate" type="number" min="1" class="obs-target-input"
+                <input v-model.number="ruleBitrate" type="number" min="1" class="ep-field-input obs-target-input"
                   style="width: 90px" />
               </div>
 
               <div class="obs-label-col">
                 <span class="obs-col-label">action</span>
-                <select v-model="ruleAction" class="obs-action-select">
+                <select v-model="ruleAction" class="ep-field-select obs-action-select">
                   <option v-for="a in BUILDER_ACTIONS" :key="a.value" :value="a.value">
                     {{ a.label }}
                   </option>
@@ -1398,14 +1398,14 @@ watch(
               <div class="obs-label-col">
                 <span class="obs-col-label">target</span>
                 <input v-model="ruleTarget" :list="ruleAction === 'scene' ? 'obs-scene-names' : 'obs-src-names'
-                  " class="obs-target-input" :placeholder="ruleAction === 'scene' ? 'scene name' : 'source name'
+                  " class="ep-field-input obs-target-input" :placeholder="ruleAction === 'scene' ? 'scene name' : 'source name'
                     " />
               </div>
 
               <div v-if="ruleAction === 'volume'" class="obs-label-col">
                 <span class="obs-col-label">volume %</span>
-                <input v-model.number="ruleValue" type="number" min="0" max="100" class="obs-target-input"
-                  style="width: 60px" />
+                <input v-model.number="ruleValue" type="number" min="0" max="100"
+                  class="ep-field-input obs-target-input" style="width: 60px" />
               </div>
 
               <div class="obs-label-col obs-label-col-end">
@@ -2566,49 +2566,16 @@ watch(
   flex-shrink: 0;
 }
 
-.obs-action-select,
-.obs-target-select {
-  height: 28px;
-  padding: 0 6px;
-  background: #0a0a0d;
-  border: 1px solid #2a2a30;
-  color: #ccc;
-  font-family: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  max-width: 130px;
-  transition: border-color 0.15s;
-}
-
+/* obs builder */
 .obs-action-select {
-  width: 118px;
-}
-
-.obs-target-select {
-  width: 118px;
-}
-
-.obs-action-select:focus,
-.obs-target-select:focus {
-  outline: none;
-  border-color: #6f2bff88;
+  width: 140px;
+  max-width: 140px;
+  flex-shrink: 0;
 }
 
 .obs-target-input {
-  height: 28px;
-  padding: 0 8px;
-  background: #0a0a0d;
-  border: 1px solid #2a2a30;
-  color: #ccc;
-  font-family: inherit;
-  font-size: 11px;
-  width: 110px;
-  transition: border-color 0.15s;
-}
-
-.obs-target-input:focus {
-  outline: none;
-  border-color: #6f2bff88;
+  width: 130px;
+  flex-shrink: 0;
 }
 
 .obs-mode-seg {
@@ -2853,10 +2820,7 @@ watch(
     align-self: stretch;
   }
 
-  .obs-trigger-wrap,
-  .obs-trigger-input,
   .obs-action-select,
-  .obs-target-select,
   .obs-target-input {
     width: 100%;
     max-width: none;

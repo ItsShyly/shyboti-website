@@ -279,7 +279,7 @@ const saveDisabled = computed(() => {
         <div class="ep-panel-header">
           <div>
             <div class="ep-panel-title">{{ isEdit ? "Edit Rule" : "New Rule" }}</div>
-            <div class="ep-panel-sub">#{{ channel }} · {{ fTriggerType }}-triggered</div>
+            <div class="ep-panel-sub">#{{ channel }}</div>
           </div>
           <button class="ep-panel-close" @click="emit('close')">✕</button>
         </div>
@@ -317,8 +317,7 @@ const saveDisabled = computed(() => {
 
           <!-- category trigger -->
           <div v-else-if="fTriggerType === 'category'" class="ep-field-group">
-            <label class="ep-field-label">Category <span class="ep-field-hint">fires when the stream switches to
-                this</span></label>
+            <label class="ep-field-label">Category</label>
             <TypeaheadInput v-model="fCategoryName" :fetch-items="fetchCategories" :min-chars="1"
               placeholder="Search a Twitch category..." @select="onCategorySelect" />
           </div>
@@ -353,7 +352,7 @@ const saveDisabled = computed(() => {
           <!-- scene/source action target -->
           <div v-else class="ep-field-group">
             <label class="ep-field-label">{{ fAction === "scene" ? "Scene" : "Source" }}
-              <span class="ep-field-hint">type or pick</span></label>
+            </label>
             <TypeaheadInput v-model="fTarget" :items="fAction === 'scene' ? scenes : sources"
               :placeholder="fAction === 'scene' ? 'Scene name' : 'Source name'" mono />
           </div>

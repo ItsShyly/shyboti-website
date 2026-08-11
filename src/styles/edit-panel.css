@@ -201,6 +201,8 @@
   transition: border-color 0.15s;
   width: 100%;
   box-sizing: border-box;
+  height: 36px;
+  line-height: 1.4;
 }
 .ep-field-input:focus,
 .ep-field-textarea:focus,
@@ -213,10 +215,16 @@
 .ep-field-textarea {
   resize: vertical;
   min-height: 52px;
+  height: auto;
 }
 .ep-field-select {
   appearance: none;
+  -webkit-appearance: none;
   cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23555' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
 }
 .ep-row-2,
 .ep-row-3 {
@@ -659,9 +667,15 @@
   color: #e0e0e0;
   font-family: inherit;
   font-size: 12px;
-  padding: 6px 8px;
+  padding: 6px 26px 6px 8px;
   outline: none;
   cursor: pointer;
+  height: 32px;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23555' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
 }
 
 /* Sync banner (trigger/timer channel-sync config) */

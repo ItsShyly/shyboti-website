@@ -239,7 +239,7 @@ async function saveTrigger() {
           method: "DELETE",
           headers: { Authorization: `Bearer ${session.value.token}` },
         },
-      ).catch(() => {});
+      ).catch(() => { });
     }
     showSuccess(t("trigger.save") + "!");
     editOpen.value = false;
@@ -345,7 +345,7 @@ async function fetchSync() {
     const data = (await res.json()) as { sync: any };
     syncConf.value = data.sync;
     syncFrom.value = data.sync?.sync_from ?? "";
-  } catch {}
+  } catch { }
 }
 async function saveSync() {
   if (!session.value || !syncFrom.value) return;
@@ -444,32 +444,20 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
           <div class="ep-view-sub">
             {{ t("trigger.sub") }} #{{ session?.channel }}
           </div>
-          <button
-            v-if="syncConf?.is_active"
-            class="ep-sync-indicator"
-            @click="syncOpen = !syncOpen"
-            :title="`${t('trigger.sync.active')} #${syncConf.sync_from}`"
-          >
+          <button v-if="syncConf?.is_active" class="ep-sync-indicator" @click="syncOpen = !syncOpen"
+            :title="`${t('trigger.sync.active')} #${syncConf.sync_from}`">
             <span class="ep-sync-dot"></span>{{ t("trigger.sync.active") }} #{{
               syncConf.sync_from
             }}
             <span class="ep-sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
           </button>
-          <button
-            v-else
-            class="ep-sync-config-btn"
-            @click="syncOpen = !syncOpen"
-          >
+          <button v-else class="ep-sync-config-btn" @click="syncOpen = !syncOpen">
             {{ t("trigger.sync.config")
             }}<span class="ep-sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
           </button>
         </div>
       </div>
-      <button
-        class="ep-btn-new"
-        @click="canEdit && openNew()"
-        :disabled="!canEdit"
-      >
+      <button class="ep-btn-new" @click="canEdit && openNew()" :disabled="!canEdit">
         {{ t("trigger.new") }}
       </button>
     </div>
@@ -484,21 +472,13 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
                 : t("trigger.sync.select")
             }}
           </option>
-          <option
-            v-for="ch in availableChannels.filter(
-              (c) => c !== session?.channel,
-            )"
-            :key="ch"
-            :value="ch"
-          >
+          <option v-for="ch in availableChannels.filter(
+            (c) => c !== session?.channel,
+          )" :key="ch" :value="ch">
             #{{ ch }}
           </option>
         </select>
-        <button
-          class="ep-sync-save-btn"
-          @click="saveSync"
-          :disabled="syncSaving || !syncFrom"
-        >
+        <button class="ep-sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">
           {{
             syncSaving
               ? "…"
@@ -507,11 +487,7 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
                 : t("trigger.sync.enable")
           }}
         </button>
-        <button
-          v-if="syncConf?.is_active"
-          class="ep-sync-stop-btn"
-          @click="stopSync"
-        >
+        <button v-if="syncConf?.is_active" class="ep-sync-stop-btn" @click="stopSync">
           {{ t("trigger.sync.stop") }}
         </button>
       </div>
@@ -519,11 +495,7 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
         {{ t("trigger.sync.last") }}
         {{ new Date(syncConf.last_synced).toLocaleString() }}
       </div>
-      <div
-        v-if="syncMsg"
-        class="ep-sync-msg"
-        :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }"
-      >
+      <div v-if="syncMsg" class="ep-sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">
         {{ syncMsg }}
       </div>
     </div>
@@ -537,18 +509,11 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
     </div>
 
     <div v-else class="ep-row-list">
-      <div
-        v-for="trigger in triggers"
-        :key="trigger.id"
-        class="ep-list-row trigger-row"
-        :class="{ inactive: !trigger.is_active }"
-      >
+      <div v-for="trigger in triggers" :key="trigger.id" class="ep-list-row trigger-row"
+        :class="{ inactive: !trigger.is_active }">
         <div class="trigger-toggle-wrap">
-          <button
-            class="ep-toggle-btn"
-            :class="{ on: trigger.is_active, disabled: !canToggle }"
-            @click="canToggle && toggleActive(trigger)"
-          >
+          <button class="ep-toggle-btn" :class="{ on: trigger.is_active, disabled: !canToggle }"
+            @click="canToggle && toggleActive(trigger)">
             <span class="ep-toggle-knob"></span>
           </button>
         </div>
@@ -557,26 +522,14 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
           <div class="trigger-meta">
             <span class="ep-meta-pill event">{{
               eventLabel(trigger.event_type)
-            }}</span>
-            <span v-if="trigger.match_pattern" class="ep-meta-pill pattern"
-              >{{ matchLabel(trigger.match_type) }}: "{{
-                trigger.match_pattern.slice(0, 20)
-              }}{{ trigger.match_pattern.length > 20 ? "…" : "" }}"</span
-            >
-            <span class="ep-meta-pill action"
-              >→ {{ actionLabel(trigger.action_type) }}</span
-            >
-            <span
-              v-if="trigger.enabled_when !== 'always'"
-              class="ep-meta-pill when"
-              >{{ trigger.enabled_when }}</span
-            >
-            <span v-if="trigger.required_game" class="ep-meta-pill game"
-              >🎮 {{ trigger.required_game }}</span
-            >
-            <span v-if="trigger.cooldown_sec" class="ep-meta-pill cd"
-              >⏱ {{ trigger.cooldown_sec }}s cd</span
-            >
+              }}</span>
+            <span v-if="trigger.match_pattern" class="ep-meta-pill pattern">{{ matchLabel(trigger.match_type) }}: "{{
+              trigger.match_pattern.slice(0, 20)
+            }}{{ trigger.match_pattern.length > 20 ? "…" : "" }}"</span>
+            <span class="ep-meta-pill action">→ {{ actionLabel(trigger.action_type) }}</span>
+            <span v-if="trigger.enabled_when !== 'always'" class="ep-meta-pill when">{{ trigger.enabled_when }}</span>
+            <span v-if="trigger.required_game" class="ep-meta-pill game">🎮 {{ trigger.required_game }}</span>
+            <span v-if="trigger.cooldown_sec" class="ep-meta-pill cd">⏱ {{ trigger.cooldown_sec }}s cd</span>
           </div>
           <div class="trigger-response">
             {{ trigger.response.slice(0, 80)
@@ -584,26 +537,14 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
           </div>
         </div>
         <div class="ep-row-actions">
-          <button
-            class="ep-btn-action edit"
-            @click.stop="canEdit && openEdit(trigger)"
-            :class="{ disabled: !canEdit }"
-          >
+          <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(trigger)" :class="{ disabled: !canEdit }">
             {{ canEdit ? t("trigger.edit") : t("trigger.view") }}
           </button>
-          <button
-            class="ep-btn-action share"
-            @click.stop="openShare(trigger.name)"
-            title="Copy to another channel"
-          >
+          <button class="ep-btn-action share" @click.stop="openShare(trigger.name)" title="Copy to another channel">
             ↪
           </button>
-          <button
-            v-if="canDelete"
-            class="ep-btn-action del"
-            @click.stop="deleteTrigger(trigger.name)"
-            :disabled="saving === trigger.name"
-          >
+          <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteTrigger(trigger.name)"
+            :disabled="saving === trigger.name">
             ✕
           </button>
         </div>
@@ -611,11 +552,7 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
     </div>
 
     <Teleport to="body">
-      <div
-        v-if="editOpen"
-        class="ep-overlay"
-        v-bind="overlay.handlers(() => (editOpen = false))"
-      >
+      <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => (editOpen = false))">
         <div class="ep-panel">
           <div class="ep-panel-header">
             <div>
@@ -623,11 +560,7 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
                 <template v-if="isNew">{{ t("trigger.edit_new") }}</template>
                 <template v-else>
                   {{ t("trigger.edit_title") }}
-                  <EditableNameHeader
-                    v-model="editTrigger.name"
-                    :orig-name="editOrigName"
-                    placeholder="hype-train"
-                  />
+                  <EditableNameHeader v-model="editTrigger.name" :orig-name="editOrigName" placeholder="hype-train" />
                 </template>
               </div>
               <div class="ep-panel-sub">#{{ session?.channel }}</div>
@@ -640,59 +573,36 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
             <div v-if="isNew" class="ep-field-group">
               <label class="ep-field-label">{{
                 t("trigger.field.name")
-              }}</label>
-              <input
-                v-model="editTrigger.name"
-                class="ep-field-input"
-                placeholder="hype-train"
-              />
+                }}</label>
+              <input v-model="editTrigger.name" class="ep-field-input" placeholder="hype-train" />
             </div>
 
             <!-- Event type -->
             <div class="ep-field-group">
               <label class="ep-field-label">{{
                 t("trigger.field.event")
-              }}</label>
+                }}</label>
               <div class="event-grid">
-                <button
-                  v-for="e in EVENT_TYPES"
-                  :key="e.value"
-                  class="event-btn"
-                  :class="{ active: editTrigger.event_type === e.value }"
-                  @click="editTrigger.event_type = e.value"
-                  :title="e.hint"
-                >
+                <button v-for="e in EVENT_TYPES" :key="e.value" class="event-btn"
+                  :class="{ active: editTrigger.event_type === e.value }" @click="editTrigger.event_type = e.value"
+                  :title="e.hint">
                   {{ e.label }}
                 </button>
               </div>
             </div>
 
             <!-- Match pattern -->
-            <div
-              v-if="needsPattern(editTrigger.event_type ?? 'message')"
-              class="ep-field-group"
-            >
+            <div v-if="needsPattern(editTrigger.event_type ?? 'message')" class="ep-field-group">
               <label class="ep-field-label">{{
                 t("trigger.field.match")
-              }}</label>
+                }}</label>
               <div class="match-row">
-                <select
-                  v-model="editTrigger.match_type"
-                  class="ep-field-select match-type"
-                >
-                  <option
-                    v-for="m in MATCH_TYPES"
-                    :key="m.value"
-                    :value="m.value"
-                  >
+                <select v-model="editTrigger.match_type" class="ep-field-select match-type">
+                  <option v-for="m in MATCH_TYPES" :key="m.value" :value="m.value">
                     {{ m.label }}
                   </option>
                 </select>
-                <input
-                  v-model="editTrigger.match_pattern"
-                  class="ep-field-input"
-                  placeholder="!lurk or hello"
-                />
+                <input v-model="editTrigger.match_pattern" class="ep-field-input" placeholder="!lurk or hello" />
               </div>
             </div>
 
@@ -700,15 +610,10 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
             <div class="ep-field-group">
               <label class="ep-field-label">{{
                 t("trigger.field.action")
-              }}</label>
+                }}</label>
               <div class="action-grid">
-                <button
-                  v-for="a in ACTION_TYPES"
-                  :key="a.value"
-                  class="action-btn"
-                  :class="{ active: editTrigger.action_type === a.value }"
-                  @click="editTrigger.action_type = a.value"
-                >
+                <button v-for="a in ACTION_TYPES" :key="a.value" class="action-btn"
+                  :class="{ active: editTrigger.action_type === a.value }" @click="editTrigger.action_type = a.value">
                   {{ a.label }}
                 </button>
               </div>
@@ -724,16 +629,10 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
                 }}
                 <span class="ep-field-hint">{{
                   t("trigger.field.resp_hint")
-                }}</span>
+                  }}</span>
               </label>
-              <div
-                ref="editorRef"
-                class="ep-script-editor"
-                contenteditable="true"
-                spellcheck="false"
-                data-placeholder="$user.mention just triggered this! PogChamp"
-                @input="onEditorInput"
-              ></div>
+              <div ref="editorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
+                data-placeholder="$user.mention just triggered this! PogChamp" @input="onEditorInput"></div>
               <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
             </div>
 
@@ -741,11 +640,8 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("trigger.field.active_when")
-                }}</label>
-                <select
-                  v-model="editTrigger.enabled_when"
-                  class="ep-field-select"
-                >
+                  }}</label>
+                <select v-model="editTrigger.enabled_when" class="ep-field-select">
                   <option value="always">{{ t("trigger.when.always") }}</option>
                   <option value="online">{{ t("trigger.when.online") }}</option>
                   <option value="offline">
@@ -756,50 +652,30 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("trigger.field.game")
-                }}</label>
-                <input
-                  v-model="editTrigger.required_game"
-                  class="ep-field-input"
-                  placeholder="optional"
-                />
+                  }}</label>
+                <input v-model="editTrigger.required_game" class="ep-field-input" placeholder="optional" />
               </div>
               <div class="ep-field-group">
-                <label class="ep-field-label"
-                  >{{ t("trigger.field.cd") }}
-                  <span class="ep-field-hint">s</span></label
-                >
-                <input
-                  v-model.number="editTrigger.cooldown_sec"
-                  type="number"
-                  min="0"
-                  class="ep-field-input"
-                />
+                <label class="ep-field-label">{{ t("trigger.field.cd") }}
+                  <span class="ep-field-hint">s</span></label>
+                <input v-model.number="editTrigger.cooldown_sec" type="number" min="0" class="ep-field-input" />
               </div>
             </div>
 
             <div class="ep-field-group">
-              <label class="ep-field-label"
-                >{{ t("trigger.field.condition") }}
+              <label class="ep-field-label">{{ t("trigger.field.condition") }}
                 <span class="ep-field-hint">{{
                   t("trigger.field.cond_hint")
-                }}</span></label
-              >
-              <input
-                v-model="editTrigger.condition"
-                class="ep-field-input ep-mono"
-                placeholder="$channel.game == Just Chatting"
-              />
+                  }}</span></label>
+              <input v-model="editTrigger.condition" class="ep-field-input ep-mono"
+                placeholder="$channel.game == Just Chatting" />
             </div>
 
             <div class="ep-panel-footer">
-              <button
-                v-if="!isNew && canDelete"
-                class="ep-btn-delete"
-                @click="
-                  deleteTrigger(editOrigName);
-                  editOpen = false;
-                "
-              >
+              <button v-if="!isNew && canDelete" class="ep-btn-delete" @click="
+                deleteTrigger(editOrigName);
+              editOpen = false;
+              ">
                 {{ t("trigger.delete") }}
               </button>
               <div v-else></div>
@@ -807,11 +683,7 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
                 <button class="ep-btn-cancel" @click="editOpen = false">
                   {{ t("trigger.cancel") }}
                 </button>
-                <button
-                  class="ep-btn-save"
-                  @click="saveTrigger"
-                  :disabled="!!saving || !editTrigger.name"
-                >
+                <button class="ep-btn-save" @click="saveTrigger" :disabled="!!saving || !editTrigger.name">
                   {{ saving ? t("trigger.saving") : t("trigger.save") }}
                 </button>
               </div>
@@ -822,30 +694,18 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
     </Teleport>
 
     <Teleport to="body">
-      <div
-        v-if="shareOpen"
-        class="ep-modal-overlay"
-        @click.self="shareOpen = false"
-      >
+      <div v-if="shareOpen" class="ep-modal-overlay" @click.self="shareOpen = false">
         <div class="ep-modal">
           <div class="ep-modal-title">
             {{ t("trigger.share.title") }}
             <span class="ep-modal-name">{{ shareTrigger }}</span>
           </div>
           <div class="ep-modal-sub">{{ t("trigger.share.sub") }}</div>
-          <select
-            v-model="shareTarget"
-            class="ep-field-select-sm"
-            style="width: 100%; margin-top: 12px"
-          >
+          <select v-model="shareTarget" class="ep-field-select-sm" style="width: 100%; margin-top: 12px">
             <option value="">{{ t("trigger.share.select") }}</option>
-            <option
-              v-for="ch in availableChannels.filter(
-                (c) => c !== session?.channel,
-              )"
-              :key="ch"
-              :value="ch"
-            >
+            <option v-for="ch in availableChannels.filter(
+              (c) => c !== session?.channel,
+            )" :key="ch" :value="ch">
               #{{ ch }}
             </option>
           </select>
@@ -857,11 +717,7 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
             <button class="ep-btn-cancel" @click="shareOpen = false">
               {{ t("trigger.cancel") }}
             </button>
-            <button
-              class="ep-btn-save"
-              @click="doShare"
-              :disabled="shareSaving || !shareTarget"
-            >
+            <button class="ep-btn-save" @click="doShare" :disabled="shareSaving || !shareTarget">
               {{
                 shareSaving
                   ? t("trigger.share.copying")
@@ -886,23 +742,27 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
 .trigger-toggle-wrap {
   flex-shrink: 0;
 }
+
 .trigger-info {
   flex: 1;
   cursor: pointer;
   min-width: 0;
 }
+
 .trigger-name {
   font-size: 13px;
   font-weight: 600;
   color: #e0e0e0;
   margin-bottom: 4px;
 }
+
 .trigger-meta {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
   margin-bottom: 4px;
 }
+
 .trigger-response {
   font-size: 11px;
   color: #555;
@@ -911,32 +771,38 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
 .ep-meta-pill.event {
   color: #569cd6;
   border-color: #569cd644;
   background: #569cd611;
 }
+
 .ep-meta-pill.pattern {
   color: #e5c07b;
   border-color: #e5c07b44;
   background: #e5c07b11;
   font-family: monospace;
 }
+
 .ep-meta-pill.action {
   color: #23d18b;
   border-color: #23d18b44;
   background: #23d18b11;
 }
+
 .ep-meta-pill.when {
   color: #e5c07b;
   border-color: #e5c07b44;
   background: #e5c07b11;
 }
+
 .ep-meta-pill.game {
   color: #4ec9b0;
   border-color: #4ec9b044;
   background: #4ec9b011;
 }
+
 .ep-meta-pill.cd {
   color: #c792ea;
   border-color: #c792ea44;
@@ -949,6 +815,7 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
   flex-wrap: wrap;
   gap: 4px;
 }
+
 .event-btn,
 .action-btn {
   height: 28px;
@@ -961,31 +828,42 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
   cursor: pointer;
   transition: all 0.15s;
 }
+
 .event-btn:hover,
 .action-btn:hover {
   color: #aaa;
   border-color: #444;
 }
+
 .event-btn.active {
   color: #569cd6;
   border-color: #569cd666;
   background: #569cd615;
 }
+
 .action-btn.active {
   color: #23d18b;
   border-color: #23d18b66;
   background: #23d18b15;
 }
+
 .match-row {
   display: flex;
   gap: 8px;
+  align-items: flex-start;
 }
+
 .match-type {
-  width: 130px;
+  width: 140px;
   flex-shrink: 0;
+  height: 36px;
+  /* match ep-field-input exactly */
 }
+
 .match-row .ep-field-input {
   flex: 1;
+  height: 36px;
+  font-size: 13px;
 }
 
 @media (max-width: 680px) {
@@ -993,37 +871,46 @@ const needsPattern = (ev: string) => ["message", "command"].includes(ev);
     flex-wrap: wrap;
     gap: 10px;
   }
+
   .ep-panel-body {
     padding: 14px 16px;
   }
+
   .match-row {
     flex-direction: column;
     gap: 6px;
   }
+
   .match-type {
     width: 100% !important;
   }
+
   .event-grid,
   .action-btn,
   .action-grid {
     flex-wrap: wrap;
   }
+
   .event-btn,
   .action-btn {
     flex: 1;
     min-width: 80px;
   }
+
   .trigger-row {
     padding: 10px 10px;
     gap: 8px;
   }
+
   .ep-row-actions {
     gap: 4px;
   }
+
   .ep-btn-action {
     padding: 0 8px;
     font-size: 10px;
   }
+
   .ep-sync-row {
     flex-wrap: wrap;
   }

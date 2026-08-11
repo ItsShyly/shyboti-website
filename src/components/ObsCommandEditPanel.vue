@@ -350,7 +350,7 @@ const saveDisabled = computed(() => {
           <!-- target (scene/source kinds only) -->
           <div v-if="fKind !== 'arg'" class="ep-field-group">
             <label class="ep-field-label">{{ fKind === "scene" ? "Scene" : "Source" }}
-              <span class="ep-field-hint">type or pick</span></label>
+            </label>
             <TypeaheadInput v-model="fTarget" :items="fKind === 'scene' ? scenes : sources"
               :placeholder="fKind === 'scene' ? 'Scene name' : 'Source name'" mono />
           </div>
@@ -437,20 +437,16 @@ const saveDisabled = computed(() => {
 
 .obs-kind-tab {
   flex: 1;
-  height: 32px;
+  height: 36px;
   border: 1px solid #2a2a30;
-  background: #0d0d10;
+  background: #111217;
   color: #555;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
   margin-right: -1px;
-}
-
-.obs-kind-tab:first-child {
-  border-radius: 0;
 }
 
 .obs-kind-tab.active {
@@ -476,30 +472,11 @@ const saveDisabled = computed(() => {
   background: #0a0a0d;
   border: 1px solid #1e1e24;
   color: #e5c07b;
-  font-size: 12px;
-}
-
-.obs-cmd-input-wrap {
-  display: flex;
-  align-items: center;
-}
-
-.obs-cmd-prefix {
+  font-size: 13px;
   height: 36px;
-  padding: 0 8px;
-  background: #0a0a0d;
-  border: 1px solid #2a2a30;
-  border-right: none;
-  color: #9d6cff;
-  font-weight: 700;
-  font-size: 14px;
   display: flex;
   align-items: center;
-}
-
-.obs-cmd-input {
-  border-left: none !important;
-  flex: 1;
+  box-sizing: border-box;
 }
 
 .obs-access-row {
@@ -509,12 +486,12 @@ const saveDisabled = computed(() => {
 
 .obs-access-btn {
   flex: 1;
-  height: 32px;
+  height: 36px;
   border: 1px solid #2a2a30;
-  background: #0d0d10;
+  background: #111217;
   color: #555;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: all 0.15s;
   margin-right: -1px;
