@@ -227,11 +227,11 @@ const saveDisabled = computed(() => {
           <!-- enabled -->
           <div class="ep-field-group">
             <label class="ep-field-label">Enabled</label>
-            <div class="obc-toggle-row">
+            <div class="obs-toggle-row">
               <button class="ep-toggle-btn" :class="{ on: fEnabled }" @click="fEnabled = !fEnabled">
                 <span class="ep-toggle-knob"></span>
               </button>
-              <span class="obc-toggle-label">{{ fEnabled ? "active" : "disabled" }}</span>
+              <span class="obs-toggle-label">{{ fEnabled ? "active" : "disabled" }}</span>
             </div>
           </div>
         </div>
@@ -291,13 +291,13 @@ const saveDisabled = computed(() => {
   border-color: #3a3a44;
 }
 
-.obc-toggle-row {
+.obs-toggle-row {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.obc-toggle-label {
+.obs-toggle-label {
   font-size: 11px;
   color: #888;
 }

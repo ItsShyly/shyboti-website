@@ -130,9 +130,9 @@ onMounted(fetchRules);
     <div class="ep-view-header">
       <div class="view-header-left">
         <div>
-          <div class="ep-view-title">OBS Rules</div>
+          <div class="ep-view-title">OBS Automations</div>
           <div class="ep-view-sub">
-            bitrate-triggered automation · #{{ session?.channel }}
+            OBS Automations · #{{ session?.channel }}
           </div>
         </div>
       </div>
@@ -149,7 +149,7 @@ onMounted(fetchRules);
       <router-link to="/obs-control" class="obs-rule-link">OBS control</router-link> page first.
     </div>
     <div v-else-if="!rules.length" class="ep-empty">
-      No rules yet - click + New to switch scenes or sources automatically based on custom rules
+      No obs automations yet. Create one to get started.
     </div>
 
     <div v-else class="ep-row-list">

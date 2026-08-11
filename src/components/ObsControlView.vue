@@ -951,10 +951,10 @@ watch(
         <div class="obsconn-sub">#{{ session?.channel }}</div>
       </div>
       <div class="obsconn-header-right">
-        <div class="obc-status-bar" :class="connStatusClass">
-          <div class="obc-status-dot"></div>
-          <span class="obc-status-text">{{ connStatusLabel }}</span>
-          <span v-if="agentStatus?.version" class="obc-status-version">v{{ agentStatus.version }}</span>
+        <div class="obs-status-bar" :class="connStatusClass">
+          <div class="obs-status-dot"></div>
+          <span class="obs-status-text">{{ connStatusLabel }}</span>
+          <span v-if="agentStatus?.version" class="obs-status-version">v{{ agentStatus.version }}</span>
         </div>
         <button v-if="isBroadcaster" class="obsconn-gear-btn" title="OBS settings" @click="openSettings">
           <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -963,7 +963,7 @@ watch(
               d="M16.2 12.3a1.4 1.4 0 00.3 1.5l.05.05a1.65 1.65 0 11-2.35 2.35l-.05-.05a1.4 1.4 0 00-1.5-.3 1.4 1.4 0 00-.85 1.28v.14a1.65 1.65 0 11-3.3 0v-.07a1.4 1.4 0 00-.92-1.28 1.4 1.4 0 00-1.5.3l-.05.05A1.65 1.65 0 113.63 13.9l.05-.05a1.4 1.4 0 00.3-1.5 1.4 1.4 0 00-1.28-.85h-.14a1.65 1.65 0 110-3.3h.07a1.4 1.4 0 001.28-.92 1.4 1.4 0 00-.3-1.5l-.05-.05A1.65 1.65 0 116.09 3.38l.05.05a1.4 1.4 0 001.5.3h.06a1.4 1.4 0 00.85-1.28V2.3a1.65 1.65 0 113.3 0v.07a1.4 1.4 0 00.85 1.28h.06a1.4 1.4 0 001.5-.3l.05-.05a1.65 1.65 0 112.35 2.35l-.05.05a1.4 1.4 0 00-.3 1.5v.06a1.4 1.4 0 001.28.85h.14a1.65 1.65 0 110 3.3h-.07a1.4 1.4 0 00-1.28.85z"
               stroke="currentColor" stroke-width="1.3" />
           </svg>
-          <span v-if="!loading && !agentStatus?.paired" class="obc-gear-badge" title="OBS agent not set up yet">!</span>
+          <span v-if="!loading && !agentStatus?.paired" class="obs-gear-badge" title="OBS agent not set up yet">!</span>
         </button>
       </div>
     </div>
@@ -971,18 +971,18 @@ watch(
     <div class="obsconn-body">
       <!-- loading -->
       <template v-if="loading">
-        <div class="obc-loading">
+        <div class="obs-loading">
           <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="loading"
-            class="obc-loading-emote" />
+            class="obs-loading-emote" />
         </div>
       </template>
 
       <!-- setup prompt, shown til agent + obs are both connected -->
       <!-- full instructions live in the gear panel, broadcaster only -->
       <template v-else-if="!agentConnected || !obsConnected">
-        <div class="obc-setup-card obc-setup-compact">
+        <div class="obs-setup-card obs-setup-compact">
           <template v-if="isBroadcaster">
-            <div class="obc-setup-title">
+            <div class="obs-setup-title">
               {{
                 agentStatus?.paired
                   ? agentConnected
@@ -991,7 +991,7 @@ watch(
                   : "OBS agent is not set up yet"
               }}
             </div>
-            <div class="obc-setup-hint">
+            <div class="obs-setup-hint">
               Click the gear icon above to
               {{
                 agentStatus?.paired
@@ -1001,8 +1001,8 @@ watch(
             </div>
           </template>
           <template v-else>
-            <div class="obc-setup-title">OBS isn't connected yet</div>
-            <div class="obc-setup-hint">
+            <div class="obs-setup-title">OBS isn't connected yet</div>
+            <div class="obs-setup-hint">
               Ask your broadcaster to set it up (gear icon, broadcaster only).
             </div>
           </template>
@@ -1013,36 +1013,36 @@ watch(
       <template v-if="agentConnected && obsConnected">
         <!-- Scenes -->
         <div class="ep-field-group">
-          <div class="ep-field-label obc-section-label">
+          <div class="ep-field-label obs-section-label">
             Scenes
-            <button class="obc-refresh-btn" @click="refreshScenes" title="Refresh scene list">
+            <button class="obs-refresh-btn" @click="refreshScenes" title="Refresh scene list">
               ↻
             </button>
           </div>
-          <div class="obc-scenes">
-            <div class="obc-scenes-live-row" v-if="liveScene">
-              <div class="obc-scene-card obc-scene-card-live active"
+          <div class="obs-scenes">
+            <div class="obs-scenes-live-row" v-if="liveScene">
+              <div class="obs-scene-card obs-scene-card-live active"
                 :class="{ picked: liveScene.sceneName === selectedScene }" @click="switchScene(liveScene.sceneName)">
-                <div class="obc-scene-thumb">
+                <div class="obs-scene-thumb">
                   <img v-if="sceneShots[liveScene.sceneName]" :src="sceneShots[liveScene.sceneName]"
                     :alt="liveScene.sceneName" />
-                  <div v-else class="obc-scene-thumb-empty">
+                  <div v-else class="obs-scene-thumb-empty">
                     {{ agentStatus?.screenshots ? "…" : "previews off" }}
                   </div>
                 </div>
-                <div class="obc-scene-name">{{ liveScene.sceneName }}</div>
-                <div class="obc-scene-live">live</div>
+                <div class="obs-scene-name">{{ liveScene.sceneName }}</div>
+                <div class="obs-scene-live">live</div>
               </div>
-              <div class="obc-live-stats">
-                <div class="obc-live-stat" :class="{ bad: bitrateBad }">
-                  <span class="obc-live-stat-label">bitrate</span>
-                  <span class="obc-live-stat-value">{{
+              <div class="obs-live-stats">
+                <div class="obs-live-stat" :class="{ bad: bitrateBad }">
+                  <span class="obs-live-stat-label">bitrate</span>
+                  <span class="obs-live-stat-value">{{
                     bitrateLabel ?? "not streaming"
-                    }}</span>
+                  }}</span>
                 </div>
-                <div class="obc-live-stat">
-                  <span class="obc-live-stat-label">preview size</span>
-                  <span class="obc-live-stat-value">{{
+                <div class="obs-live-stat">
+                  <span class="obs-live-stat-label">preview size</span>
+                  <span class="obs-live-stat-value">{{
                     liveShotStats.kb != null
                       ? liveShotStats.kb + " kb"
                       : agentStatus?.screenshots
@@ -1050,9 +1050,9 @@ watch(
                         : "off"
                   }}</span>
                 </div>
-                <div class="obc-live-stat">
-                  <span class="obc-live-stat-label">preview cpu</span>
-                  <span class="obc-live-stat-value">{{
+                <div class="obs-live-stat">
+                  <span class="obs-live-stat-label">preview cpu</span>
+                  <span class="obs-live-stat-value">{{
                     liveShotStats.cpuMs != null
                       ? liveShotStats.cpuMs + " ms"
                       : agentStatus?.screenshots
@@ -1062,16 +1062,16 @@ watch(
                 </div>
               </div>
             </div>
-            <div class="obc-scenes-others">
-              <div v-for="s in nonLiveScenes" :key="s.sceneName" class="obc-scene-card"
+            <div class="obs-scenes-others">
+              <div v-for="s in nonLiveScenes" :key="s.sceneName" class="obs-scene-card"
                 :class="{ picked: s.sceneName === selectedScene }" @click="switchScene(s.sceneName)">
-                <div class="obc-scene-thumb">
+                <div class="obs-scene-thumb">
                   <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
-                  <div v-else class="obc-scene-thumb-empty">
+                  <div v-else class="obs-scene-thumb-empty">
                     {{ agentStatus?.screenshots ? "…" : "previews off" }}
                   </div>
                 </div>
-                <div class="obc-scene-name">{{ s.sceneName }}</div>
+                <div class="obs-scene-name">{{ s.sceneName }}</div>
               </div>
             </div>
             <div v-if="!scenes.length" class="ep-empty">
@@ -1086,32 +1086,32 @@ watch(
             style="width: 200px; display: block; margin: 0 auto">
             {{ forcePreviewLoading ? "Opening…" : "Force all previews" }}
           </button>
-          <div v-if="canForcePreview" class="obc-projector-state">
+          <div v-if="canForcePreview" class="obs-projector-state">
             Multiview projector: {{ videoMixProjectorOpen ? "open" : "closed" }}
-            <span v-if="videoMixProjectorTitle" class="obc-projector-title">"{{ videoMixProjectorTitle }}"</span>
+            <span v-if="videoMixProjectorTitle" class="obs-projector-title">"{{ videoMixProjectorTitle }}"</span>
           </div>
         </div>
       </template>
 
       <!-- sources | audio mixer | command builder, builder still works if obs itself isn't connected -->
-      <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obc-boxes-row"
-        :class="{ 'obc-boxes-single': !(agentConnected && obsConnected) }">
+      <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"
+        :class="{ 'obs-boxes-single': !(agentConnected && obsConnected) }">
         <template v-if="agentConnected && obsConnected">
           <!-- Sources -->
-          <div class="ep-field-group obc-box">
+          <div class="ep-field-group obs-box">
             <label class="ep-field-label">sources
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-                }}</span></label>
-            <div class="obc-source-list">
-              <div v-for="src in sources as any[]" :key="src.sceneItemId" class="obc-source-row">
-                <span class="obc-source-name">{{ src.sourceName }}</span>
-                <button class="obc-vis-btn" :class="{ on: src.visible }" :disabled="pendingSources.has(src.sceneItemId)"
+              }}</span></label>
+            <div class="obs-source-list">
+              <div v-for="src in sources as any[]" :key="src.sceneItemId" class="obs-source-row">
+                <span class="obs-source-name">{{ src.sourceName }}</span>
+                <button class="obs-vis-btn" :class="{ on: src.visible }" :disabled="pendingSources.has(src.sceneItemId)"
                   @click="toggleSourceVisible(src)">
                   {{ src.visible ? "visible" : "hidden" }}
                 </button>
                 <template v-if="src.isAudioSource">
-                  <button class="obc-mute-btn" :class="{ muted: src.muted }"
+                  <button class="obs-mute-btn" :class="{ muted: src.muted }"
                     :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceMute(src)">
                     {{ src.muted ? "muted" : "unmuted" }}
                   </button>
@@ -1128,25 +1128,25 @@ watch(
           </div>
 
           <!-- Audio mixer -->
-          <div class="ep-field-group obc-box">
+          <div class="ep-field-group obs-box">
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-                }}</span></label>
-            <div class="obc-mixer-list">
-              <div v-for="src in audioSources" :key="src.sceneItemId" class="obc-mixer-row">
-                <div class="obc-mixer-top">
-                  <span class="obc-source-name">{{ src.sourceName }}</span>
-                  <button class="obc-mute-btn" :class="{ muted: src.muted }"
+              }}</span></label>
+            <div class="obs-mixer-list">
+              <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row">
+                <div class="obs-mixer-top">
+                  <span class="obs-source-name">{{ src.sourceName }}</span>
+                  <button class="obs-mute-btn" :class="{ muted: src.muted }"
                     :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceMute(src)">
                     {{ src.muted ? "muted" : "unmuted" }}
                   </button>
                 </div>
-                <div class="obc-mixer-slider-row">
+                <div class="obs-mixer-slider-row">
                   <input type="range" min="0" max="100" :value="sliderOverride[src.sceneItemId] ??
                     src.volumePercent ??
                     100
-                    " class="obc-mixer-slider" @input="
+                    " class="obs-mixer-slider" @input="
                       onVolumeInput(
                         src,
                         +($event.target as HTMLInputElement).value,
@@ -1157,7 +1157,7 @@ watch(
                           +($event.target as HTMLInputElement).value,
                         )
                         " />
-                  <span class="obc-mixer-db">{{
+                  <span class="obs-mixer-db">{{
                     volumeToDb(
                       sliderOverride[src.sceneItemId] ?? src.volumePercent,
                     )
@@ -1177,13 +1177,13 @@ watch(
         </template>
 
         <!-- Command builder / Rule builder -->
-        <div v-if="agentStatus?.paired" class="ep-field-group obc-box obc-box-builder">
-          <div class="obc-builder-tabs">
-            <button type="button" class="obc-builder-tab" :class="{ active: builderView === 'command' }"
+        <div v-if="agentStatus?.paired" class="ep-field-group obs-box obs-box-builder">
+          <div class="obs-builder-tabs">
+            <button type="button" class="obs-builder-tab" :class="{ active: builderView === 'command' }"
               @click="builderView = 'command'">
               command builder
             </button>
-            <button type="button" class="obc-builder-tab" :class="{ active: builderView === 'rule' }"
+            <button type="button" class="obs-builder-tab" :class="{ active: builderView === 'rule' }"
               @click="builderView = 'rule'">
               rule builder
             </button>
@@ -1191,85 +1191,85 @@ watch(
 
           <template v-if="builderView === 'command'">
             <!-- Chat command name -->
-            <div class="obc-cmd-name-row">
-              <span class="obc-cmd-name-prefix">+</span>
-              <input v-model="builderCmd" class="obc-cmd-name-input ep-mono"
-                :class="{ 'obc-trigger-conflict': existingCmdNames.includes(builderCmd.trim().replace(/^\+/, '').toLowerCase()) }"
+            <div class="obs-cmd-name-row">
+              <span class="obs-cmd-name-prefix">+</span>
+              <input v-model="builderCmd" class="obs-cmd-name-input ep-mono"
+                :class="{ 'obs-trigger-conflict': existingCmdNames.includes(builderCmd.trim().replace(/^\+/, '').toLowerCase()) }"
                 placeholder="command name" maxlength="20"
                 :title="existingCmdNames.includes(builderCmd.trim().replace(/^\+/, '').toLowerCase()) ? 'This name is already used by another command' : ''"
                 @keydown.enter="!addDisabled && addBuilderCommand()" />
               <span v-if="existingCmdNames.includes(builderCmd.trim().replace(/^\+/, '').toLowerCase())"
-                class="obc-cmd-name-conflict">already taken</span>
+                class="obs-cmd-name-conflict">already taken</span>
             </div>
 
-            <div class="obc-label-row">
-              <div class="obc-label-col">
-                <span class="obc-col-label">action</span>
-                <select v-model="builderAction" class="obc-action-select">
+            <div class="obs-label-row">
+              <div class="obs-label-col">
+                <span class="obs-col-label">action</span>
+                <select v-model="builderAction" class="obs-action-select">
                   <option v-for="a in BUILDER_ACTIONS" :key="a.value" :value="a.value">
                     {{ a.label }}
                   </option>
                 </select>
               </div>
 
-              <div class="obc-label-col">
-                <span class="obc-col-label">target type</span>
-                <div class="obc-mode-seg" v-if="builderAction === 'volume'">
-                  <button type="button" class="obc-mode-seg-btn" :class="{ active: builderVolMode === 'both' }"
+              <div class="obs-label-col">
+                <span class="obs-col-label">target type</span>
+                <div class="obs-mode-seg" v-if="builderAction === 'volume'">
+                  <button type="button" class="obs-mode-seg-btn" :class="{ active: builderVolMode === 'both' }"
                     @click="builderVolMode = 'both'">
                     src+vol
                   </button>
-                  <button type="button" class="obc-mode-seg-btn" :class="{ active: builderVolMode === 'vol_only' }"
+                  <button type="button" class="obs-mode-seg-btn" :class="{ active: builderVolMode === 'vol_only' }"
                     @click="builderVolMode = 'vol_only'">
                     vol only
                   </button>
                 </div>
-                <div class="obc-mode-seg" v-else>
-                  <button type="button" class="obc-mode-seg-btn" :class="{ active: builderMode === 'specific' }"
+                <div class="obs-mode-seg" v-else>
+                  <button type="button" class="obs-mode-seg-btn" :class="{ active: builderMode === 'specific' }"
                     @click="builderMode = 'specific'">
                     preset
                   </button>
-                  <button type="button" class="obc-mode-seg-btn" :class="{ active: builderMode === 'argument' }"
+                  <button type="button" class="obs-mode-seg-btn" :class="{ active: builderMode === 'argument' }"
                     @click="builderMode = 'argument'">
                     chat arg
                   </button>
                 </div>
               </div>
 
-              <div class="obc-label-col">
-                <span class="obc-col-label">target</span>
+              <div class="obs-label-col">
+                <span class="obs-col-label">target</span>
 
                 <!-- volume: src+vol -> both come from chat -->
                 <span v-if="builderAction === 'volume' && builderVolMode === 'both'"
-                  class="obc-arg-badge">&lt;source&gt; &lt;vol&gt;</span>
+                  class="obs-arg-badge">&lt;source&gt; &lt;vol&gt;</span>
 
                 <!-- volume: vol only -> fixed source, number from chat -->
                 <template v-else-if="builderAction === 'volume'">
-                  <input v-model="builderTarget" list="obc-src-names" class="obc-target-input"
+                  <input v-model="builderTarget" list="obs-src-names" class="obs-target-input"
                     placeholder="source name" />
                 </template>
 
                 <!-- non-volume: chat arg -->
-                <span v-else-if="builderMode === 'argument'" class="obc-arg-badge">&lt;{{
+                <span v-else-if="builderMode === 'argument'" class="obs-arg-badge">&lt;{{
                   builderAction === "scene" ? "scene" : "source"
-                }}&gt;</span>
+                  }}&gt;</span>
 
                 <!-- non-volume: preset scene - combo: type or pick -->
                 <template v-else-if="builderAction === 'scene'">
-                  <input v-model="builderTarget" list="obc-scene-names" class="obc-target-input"
+                  <input v-model="builderTarget" list="obs-scene-names" class="obs-target-input"
                     placeholder="scene name" />
-                  <datalist id="obc-scene-names">
+                  <datalist id="obs-scene-names">
                     <option v-for="s in scenes" :key="s.sceneName" :value="s.sceneName" />
                   </datalist>
                 </template>
 
                 <!-- non-volume: preset source - combo: type or pick -->
-                <input v-else v-model="builderTarget" list="obc-src-names" class="obc-target-input"
+                <input v-else v-model="builderTarget" list="obs-src-names" class="obs-target-input"
                   placeholder="source name" />
               </div>
 
-              <div class="obc-label-col">
-                <span class="obc-col-label">access</span>
+              <div class="obs-label-col">
+                <span class="obs-col-label">access</span>
                 <button type="button" class="access-btn" :class="{
                   'access-mod': builderAccess === 'mod',
                   'access-bc': builderAccess === 'broadcaster',
@@ -1279,18 +1279,18 @@ watch(
                 </button>
               </div>
 
-              <div class="obc-label-col obc-label-col-end">
-                <button class="obc-add-btn" :disabled="addDisabled" @click="addBuilderCommand">
+              <div class="obs-label-col obs-label-col-end">
+                <button class="obs-add-btn" :disabled="addDisabled" @click="addBuilderCommand">
                   add
                 </button>
               </div>
             </div>
-            <datalist id="obc-src-names">
+            <datalist id="obs-src-names">
               <option v-for="n in knownSources" :key="n" :value="n" />
             </datalist>
 
-            <div class="obc-table-wrap">
-              <table class="obc-table">
+            <div class="obs-table-wrap">
+              <table class="obs-table">
                 <thead>
                   <tr>
                     <th>trigger</th>
@@ -1303,30 +1303,30 @@ watch(
                 </thead>
                 <tbody>
                   <tr v-if="!unifiedCommands.length">
-                    <td colspan="6" class="obc-table-empty">
+                    <td colspan="6" class="obs-table-empty">
                       no commands set up yet
                     </td>
                   </tr>
                   <tr v-for="c in unifiedCommands" :key="c.type + (c.index ?? c.action)">
-                    <td class="obc-td-trigger ep-mono">
+                    <td class="obs-td-trigger ep-mono">
                       +{{ c.command }}
                       <span v-if="c.actionHint" class="cmd-usecase-arg">{{
                         c.actionHint
-                        }}</span>
+                      }}</span>
                     </td>
                     <td>
                       {{ c.actionLabel }}
                     </td>
                     <td>
-                      <span class="obc-type-badge" :class="c.badgeClass">{{
+                      <span class="obs-type-badge" :class="c.badgeClass">{{
                         c.badgeText
-                        }}</span>
+                      }}</span>
                     </td>
-                    <td class="obc-td-target" :class="{
-                      'obc-td-target-arg': c.badgeClass === 'arg-type',
+                    <td class="obs-td-target" :class="{
+                      'obs-td-target-arg': c.badgeClass === 'arg-type',
                     }">
                       {{ c.targetDisplay }}
-                      <span v-if="isTargetMissing(c)" class="obc-target-warn"
+                      <span v-if="isTargetMissing(c)" class="obs-target-warn"
                         title="Not found in OBS right now - check the name">!</span>
                     </td>
                     <td>
@@ -1338,7 +1338,7 @@ watch(
                         }}<span class="access-arrow">⤴︎</span>
                       </button>
                     </td>
-                    <td class="obc-td-delete" @click="removeUnifiedCommand(c)">
+                    <td class="obs-td-delete" @click="removeUnifiedCommand(c)">
                       ×
                     </td>
                   </tr>
@@ -1365,58 +1365,58 @@ watch(
 
           <!-- rule builder, bitrate is the trigger, runs agent-side -->
           <template v-else>
-            <div class="obc-label-row">
-              <div class="obc-label-col">
-                <span class="obc-col-label">condition</span>
-                <div class="obc-mode-seg">
-                  <button type="button" class="obc-mode-seg-btn" :class="{ active: ruleCondition === 'below' }"
+            <div class="obs-label-row">
+              <div class="obs-label-col">
+                <span class="obs-col-label">condition</span>
+                <div class="obs-mode-seg">
+                  <button type="button" class="obs-mode-seg-btn" :class="{ active: ruleCondition === 'below' }"
                     @click="ruleCondition = 'below'">
                     below
                   </button>
-                  <button type="button" class="obc-mode-seg-btn" :class="{ active: ruleCondition === 'above' }"
+                  <button type="button" class="obs-mode-seg-btn" :class="{ active: ruleCondition === 'above' }"
                     @click="ruleCondition = 'above'">
                     above
                   </button>
                 </div>
               </div>
 
-              <div class="obc-label-col">
-                <span class="obc-col-label">bitrate (kbps)</span>
-                <input v-model.number="ruleBitrate" type="number" min="1" class="obc-target-input"
+              <div class="obs-label-col">
+                <span class="obs-col-label">bitrate (kbps)</span>
+                <input v-model.number="ruleBitrate" type="number" min="1" class="obs-target-input"
                   style="width: 90px" />
               </div>
 
-              <div class="obc-label-col">
-                <span class="obc-col-label">action</span>
-                <select v-model="ruleAction" class="obc-action-select">
+              <div class="obs-label-col">
+                <span class="obs-col-label">action</span>
+                <select v-model="ruleAction" class="obs-action-select">
                   <option v-for="a in BUILDER_ACTIONS" :key="a.value" :value="a.value">
                     {{ a.label }}
                   </option>
                 </select>
               </div>
 
-              <div class="obc-label-col">
-                <span class="obc-col-label">target</span>
-                <input v-model="ruleTarget" :list="ruleAction === 'scene' ? 'obc-scene-names' : 'obc-src-names'
-                  " class="obc-target-input" :placeholder="ruleAction === 'scene' ? 'scene name' : 'source name'
+              <div class="obs-label-col">
+                <span class="obs-col-label">target</span>
+                <input v-model="ruleTarget" :list="ruleAction === 'scene' ? 'obs-scene-names' : 'obs-src-names'
+                  " class="obs-target-input" :placeholder="ruleAction === 'scene' ? 'scene name' : 'source name'
                     " />
               </div>
 
-              <div v-if="ruleAction === 'volume'" class="obc-label-col">
-                <span class="obc-col-label">volume %</span>
-                <input v-model.number="ruleValue" type="number" min="0" max="100" class="obc-target-input"
+              <div v-if="ruleAction === 'volume'" class="obs-label-col">
+                <span class="obs-col-label">volume %</span>
+                <input v-model.number="ruleValue" type="number" min="0" max="100" class="obs-target-input"
                   style="width: 60px" />
               </div>
 
-              <div class="obc-label-col obc-label-col-end">
-                <button class="obc-add-btn" :disabled="ruleAddDisabled" @click="addRule">
+              <div class="obs-label-col obs-label-col-end">
+                <button class="obs-add-btn" :disabled="ruleAddDisabled" @click="addRule">
                   add
                 </button>
               </div>
             </div>
 
-            <div class="obc-table-wrap">
-              <table class="obc-table">
+            <div class="obs-table-wrap">
+              <table class="obs-table">
                 <thead>
                   <tr>
                     <th>condition</th>
@@ -1428,7 +1428,7 @@ watch(
                 </thead>
                 <tbody>
                   <tr v-if="!rules.length">
-                    <td colspan="5" class="obc-table-empty">
+                    <td colspan="5" class="obs-table-empty">
                       no rules set up yet
                     </td>
                   </tr>
@@ -1437,17 +1437,17 @@ watch(
                       {{ r.condition }} {{ r.bitrate_kbps }} kbps
                     </td>
                     <td>{{ BUILDER_ACTION_LABEL[r.action] ?? r.action }}</td>
-                    <td class="obc-td-target">
+                    <td class="obs-td-target">
                       {{ r.target
                       }}<span v-if="r.action === 'volume'">
                         @ {{ r.value }}%</span>
                     </td>
                     <td>
-                      <button class="obc-toggle obc-toggle-sm" :class="{ on: r.enabled }" @click="toggleRule(r)">
-                        <span class="obc-toggle-knob"></span>
+                      <button class="obs-toggle obs-toggle-sm" :class="{ on: r.enabled }" @click="toggleRule(r)">
+                        <span class="obs-toggle-knob"></span>
                       </button>
                     </td>
-                    <td class="obc-td-delete" @click="removeRule(r.id)">×</td>
+                    <td class="obs-td-delete" @click="removeRule(r.id)">×</td>
                   </tr>
                 </tbody>
               </table>
@@ -1484,10 +1484,10 @@ watch(
         <div class="ep-panel-body">
           <div class="ep-field-group">
             <label class="ep-field-label">Set up the ShyBoti Agent</label>
-            <ol class="obc-setup-steps">
+            <ol class="obs-setup-steps">
               <li>
                 <strong>Generate a pairing token</strong>
-                <button class="ep-btn-new obc-token-btn" :disabled="generatingToken" @click="generateToken">
+                <button class="ep-btn-new obs-token-btn" :disabled="generatingToken" @click="generateToken">
                   {{
                     generatingToken
                       ? "generating..."
@@ -1496,42 +1496,42 @@ watch(
                         : "generate token"
                   }}
                 </button>
-                <div v-if="tokenVisible && token" class="obc-token-box">
-                  <code class="obc-token-val">{{ token }}</code>
-                  <button class="obc-copy-btn" @click="copyToken">
+                <div v-if="tokenVisible && token" class="obs-token-box">
+                  <code class="obs-token-val">{{ token }}</code>
+                  <button class="obs-copy-btn" @click="copyToken">
                     {{ tokenJustCopied ? "copied!" : "copy" }}
                   </button>
-                  <button class="obc-dismiss-btn" @click="
+                  <button class="obs-dismiss-btn" @click="
                     tokenVisible = false;
                   token = '';
                   " title="I saved it, dismiss">
                     done
                   </button>
-                  <div class="obc-token-warn">
+                  <div class="obs-token-warn">
                     Copy this before dismissing - it is not stored on the server
                     and cannot be shown again. If you lose it, regenerate a new
                     one (this will disconnect the agent).
                   </div>
                 </div>
-                <div v-else-if="agentStatus?.paired && !token" class="obc-token-hint">
+                <div v-else-if="agentStatus?.paired && !token" class="obs-token-hint">
                   Token already set. Click "regenerate token" to replace it.
                 </div>
               </li>
               <li>
                 <strong>Download the ShyBoti Agent</strong> - Keeps OBS control local to your PC. Shyboti tells this app
                 what to do, and it talks to OBS directly. Requires
-                <a href="https://nodejs.org" target="_blank" rel="noopener" class="obc-link">Node.js</a>.
-                <div class="obc-dl-row">
-                  <a class="ep-btn-cancel obc-dl-btn" :href="`${API}/agent/download/windows`" target="_blank"
+                <a href="https://nodejs.org" target="_blank" rel="noopener" class="obs-link">Node.js</a>.
+                <div class="obs-dl-row">
+                  <a class="ep-btn-cancel obs-dl-btn" :href="`${API}/agent/download/windows`" target="_blank"
                     rel="noopener">
                     Download for Windows (.zip)
                   </a>
-                  <a class="ep-btn-cancel obc-dl-btn" :href="`${API}/agent/download/linux`" target="_blank"
+                  <a class="ep-btn-cancel obs-dl-btn" :href="`${API}/agent/download/linux`" target="_blank"
                     rel="noopener">
                     Download for Linux (.tar.gz)
                   </a>
                 </div>
-                <div class="obc-av-note">
+                <div class="obs-av-note">
                   Extract the zip, then run <code>start.bat</code> (Windows) or
                   <code>start.sh</code> (Linux/Mac)
                 </div>
@@ -1544,18 +1544,18 @@ watch(
                 the same PC
               </li>
             </ol>
-            <div v-if="agentStatus?.paired && !agentConnected" class="obc-setup-hint obc-paired-hint">
+            <div v-if="agentStatus?.paired && !agentConnected" class="obs-setup-hint obs-paired-hint">
               Token is set - waiting for the agent start...
             </div>
           </div>
 
           <div class="ep-field-group">
             <label class="ep-field-label">Connection enabled</label>
-            <div class="obc-toggle-row">
-              <button class="obc-toggle" :class="{ on: enabledLocal }" @click="enabledLocal = !enabledLocal">
-                <span class="obc-toggle-knob"></span>
+            <div class="obs-toggle-row">
+              <button class="obs-toggle" :class="{ on: enabledLocal }" @click="enabledLocal = !enabledLocal">
+                <span class="obs-toggle-knob"></span>
               </button>
-              <span class="obc-toggle-label">{{
+              <span class="obs-toggle-label">{{
                 enabledLocal
                   ? "on - agent can relay commands"
                   : "off - agent connections are rejected"
@@ -1565,21 +1565,21 @@ watch(
 
           <div class="ep-field-group">
             <label class="ep-field-label">Scene previews</label>
-            <div class="obc-toggle-row">
-              <button class="obc-toggle" :class="{ on: screenshotsLocal }"
+            <div class="obs-toggle-row">
+              <button class="obs-toggle" :class="{ on: screenshotsLocal }"
                 @click="screenshotsLocal = !screenshotsLocal">
-                <span class="obc-toggle-knob"></span>
+                <span class="obs-toggle-knob"></span>
               </button>
-              <span class="obc-toggle-label">{{
+              <span class="obs-toggle-label">{{
                 screenshotsLocal
                   ? "on - periodic screenshots of each scene"
                   : "off - no screenshots are taken"
               }}</span>
             </div>
-            <div v-if="screenshotsLocal" class="obc-interval-row">
+            <div v-if="screenshotsLocal" class="obs-interval-row">
               <span class="ep-field-hint">refresh every</span>
               <input v-model.number="screenshotIntervalLocal" type="number" min="1" max="60"
-                class="ep-field-input obc-interval-input" />
+                class="ep-field-input obs-interval-input" />
               <span class="ep-field-hint">seconds (min 1, to keep this light on OBS)</span>
             </div>
             <div class="ep-field-hint">
@@ -1658,7 +1658,7 @@ watch(
   flex-shrink: 0;
 }
 
-.obc-gear-badge {
+.obs-gear-badge {
   position: absolute;
   top: -5px;
   right: -5px;
@@ -1704,7 +1704,7 @@ watch(
 }
 
 /* Status bar */
-.obc-status-bar {
+.obs-status-bar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1714,21 +1714,21 @@ watch(
   font-size: 11px;
 }
 
-.obc-status-dot {
+.obs-status-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-.obc-status-text {
+.obs-status-text {
   flex: 1;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
-.obc-status-version {
+.obs-status-version {
   font-size: 9px;
   color: #444;
 }
@@ -1739,7 +1739,7 @@ watch(
   background: transparent;
 }
 
-.status-none .obc-status-dot {
+.status-none .obs-status-dot {
   background: #333;
 }
 
@@ -1749,7 +1749,7 @@ watch(
   background: #0d0d1088;
 }
 
-.status-offline .obc-status-dot {
+.status-offline .obs-status-dot {
   background: #555;
 }
 
@@ -1759,7 +1759,7 @@ watch(
   background: #e5c07b08;
 }
 
-.status-partial .obc-status-dot {
+.status-partial .obs-status-dot {
   background: #e5c07b;
 }
 
@@ -1769,7 +1769,7 @@ watch(
   background: #23d18b08;
 }
 
-.status-ready .obc-status-dot {
+.status-ready .obs-status-dot {
   background: #23d18b;
   animation: pulse 2s ease-in-out infinite;
 }
@@ -1797,28 +1797,28 @@ watch(
   padding-left: 10px;
 }
 
-.obc-setup-card {
+.obs-setup-card {
   border: 1px solid #1e1e22;
   padding: 14px 16px;
   background: #0d0d10;
 }
 
-.obc-setup-compact {
+.obs-setup-compact {
   padding: 12px 14px;
 }
 
-.obc-setup-compact .obc-setup-title {
+.obs-setup-compact .obs-setup-title {
   margin-bottom: 4px;
 }
 
-.obc-setup-title {
+.obs-setup-title {
   font-size: 12px;
   font-weight: 600;
   color: #ccc;
   margin-bottom: 12px;
 }
 
-.obc-setup-steps {
+.obs-setup-steps {
   padding-left: 18px;
   margin: 0 0 10px;
   display: flex;
@@ -1826,42 +1826,42 @@ watch(
   gap: 12px;
 }
 
-.obc-setup-steps li {
+.obs-setup-steps li {
   font-size: 12px;
   color: #777;
   line-height: 1.6;
 }
 
-.obc-setup-steps li strong {
+.obs-setup-steps li strong {
   color: #aaa;
 }
 
-.obc-setup-hint {
+.obs-setup-hint {
   font-size: 11px;
   color: #555;
   display: block;
   margin-top: 4px;
 }
 
-.obc-paired-hint {
+.obs-paired-hint {
   color: #e5c07b;
   border-top: 1px solid #1e1e22;
   padding-top: 10px;
   margin-top: 4px;
 }
 
-.obc-token-btn {
+.obs-token-btn {
   margin-top: 6px;
   display: block;
 }
 
-.obc-dl-btn {
+.obs-dl-btn {
   margin-top: 6px;
   display: inline-block;
   text-decoration: none;
 }
 
-.obc-token-box {
+.obs-token-box {
   margin-top: 8px;
   padding: 8px 10px;
   background: #0a0a0d;
@@ -1872,7 +1872,7 @@ watch(
   align-items: flex-start;
 }
 
-.obc-token-val {
+.obs-token-val {
   font-family: "Consolas", "Fira Mono", monospace;
   font-size: 11px;
   color: #c4a0ff;
@@ -1881,7 +1881,7 @@ watch(
   word-break: break-all;
 }
 
-.obc-copy-btn {
+.obs-copy-btn {
   height: 24px;
   padding: 0 10px;
   border: 1px solid #6f2bff55;
@@ -1894,11 +1894,11 @@ watch(
   transition: background 0.15s;
 }
 
-.obc-copy-btn:hover {
+.obs-copy-btn:hover {
   background: #6f2bff22;
 }
 
-.obc-token-warn {
+.obs-token-warn {
   width: 100%;
   font-size: 10px;
   color: #e5c07b;
@@ -1906,13 +1906,13 @@ watch(
   line-height: 1.5;
 }
 
-.obc-token-hint {
+.obs-token-hint {
   font-size: 11px;
   color: #555;
   margin-top: 4px;
 }
 
-.obc-dismiss-btn {
+.obs-dismiss-btn {
   height: 22px;
   padding: 0 10px;
   border: 1px solid #2a2a30;
@@ -1924,46 +1924,46 @@ watch(
   flex-shrink: 0;
 }
 
-.obc-dismiss-btn:hover {
+.obs-dismiss-btn:hover {
   border-color: #444;
   color: #aaa;
 }
 
-.obc-dl-row {
+.obs-dl-row {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 6px;
 }
 
-.obc-av-note {
+.obs-av-note {
   font-size: 10px;
   color: #555;
   margin-top: 6px;
   line-height: 1.5;
 }
 
-.obc-av-note code {
+.obs-av-note code {
   color: #9d6cff;
   font-family: "Consolas", "Fira Mono", monospace;
 }
 
-.obc-link {
+.obs-link {
   color: #9d6cff;
   text-decoration: none;
 }
 
-.obc-link:hover {
+.obs-link:hover {
   text-decoration: underline;
 }
 
-.obc-section-label {
+.obs-section-label {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.obc-refresh-btn {
+.obs-refresh-btn {
   height: 20px;
   padding: 0 7px;
   border: 1px solid #2a2a30;
@@ -1974,19 +1974,19 @@ watch(
   transition: color 0.15s;
 }
 
-.obc-refresh-btn:hover {
+.obs-refresh-btn:hover {
   color: #9d6cff;
 }
 
 /* Scenes - live scene big & centered above, the rest small & centered below */
-.obc-scenes {
+.obs-scenes {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 14px;
 }
 
-.obc-scenes-live-row {
+.obs-scenes-live-row {
   display: flex;
   justify-content: center;
   align-items: stretch;
@@ -1995,7 +1995,7 @@ watch(
   flex-wrap: wrap;
 }
 
-.obc-scenes-others {
+.obs-scenes-others {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -2003,7 +2003,7 @@ watch(
   width: 100%;
 }
 
-.obc-scene-card {
+.obs-scene-card {
   width: 200px;
   padding: 0 0 8px;
   border: 1px solid #2a2a30;
@@ -2018,26 +2018,26 @@ watch(
   overflow: hidden;
 }
 
-.obc-scene-card-live {
+.obs-scene-card-live {
   width: 500px;
   max-width: 100%;
 }
 
-.obc-scene-card:hover {
+.obs-scene-card:hover {
   border-color: #3a3a44;
   color: #aaa;
 }
 
-.obc-scene-card.active {
+.obs-scene-card.active {
   border-color: #6f2bff;
   color: #c4a0ff;
 }
 
-.obc-scene-card.picked:not(.active) {
+.obs-scene-card.picked:not(.active) {
   border-color: #2a2a42;
 }
 
-.obc-scene-live {
+.obs-scene-live {
   position: absolute;
   top: 5px;
   right: 6px;
@@ -2050,7 +2050,7 @@ watch(
   z-index: 1;
 }
 
-.obc-scene-name {
+.obs-scene-name {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2058,7 +2058,7 @@ watch(
   text-align: center;
 }
 
-.obc-scene-thumb {
+.obs-scene-thumb {
   width: 100%;
   aspect-ratio: 16/9;
   background: #0a0a0d;
@@ -2069,37 +2069,37 @@ watch(
   border-bottom: 1px solid #1e1e24;
 }
 
-.obc-scene-thumb img {
+.obs-scene-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
 
-.obc-scene-thumb-empty {
+.obs-scene-thumb-empty {
   font-size: 9px;
   color: #333;
 }
 
-.obc-projector-state {
+.obs-projector-state {
   margin-top: 6px;
   font-size: 11px;
   color: #666;
 }
 
-.obc-projector-title {
+.obs-projector-title {
   color: #666666ab;
   font-style: italic;
 }
 
 /* Sources */
-.obc-source-list {
+.obs-source-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
 
-.obc-source-row {
+.obs-source-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2109,7 +2109,7 @@ watch(
   border: 1px solid #1e1e24;
 }
 
-.obc-source-name {
+.obs-source-name {
   flex: 1;
   font-size: 12px;
   color: #888;
@@ -2119,8 +2119,8 @@ watch(
   white-space: nowrap;
 }
 
-.obc-vis-btn,
-.obc-mute-btn {
+.obs-vis-btn,
+.obs-mute-btn {
   height: 22px;
   padding: 0 9px;
   border: 1px solid #2a2a30;
@@ -2133,34 +2133,34 @@ watch(
   transition: all 0.15s;
 }
 
-.obc-vis-btn.on {
+.obs-vis-btn.on {
   border-color: #6f2bff55;
   color: #9d6cff;
   background: #6f2bff0e;
 }
 
-.obc-mute-btn.muted {
+.obs-mute-btn.muted {
   border-color: #f1494944;
   color: #f14949;
   background: #f149490a;
 }
 
-.obc-vis-btn:hover,
-.obc-mute-btn:hover {
+.obs-vis-btn:hover,
+.obs-mute-btn:hover {
   border-color: #444;
   color: #aaa;
 }
 
 /* Bindings */
-.obc-bind-list {
+.obs-bind-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin-bottom: 8px;
 }
 
-.obc-bind-row,
-.obc-add-row {
+.obs-bind-row,
+.obs-add-row {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2168,42 +2168,42 @@ watch(
   padding: 3px 0;
 }
 
-.obc-bind-prefix {
+.obs-bind-prefix {
   color: #9d6cff;
   font-weight: 700;
   font-size: 12px;
   flex-shrink: 0;
 }
 
-.obc-bind-cmd {
+.obs-bind-cmd {
   width: 120px;
   flex: none;
 }
 
-.obc-bind-target {
+.obs-bind-target {
   width: 150px;
   flex: none;
 }
 
-.obc-bind-vol {
+.obs-bind-vol {
   width: 64px;
   flex: none;
 }
 
-.obc-bind-arrow {
+.obs-bind-arrow {
   color: #555;
   font-size: 12px;
   flex-shrink: 0;
 }
 
 /* Settings panel: toggles + generic arg commands */
-.obc-toggle-row {
+.obs-toggle-row {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.obc-toggle {
+.obs-toggle {
   width: 34px;
   height: 18px;
   border: 1px solid #2a2a30;
@@ -2216,12 +2216,12 @@ watch(
     background 0.15s;
 }
 
-.obc-toggle.on {
+.obs-toggle.on {
   border-color: #6f2bff88;
   background: #6f2bff22;
 }
 
-.obc-toggle-knob {
+.obs-toggle-knob {
   display: block;
   width: 12px;
   height: 12px;
@@ -2231,36 +2231,36 @@ watch(
     background 0.15s;
 }
 
-.obc-toggle.on .obc-toggle-knob {
+.obs-toggle.on .obs-toggle-knob {
   background: #9d6cff;
   transform: translateX(14px);
 }
 
-.obc-toggle-label {
+.obs-toggle-label {
   font-size: 11px;
   color: #888;
 }
 
-.obc-interval-row {
+.obs-interval-row {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-top: 8px;
 }
 
-.obc-interval-input {
+.obs-interval-input {
   width: 56px;
   flex: none;
   text-align: center;
 }
 
-.obc-arg-list {
+.obs-arg-list {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 
-.obc-arg-row {
+.obs-arg-row {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2268,14 +2268,14 @@ watch(
   padding: 3px 0;
 }
 
-.obc-arg-label {
+.obs-arg-label {
   width: 130px;
   flex: none;
   font-size: 11px;
   color: #999;
 }
 
-.obc-arg-usage {
+.obs-arg-usage {
   font-size: 10px;
   color: #444;
   font-family: "Consolas", "Fira Mono", monospace;
@@ -2286,44 +2286,44 @@ watch(
   justify-content: center;
 }
 
-.obc-box {
+.obs-box {
   justify-content: flex-start;
 }
 
 /* loading spinner, avoids flashing "not set up" on first load */
-.obc-loading {
+.obs-loading {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 48px 0;
 }
 
-.obc-loading-emote {
+.obs-loading-emote {
   width: 48px;
   height: 48px;
   image-rendering: pixelated;
-  animation: obc-spin 1.1s linear infinite;
+  animation: obs-spin 1.1s linear infinite;
 }
 
-@keyframes obc-spin {
+@keyframes obs-spin {
   to {
     transform: rotate(360deg);
   }
 }
 
 /* Sources | Audio mixer | Command builder */
-.obc-boxes-row {
+.obs-boxes-row {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
   align-items: stretch;
 }
 
-.obc-boxes-row.obc-boxes-single {
+.obs-boxes-row.obs-boxes-single {
   display: block;
 }
 
-.obc-box {
+.obs-box {
   padding: 12px 14px;
   border: 1px solid #1e1e22;
   background: #0d0d10;
@@ -2332,7 +2332,7 @@ watch(
   max-width: 400px;
 }
 
-.obc-box-builder {
+.obs-box-builder {
   flex: 0 0 700px;
   max-width: 700px;
   width: 700px;
@@ -2406,13 +2406,13 @@ watch(
 }
 
 /* Audio mixer */
-.obc-mixer-list {
+.obs-mixer-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.obc-mixer-row {
+.obs-mixer-row {
   padding: 6px 8px;
   background: #111217;
   border: 1px solid #1e1e24;
@@ -2421,19 +2421,19 @@ watch(
   gap: 6px;
 }
 
-.obc-mixer-top {
+.obs-mixer-top {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.obc-mixer-slider-row {
+.obs-mixer-slider-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.obc-mixer-slider {
+.obs-mixer-slider {
   flex: 1;
   accent-color: #9d6cff;
   /* Remove browser default white track background */
@@ -2442,13 +2442,13 @@ watch(
   height: 4px;
 }
 
-.obc-mixer-slider::-webkit-slider-runnable-track {
+.obs-mixer-slider::-webkit-slider-runnable-track {
   background: #2a2a30;
   height: 4px;
   border-radius: 2px;
 }
 
-.obc-mixer-slider::-webkit-slider-thumb {
+.obs-mixer-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 12px;
   height: 12px;
@@ -2458,13 +2458,13 @@ watch(
   cursor: pointer;
 }
 
-.obc-mixer-slider::-moz-range-track {
+.obs-mixer-slider::-moz-range-track {
   background: #2a2a30;
   height: 4px;
   border-radius: 2px;
 }
 
-.obc-mixer-slider::-moz-range-thumb {
+.obs-mixer-slider::-moz-range-thumb {
   width: 12px;
   height: 12px;
   border-radius: 50%;
@@ -2473,7 +2473,7 @@ watch(
   cursor: pointer;
 }
 
-.obc-mixer-db {
+.obs-mixer-db {
   font-size: 10px;
   color: #666;
   font-family: "Consolas", "Fira Mono", monospace;
@@ -2483,7 +2483,7 @@ watch(
 }
 
 /* Command builder - single-row form matching the reference demo */
-.obc-label-row {
+.obs-label-row {
   display: flex;
   align-items: flex-end;
   gap: 10px;
@@ -2491,18 +2491,18 @@ watch(
   padding: 4px 0 12px;
 }
 
-.obc-label-col {
+.obs-label-col {
   display: flex;
   flex-direction: column;
   gap: 4px;
   flex-shrink: 0;
 }
 
-.obc-label-col-end {
+.obs-label-col-end {
   align-self: flex-end;
 }
 
-.obc-col-label {
+.obs-col-label {
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
@@ -2512,7 +2512,7 @@ watch(
 }
 
 /* builder chat command name header */
-.obc-cmd-name-row {
+.obs-cmd-name-row {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -2521,7 +2521,7 @@ watch(
   border-bottom: 1px solid #1e1e24;
 }
 
-.obc-cmd-name-prefix {
+.obs-cmd-name-prefix {
   font-size: 22px;
   font-weight: 700;
   color: #9d6cff;
@@ -2529,7 +2529,7 @@ watch(
   line-height: 1;
 }
 
-.obc-cmd-name-input {
+.obs-cmd-name-input {
   flex: 1;
   max-width: 260px;
   height: 36px;
@@ -2544,21 +2544,21 @@ watch(
   transition: border-color .15s;
 }
 
-.obc-cmd-name-input::placeholder {
+.obs-cmd-name-input::placeholder {
   color: #2a2a3a;
   font-weight: 400;
 }
 
-.obc-cmd-name-input:focus {
+.obs-cmd-name-input:focus {
   border-bottom-color: #9d6cff;
 }
 
-.obc-cmd-name-input.obc-trigger-conflict {
+.obs-cmd-name-input.obs-trigger-conflict {
   border-bottom-color: #f14949;
   color: #f14949;
 }
 
-.obc-cmd-name-conflict {
+.obs-cmd-name-conflict {
   font-size: 10px;
   color: #f14949;
   letter-spacing: .04em;
@@ -2566,8 +2566,8 @@ watch(
   flex-shrink: 0;
 }
 
-.obc-action-select,
-.obc-target-select {
+.obs-action-select,
+.obs-target-select {
   height: 28px;
   padding: 0 6px;
   background: #0a0a0d;
@@ -2580,21 +2580,21 @@ watch(
   transition: border-color 0.15s;
 }
 
-.obc-action-select {
+.obs-action-select {
   width: 118px;
 }
 
-.obc-target-select {
+.obs-target-select {
   width: 118px;
 }
 
-.obc-action-select:focus,
-.obc-target-select:focus {
+.obs-action-select:focus,
+.obs-target-select:focus {
   outline: none;
   border-color: #6f2bff88;
 }
 
-.obc-target-input {
+.obs-target-input {
   height: 28px;
   padding: 0 8px;
   background: #0a0a0d;
@@ -2606,19 +2606,19 @@ watch(
   transition: border-color 0.15s;
 }
 
-.obc-target-input:focus {
+.obs-target-input:focus {
   outline: none;
   border-color: #6f2bff88;
 }
 
-.obc-mode-seg {
+.obs-mode-seg {
   display: inline-flex;
   border: 1px solid #2a2a30;
   overflow: hidden;
   flex-shrink: 0;
 }
 
-.obc-mode-seg-btn {
+.obs-mode-seg-btn {
   height: 26px;
   padding: 0 8px;
   border: none;
@@ -2632,21 +2632,21 @@ watch(
   border-right: 1px solid #2a2a30;
 }
 
-.obc-mode-seg-btn:last-child {
+.obs-mode-seg-btn:last-child {
   border-right: none;
 }
 
-.obc-mode-seg-btn.active {
+.obs-mode-seg-btn.active {
   background: #6f2bff15;
   color: #9d6cff;
   font-weight: 600;
 }
 
-.obc-mode-seg-btn:hover:not(.active) {
+.obs-mode-seg-btn:hover:not(.active) {
   color: #888;
 }
 
-.obc-arg-badge {
+.obs-arg-badge {
   display: inline-flex;
   align-items: center;
   height: 28px;
@@ -2659,7 +2659,7 @@ watch(
   white-space: nowrap;
 }
 
-.obc-add-btn {
+.obs-add-btn {
   height: 28px;
   padding: 0 14px;
   border: 1px solid #6f2bff66;
@@ -2673,29 +2673,29 @@ watch(
   white-space: nowrap;
 }
 
-.obc-add-btn:hover:not(:disabled) {
+.obs-add-btn:hover:not(:disabled) {
   background: #6f2bff25;
   border-color: #9d6cff99;
 }
 
-.obc-add-btn:disabled {
+.obs-add-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
 
-.obc-table-wrap {
+.obs-table-wrap {
   max-height: 240px;
   overflow-y: auto;
   border: 1px solid #1e1e24;
 }
 
-.obc-table {
+.obs-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 11px;
 }
 
-.obc-table th {
+.obs-table th {
   text-align: left;
   padding: 6px 10px;
   color: #555;
@@ -2710,7 +2710,7 @@ watch(
   z-index: 1;
 }
 
-.obc-table td {
+.obs-table td {
   padding: 6px 10px;
   color: #888;
   border-bottom: 1px solid #1a1a20;
@@ -2720,32 +2720,32 @@ watch(
   text-overflow: ellipsis;
 }
 
-.obc-table tbody tr:hover {
+.obs-table tbody tr:hover {
   background: #ffffff03;
 }
 
-.obc-table-empty {
+.obs-table-empty {
   text-align: center;
   color: #444;
   padding: 20px !important;
 }
 
-.obc-td-trigger {
+.obs-td-trigger {
   color: #c4a0ff;
   font-weight: 600;
 }
 
-.obc-td-target {
+.obs-td-target {
   color: #ccc;
 }
 
-.obc-td-target-arg {
+.obs-td-target-arg {
   color: #e5c07b;
   font-style: italic;
   font-family: "Consolas", "Fira Mono", monospace;
 }
 
-.obc-target-warn {
+.obs-target-warn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2762,7 +2762,7 @@ watch(
   cursor: help;
 }
 
-.obc-td-delete {
+.obs-td-delete {
   color: #555;
   cursor: pointer;
   font-size: 13px;
@@ -2771,11 +2771,11 @@ watch(
   width: 30px;
 }
 
-.obc-td-delete:hover {
+.obs-td-delete:hover {
   color: #f14949;
 }
 
-.obc-type-badge {
+.obs-type-badge {
   display: inline-block;
   font-size: 9px;
   padding: 1px 7px;
@@ -2783,23 +2783,23 @@ watch(
   color: #666;
 }
 
-.obc-type-badge.fixed-type {
+.obs-type-badge.fixed-type {
   border-color: #6f2bff44;
   color: #9d6cff;
 }
 
-.obc-type-badge.arg-type {
+.obs-type-badge.arg-type {
   border-color: #e5c07b44;
   color: #e5c07b;
 }
 
 @media (max-width: 900px) {
-  .obc-boxes-row {
+  .obs-boxes-row {
     flex-direction: column;
   }
 
-  .obc-box,
-  .obc-box-builder {
+  .obs-box,
+  .obs-box-builder {
     max-width: 100%;
     width: 100%;
   }
@@ -2807,29 +2807,29 @@ watch(
 
 @media (max-width: 680px) {
 
-  .obc-bind-cmd,
-  .obc-bind-target {
+  .obs-bind-cmd,
+  .obs-bind-target {
     width: 100%;
   }
 
-  .obc-arg-label {
+  .obs-arg-label {
     width: 100%;
   }
 
-  .obc-scenes-others {
+  .obs-scenes-others {
     gap: 8px;
   }
 
-  .obc-scenes-others .obc-scene-card {
+  .obs-scenes-others .obs-scene-card {
     width: calc(50% - 4px);
   }
 
-  .obc-scenes-live-row {
+  .obs-scenes-live-row {
     flex-direction: column;
     align-items: center;
   }
 
-  .obc-live-stats {
+  .obs-live-stats {
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
@@ -2837,41 +2837,41 @@ watch(
     min-width: 0;
   }
 
-  .obc-live-stat {
+  .obs-live-stat {
     flex: 1 1 90px;
   }
 
-  .obc-label-row {
+  .obs-label-row {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
   }
 
-  .obc-label-col,
-  .obc-label-col-end {
+  .obs-label-col,
+  .obs-label-col-end {
     width: 100%;
     align-self: stretch;
   }
 
-  .obc-trigger-wrap,
-  .obc-trigger-input,
-  .obc-action-select,
-  .obc-target-select,
-  .obc-target-input {
+  .obs-trigger-wrap,
+  .obs-trigger-input,
+  .obs-action-select,
+  .obs-target-select,
+  .obs-target-input {
     width: 100%;
     max-width: none;
   }
 
-  .obc-mode-seg {
+  .obs-mode-seg {
     width: 100%;
     display: flex;
   }
 
-  .obc-mode-seg-btn {
+  .obs-mode-seg-btn {
     flex: 1;
   }
 
-  .obc-arg-badge {
+  .obs-arg-badge {
     width: 100%;
     justify-content: center;
     box-sizing: border-box;
@@ -2879,32 +2879,32 @@ watch(
 
   /* scoped to the builder form only, not the small per-row access button
      inside the results table */
-  .obc-label-row .access-btn,
-  .obc-add-btn {
+  .obs-label-row .access-btn,
+  .obs-add-btn {
     width: 100%;
   }
 
   /* results table: let it scroll sideways instead of truncating every
      cell down to a couple of characters */
-  .obc-table-wrap {
+  .obs-table-wrap {
     overflow-x: auto;
   }
 
-  .obc-table {
+  .obs-table {
     min-width: 560px;
   }
 
-  .obc-builder-tabs {
+  .obs-builder-tabs {
     overflow-x: auto;
   }
 
-  .obc-box-builder {
+  .obs-box-builder {
     padding: 12px;
   }
 }
 
 /* Bitrate/preview stats panel next to the live scene */
-.obc-live-stats {
+.obs-live-stats {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -2913,7 +2913,7 @@ watch(
   flex-shrink: 0;
 }
 
-.obc-live-stat {
+.obs-live-stat {
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -2922,33 +2922,33 @@ watch(
   background: #0d0d10;
 }
 
-.obc-live-stat-label {
+.obs-live-stat-label {
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: #555;
 }
 
-.obc-live-stat-value {
+.obs-live-stat-value {
   font-size: 13px;
   font-family: "Consolas", "Fira Mono", monospace;
   color: #9d6cff;
   font-weight: 600;
 }
 
-.obc-live-stat.bad .obc-live-stat-value {
+.obs-live-stat.bad .obs-live-stat-value {
   color: #f14949;
 }
 
 /* Command builder / Rule builder tab switch */
-.obc-builder-tabs {
+.obs-builder-tabs {
   display: flex;
   gap: 2px;
   margin-bottom: 10px;
   border-bottom: 1px solid #1e1e22;
 }
 
-.obc-builder-tab {
+.obs-builder-tab {
   padding: 6px 12px;
   border: none;
   background: transparent;
@@ -2964,27 +2964,27 @@ watch(
     border-color 0.15s;
 }
 
-.obc-builder-tab.active {
+.obs-builder-tab.active {
   color: #9d6cff;
   border-bottom-color: #6f2bff;
 }
 
-.obc-builder-tab:hover:not(.active) {
+.obs-builder-tab:hover:not(.active) {
   color: #888;
 }
 
 /* small toggle for the rule table's on column */
-.obc-toggle-sm {
+.obs-toggle-sm {
   width: 26px;
   height: 15px;
 }
 
-.obc-toggle-sm .obc-toggle-knob {
+.obs-toggle-sm .obs-toggle-knob {
   width: 9px;
   height: 9px;
 }
 
-.obc-toggle-sm.on .obc-toggle-knob {
+.obs-toggle-sm.on .obs-toggle-knob {
   transform: translateX(11px);
 }
 </style>
