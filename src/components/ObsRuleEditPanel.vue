@@ -173,7 +173,7 @@ async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
   if (!session.value) return [];
   try {
     const res = await fetch(
-      `${API}/twitch/categories/search?q=${encodeURIComponent(query)}`,
+      `${API}/obs/twitch/categories?q=${encodeURIComponent(query)}`,
       { headers: { Authorization: `Bearer ${session.value.token}` } },
     );
     if (!res.ok) return [];
