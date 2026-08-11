@@ -21,6 +21,7 @@ const rules = ref<ObsRule[]>([]);
 const scenes = ref<string[]>([]);
 const sources = ref<string[]>([]);
 const saving = ref<string | null>(null);
+const hasCategoryScope = ref(true); // >>> optimistic default so the warning doesn't flash before the check resolves
 
 const RULE_ACTION_LABEL: Record<string, string> = {
   scene: "scene",
@@ -42,6 +43,11 @@ function ruleTitle(rule: ObsRule): string {
   return `${rule.trigger_scene ?? "?"} -> ${rule.target}`;
 }
 
+// >>> a rule that touches category (trigger or action) but can't actually fire without this scope
+const hasCategoryRule = computed(() =>
+  rules.value.some((r) => r.trigger_type === "category" || r.action === "category"),
+);
+
 async function fetchRules() {
   if (!session.value || !canView.value) return;
   loading.value = true;
@@ -56,6 +62,19 @@ async function fetchRules() {
     }
   } catch { }
   loading.value = false;
+}
+
+async function fetchCategoryScope() {
+  if (!session.value) return;
+  try {
+    const res = await fetch(`${API}/obs/${session.value.channel}/category-scope-status`, {
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    if (res.ok) {
+      const d = (await res.json()) as { hasScope: boolean };
+      hasCategoryScope.value = d.hasScope;
+    }
+  } catch { }
 }
 
 // >>> edit panel
@@ -131,7 +150,10 @@ async function deleteRule(id: string) {
   saving.value = null;
 }
 
-onMounted(fetchRules);
+onMounted(() => {
+  fetchRules();
+  fetchCategoryScope();
+});
 </script>
 
 <template>
@@ -157,9 +179,15 @@ onMounted(fetchRules);
       OBS isn't set up yet - set up the agent on the
       <router-link to="/obs-control" class="obs-rule-link">OBS control</router-link> page first.
     </div>
-    <div v-else-if="!rules.length" class="ep-empty">
-      No obs automations yet. Create one to get started.
-    </div>
+    <template v-else>
+      <div v-if="!hasCategoryScope && hasCategoryRule" class="obs-scope-warning">
+        Your stored Twitch token doesn't have permission to change the category, so any
+        category-related rule below silently won't fire. <a href="/auth/add" class="obs-rule-link">Re-authorize</a>
+        to grant it.
+      </div>
+      <div v-if="!rules.length" class="ep-empty">
+        No obs automations yet. Create one to get started.
+      </div>
 
     <div v-else class="ep-row-list">
       <div v-for="rule in rules" :key="rule.id" class="ep-list-row" :class="{ inactive: !rule.enabled }">
@@ -188,10 +216,11 @@ onMounted(fetchRules);
         </div>
       </div>
     </div>
+    </template>
   </div>
 
   <ObsRuleEditPanel :open="editOpen" :channel="session?.channel ?? ''" :rules="rules" :editTarget="editTarget"
-    :scenes="scenes" :sources="sources" @close="editOpen = false" @saved="onSaved" />
+    :scenes="scenes" :sources="sources" :hasCategoryScope="hasCategoryScope" @close="editOpen = false" @saved="onSaved" />
 </template>
 
 <style scoped>
@@ -245,6 +274,16 @@ onMounted(fetchRules);
 
 .obs-rule-link:hover {
   text-decoration: underline;
+}
+
+.obs-scope-warning {
+  font-size: 11px;
+  color: #e5c07b;
+  background: rgba(229, 192, 123, 0.08);
+  border-left: 2px solid #e5c07b;
+  padding: 8px 10px;
+  margin-bottom: 12px;
+  line-height: 1.5;
 }
 
 @media (max-width: 680px) {

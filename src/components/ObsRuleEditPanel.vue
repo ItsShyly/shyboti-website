@@ -23,6 +23,8 @@ export interface ObsRule {
   target: string;
   target_category_id?: string;
   value?: number;
+  chat_message_enabled?: boolean;
+  chat_message?: string; // supports $scene / $category placeholders
   enabled: boolean;
 }
 
@@ -35,6 +37,7 @@ interface Props {
   editTarget: string | null;
   scenes: string[];
   sources: string[];
+  hasCategoryScope: boolean;
 }
 
 const props = defineProps<Props>();
@@ -85,6 +88,21 @@ const fTargetCategoryId = ref("");
 const fTargetCategoryName = ref("");
 const fValue = ref<number | "">("");
 const fEnabled = ref(true);
+const fChatMsgEnabled = ref(false);
+const fChatMsg = ref("");
+
+// >>> what to prefill the chat message with the first time the toggle is
+function defaultChatMessage(action: string): string {
+  if (action === "scene") return "Scene changed to $scene";
+  if (action === "category") return "Category changed to $category";
+  return "";
+}
+function toggleChatMessage() {
+  fChatMsgEnabled.value = !fChatMsgEnabled.value;
+  if (fChatMsgEnabled.value && !fChatMsg.value.trim()) {
+    fChatMsg.value = defaultChatMessage(fAction.value);
+  }
+}
 
 // guard: suppress field-change watchers while populate() is bulk-filling the form
 let populating = false;
@@ -120,6 +138,8 @@ watch(
       fTargetCategoryName.value = "";
       fValue.value = "";
       fEnabled.value = true;
+      fChatMsgEnabled.value = false;
+      fChatMsg.value = "";
     } else {
       const r = props.rules.find((x) => x.id === props.editTarget);
       if (r) {
@@ -135,6 +155,8 @@ watch(
         fTarget.value = r.action === "category" ? "" : r.target;
         fValue.value = r.value ?? "";
         fEnabled.value = r.enabled;
+        fChatMsgEnabled.value = r.chat_message_enabled ?? false;
+        fChatMsg.value = r.chat_message ?? "";
       }
     }
     // released after Vue's next DOM patch, which happens after any pre-flush
@@ -159,6 +181,11 @@ watch(fAction, (a) => {
     fTargetCategoryName.value = "";
   }
 });
+
+// >>> not sure if this works but yea
+const needsCategoryScope = computed(
+  () => (fTriggerType.value === "category" || fAction.value === "category") && !props.hasCategoryScope,
+);
 
 function onCategorySelect(item: TypeaheadItem) {
   fCategoryId.value = item.id ?? "";
@@ -211,6 +238,10 @@ async function save() {
     if (fAction.value === "category") entry.target_category_id = fTargetCategoryId.value;
     if (fAction.value === "volume" && fValue.value !== "")
       entry.value = Number(fValue.value);
+    if (fChatMsgEnabled.value && fChatMsg.value.trim()) {
+      entry.chat_message_enabled = true;
+      entry.chat_message = fChatMsg.value.trim();
+    }
 
     const idx = newRules.findIndex((r) => r.id === entry.id);
     if (idx >= 0) newRules[idx] = entry;
@@ -361,6 +392,20 @@ const saveDisabled = computed(() => {
               placeholder="e.g. 50" />
           </div>
 
+          <!-- chat message -->
+          <div class="ep-field-group">
+            <label class="ep-field-label">Chat message</label>
+            <div class="obs-toggle-row">
+              <button class="ep-toggle-btn" :class="{ on: fChatMsgEnabled }" @click="toggleChatMessage">
+                <span class="ep-toggle-knob"></span>
+              </button>
+              <span class="obs-toggle-label">{{ fChatMsgEnabled ? "send a message when this fires" : "off" }}</span>
+            </div>
+            <textarea v-if="fChatMsgEnabled" v-model="fChatMsg" class="ep-field-input obs-chat-msg-input" rows="2"
+              placeholder="Scene changed to $scene"></textarea>
+            <span v-if="fChatMsgEnabled" class="ep-field-hint">$scene and $category get filled in automatically</span>
+          </div>
+
           <!-- enabled -->
           <div class="ep-field-group">
             <label class="ep-field-label">Enabled</label>
@@ -370,6 +415,13 @@ const saveDisabled = computed(() => {
               </button>
               <span class="obs-toggle-label">{{ fEnabled ? "active" : "disabled" }}</span>
             </div>
+          </div>
+        </div>
+
+        <div v-if="needsCategoryScope" class="ep-panel-body" style="padding-top: 0">
+          <div class="obs-scope-warning">
+            Your stored Twitch token doesn't have permission to change the category yet, so this
+            rule won't actually fire until you <a href="/auth/add" class="obs-rule-link">re-authorize</a>.
           </div>
         </div>
 
@@ -432,6 +484,13 @@ const saveDisabled = computed(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.obs-chat-msg-input {
+  margin-top: 8px;
+  resize: vertical;
+  min-height: 44px;
+  font-family: inherit;
 }
 
 .obs-toggle-label {
