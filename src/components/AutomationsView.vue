@@ -53,12 +53,14 @@ const activeChild = computed(() => {
         <div class="ep-view-title">{{ t("auto.title") }}</div>
         <div class="ep-view-sub">
           <template v-if="activeChild?.header">{{ activeChild.header.count }} {{ activeChild.header.countLabel
-          }}</template>
+            }}</template>
           <template v-else>&mdash;</template>
         </div>
       </div>
       <div class="ep-view-header-right">
-        <div id="auto-sync-slot"></div>
+        <!-- separate, always-present teleport targets per tab  -->
+        <div id="auto-sync-slot-timers"></div>
+        <div id="auto-sync-slot-triggers"></div>
         <button class="ep-btn-reload" @click="activeChild?.reload?.()" title="Reload">↺</button>
         <button class="ep-btn-new" :disabled="!activeChild?.header?.canCreate" @click="activeChild?.create?.()">
           {{ activeChild?.header?.createLabel ?? '+ New' }}

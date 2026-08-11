@@ -405,7 +405,7 @@ defineExpose({
 
 <template>
   <div class="ep-view">
-    <Teleport to="#auto-sync-slot">
+    <Teleport to="#auto-sync-slot-timers">
       <div class="ep-sync-wrap">
         <button v-if="syncConf?.is_active" class="ep-sync-indicator" @click="syncOpen = !syncOpen"
           :title="`${t('timer.sync.active')} #${syncConf.sync_from}`">
