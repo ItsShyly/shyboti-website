@@ -1,19 +1,26 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { ref, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../i18n";
+import { useAuth } from "../auth";
 import TimersView from "./TimersView.vue";
 import TriggersView from "./TriggersView.vue";
 import CountdownView from "./CountdownView.vue";
+import ObsAutomationsView from "./ObsAutomationsView.vue";
 
-// >>> Tab type extended with countdown <<<
-type Tab = "timers" | "triggers" | "countdowns";
+// >>> Tab type extended with countdown + obs <<<
+type Tab = "timers" | "triggers" | "countdowns" | "obs";
 const route = useRoute();
 const router = useRouter();
 const { t } = useI18n();
+const { channelRole } = useAuth();
+
+const canViewObs = computed(
+  () => channelRole.value?.permissions?.obs_view ?? false,
+);
 
 function parseTab(v: unknown): Tab {
-  if (v === "triggers" || v === "countdowns") return v;
+  if (v === "triggers" || v === "countdowns" || v === "obs") return v;
   return "timers";
 }
 
@@ -55,6 +62,14 @@ watch(
       >
         {{ t("auto.countdowns") }}
       </button>
+      <button
+        v-if="canViewObs"
+        class="auto-tab"
+        :class="{ active: activeTab === 'obs' }"
+        @click="activeTab = 'obs'"
+      >
+        OBS
+      </button>
       <button class="auto-tab reload-tab" @click="reloadKey++" title="Reload">
         ↺
       </button>
@@ -64,6 +79,10 @@ watch(
       <TriggersView
         v-else-if="activeTab === 'triggers'"
         :key="'triggers-' + reloadKey"
+      />
+      <ObsAutomationsView
+        v-else-if="activeTab === 'obs'"
+        :key="'obs-' + reloadKey"
       />
       <CountdownView v-else :key="'countdowns-' + reloadKey" />
     </div>
