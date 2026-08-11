@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed } from "vue";
+import { ref, watch, computed, nextTick } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useOverlayClose } from "../composables/useOverlayClose";
@@ -66,7 +66,7 @@ const SOURCE_ACTIONS = [
 
 const RULE_ACTIONS = computed(() =>
   fTriggerType.value === "scene"
-    ? [...SOURCE_ACTIONS, { value: "category", label: "change category" }]
+    ? [{ value: "category", label: "change category" }, ...SOURCE_ACTIONS]
     : SOURCE_ACTIONS,
 );
 
@@ -102,6 +102,20 @@ async function checkScope() {
   } catch { }
   scopeChecked.value = true;
 }
+
+// >>> True for the moment the form is being bulk-filled from a saved rule (or
+// >>> reset to blank for a new one). Every watcher below that reacts to a
+// >>> single field changing needs to check this and bail, because setting
+// >>> several refs in a row during populate ALSO triggers those same
+// >>> watchers - and since watch() runs post-flush (after the populate
+// >>> function has already finished setting the real saved values), an
+// >>> unguarded watcher fires afterward and silently overwrites them back to
+// >>> whatever "a fresh field just changed" would normally reset them to.
+// >>> That's not hypothetical here: without this guard, opening the edit
+// >>> panel on any existing scene/category-action rule blanks its saved
+// >>> target out right as it opens.
+let populating = false;
+
 watch(fAction, (a) => {
   if (a === "category") checkScope();
 });
@@ -109,8 +123,9 @@ watch(fAction, (a) => {
 // >>> populate form when opening
 watch(
   () => props.open,
-  (open) => {
+  async (open) => {
     if (!open) return;
+    populating = true;
     deleteConfirm.value = false;
     saved.value = false;
     scopeChecked.value = false;
@@ -127,31 +142,38 @@ watch(
       fTargetCategoryName.value = "";
       fValue.value = "";
       fEnabled.value = true;
-      return;
+    } else {
+      const r = props.rules.find((x) => x.id === props.editTarget);
+      if (r) {
+        fTriggerType.value = r.trigger_type ?? "bitrate";
+        fCondition.value = r.condition ?? "below";
+        fBitrate.value = r.bitrate_kbps ?? 2500;
+        fCategoryId.value = r.category_id ?? "";
+        fCategoryName.value = r.category_name ?? "";
+        fTriggerScene.value = r.trigger_scene ?? "";
+        fAction.value = r.action;
+        fTargetCategoryId.value = r.action === "category" ? (r.target_category_id ?? "") : "";
+        fTargetCategoryName.value = r.action === "category" ? r.target : "";
+        fTarget.value = r.action === "category" ? "" : r.target;
+        fValue.value = r.value ?? "";
+        fEnabled.value = r.enabled;
+      }
     }
-    const r = props.rules.find((x) => x.id === props.editTarget);
-    if (!r) return;
-    fTriggerType.value = r.trigger_type ?? "bitrate";
-    fCondition.value = r.condition ?? "below";
-    fBitrate.value = r.bitrate_kbps ?? 2500;
-    fCategoryId.value = r.category_id ?? "";
-    fCategoryName.value = r.category_name ?? "";
-    fTriggerScene.value = r.trigger_scene ?? "";
-    fAction.value = r.action;
-    fTargetCategoryId.value = r.action === "category" ? (r.target_category_id ?? "") : "";
-    fTargetCategoryName.value = r.action === "category" ? r.target : "";
-    fTarget.value = r.action === "category" ? "" : r.target;
-    fValue.value = r.value ?? "";
-    fEnabled.value = r.enabled;
+    // released after Vue's next DOM patch, which happens after any pre-flush
+    await nextTick();
+    populating = false;
   },
 );
 
-
-watch(fTriggerType, () => {
-  fAction.value = "scene";
+// >>> Deliberately NOT a watch(fTriggerType, ...)
+function selectTrigger(type: "bitrate" | "category" | "scene") {
+  fTriggerType.value = type;
+  // a scene trigger's whole point is usually to change the category
+  fAction.value = type === "scene" ? "category" : "scene";
   fTarget.value = "";
-});
+}
 watch(fAction, (a) => {
+  if (populating) return;
   fTarget.value = "";
   fValue.value = "";
   if (a !== "category") {
@@ -180,7 +202,7 @@ async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
     const d = (await res.json()) as {
       categories: { id: string; name: string; box_art_url: string }[];
     };
-    return d.categories.map((c) => ({ id: c.id, label: c.name, iconUrl: c.box_art_url }));
+    return (d.categories ?? []).map((c) => ({ id: c.id, label: c.name, iconUrl: c.box_art_url }));
   } catch {
     return [];
   }
@@ -290,7 +312,7 @@ const saveDisabled = computed(() => {
             <label class="ep-field-label">Trigger</label>
             <div class="obs-kind-tabs">
               <button v-for="t in TRIGGER_TABS" :key="t.value" class="obs-kind-tab"
-                :class="{ active: fTriggerType === t.value }" @click="fTriggerType = t.value">
+                :class="{ active: fTriggerType === t.value }" @click="selectTrigger(t.value)">
                 {{ t.label }}
               </button>
             </div>
@@ -352,7 +374,8 @@ const saveDisabled = computed(() => {
           <!-- scene/source action target -->
           <div v-else class="ep-field-group">
             <label class="ep-field-label">
-              {{ fAction === "scene" && fTriggerType === "scene" ? "Switch to scene" : fAction === "scene" ? "Scene" : "Source" }}
+              {{ fAction === "scene" && fTriggerType === "scene" ? "Switch to scene" : fAction === "scene" ? "Scene" :
+                "Source" }}
             </label>
             <TypeaheadInput v-model="fTarget" :items="fAction === 'scene' ? scenes : sources"
               :placeholder="fAction === 'scene' ? 'Scene name' : 'Source name'" mono />
