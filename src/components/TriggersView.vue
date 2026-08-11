@@ -449,6 +449,10 @@ defineExpose({
   create: () => {
     canEdit.value && openNew();
   },
+  close: () => {
+    editOpen.value = false;
+    shareOpen.value = false;
+  },
 });
 </script>
 

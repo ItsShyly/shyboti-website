@@ -321,6 +321,9 @@ defineExpose({
   create: () => {
     (canEdit.value || isBroadcaster.value) && openNew();
   },
+  close: () => {
+    editOpen.value = false;
+  },
 });
 </script>
 

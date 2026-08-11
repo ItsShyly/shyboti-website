@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../i18n";
 import { useAuth } from "../auth";
@@ -43,6 +43,13 @@ const activeChild = computed(() => {
   if (activeTab.value === "obs") return obsRef.value;
   return countdownsRef.value;
 });
+
+// >>> Close any Teleport(to body) panel on outgoing tab before it unmounts.
+async function switchTab(tab: Tab) {
+  activeChild.value?.close?.();
+  await nextTick();
+  activeTab.value = tab;
+}
 </script>
 
 <template>
@@ -53,7 +60,7 @@ const activeChild = computed(() => {
         <div class="ep-view-title">{{ t("auto.title") }}</div>
         <div class="ep-view-sub">
           <template v-if="activeChild?.header">{{ activeChild.header.count }} {{ activeChild.header.countLabel
-            }}</template>
+          }}</template>
           <template v-else>&mdash;</template>
         </div>
       </div>
@@ -69,16 +76,16 @@ const activeChild = computed(() => {
     </div>
 
     <div class="ep-tabs">
-      <button class="ep-tab" :class="{ active: activeTab === 'timers' }" @click="activeTab = 'timers'">
+      <button class="ep-tab" :class="{ active: activeTab === 'timers' }" @click="switchTab('timers')">
         {{ t("auto.timers") }}
       </button>
-      <button class="ep-tab" :class="{ active: activeTab === 'triggers' }" @click="activeTab = 'triggers'">
+      <button class="ep-tab" :class="{ active: activeTab === 'triggers' }" @click="switchTab('triggers')">
         {{ t("auto.triggers") }}
       </button>
-      <button class="ep-tab" :class="{ active: activeTab === 'countdowns' }" @click="activeTab = 'countdowns'">
+      <button class="ep-tab" :class="{ active: activeTab === 'countdowns' }" @click="switchTab('countdowns')">
         {{ t("auto.countdowns") }}
       </button>
-      <button v-if="canViewObs" class="ep-tab" :class="{ active: activeTab === 'obs' }" @click="activeTab = 'obs'">
+      <button v-if="canViewObs" class="ep-tab" :class="{ active: activeTab === 'obs' }" @click="switchTab('obs')">
         OBS
       </button>
     </div>
