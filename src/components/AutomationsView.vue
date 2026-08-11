@@ -53,7 +53,7 @@ const activeChild = computed(() => {
         <div class="ep-view-title">{{ t("auto.title") }}</div>
         <div class="ep-view-sub">
           <template v-if="activeChild?.header">{{ activeChild.header.count }} {{ activeChild.header.countLabel
-            }}</template>
+          }}</template>
           <template v-else>&mdash;</template>
         </div>
       </div>

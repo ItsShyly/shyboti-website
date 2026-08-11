@@ -613,7 +613,7 @@ function addBot() {
   window.location.href = `${API}/auth/add`;
 }
 
-const KEEP_ALIVE_ROUTES = ["DashboardView", "CommandsView", "AutomationsView"];
+const KEEP_ALIVE_ROUTES = ["LogsView"];
 
 // >>> provide nextActiveTab + searchOpenEdit for CommandsView
 provide("nextActiveTab", nextActiveTab);
