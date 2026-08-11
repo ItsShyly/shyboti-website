@@ -43,6 +43,9 @@ watch(
         <div class="ep-view-title">{{ t("auto.title") }}</div>
         <div class="ep-view-sub"><span class="chan">#{{ session?.channel }}</span></div>
       </div>
+      <div class="ep-view-header-right">
+        <button class="ep-btn-reload" @click="reloadKey++" title="Reload">↺</button>
+      </div>
     </div>
 
     <div class="auto-tabs">
@@ -58,7 +61,6 @@ watch(
       <button v-if="canViewObs" class="auto-tab" :class="{ active: activeTab === 'obs' }" @click="activeTab = 'obs'">
         OBS
       </button>
-      <button class="auto-tab reload-tab" @click="reloadKey++" title="Reload">↺</button>
     </div>
 
     <div class="auto-body">
@@ -78,13 +80,41 @@ watch(
   height: 100%;
   gap: 0;
 }
-.chan { color: #9d6cff; }
+
+.chan {
+  color: #9d6cff;
+}
+
+.ep-view-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ep-btn-reload {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #2a2a30;
+  background: transparent;
+  color: #555;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color .15s;
+}
+
+.ep-btn-reload:hover {
+  color: #9d6cff;
+  border-color: #6f2bff44;
+}
+
 .auto-tabs {
   display: flex;
   border-bottom: 1px solid #222;
   flex-shrink: 0;
   margin-bottom: 16px;
 }
+
 .auto-tab {
   padding: 8px 20px;
   border: none;
@@ -98,10 +128,27 @@ watch(
   margin-bottom: -1px;
   transition: color 0.15s;
 }
-.auto-tab:hover { color: #aaa; }
-.auto-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
-.reload-tab { margin-left: auto; font-size: 14px; padding: 4px 14px; }
-.reload-tab:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.auto-tab:hover {
+  color: #aaa;
+}
+
+.auto-tab.active {
+  color: #9d6cff;
+  border-bottom-color: #6f2bff;
+}
+
+.reload-tab {
+  margin-left: auto;
+  font-size: 14px;
+  padding: 4px 14px;
+}
+
+.reload-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .auto-body {
   flex: 1;
   display: flex;

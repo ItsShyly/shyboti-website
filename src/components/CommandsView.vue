@@ -906,6 +906,31 @@ onUnmounted(() => {
         <div class="ep-view-title">{{ t("cmd.title") }}</div>
         <div class="ep-view-sub"><span class="chan">#{{ session?.channel }}</span></div>
       </div>
+      <div class="ep-view-header-right">
+        <!-- count badge -->
+        <span v-if="activeTab === 'Default'" class="ep-view-count">{{ filtered().length }} {{ t('cmd.count_plural')
+          }}</span>
+        <span v-else-if="activeTab === 'Custom'" class="ep-view-count">{{ customCommands.length }} {{
+          customCommands.length !== 1 ? t('cmd.count_plural') : t('cmd.count') }}</span>
+        <span v-else-if="activeTab === 'Obs' && obsPaired" class="ep-view-count">{{ obsCommandCount }} OBS</span>
+        <!-- sync (Custom tab only) -->
+        <button v-if="activeTab === 'Custom' && syncConf?.is_active" class="ep-sync-indicator"
+          @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from}`">
+          <span class="ep-sync-dot"></span>sync #{{ syncConf.sync_from }}<span class="ep-sync-chevron">{{ syncOpen ? '▲'
+            : '▼' }}</span>
+        </button>
+        <button v-else-if="activeTab === 'Custom'" class="ep-sync-config-btn" @click="syncOpen = !syncOpen">
+          {{ t('cmd.sync.config') }}<span class="ep-sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
+        </button>
+        <!-- reload -->
+        <button class="ep-btn-reload" @click="reloadAll" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
+          }}</button>
+        <!-- new -->
+        <button v-if="activeTab === 'Custom'" class="ep-btn-new" :disabled="!canEdit"
+          @click="canEdit && startCreate()">{{ t('cmd.new') }}</button>
+        <button v-else-if="activeTab === 'Obs' && obsPaired" class="ep-btn-new" @click="openObsEdit(null)">{{
+          t('cmd.new') }}</button>
+      </div>
     </div>
 
     <div class="cmd-tabs">
@@ -920,9 +945,6 @@ onUnmounted(() => {
       </button>
       <button v-if="canViewObs" class="cmd-tab" :class="{ active: activeTab === 'Obs' }" @click="activeTab = 'Obs'">
         OBS
-      </button>
-      <button class="cmd-tab reload-tab" @click="reloadAll" :disabled="reloading" title="Reload">
-        {{ reloading ? "…" : "↺" }}
       </button>
     </div>
 
@@ -1034,33 +1056,7 @@ onUnmounted(() => {
 
     <!-- Custom tab -->
     <template v-if="activeTab === 'Custom'">
-      <div class="custom-header">
-        <div class="custom-header-left">
-          <span class="custom-count">{{ customCommands.length }}
-            {{
-              customCommands.length !== 1
-                ? t("cmd.count_plural")
-                : t("cmd.count")
-            }}</span>
-          <button v-if="syncConf?.is_active" class="sync-indicator" @click="syncOpen = !syncOpen"
-            :title="`Syncing from #${syncConf.sync_from}`">
-            <span class="sync-dot"></span>{{ t("cmd.sync.active") }} #{{
-              syncConf.sync_from
-            }}<span class="sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
-          </button>
-          <button v-else class="sync-config-btn" @click="syncOpen = !syncOpen">
-            {{ t("cmd.sync.config")
-            }}<span class="sync-chevron">{{ syncOpen ? "▲" : "▼" }}</span>
-          </button>
-        </div>
-        <div>
-          <button class="ep-btn-new" :disabled="!canEdit"
-            @click="canEdit && startCreate()">
-            {{ t("cmd.new") }}
-          </button>
-        </div>
-      </div>
-
+      <!-- sync dropdown panel -->
       <div v-if="syncOpen" class="sync-panel">
         <div class="sync-row">
           <select v-model="syncFrom" class="field-select-sm">
@@ -1249,11 +1245,7 @@ onUnmounted(() => {
       </template>
 
       <template v-else>
-        <div class="custom-header">
-          <span class="custom-count">{{ obsCommandCount }} OBS
-            {{ obsCommandCount === 1 ? "command" : "commands" }}</span>
-          <button class="ep-btn-new" @click="openObsEdit(null)">+ New</button>
-        </div>
+        <!-- count and new button now live in ep-view-header -->
 
         <div v-if="obsCommandCount === 0" class="custom-empty">
           <div class="empty-icon">✦</div>
@@ -1474,7 +1466,47 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
 }
-.chan { color: #9d6cff; }
+
+.chan {
+  color: #9d6cff;
+}
+
+/* page header right-side cluster */
+.ep-view-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ep-view-count {
+  font-size: 11px;
+  color: #555;
+  white-space: nowrap;
+}
+
+.ep-btn-reload {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #2a2a30;
+  background: transparent;
+  color: #555;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color .15s;
+}
+
+.ep-btn-reload:hover {
+  color: #9d6cff;
+  border-color: #6f2bff44;
+}
+
+.ep-btn-reload:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
 
 .cmd-tabs {
   display: flex;
@@ -1496,8 +1528,14 @@ onUnmounted(() => {
   transition: color 0.15s;
 }
 
-.cmd-tab:hover { color: #aaa; }
-.cmd-tab.active { color: #9d6cff; border-bottom-color: #6f2bff; }
+.cmd-tab:hover {
+  color: #aaa;
+}
+
+.cmd-tab.active {
+  color: #9d6cff;
+  border-bottom-color: #6f2bff;
+}
 
 .reload-tab {
   margin-left: auto;
@@ -1570,7 +1608,8 @@ onUnmounted(() => {
 .table-row {
   min-height: 48px;
   padding: 0 16px 0 8px;
-  background: #141418;
+  background: #222226;
+  ;
   border-bottom: 1px solid #1e1e1e;
   transition: background 0.1s, opacity 0.2s;
 }

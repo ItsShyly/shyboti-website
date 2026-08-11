@@ -391,10 +391,6 @@ watch(
     <div class="ep-view-header">
       <div class="view-header-left">
         <div>
-          <div class="ep-view-title">{{ t("timer.title") }}</div>
-          <div class="ep-view-sub">
-            {{ t("timer.sub") }} #{{ session?.channel }}
-          </div>
           <button v-if="syncConf?.is_active" class="ep-sync-indicator" @click="syncOpen = !syncOpen"
             :title="`${t('timer.sync.active')} #${syncConf.sync_from}`">
             <span class="ep-sync-dot"></span>{{ t("timer.sync.active") }} #{{
@@ -523,7 +519,7 @@ watch(
               <label class="ep-field-label">{{ t("timer.field.response") }}
                 <span class="ep-field-hint">{{
                   t("timer.field.resp_hint")
-                  }}</span></label>
+                }}</span></label>
               <div ref="editorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
                 data-placeholder="Hello chat! $channel.viewers viewers right now." @input="onEditorInput"></div>
               <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
@@ -533,7 +529,7 @@ watch(
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("timer.field.interval")
-                  }}</label>
+                }}</label>
                 <div class="interval-row">
                   <input v-model.number="editTimer.interval_sec" type="number" min="30" class="ep-field-input" />
                   <span class="ep-field-hint">{{ t("timer.field.interval_hint") }} ·
@@ -544,7 +540,7 @@ watch(
                 <label class="ep-field-label">{{ t("timer.field.min_msgs") }}
                   <span class="ep-field-hint">{{
                     t("timer.field.min_msgs_hint")
-                    }}</span></label>
+                  }}</span></label>
                 <input v-model.number="editTimer.min_messages" type="number" min="0" class="ep-field-input" />
               </div>
             </div>
@@ -553,7 +549,7 @@ watch(
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("timer.field.active_when")
-                  }}</label>
+                }}</label>
                 <select v-model="editTimer.enabled_when" class="ep-field-select">
                   <option value="always">{{ t("timer.when.always") }}</option>
                   <option value="online">{{ t("timer.when.online") }}</option>
@@ -564,7 +560,7 @@ watch(
                 <label class="ep-field-label">{{ t("timer.field.game") }}
                   <span class="ep-field-hint">{{
                     t("timer.field.game_hint")
-                    }}</span></label>
+                  }}</span></label>
                 <input v-model="editTimer.required_game" class="ep-field-input" placeholder="Just Chatting" />
               </div>
             </div>
@@ -573,7 +569,7 @@ watch(
               <label class="ep-field-label">{{ t("timer.field.condition") }}
                 <span class="ep-field-hint">{{
                   t("timer.field.cond_hint")
-                  }}</span></label>
+                }}</span></label>
               <input v-model="editTimer.condition" class="ep-field-input ep-mono" placeholder="$channel.viewers > 10" />
             </div>
 

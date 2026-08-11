@@ -383,12 +383,21 @@ onUnmounted(() => { _sseSource?.close() });
         <div class="ep-view-title">{{ t("mod.title") }}</div>
         <div class="ep-view-sub">{{ t("mod.sub") }} <span class="chan">#{{ session?.channel }}</span></div>
       </div>
-      <button class="ep-btn-new" @click="
-        activeTab === 'blocked' ? openNewBlocked() :
-          activeTab === 'spam' ? openNewSpam() : openNewNuke()
-        " :disabled="!canManage">
-        + {{ t("mod.add") }}
-      </button>
+      <div class="ep-view-header-right">
+        <span class="ep-view-count">
+          <template v-if="activeTab === 'blocked'">{{ blockedTerms.length }} {{ t('cmd.count_plural') }}</template>
+          <template v-else-if="activeTab === 'spam'">{{ spamFilters.length }} {{ t('cmd.count_plural') }}</template>
+          <template v-else>{{ nukes.length }} {{ t('cmd.count_plural') }}</template>
+        </span>
+        <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
+          }}</button>
+        <button class="ep-btn-new" @click="
+          activeTab === 'blocked' ? openNewBlocked() :
+            activeTab === 'spam' ? openNewSpam() : openNewNuke()
+          " :disabled="!canManage">
+          + {{ t("mod.add") }}
+        </button>
+      </div>
     </div>
 
     <div v-if="error" class="ep-toast error">{{ error }}</div>
@@ -399,7 +408,6 @@ onUnmounted(() => { _sseSource?.close() });
         :class="{ active: activeTab === tab }" @click="activeTab = tab">
         {{ tab === 'blocked' ? t('mod.tab.blocked') : tab === 'spam' ? t('mod.tab.spam') : t('mod.tab.nukes') }}
       </button>
-      <button class="mod-tab reload-tab" @click="reload" :disabled="reloading">{{ reloading ? '…' : '↺' }}</button>
     </div>
 
     <div v-if="loading" class="ep-empty">{{ t("mod.loading") }}</div>
@@ -418,7 +426,7 @@ onUnmounted(() => { _sseSource?.close() });
           <span v-if="term.action !== 'delete'" class="item-dur">{{ fmtDur(term.duration) }}</span>
           <div class="ep-row-actions">
             <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
-            }}</button>
+              }}</button>
           </div>
         </div>
       </div>
@@ -448,7 +456,7 @@ onUnmounted(() => { _sseSource?.close() });
     <!-- Nukes list -->
     <template v-else-if="activeTab === 'nukes'">
       <div class="nuke-hint">{{ t("mod.nuke.hint") }} <strong>{{ t("mod.nuke.stay") }}</strong> - {{ t("mod.nuke.hint2")
-      }}</div>
+        }}</div>
       <div v-if="!nukes.length" class="ep-empty">{{ t("mod.empty.nukes") }}</div>
       <div v-else class="ep-row-list">
         <div v-for="n in nukes" :key="n.id" class="ep-list-row nuke-item-row">
@@ -700,7 +708,7 @@ onUnmounted(() => { _sseSource?.close() });
             </div>
             <div v-if="fNukeExpiry && fNukeStay" class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.nuke.expiry") }} <span class="ep-field-hint">{{ t("mod.nuke.min")
-              }}</span></label>
+                  }}</span></label>
               <input v-model.number="fNukeExpiryMins" type="number" min="1" class="ep-field-input" />
             </div>
           </template>
@@ -729,6 +737,43 @@ onUnmounted(() => { _sseSource?.close() });
 <style scoped>
 .chan {
   color: #9d6cff
+}
+
+/* header right cluster - same pattern as CommandsView */
+.ep-view-header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.ep-view-count {
+  font-size: 11px;
+  color: #555;
+  white-space: nowrap;
+}
+
+.ep-btn-reload {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #2a2a30;
+  background: transparent;
+  color: #555;
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: color .15s;
+}
+
+.ep-btn-reload:hover {
+  color: #9d6cff;
+  border-color: #6f2bff44;
+}
+
+.ep-btn-reload:disabled {
+  opacity: .4;
+  cursor: not-allowed;
 }
 
 .mod-tabs {
