@@ -351,7 +351,8 @@ const saveDisabled = computed(() => {
 
           <!-- scene/source action target -->
           <div v-else class="ep-field-group">
-            <label class="ep-field-label">{{ fAction === "scene" ? "Scene" : "Source" }}
+            <label class="ep-field-label">
+              {{ fAction === "scene" && fTriggerType === "scene" ? "Switch to scene" : fAction === "scene" ? "Scene" : "Source" }}
             </label>
             <TypeaheadInput v-model="fTarget" :items="fAction === 'scene' ? scenes : sources"
               :placeholder="fAction === 'scene' ? 'Scene name' : 'Source name'" mono />

@@ -38,8 +38,8 @@ const RULE_ACTION_LABEL: Record<string, string> = {
 function ruleTitle(rule: ObsRule): string {
   const type = rule.trigger_type ?? "bitrate";
   if (type === "bitrate") return `${rule.condition} ${rule.bitrate_kbps} kbps`;
-  if (type === "category") return `category -> ${rule.category_name}`;
-  return `scene -> ${rule.trigger_scene}`;
+  if (type === "category") return `${rule.category_name ?? "?"} -> ${rule.target}`;
+  return `${rule.trigger_scene ?? "?"} -> ${rule.target}`;
 }
 
 async function fetchRules() {
