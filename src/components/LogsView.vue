@@ -19,13 +19,7 @@ import {
 } from "../composables/useLogsSearch";
 import { VueDatePicker } from "@vuepic/vue-datepicker";
 import "@vuepic/vue-datepicker/dist/main.css";
-// vue-virtual-scroller removed - all items rendered in plain DOM for instant scroll
-
-// ─── DOM-cache directive for server-rendered rows ────────────────────────────
-// The virtual scroller recycles DOM elements on scroll. With v-html, every
-// recycle destroys and recreates all <img> elements, triggering re-decode even
-// when the images are already in cache. This directive caches the actual DOM
-// subtree by message ID and re-attaches it on recycle - images stay loaded.
+// vue-virtual-scroller removed 
 const _rowDomCache = new Map<string, Element>();
 const _ROW_CACHE_MAX = 600;
 
@@ -198,8 +192,8 @@ function attachEmoteObserver(container: Element) {
             ? node.classList.contains("chat-emote")
               ? [node as HTMLImageElement]
               : Array.from(
-                  node.querySelectorAll<HTMLImageElement>("img.chat-emote"),
-                )
+                node.querySelectorAll<HTMLImageElement>("img.chat-emote"),
+              )
             : [];
         for (const img of imgs) _emoteT0.set(img.src, performance.now());
       }
@@ -669,7 +663,7 @@ async function fetchEmotes(ch: string) {
         for (const e of d.emotes ?? [])
           next[e.name] = { url: e.url, overlay: !!e.overlay };
       }
-    } catch {}
+    } catch { }
   }
   emoteMap.value = next;
 }
@@ -701,7 +695,7 @@ async function fetchTwitchBadges(ch: string) {
       Array.from(m.values(), (b) => b.imageUrl),
       "badges",
     );
-  } catch {}
+  } catch { }
 }
 
 /* ── Image pre-decode helper ── */
@@ -719,7 +713,7 @@ function preDecodeUrls(urls: string[], label?: string) {
   for (const url of fresh) {
     const img = new Image();
     img.src = url;
-    img.decode().catch(() => {}); // pre-decode to raster - instant paint later
+    img.decode().catch(() => { }); // pre-decode to raster - instant paint later
   }
 }
 
@@ -735,7 +729,7 @@ async function preloadChannelAssets(ch: string) {
     if (!r.ok) return;
     const { urls } = (await r.json()) as { urls: string[] };
     preDecodeUrls(urls, `channel ${ch}`);
-  } catch {}
+  } catch { }
 }
 
 /* ── Pre-load images extracted from server-rendered row HTML ── */
@@ -1033,7 +1027,7 @@ async function loadOlder() {
         loadingMore.value = false;
         return loadOlder();
       }
-    } catch {}
+    } catch { }
     loadingMore.value = false;
   } else {
     if (!cursorDate) {
@@ -1065,7 +1059,7 @@ async function loadOlder() {
         loadingMore.value = false;
         return loadOlder();
       }
-    } catch {}
+    } catch { }
     loadingMore.value = false;
   }
   // Guard: after prepend + scroll correction, ensure scrollTop is well past
@@ -1106,7 +1100,7 @@ async function loadNewer() {
         loadingNewer.value = false;
         return loadNewer();
       }
-    } catch {}
+    } catch { }
     loadingNewer.value = false;
     if (new Date(cursorNewerMonth.y, cursorNewerMonth.m - 1, 1) > today)
       noNewer.value = true;
@@ -1140,7 +1134,7 @@ async function loadNewer() {
         loadingNewer.value = false;
         return loadNewer();
       }
-    } catch {}
+    } catch { }
     loadingNewer.value = false;
     if (cursorNewerDate > today) noNewer.value = true;
   }
@@ -1461,7 +1455,7 @@ async function fetchAutomod(ch: string, date?: string) {
       const data = (await res.json()) as { messages: AutomodMsg[] };
       automodMsgs.value = data.messages ?? [];
     }
-  } catch {}
+  } catch { }
 }
 
 // >>> Fetch the oldest available log date for a channel (for oldest-first mode)
@@ -1480,7 +1474,7 @@ async function fetchOldestDate(ch: string): Promise<Date> {
         return new Date(Date.UTC(oldest.year, oldest.month - 1, 1));
       }
     }
-  } catch {}
+  } catch { }
   // fallback: 2 years ago
   const d = new Date();
   d.setFullYear(d.getFullYear() - 2);
@@ -1589,22 +1583,22 @@ async function search() {
           const d = days[i]!;
           results[i] = isUser
             ? await fetchMonth(
-                ch,
-                d.getFullYear(),
-                d.getMonth() + 1,
-                abortCtrl.signal,
-              ).then((ms) =>
-                ms.filter((msg) =>
-                  msg.timestamp.startsWith(d.toISOString().slice(0, 10)),
-                ),
-              )
+              ch,
+              d.getFullYear(),
+              d.getMonth() + 1,
+              abortCtrl.signal,
+            ).then((ms) =>
+              ms.filter((msg) =>
+                msg.timestamp.startsWith(d.toISOString().slice(0, 10)),
+              ),
+            )
             : await fetchDay(
-                ch,
-                d.getFullYear(),
-                d.getMonth() + 1,
-                d.getDate(),
-                abortCtrl.signal,
-              );
+              ch,
+              d.getFullYear(),
+              d.getMonth() + 1,
+              d.getDate(),
+              abortCtrl.signal,
+            );
         }
       }
       await Promise.all(
@@ -1614,7 +1608,7 @@ async function search() {
         ),
       );
       msgs.value = results.flat();
-    } catch {}
+    } catch { }
     loading.value = false;
     noMore.value = true;
     await nextTick();
@@ -1645,14 +1639,14 @@ async function search() {
       let cur = { y: startDate.getFullYear(), m: startDate.getMonth() + 1 };
       try {
         msgs.value = await fetchMonth(ch, cur.y, cur.m, abortCtrl.signal);
-      } catch {}
+      } catch { }
       // Walk forward until we find messages
       while (!msgs.value.length && !abortCtrl.signal.aborted) {
         cur = nextMonth(cur);
         if (new Date(cur.y, cur.m - 1, 1) > today) break;
         try {
           msgs.value = await fetchMonth(ch, cur.y, cur.m, abortCtrl.signal);
-        } catch {}
+        } catch { }
       }
       // cursorMonth now points to the NEXT month (for loading newer)
       cursorMonth = nextMonth(cur);
@@ -1666,7 +1660,7 @@ async function search() {
           d.getDate(),
           abortCtrl.signal,
         );
-      } catch {}
+      } catch { }
       while (!msgs.value.length && d <= today && !abortCtrl.signal.aborted) {
         d = nextDay(d);
         try {
@@ -1677,7 +1671,7 @@ async function search() {
             d.getDate(),
             abortCtrl.signal,
           );
-        } catch {}
+        } catch { }
       }
       cursorDate = nextDay(d);
     }
@@ -1701,7 +1695,7 @@ async function search() {
     let _raw: LogMsg[] = [];
     try {
       _raw = await fetchMonth(ch, y, m, abortCtrl.signal);
-    } catch {}
+    } catch { }
     msgs.value = _raw;
     cursorMonth = prevMonth({ y, m });
     // >>> If current month empty, walk backwards up to 1 year to find logs
@@ -1715,7 +1709,7 @@ async function search() {
         let _wr: LogMsg[] = [];
         try {
           _wr = await fetchMonth(ch, cur.y, cur.m, abortCtrl.signal);
-        } catch {}
+        } catch { }
         msgs.value = _wr;
       }
     }
@@ -1744,7 +1738,7 @@ async function search() {
         today.getDate(),
         abortCtrl.signal,
       );
-    } catch {}
+    } catch { }
     msgs.value = _raw;
     cursorDate = prevDay(today);
     // >>> If today empty, walk backwards up to 1 year to find logs
@@ -1768,7 +1762,7 @@ async function search() {
             d.getDate(),
             abortCtrl.signal,
           );
-        } catch {}
+        } catch { }
         msgs.value = _wr;
       }
     }
@@ -1926,7 +1920,7 @@ function shareMsg(m: LogMsg) {
   setTimeout(() => {
     if (highlightId.value === m.id) highlightId.value = null;
   }, 3000);
-  navigator.clipboard.writeText(window.location.href).catch(() => {});
+  navigator.clipboard.writeText(window.location.href).catch(() => { });
   copyToast.value = true;
   setTimeout(() => (copyToast.value = false), 2000);
 }
@@ -2518,10 +2512,10 @@ function userNameStyle(m: LogMsg): Record<string, string> {
   return painted
     ? { ...painted, "--snippet-fallback-color": fallback }
     : {
-        color: fallback,
-        "--snippet-fallback-color": fallback,
-        "--snippet-paint-preview": fallback,
-      };
+      color: fallback,
+      "--snippet-fallback-color": fallback,
+      "--snippet-paint-preview": fallback,
+    };
 }
 
 function snippetPaintPreview(m: LogMsg): string {
@@ -2791,9 +2785,9 @@ function buildPaintStyle(
       ? stopsArr
       : stopsArr.length === 1
         ? [
-            { at: 0, color: firstStopColor },
-            { at: 1, color: firstStopColor },
-          ]
+          { at: 0, color: firstStopColor },
+          { at: 1, color: firstStopColor },
+        ]
         : [];
 
   if (normStops.length >= 2) {
@@ -3346,7 +3340,7 @@ function openUserPopup(username: string, ch: string, evt: MouseEvent) {
     .then((u) => {
       popupUser.value = u;
     })
-    .catch(() => {})
+    .catch(() => { })
     .finally(() => {
       popupLoading.value = false;
     });
@@ -3422,134 +3416,71 @@ function paintNameStyle(paint: {
     </div>
 
     <!-- Mobile: collapsed summary bar -->
-    <div
-      class="search-summary show-mobile"
-      @click="searchExpanded = !searchExpanded"
-    >
+    <div class="search-summary show-mobile" @click="searchExpanded = !searchExpanded">
       <span class="summary-text">
         <span class="summary-ch">#{{ channel || "?" }}</span>
         <span v-if="userFilter" class="summary-tag">@{{ userFilter }}</span>
         <span v-if="termFilter" class="summary-tag">"{{ termFilter }}"</span>
-        <span v-if="dateFrom" class="summary-tag"
-          >{{ dateFrom
-          }}{{
+        <span v-if="dateFrom" class="summary-tag">{{ dateFrom
+        }}{{
             dateUntil && dateUntil !== dateFrom ? " → " + dateUntil : ""
-          }}</span
-        >
+          }}</span>
       </span>
       <span class="summary-chevron">{{ searchExpanded ? "▲" : "▼" }}</span>
     </div>
 
     <div class="search-bar-wrapper">
-      <div
-        class="search-bar"
-        :class="{ 'search-bar-collapsed': !searchExpanded }"
-      >
+      <div class="search-bar" :class="{ 'search-bar-collapsed': !searchExpanded }">
         <div class="search-bar-content">
           <div class="field-wrap">
             <label class="field-lbl">{{ t("logs.field.channel") }}</label>
-            <input
-              ref="channelInputRef"
-              class="field-input"
-              placeholder="channelname"
-              @keydown.enter="search"
-              autocomplete="off"
-              spellcheck="false"
-            />
+            <input ref="channelInputRef" class="field-input" placeholder="channelname" @keydown.enter="search"
+              autocomplete="off" spellcheck="false" />
           </div>
           <div class="field-wrap">
-            <label class="field-lbl"
-              >{{ t("logs.field.user") }}
-              <span class="opt">{{ t("logs.field.optional") }}</span></label
-            >
-            <input
-              ref="userInputRef"
-              class="field-input"
-              placeholder="username"
-              @keydown.enter="search"
-              autocomplete="off"
-              spellcheck="false"
-            />
+            <label class="field-lbl">{{ t("logs.field.user") }}
+              <span class="opt">{{ t("logs.field.optional") }}</span></label>
+            <input ref="userInputRef" class="field-input" placeholder="username" @keydown.enter="search"
+              autocomplete="off" spellcheck="false" />
           </div>
           <div class="field-wrap">
-            <label class="field-lbl"
-              >{{ t("logs.field.term") }}
-              <span class="opt">{{ t("logs.field.optional") }}</span></label
-            >
-            <input
-              ref="termInputRef"
-              class="field-input"
-              placeholder="search term"
-              @keydown.enter="search"
-              autocomplete="off"
-              spellcheck="false"
-            />
+            <label class="field-lbl">{{ t("logs.field.term") }}
+              <span class="opt">{{ t("logs.field.optional") }}</span></label>
+            <input ref="termInputRef" class="field-input" placeholder="search term" @keydown.enter="search"
+              autocomplete="off" spellcheck="false" />
           </div>
           <div class="field-wrap">
-            <label class="field-lbl"
-              >Date
-              <span class="opt">{{ t("logs.field.optional") }}</span></label
-            >
-            <VueDatePicker
-              v-model="dateSingle"
-              no-time-picker
-              dark
-              auto-apply
-              :format="formatDateSingle"
-              placeholder="Any date"
-              class="dp-logs dp-logs-single"
-              :teleport="true"
-            />
+            <label class="field-lbl">Date
+              <span class="opt">{{ t("logs.field.optional") }}</span></label>
+            <VueDatePicker v-model="dateSingle" no-time-picker dark auto-apply :format="formatDateSingle"
+              placeholder="Any date" class="dp-logs dp-logs-single" :teleport="true" />
           </div>
           <!-- Options: sort direction + cosmetic visuals, merged into one dropdown so -->
           <!-- the bar doesn't sprawl into a wall of separate controls. -->
           <div class="field-wrap visuals-bar" ref="visualsBarRef">
             <label class="field-lbl hide-mobile">Options</label>
-            <button
-              class="visuals-toggle hide-mobile"
-              :class="{ open: visualsOpen }"
-              @click.stop="visualsOpen = !visualsOpen"
-            >
+            <button class="visuals-toggle hide-mobile" :class="{ open: visualsOpen }"
+              @click.stop="visualsOpen = !visualsOpen">
               Options {{ visualsOpen ? "▲" : "▼" }}
             </button>
-            <div
-              class="visuals-panel"
-              :class="{ 'visuals-panel-open': visualsOpen }"
-              @click.stop
-            >
+            <div class="visuals-panel" :class="{ 'visuals-panel-open': visualsOpen }" @click.stop>
               <div class="options-group">
                 <span class="options-group-lbl show-mobile">Sort</span>
-                <button
-                  class="dir-btn"
-                  :class="{ active: direction === 'newest' }"
-                  @click="setDirection('newest')"
-                >
+                <button class="dir-btn" :class="{ active: direction === 'newest' }" @click="setDirection('newest')">
                   &#8595; Newest
                 </button>
-                <button
-                  class="dir-btn"
-                  :class="{ active: direction === 'oldest' }"
-                  @click="setDirection('oldest')"
-                >
+                <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="setDirection('oldest')">
                   &#8593; Oldest
                 </button>
               </div>
               <div class="options-group">
                 <span class="options-group-lbl show-mobile">Visuals</span>
-                <button
-                  class="dir-btn"
-                  :class="{ active: nameVisual === '7tv' }"
-                  @click="nameVisual = '7tv'"
-                  title="Show 7TV paints & badges"
-                >
+                <button class="dir-btn" :class="{ active: nameVisual === '7tv' }" @click="nameVisual = '7tv'"
+                  title="Show 7TV paints & badges">
                   7TV
                 </button>
-                <button
-                  class="dir-btn"
-                  :class="{ active: nameVisual === 'white' }"
-                  @click="nameVisual = 'white'"
-                  title="Show all usernames in white"
-                >
+                <button class="dir-btn" :class="{ active: nameVisual === 'white' }" @click="nameVisual = 'white'"
+                  title="Show all usernames in white">
                   White names
                 </button>
               </div>
@@ -3566,15 +3497,8 @@ function paintNameStyle(paint: {
     </div>
 
     <!-- Automod toggle -->
-    <div
-      v-if="searched && isBroadcaster && automodMsgs.length > 0"
-      class="automod-bar"
-    >
-      <button
-        class="automod-toggle"
-        :class="{ active: showAutomod }"
-        @click="showAutomod = !showAutomod"
-      >
+    <div v-if="searched && isBroadcaster && automodMsgs.length > 0" class="automod-bar">
+      <button class="automod-toggle" :class="{ active: showAutomod }" @click="showAutomod = !showAutomod">
         ⚠ AutoMod ({{ automodMsgs.length }})
         {{ showAutomod ? "- click to hide" : "- click to show" }}
       </button>
@@ -3591,10 +3515,7 @@ function paintNameStyle(paint: {
       {{ t("logs.empty") }}
     </div>
     <div v-else-if="loading" class="logs-empty">{{ t("logs.searching") }}</div>
-    <div
-      v-else-if="searched && !msgs.length && !loadingMore"
-      class="logs-empty"
-    >
+    <div v-else-if="searched && !msgs.length && !loadingMore" class="logs-empty">
       {{ t("logs.no_results") }}
     </div>
 
@@ -3603,15 +3524,8 @@ function paintNameStyle(paint: {
         {{ msgs.length.toLocaleString() }} {{ t("logs.count") }}
       </div>
       <div class="logs-table-wrap" ref="tableWrapRef">
-        <div
-          class="logs-table-shell"
-          ref="tableShellRef"
-          :style="tableShellStyle"
-        >
-          <div
-            class="logs-table"
-            :style="{ '--user-width': nameColWidth + 'px' }"
-          >
+        <div class="logs-table-shell" ref="tableShellRef" :style="tableShellStyle">
+          <div class="logs-table" :style="{ '--user-width': nameColWidth + 'px' }">
             <div class="logs-thead">
               <div>{{ t("logs.col.time") }}</div>
               <div>{{ t("logs.col.user") }}</div>
@@ -3638,47 +3552,29 @@ function paintNameStyle(paint: {
                 <div v-if="loadingMore" class="top-loader">
                   <span class="spinner">⟳</span> {{ t("logs.load_older") }}
                 </div>
-                <div
-                  v-if="noMore && !userFilter && !termFilter && !dateFilter"
-                  class="top-loader no-more"
-                >
+                <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">
                   {{ t("logs.no_older") }}
                 </div>
 
                 <!-- Virtual scroll: spacer for items above rendered slice -->
-                <div
-                  :style="{ height: vSpacerTop + 'px', flexShrink: 0 }"
-                  aria-hidden="true"
-                ></div>
+                <div :style="{ height: vSpacerTop + 'px', flexShrink: 0 }" aria-hidden="true"></div>
 
                 <template v-for="item in virtualSlice" :key="item.id">
-                  <div
-                    v-if="item.kind === 'day'"
-                    :id="`day-${item.id}`"
-                    :data-vit-id="item.id"
-                    class="log-day-sep"
-                  >
+                  <div v-if="item.kind === 'day'" :id="`day-${item.id}`" :data-vit-id="item.id" class="log-day-sep">
                     {{ item.label }}
                   </div>
 
-                  <div
-                    v-else-if="item.kind === 'automod'"
-                    :id="`log-${item.msg.id}`"
-                    :data-vit-id="item.id"
-                    class="log-row log-row-automod"
-                  >
+                  <div v-else-if="item.kind === 'automod'" :id="`log-${item.msg.id}`" :data-vit-id="item.id"
+                    class="log-row log-row-automod">
                     <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
                     <div class="log-time-short">
                       {{ fmtTimeOnly(item.msg.timestamp) }}
                     </div>
                     <div class="log-user log-automod-badge">⚠ AutoMod</div>
                     <div class="log-msg">
-                      <span class="automod-user">{{ item.msg.username }}</span
-                      >:
+                      <span class="automod-user">{{ item.msg.username }}</span>:
                       <span class="automod-text">{{ item.msg.text }}</span>
-                      <span class="automod-category"
-                        >[{{ item.msg._category }}]</span
-                      >
+                      <span class="automod-category">[{{ item.msg._category }}]</span>
                       <span class="automod-status" :class="item.msg._status">{{
                         item.msg._status
                       }}</span>
@@ -3686,48 +3582,30 @@ function paintNameStyle(paint: {
                   </div>
 
                   <!-- Server pre-rendered row (fast path: single v-html, zero per-row reactive work) -->
-                  <div
-                    v-else-if="item.msg?._rowHtml"
-                    :id="`log-${item.msg.id}`"
-                    :data-vit-id="item.id"
-                    class="log-row-outer"
-                    :class="{
+                  <div v-else-if="item.msg?._rowHtml" :id="`log-${item.msg.id}`" :data-vit-id="item.id"
+                    class="log-row-outer" :class="{
                       highlighted: highlightId === item.msg.id,
                       'log-row-reply': item.msg._hasReply,
                       'log-row-event': !!item.msg._eventMeta,
                       'search-match': searchMatchSet.has(item.msg.id),
                       'search-current': searchCurrentId === item.msg.id,
-                    }"
-                    v-cached-html="{ id: item.msg.id, html: item.msg._rowHtml }"
-                  ></div>
+                    }" v-cached-html="{ id: item.msg.id, html: item.msg._rowHtml }"></div>
 
                   <!-- Client-rendered fallback (when server did not pre-render) -->
-                  <div
-                    v-else
-                    :id="`log-${item.msg.id}`"
-                    :data-vit-id="item.id"
-                    class="log-row-outer"
-                    :class="{
-                      highlighted: highlightId === item.msg.id,
-                      'log-row-reply':
-                        !!item.msg.tags?.['reply-parent-msg-body'],
-                      'log-row-event': getRowData(item.msg).eventMeta !== null,
-                      'search-match': searchMatchSet.has(item.msg.id),
-                      'search-current': searchCurrentId === item.msg.id,
-                    }"
-                    @vnodeMounted="(vn: VNode) => rowMounted(vn.el as Element)"
-                    @vnodeBeforeUpdate="
+                  <div v-else :id="`log-${item.msg.id}`" :data-vit-id="item.id" class="log-row-outer" :class="{
+                    highlighted: highlightId === item.msg.id,
+                    'log-row-reply':
+                      !!item.msg.tags?.['reply-parent-msg-body'],
+                    'log-row-event': getRowData(item.msg).eventMeta !== null,
+                    'search-match': searchMatchSet.has(item.msg.id),
+                    'search-current': searchCurrentId === item.msg.id,
+                  }" @vnodeMounted="(vn: VNode) => rowMounted(vn.el as Element)" @vnodeBeforeUpdate="
                       (vn: VNode) => rowBeforeUpdate(vn.el as Element)
-                    "
-                    @vnodeUpdated="(vn: VNode) => rowUpdated(vn.el as Element)"
-                  >
+                    " @vnodeUpdated="(vn: VNode) => rowUpdated(vn.el as Element)">
                     <div class="log-row">
                       <div class="log-time-col">
-                        <div
-                          v-if="getRowData(item.msg).eventMeta"
-                          class="log-event-label"
-                          :class="`tone-${getRowData(item.msg).eventMeta!.tone}`"
-                        >
+                        <div v-if="getRowData(item.msg).eventMeta" class="log-event-label"
+                          :class="`tone-${getRowData(item.msg).eventMeta!.tone}`">
                           <span class="log-event-icon">{{
                             getRowData(item.msg).eventMeta!.icon
                           }}</span>
@@ -3742,160 +3620,75 @@ function paintNameStyle(paint: {
                           {{ fmtTimeOnly(item.msg.timestamp) }}
                         </div>
                       </div>
-                      <div
-                        v-if="
-                          !getRowData(item.msg).isMod &&
-                          getRowData(item.msg).badges.length
-                        "
-                        class="log-badges"
-                      >
-                        <template
-                          v-for="b in getRowData(item.msg).badges"
-                          :key="`${item.msg.id}-${b.kind}-${b.key}`"
-                        >
-                          <img
-                            v-if="b.imageUrl"
-                            class="badge-img"
-                            fetchpriority="high"
-                            :src="b.imageUrl"
-                            :alt="b.title || b.label"
-                            :title="b.title || b.label"
-                            @vnodeMounted="() => badgeLoadStart(b.imageUrl!)"
-                            @vnodeBeforeUpdate="
+                      <div v-if="
+                        !getRowData(item.msg).isMod &&
+                        getRowData(item.msg).badges.length
+                      " class="log-badges">
+                        <template v-for="b in getRowData(item.msg).badges" :key="`${item.msg.id}-${b.kind}-${b.key}`">
+                          <img v-if="b.imageUrl" class="badge-img" fetchpriority="high" :src="b.imageUrl"
+                            :alt="b.title || b.label" :title="b.title || b.label"
+                            @vnodeMounted="() => badgeLoadStart(b.imageUrl!)" @vnodeBeforeUpdate="
                               () => badgeLoadStart(b.imageUrl!)
-                            "
-                            @load="badgeLoaded"
-                            @error="badgeError"
-                          />
-                          <span
-                            v-else
-                            class="badge-fallback"
-                            :title="b.title || b.label"
-                            >{{ b.label }}</span
-                          >
+                            " @load="badgeLoaded" @error="badgeError" />
+                          <span v-else class="badge-fallback" :title="b.title || b.label">{{ b.label }}</span>
                         </template>
                       </div>
-                      <div
-                        v-if="!getRowData(item.msg).isMod"
-                        class="log-user"
-                        :data-snippet-paint="getRowData(item.msg).paintPreview"
-                        :style="getRowData(item.msg).nameStyle"
-                        :class="{ 'log-user-clickable': true }"
-                        @click.stop="
+                      <div v-if="!getRowData(item.msg).isMod" class="log-user"
+                        :data-snippet-paint="getRowData(item.msg).paintPreview" :style="getRowData(item.msg).nameStyle"
+                        :class="{ 'log-user-clickable': true }" @click.stop="
                           openUserPopup(
                             item.msg.username,
                             channel || item.msg.channel?.replace('#', ''),
                             $event,
                           )
-                        "
-                      >
+                          ">
                         {{ item.msg.displayName || item.msg.username }}
                       </div>
-                      <div
-                        class="log-msg-wrap"
-                        :class="{
-                          'has-reply':
-                            !!item.msg.tags?.['reply-parent-msg-body'],
-                          'is-system-mod': getRowData(item.msg).isMod,
-                        }"
-                      >
-                        <div
-                          v-if="!getRowData(item.msg).isMod"
-                          class="log-mobile-msgline"
-                        >
-                          <span
-                            v-if="getRowData(item.msg).badges.length"
-                            class="log-mobile-badges"
-                          >
-                            <template
-                              v-for="b in getRowData(item.msg).badges"
-                              :key="`mob-${item.msg.id}-${b.kind}-${b.key}`"
-                            >
-                              <img
-                                v-if="b.imageUrl"
-                                class="badge-img"
-                                :src="b.imageUrl"
-                                :alt="b.title || b.label"
-                                :title="b.title || b.label"
-                              />
-                              <span
-                                v-else
-                                class="badge-fallback"
-                                :title="b.title || b.label"
-                                >{{ b.label }}</span
-                              >
+                      <div class="log-msg-wrap" :class="{
+                        'has-reply':
+                          !!item.msg.tags?.['reply-parent-msg-body'],
+                        'is-system-mod': getRowData(item.msg).isMod,
+                      }">
+                        <div v-if="!getRowData(item.msg).isMod" class="log-mobile-msgline">
+                          <span v-if="getRowData(item.msg).badges.length" class="log-mobile-badges">
+                            <template v-for="b in getRowData(item.msg).badges"
+                              :key="`mob-${item.msg.id}-${b.kind}-${b.key}`">
+                              <img v-if="b.imageUrl" class="badge-img" :src="b.imageUrl" :alt="b.title || b.label"
+                                :title="b.title || b.label" />
+                              <span v-else class="badge-fallback" :title="b.title || b.label">{{ b.label }}</span>
                             </template>
                           </span>
-                          <span
-                            class="log-mobile-user"
-                            :data-snippet-paint="
-                              getRowData(item.msg).paintPreview
-                            "
-                            :style="getRowData(item.msg).nameStyle"
-                            >{{
+                          <span class="log-mobile-user" :data-snippet-paint="getRowData(item.msg).paintPreview
+                            " :style="getRowData(item.msg).nameStyle">{{
                               item.msg.displayName || item.msg.username
-                            }}</span
-                          ><span class="log-mobile-user-colon">:</span>
-                          <span
-                            class="log-mobile-msg"
-                            v-html="getRowData(item.msg).html"
-                          ></span>
+                            }}</span><span class="log-mobile-user-colon">:</span>
+                          <span class="log-mobile-msg" v-html="getRowData(item.msg).html"></span>
                         </div>
-                        <div
-                          v-if="item.msg.tags?.['reply-parent-msg-body']"
-                          class="reply-context"
-                          :class="{
-                            'reply-context-link':
-                              !!item.msg.tags?.['reply-parent-msg-id'],
-                          }"
-                          :title="
-                            item.msg.tags?.['reply-parent-msg-id']
+                        <div v-if="item.msg.tags?.['reply-parent-msg-body']" class="reply-context" :class="{
+                          'reply-context-link':
+                            !!item.msg.tags?.['reply-parent-msg-id'],
+                        }" :title="item.msg.tags?.['reply-parent-msg-id']
                               ? 'Jump to replied message'
                               : undefined
-                          "
-                          @click.stop="jumpToReplyParent(item.msg)"
-                        >
+                            " @click.stop="jumpToReplyParent(item.msg)">
                           <span class="reply-icon">⮣</span>
-                          <span class="reply-parent-user"
-                            >@{{
-                              item.msg.tags["reply-parent-display-name"] ||
-                              item.msg.tags["reply-parent-user-login"] ||
-                              "?"
-                            }}:</span
-                          >
+                          <span class="reply-parent-user">@{{
+                            item.msg.tags["reply-parent-display-name"] ||
+                            item.msg.tags["reply-parent-user-login"] ||
+                            "?"
+                          }}:</span>
                           <span class="reply-parent-body">{{
                             item.msg.tags["reply-parent-msg-body"]
                           }}</span>
                         </div>
-                        <div
-                          class="log-msg"
-                          v-html="getRowData(item.msg).html"
-                        ></div>
+                        <div class="log-msg" v-html="getRowData(item.msg).html"></div>
                       </div>
-                      <div
-                        class="log-share"
-                        @click="shareMsg(item.msg)"
-                        title="Copy link"
-                      >
-                        <svg
-                          viewBox="0 0 16 16"
-                          fill="none"
-                          xmlns="http://www.w3.org/2000/svg"
-                        >
-                          <path
-                            d="M10 2L14 6L10 10"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          />
-                          <path
-                            d="M14 6H6C4.34 6 3 7.34 3 9V14"
-                            stroke="currentColor"
-                            stroke-width="1.5"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                          />
+                      <div class="log-share" @click="shareMsg(item.msg)" title="Copy link">
+                        <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                          <path d="M10 2L14 6L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                            stroke-linejoin="round" />
+                          <path d="M14 6H6C4.34 6 3 7.34 3 9V14" stroke="currentColor" stroke-width="1.5"
+                            stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
                       </div>
                     </div>
@@ -3903,79 +3696,46 @@ function paintNameStyle(paint: {
                 </template>
 
                 <!-- Virtual scroll: spacer for items below rendered slice -->
-                <div
-                  :style="{ height: vSpacerBottom + 'px', flexShrink: 0 }"
-                  aria-hidden="true"
-                ></div>
+                <div :style="{ height: vSpacerBottom + 'px', flexShrink: 0 }" aria-hidden="true"></div>
 
                 <div class="top-loader" v-show="loadingNewer">
                   <span class="spinner">⟳</span> {{ t("logs.load_newer") }}
                 </div>
               </div>
               <!-- Custom scrollbar overlay (desktop only) -->
-              <div
-                v-if="!isMobileView"
-                class="logs-custom-scrollbar"
-                ref="customScrollbarRef"
-                @pointerdown.stop="onCustomScrollbarTrackPointerDown"
-              >
-                <div
-                  class="logs-custom-thumb"
-                  :style="customThumbStyle"
-                  @pointerdown.stop.prevent="onThumbDragStart"
-                ></div>
+              <div v-if="!isMobileView" class="logs-custom-scrollbar" ref="customScrollbarRef"
+                @pointerdown.stop="onCustomScrollbarTrackPointerDown">
+                <div class="logs-custom-thumb" :style="customThumbStyle" @pointerdown.stop.prevent="onThumbDragStart">
+                </div>
               </div>
             </div>
           </div>
 
           <!-- Jump-to-newest pill: appears when the user has scrolled up -->
           <transition name="jump-fade">
-            <button
-              v-if="searched && !isNearBottom"
-              class="jump-to-newest-btn"
-              @click="jumpToNewest"
-            >
+            <button v-if="searched && !isNearBottom" class="jump-to-newest-btn" @click="jumpToNewest">
               {{ t("logs.jump_to_newest") }}
             </button>
           </transition>
 
           <div v-if="!isMobileView" class="event-rail" aria-hidden="true">
-            <button
-              v-for="m in timelineMarkers"
-              :key="m.key"
-              class="event-marker"
-              :class="{ thin: !!m.thin }"
-              :title="m.title"
-              :style="{ top: m.topPct + '%', background: m.color }"
-              @click.stop="jumpToTimelineMarker(m)"
-            ></button>
+            <button v-for="m in timelineMarkers" :key="m.key" class="event-marker" :class="{ thin: !!m.thin }"
+              :title="m.title" :style="{ top: m.topPct + '%', background: m.color }"
+              @click.stop="jumpToTimelineMarker(m)"></button>
           </div>
         </div>
-        <button
-          v-if="!isMobileView"
-          class="logs-resize-handle"
-          title="Drag to resize logs panel"
-          @pointerdown="startResizeDrag"
-        ></button>
+        <button v-if="!isMobileView" class="logs-resize-handle" title="Drag to resize logs panel"
+          @pointerdown="startResizeDrag"></button>
       </div>
     </div>
 
     <!-- Screenshot toast moved to global SnippetOverlay -->
 
     <!-- User popup -->
-    <div
-      v-if="popup"
-      class="user-popup"
-      :style="{ top: popup.y + 'px', left: popup.x + 'px' }"
-      @click.stop
-    >
+    <div v-if="popup" class="user-popup" :style="{ top: popup.y + 'px', left: popup.x + 'px' }" @click.stop>
       <div class="popup-header" @mousedown.stop="startPopupDrag">
         <div class="popup-avatar-wrap">
-          <img
-            v-if="popupUser?.avatar"
-            :src="popupUser.avatar"
-            class="popup-avatar"
-          />
+          <img v-if="popupUser?.avatar" :src="popupUser.avatar" class="popup-avatar" />
           <div v-else class="popup-avatar-placeholder">
             {{ popup.username[0]?.toUpperCase() }}
           </div>
@@ -4010,29 +3770,19 @@ function paintNameStyle(paint: {
               ShyBoti not in #{{ popup?.channel }} - follow/sub info unavailable
             </div>
             <template v-else>
-              <div
-                class="popup-rel"
-                :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'"
-              >
+              <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">
                 <span class="rel-icon">♥</span>
                 <span class="rel-label">
-                  <template v-if="popupUser.followedAt"
-                    >Following for
-                    {{ fmtDuration(popupUser.followedAt) }}</template
-                  >
+                  <template v-if="popupUser.followedAt">Following for
+                    {{ fmtDuration(popupUser.followedAt) }}</template>
                   <template v-else>Not following</template>
                 </span>
               </div>
-              <div
-                class="popup-rel"
-                :class="popupUser.subbedSince ? 'rel-yes' : 'rel-no'"
-              >
+              <div class="popup-rel" :class="popupUser.subbedSince ? 'rel-yes' : 'rel-no'">
                 <span class="rel-icon">★</span>
                 <span class="rel-label">
-                  <template v-if="popupUser.subbedSince"
-                    >{{ subTierLabel(popupUser.subTier ?? "1000") }} ·
-                    {{ fmtDuration(popupUser.subbedSince) }}</template
-                  >
+                  <template v-if="popupUser.subbedSince">{{ subTierLabel(popupUser.subTier ?? "1000") }} ·
+                    {{ fmtDuration(popupUser.subbedSince) }}</template>
                   <template v-else>Not subscribed</template>
                 </span>
               </div>
@@ -4041,24 +3791,14 @@ function paintNameStyle(paint: {
           <div v-if="popupUser.paint" class="popup-paint">
             <div class="popup-paint-label">7TV Paint</div>
             <div class="popup-paint-display">
-              <span
-                class="popup-paint-name"
-                :style="paintNameStyle(popupUser.paint)"
-                >{{ popupUser.paint.name }}</span
-              >
+              <span class="popup-paint-name" :style="paintNameStyle(popupUser.paint)">{{ popupUser.paint.name }}</span>
             </div>
           </div>
           <div v-if="popupUser.nameHistory?.length" class="popup-names">
             <div class="popup-names-label">Previous names</div>
-            <div
-              v-for="n in popupUser.nameHistory"
-              :key="n.name"
-              class="popup-name-row"
-            >
+            <div v-for="n in popupUser.nameHistory" :key="n.name" class="popup-name-row">
               <span class="name-val">{{ n.name }}</span>
-              <span v-if="n.lastSeen" class="name-when"
-                >{{ fmtDuration(n.lastSeen) }} ago</span
-              >
+              <span v-if="n.lastSeen" class="name-when">{{ fmtDuration(n.lastSeen) }} ago</span>
             </div>
           </div>
         </template>
@@ -4067,35 +3807,19 @@ function paintNameStyle(paint: {
         </div>
       </div>
       <div class="popup-actions">
-        <button
-          class="popup-btn"
-          @click="goToLogsForUser(popup.username, popup.channel)"
-        >
+        <button class="popup-btn" @click="goToLogsForUser(popup.username, popup.channel)">
           Logs
         </button>
-        <button
-          class="popup-btn"
-          @click="openUsercardPopout(popup.username, popup.channel)"
-        >
+        <button class="popup-btn" @click="openUsercardPopout(popup.username, popup.channel)">
           ↗ Twitch
         </button>
       </div>
     </div>
 
-    <div
-      class="logs-fetch-floating"
-      :class="{ visible: showFloatingFetch }"
-      aria-live="polite"
-      :aria-busy="showFloatingFetch ? 'true' : 'false'"
-    >
-      <img
-        class="logs-fetch-logo"
-        :src="loadingOverlayLogoUrl"
-        alt="ShyBoti loading"
-        loading="eager"
-        decoding="async"
-        fetchpriority="high"
-      />
+    <div class="logs-fetch-floating" :class="{ visible: showFloatingFetch }" aria-live="polite"
+      :aria-busy="showFloatingFetch ? 'true' : 'false'">
+      <img class="logs-fetch-logo" :src="loadingOverlayLogoUrl" alt="ShyBoti loading" loading="eager" decoding="async"
+        fetchpriority="high" />
       <span class="logs-fetch-text">logs getting displayed...</span>
     </div>
   </div>
@@ -4111,15 +3835,18 @@ function paintNameStyle(paint: {
   margin: -20px;
   padding: 20px;
 }
+
 .logs-header {
   flex-shrink: 0;
 }
+
 .logs-title {
   font-size: 18px;
   font-weight: 700;
   color: #e0e0e0;
   margin-bottom: 4px;
 }
+
 .logs-sub {
   font-size: 12px;
   color: #555;
@@ -4131,6 +3858,7 @@ function paintNameStyle(paint: {
   align-items: flex-start;
   flex-shrink: 0;
 }
+
 .search-bar {
   display: flex;
   align-items: flex-end;
@@ -4141,17 +3869,20 @@ function paintNameStyle(paint: {
   flex-shrink: 0;
   flex: 1;
 }
+
 .search-bar-content {
   display: flex;
   align-items: flex-end;
   gap: 10px;
   flex-wrap: wrap;
 }
+
 .field-wrap {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+
 .snippet-info {
   display: flex;
   flex-direction: column;
@@ -4159,17 +3890,20 @@ function paintNameStyle(paint: {
   flex-shrink: 0;
   align-items: center;
 }
+
 .snippet-gif-wrap {
   position: relative;
   cursor: pointer;
   display: inline-block;
 }
+
 .snippet-gif {
   display: block;
   max-height: 60px;
   max-width: 180px;
   border: 1px solid #2a2a30;
 }
+
 .snippet-hover-overlay {
   position: absolute;
   inset: 0;
@@ -4194,12 +3928,14 @@ function paintNameStyle(paint: {
   gap: 5px;
   align-items: center;
 }
+
 .opt {
   font-size: 9px;
   color: #383838;
   font-weight: 400;
   text-transform: none;
 }
+
 .field-input {
   background: #0d0d10;
   border: 1px solid #2a2a30;
@@ -4211,9 +3947,11 @@ function paintNameStyle(paint: {
   width: 160px;
   transition: border-color 0.15s;
 }
+
 .field-input:focus {
   border-color: #6f2bff55;
 }
+
 .search-btn {
   height: 34px;
   padding: 0 20px;
@@ -4227,9 +3965,11 @@ function paintNameStyle(paint: {
   align-self: flex-end;
   transition: background 0.15s;
 }
+
 .search-btn:hover:not(:disabled) {
   background: #7f3fff;
 }
+
 .search-btn:disabled {
   opacity: 0.4;
   cursor: default;
@@ -4243,12 +3983,14 @@ function paintNameStyle(paint: {
   border-left: 2px solid #f14949;
   flex-shrink: 0;
 }
+
 .logs-empty {
   color: #444;
   font-size: 13px;
   padding: 40px;
   text-align: center;
 }
+
 .logs-count {
   font-size: 11px;
   color: #555;
@@ -4269,12 +4011,14 @@ function paintNameStyle(paint: {
   pointer-events: none;
   z-index: 9999;
 }
+
 .toast-fade-enter-active,
 .toast-fade-leave-active {
   transition:
     opacity 0.2s,
     transform 0.2s;
 }
+
 .toast-fade-enter-from,
 .toast-fade-leave-to {
   opacity: 0;
@@ -4287,6 +4031,7 @@ function paintNameStyle(paint: {
   flex: 1;
   min-height: 0;
 }
+
 .logs-table-wrap {
   display: flex;
   align-items: stretch;
@@ -4295,6 +4040,7 @@ function paintNameStyle(paint: {
   min-height: 0;
   overflow: hidden;
 }
+
 .logs-table-shell {
   position: relative;
   display: flex;
@@ -4303,6 +4049,7 @@ function paintNameStyle(paint: {
   min-width: 0;
   min-height: 0;
 }
+
 .logs-table {
   display: flex;
   flex-direction: column;
@@ -4310,6 +4057,7 @@ function paintNameStyle(paint: {
   min-height: 0;
   min-width: 0;
 }
+
 .logs-thead {
   display: grid;
   grid-template-columns: 120px var(--user-width, 140px) 1fr;
@@ -4326,7 +4074,7 @@ function paintNameStyle(paint: {
   position: relative;
 }
 
-.logs-thead > :nth-child(3) {
+.logs-thead> :nth-child(3) {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -4340,6 +4088,7 @@ function paintNameStyle(paint: {
   background: #101015;
   border-bottom: 0;
 }
+
 .day-jump-btn {
   width: 100%;
   height: 100%;
@@ -4355,6 +4104,7 @@ function paintNameStyle(paint: {
     border-color 0.15s,
     background 0.15s;
 }
+
 .day-jump-btn:hover {
   color: #d2d2df;
   background: rgba(152, 101, 255, 0.473);
@@ -4366,11 +4116,13 @@ function paintNameStyle(paint: {
   min-height: 0;
   position: relative;
 }
+
 .pinned-day-header {
   position: absolute;
   top: 0;
   left: 0;
-  right: 14px; /* 14px = width of the custom scrollbar track */
+  right: 14px;
+  /* 14px = width of the custom scrollbar track */
   padding: 6px 12px 3px;
   font-size: 10px;
   font-weight: 700;
@@ -4381,6 +4133,7 @@ function paintNameStyle(paint: {
   z-index: 5;
   pointer-events: none;
 }
+
 .logs-tbody {
   overflow-y: scroll;
   overflow-anchor: auto;
@@ -4389,10 +4142,12 @@ function paintNameStyle(paint: {
   min-height: 0;
   scrollbar-width: none;
 }
+
 .logs-tbody::-webkit-scrollbar {
   width: 0;
   height: 0;
 }
+
 .logs-custom-scrollbar {
   width: 14px;
   flex-shrink: 0;
@@ -4403,6 +4158,7 @@ function paintNameStyle(paint: {
   user-select: none;
   border-left: 1px solid #1e1e26;
 }
+
 .logs-custom-thumb {
   position: absolute;
   left: 2px;
@@ -4414,9 +4170,11 @@ function paintNameStyle(paint: {
   transition: background 0.1s;
   min-height: 28px;
 }
+
 .logs-custom-thumb:hover {
   background: rgba(140, 140, 160, 0.95);
 }
+
 .logs-custom-thumb:active {
   cursor: grabbing;
 }
@@ -4432,6 +4190,7 @@ function paintNameStyle(paint: {
   pointer-events: none;
   z-index: 2;
 }
+
 .event-marker {
   position: absolute;
   left: 0;
@@ -4445,6 +4204,7 @@ function paintNameStyle(paint: {
   cursor: pointer;
   pointer-events: auto;
 }
+
 .event-marker.thin {
   height: 2px;
   border-radius: 2px;
@@ -4455,17 +4215,16 @@ function paintNameStyle(paint: {
   border: none;
   border-left: 1px solid #22222b;
   background:
-    radial-gradient(circle, #6b6b78 1.2px, transparent 1.3px) center 4px / 6px
-      6px repeat-y,
+    radial-gradient(circle, #6b6b78 1.2px, transparent 1.3px) center 4px / 6px 6px repeat-y,
     #121217;
   cursor: ew-resize;
   touch-action: none;
   flex-shrink: 0;
 }
+
 .logs-resize-handle:hover {
   background:
-    radial-gradient(circle, #9a9aab 1.2px, transparent 1.3px) center 4px / 6px
-      6px repeat-y,
+    radial-gradient(circle, #9a9aab 1.2px, transparent 1.3px) center 4px / 6px 6px repeat-y,
     #17171d;
 }
 
@@ -4480,16 +4239,19 @@ function paintNameStyle(paint: {
   background: #0e0e12;
   border-bottom: 1px solid #1e1e24;
 }
+
 .top-loader.no-more {
   color: #333;
   background: transparent;
   border-bottom: none;
   position: static;
 }
+
 .spinner {
   display: inline-block;
   animation: spin 1s linear infinite;
 }
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -4517,15 +4279,18 @@ function paintNameStyle(paint: {
     background 0.15s,
     opacity 0.15s;
 }
+
 .jump-to-newest-btn:hover {
   background: #6d28d9;
 }
+
 .jump-fade-enter-active,
 .jump-fade-leave-active {
   transition:
     opacity 0.2s,
     transform 0.2s;
 }
+
 .jump-fade-enter-from,
 .jump-fade-leave-to {
   opacity: 0;
@@ -4537,36 +4302,39 @@ function paintNameStyle(paint: {
   transition: background 0.1s;
   position: relative;
 }
+
 .log-row-outer:hover {
   background: #1a1a1e;
 }
+
 .log-row-outer.highlighted {
   animation: hl-fade 3s ease forwards;
 }
+
 .log-row-outer.log-row-event {
-  background: linear-gradient(
-    90deg,
-    rgba(200, 50, 200, 0.16),
-    rgba(200, 50, 200, 0.02) 45%,
-    transparent 80%
-  );
+  background: linear-gradient(90deg,
+      rgba(200, 50, 200, 0.16),
+      rgba(200, 50, 200, 0.02) 45%,
+      transparent 80%);
   border-left: 2px solid #c832c8;
 }
+
 .log-row-outer.log-row-event:hover {
-  background: linear-gradient(
-    90deg,
-    rgba(200, 50, 200, 0.24),
-    rgba(200, 50, 200, 0.08) 50%,
-    rgba(26, 26, 30, 0.9) 100%
-  );
+  background: linear-gradient(90deg,
+      rgba(200, 50, 200, 0.24),
+      rgba(200, 50, 200, 0.08) 50%,
+      rgba(26, 26, 30, 0.9) 100%);
 }
+
 .log-row-outer.log-row-event :deep(.log-row) {
   align-items: center;
 }
+
 @keyframes hl-fade {
   0% {
     background: rgba(111, 43, 255, 0.25);
   }
+
   100% {
     background: transparent;
   }
@@ -4577,13 +4345,16 @@ function paintNameStyle(paint: {
   background: rgba(255, 214, 10, 0.05);
   border-left: 2px solid rgba(255, 214, 10, 0.32);
 }
+
 .log-row-outer.search-match:hover {
   background: rgba(255, 214, 10, 0.09);
 }
+
 .log-row-outer.search-current {
   background: rgba(255, 214, 10, 0.16) !important;
   border-left-color: #ffd60a !important;
 }
+
 .log-row-outer.search-current:hover {
   background: rgba(255, 214, 10, 0.2) !important;
 }
@@ -4604,6 +4375,7 @@ function paintNameStyle(paint: {
   margin-right: 10px;
   min-width: 120px;
 }
+
 :deep(.log-event-label) {
   display: inline-flex;
   align-items: center;
@@ -4618,33 +4390,40 @@ function paintNameStyle(paint: {
   border: 1px solid transparent;
   white-space: nowrap;
 }
+
 :deep(.log-event-icon) {
   font-size: 10px;
   line-height: 1;
 }
+
 :deep(.log-event-label.tone-first) {
   background: rgba(200, 50, 200, 0.16);
   border-color: rgba(200, 50, 200, 0.55);
   color: #f4c2f4;
 }
+
 :deep(.log-event-label.tone-sub) {
   background: rgba(255, 208, 69, 0.14);
   border-color: rgba(255, 208, 69, 0.45);
   color: #ffdd7d;
 }
+
 :deep(.log-event-label.tone-announce) {
   background: rgba(93, 171, 255, 0.12);
   border-color: rgba(93, 171, 255, 0.45);
   color: #a8d3ff;
 }
+
 :deep(.log-time) {
   color: #444;
   font-size: 11px;
   flex-shrink: 0;
 }
+
 :deep(.log-time-short) {
   display: none;
 }
+
 :deep(.log-day-sep) {
   display: block;
   padding: 6px 12px 3px;
@@ -4655,6 +4434,7 @@ function paintNameStyle(paint: {
   border-top: 1px solid #1e1e24;
   background: #0d0d10;
 }
+
 :deep(.log-badges) {
   display: inline-flex;
   align-items: center;
@@ -4662,26 +4442,31 @@ function paintNameStyle(paint: {
   margin-right: 6px;
   flex-shrink: 0;
 }
+
 :deep(.badge-img) {
   display: block;
   width: 18px;
   height: 18px;
 }
+
 :deep(.badge-fallback) {
   font-size: 10px;
   color: #888;
 }
+
 :deep(.log-user) {
   font-weight: 600;
   white-space: nowrap;
   flex-shrink: 0;
   padding-right: 0;
 }
+
 :deep(.log-user)::after {
   content: ":";
   color: #555;
   margin-right: 5px;
 }
+
 :deep(.log-msg-wrap) {
   flex: 1;
   min-width: 0;
@@ -4689,16 +4474,20 @@ function paintNameStyle(paint: {
   flex-direction: column;
   position: relative;
 }
+
 :deep(.log-msg-wrap.has-reply) {
   padding-top: 16px;
 }
+
 :deep(.log-mobile-msgline) {
   display: none;
 }
+
 :deep(.log-msg-wrap.is-system-mod .log-msg) {
   color: #898989;
   font-style: italic;
 }
+
 :deep(.log-msg) {
   flex: 1;
   color: #ccc;
@@ -4723,22 +4512,27 @@ function paintNameStyle(paint: {
   white-space: nowrap;
   overflow: hidden;
 }
+
 :deep(.reply-context-link) {
   cursor: pointer;
 }
+
 :deep(.reply-context-link):hover {
   color: #7f7f7f;
 }
+
 :deep(.reply-icon) {
   color: #444;
   font-size: 11px;
   flex-shrink: 0;
 }
+
 :deep(.reply-parent-user) {
   color: #777;
   font-weight: 600;
   flex-shrink: 0;
 }
+
 :deep(.reply-parent-body) {
   color: #444;
   overflow: hidden;
@@ -4761,12 +4555,15 @@ function paintNameStyle(paint: {
   flex-shrink: 0;
   margin-left: 6px;
 }
+
 .log-row-outer:hover :deep(.log-share) {
   opacity: 1;
 }
+
 :deep(.log-share):hover {
   color: #9d6cff;
 }
+
 :deep(.log-share svg) {
   width: 13px;
   height: 13px;
@@ -4775,6 +4572,7 @@ function paintNameStyle(paint: {
 :deep(.log-user-clickable) {
   cursor: pointer;
 }
+
 :deep(.log-user-clickable):hover {
   opacity: 0.8;
   text-decoration: underline dotted;
@@ -4797,10 +4595,12 @@ function paintNameStyle(paint: {
   vertical-align: middle;
   margin: 0 1px;
 }
+
 :deep(.emote-stack .chat-emote) {
   margin: 0;
   display: block;
 }
+
 :deep(.emote-stack .emote-overlay) {
   position: absolute;
   top: 50%;
@@ -4823,6 +4623,7 @@ function paintNameStyle(paint: {
   transform: translate(-50%, 12px);
   overflow: hidden;
 }
+
 .popup-header {
   display: flex;
   align-items: center;
@@ -4832,9 +4633,11 @@ function paintNameStyle(paint: {
   cursor: move;
   user-select: none;
 }
+
 .popup-avatar-wrap {
   flex-shrink: 0;
 }
+
 .popup-avatar {
   width: 40px;
   height: 40px;
@@ -4842,6 +4645,7 @@ function paintNameStyle(paint: {
   display: block;
   border: 2px solid #2a2a30;
 }
+
 .popup-avatar-placeholder {
   width: 40px;
   height: 40px;
@@ -4855,10 +4659,12 @@ function paintNameStyle(paint: {
   font-weight: 700;
   color: #9d6cff;
 }
+
 .popup-title-block {
   flex: 1;
   min-width: 0;
 }
+
 .popup-name {
   font-size: 13px;
   font-weight: 700;
@@ -4868,10 +4674,12 @@ function paintNameStyle(paint: {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .popup-sub {
   font-size: 11px;
   color: #555;
 }
+
 .popup-close {
   background: none;
   border: none;
@@ -4882,9 +4690,11 @@ function paintNameStyle(paint: {
   line-height: 1;
   flex-shrink: 0;
 }
+
 .popup-close:hover {
   color: #aaa;
 }
+
 .popup-body {
   padding: 12px 14px;
   min-height: 72px;
@@ -4892,43 +4702,51 @@ function paintNameStyle(paint: {
   flex-direction: column;
   gap: 10px;
 }
+
 .popup-loading {
   font-size: 12px;
   color: #555;
   text-align: center;
   padding: 16px 0;
 }
+
 .popup-stats {
   display: flex;
   gap: 20px;
 }
+
 .popup-stat {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
+
 .stat-val {
   font-size: 13px;
   font-weight: 700;
   color: #e0e0e0;
 }
+
 .stat-lbl {
   font-size: 10px;
   color: #555;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
 .popup-relations {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+
 .popup-no-bot {
   font-size: 10px;
   color: #555;
   font-style: italic;
   padding: 4px 0;
 }
+
 .popup-rel {
   display: flex;
   align-items: center;
@@ -4936,26 +4754,32 @@ function paintNameStyle(paint: {
   padding: 5px 8px;
   font-size: 12px;
 }
+
 .popup-rel.rel-yes {
   background: #1a2a1a;
   color: #23d18b;
 }
+
 .popup-rel.rel-no {
   background: #1e1e22;
   color: #444;
 }
+
 .rel-icon {
   font-size: 11px;
   flex-shrink: 0;
 }
+
 .rel-label {
   flex: 1;
 }
+
 .popup-names {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
+
 .popup-names-label {
   font-size: 10px;
   color: #555;
@@ -4963,6 +4787,7 @@ function paintNameStyle(paint: {
   letter-spacing: 0.05em;
   margin-bottom: 2px;
 }
+
 .popup-name-row {
   display: flex;
   justify-content: space-between;
@@ -4970,43 +4795,52 @@ function paintNameStyle(paint: {
   padding: 3px 0;
   border-bottom: 1px solid #1e1e22;
 }
+
 .popup-name-row:last-child {
   border-bottom: none;
 }
+
 .name-val {
   font-size: 12px;
   color: #aaa;
 }
+
 .name-when {
   font-size: 10px;
   color: #444;
 }
+
 .popup-paint {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+
 .popup-paint-label {
   font-size: 10px;
   color: #555;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
 .popup-paint-display {
   padding: 6px 8px;
   background: #111217;
   border: 1px solid #1e1e22;
 }
+
 .popup-paint-name {
   font-size: 14px;
   font-weight: 700;
   font-family: inherit;
 }
+
 .popup-actions {
   display: flex;
   gap: 1px;
   border-top: 1px solid #1e1e22;
 }
+
 .popup-btn {
   flex: 1;
   height: 32px;
@@ -5021,9 +4855,11 @@ function paintNameStyle(paint: {
     background 0.15s,
     color 0.15s;
 }
+
 .popup-btn:last-child {
   border-right: none;
 }
+
 .popup-btn:hover {
   background: #1e1e24;
   color: #9d6cff;
@@ -5051,11 +4887,13 @@ function paintNameStyle(paint: {
     transform 0.16s ease,
     visibility 0.16s ease;
 }
+
 .logs-fetch-floating.visible {
   opacity: 1;
   transform: translateY(0);
   visibility: visible;
 }
+
 .logs-fetch-logo {
   width: 18px;
   height: 18px;
@@ -5063,6 +4901,7 @@ function paintNameStyle(paint: {
   animation: logs-fetch-spin 1s linear infinite;
   transform-origin: center center;
 }
+
 .logs-fetch-text {
   font-size: 11px;
   font-weight: 700;
@@ -5070,6 +4909,7 @@ function paintNameStyle(paint: {
   color: #f2d3ff;
   text-transform: lowercase;
 }
+
 @keyframes logs-fetch-spin {
   to {
     transform: rotate(360deg);
@@ -5081,6 +4921,7 @@ function paintNameStyle(paint: {
   display: flex;
   gap: 0;
 }
+
 .dir-btn {
   height: 34px;
   width: 96px;
@@ -5100,12 +4941,15 @@ function paintNameStyle(paint: {
     color 0.15s,
     background 0.15s;
 }
+
 .dir-btn:first-child {
   border-right: none;
 }
+
 .dir-btn:hover {
   color: #aaa;
 }
+
 .dir-btn.active {
   background: #1a1a24;
   color: #9d6cff;
@@ -5119,6 +4963,7 @@ function paintNameStyle(paint: {
   flex-direction: column;
   gap: 4px;
 }
+
 .visuals-toggle {
   height: 34px;
   padding: 0 14px;
@@ -5132,13 +4977,16 @@ function paintNameStyle(paint: {
   transition: background 0.15s;
   white-space: nowrap;
 }
+
 .visuals-toggle:hover {
   background: rgba(157, 108, 255, 0.14);
 }
+
 .visuals-toggle.open {
   background: rgba(157, 108, 255, 0.18);
   border-color: #9d6cff88;
 }
+
 .visuals-panel {
   display: none;
   flex-direction: column;
@@ -5153,23 +5001,28 @@ function paintNameStyle(paint: {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
   z-index: 30;
 }
+
 .visuals-panel .dir-btn {
   border-right: 1px solid #2a2a30 !important;
 }
+
 .visuals-panel-open {
   display: flex !important;
 }
+
 .options-group {
   display: flex;
   flex-direction: row;
   gap: 0;
   flex-wrap: wrap;
 }
-.options-group + .options-group {
+
+.options-group+.options-group {
   margin-top: 4px;
   padding-top: 4px;
   border-top: 1px solid #2a2a30;
 }
+
 .options-group-lbl {
   font-size: 9px;
   font-weight: 700;
@@ -5201,6 +5054,7 @@ function paintNameStyle(paint: {
   --dp-font-size: 12px;
   --dp-cell-size: 30px;
 }
+
 .dp-logs .dp__input {
   background: #0d0d10;
   border: 1px solid #2a2a30;
@@ -5212,19 +5066,24 @@ function paintNameStyle(paint: {
   border-radius: 0;
   min-width: 200px;
 }
+
 .dp-logs-single .dp__input {
   min-width: 140px;
 }
+
 .dp-logs .dp__input:focus {
   border-color: #6f2bff55;
   outline: none;
 }
+
 .dp-logs .dp__input_icon {
   display: none;
 }
+
 .dp-logs .dp__input_icon_pad {
   padding-left: 10px;
 }
+
 .dp-logs .dp__clear_icon {
   color: #555;
   right: 6px;
@@ -5234,6 +5093,7 @@ function paintNameStyle(paint: {
 .automod-bar {
   flex-shrink: 0;
 }
+
 .automod-toggle {
   height: 28px;
   padding: 0 14px;
@@ -5246,9 +5106,11 @@ function paintNameStyle(paint: {
   cursor: pointer;
   transition: background 0.15s;
 }
+
 .automod-toggle:hover {
   background: rgba(229, 192, 123, 0.14);
 }
+
 .automod-toggle.active {
   background: rgba(229, 192, 123, 0.18);
   border-color: #e5c07b88;
@@ -5259,9 +5121,11 @@ function paintNameStyle(paint: {
   background: rgba(229, 192, 123, 0.05);
   border-left: 2px solid #e5c07b44;
 }
+
 .log-row-automod:hover {
   background: rgba(229, 192, 123, 0.09);
 }
+
 .log-automod-badge {
   color: #e5c07b !important;
   font-size: 10px;
@@ -5269,36 +5133,44 @@ function paintNameStyle(paint: {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+
 .log-automod-badge::after {
   display: none;
 }
+
 .automod-user {
   color: #e5c07b;
   font-weight: 600;
 }
+
 .automod-text {
   color: #888;
   font-style: italic;
 }
+
 .automod-category {
   font-size: 10px;
   color: #555;
   margin-left: 6px;
 }
+
 .automod-status {
   font-size: 10px;
   font-weight: 700;
   margin-left: 4px;
   padding: 1px 5px;
 }
+
 .automod-status.held {
   color: #e5c07b;
   background: rgba(229, 192, 123, 0.15);
 }
+
 .automod-status.approved {
   color: #23d18b;
   background: rgba(35, 209, 139, 0.1);
 }
+
 .automod-status.denied {
   color: #f14949;
   background: rgba(241, 73, 73, 0.1);
@@ -5315,10 +5187,12 @@ function paintNameStyle(paint: {
     gap: 0;
     margin: -30px;
   }
+
   .logs-header {
     padding: 10px 14px 6px;
     flex-shrink: 0;
   }
+
   .logs-title {
     font-size: 15px;
     margin-bottom: 2px;
@@ -5335,6 +5209,7 @@ function paintNameStyle(paint: {
     flex-shrink: 0;
     user-select: none;
   }
+
   .summary-text {
     display: flex;
     align-items: center;
@@ -5342,15 +5217,18 @@ function paintNameStyle(paint: {
     flex-wrap: wrap;
     font-size: 11px;
   }
+
   .summary-ch {
     color: #9d6cff;
     font-weight: 700;
   }
+
   .summary-tag {
     color: #888;
     background: #1e1e24;
     padding: 1px 6px;
   }
+
   .summary-chevron {
     font-size: 9px;
     color: #555;
@@ -5362,6 +5240,7 @@ function paintNameStyle(paint: {
     gap: 8px;
     align-items: center;
   }
+
   .search-bar {
     flex-direction: column;
     align-items: stretch;
@@ -5375,32 +5254,40 @@ function paintNameStyle(paint: {
     max-height: 400px;
     width: 100%;
   }
+
   .search-bar-content {
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
   }
+
   .search-bar-collapsed {
     max-height: 0 !important;
     padding: 0 14px !important;
   }
+
   .field-input {
     width: 100% !important;
   }
+
   .dp-logs .dp__input {
     min-width: 0;
     width: 100%;
   }
+
   .search-btn {
     width: 100%;
   }
+
   .snippet-info {
     display: none !important;
   }
+
   /* Visuals: always show inline on mobile, no dropdown */
   .visuals-toggle {
     display: none !important;
   }
+
   .visuals-panel {
     display: flex !important;
     position: static;
@@ -5413,6 +5300,7 @@ function paintNameStyle(paint: {
     flex-wrap: wrap;
     gap: 6px;
   }
+
   /* Bigger touch targets on mobile */
   .dir-btn {
     height: 40px;
@@ -5421,6 +5309,7 @@ function paintNameStyle(paint: {
     padding: 0 14px;
     font-size: 13px;
   }
+
   .options-group {
     gap: 6px;
   }
@@ -5431,29 +5320,35 @@ function paintNameStyle(paint: {
     display: flex;
     flex-direction: column;
   }
+
   .logs-table-wrap {
     flex: 1;
     min-height: 0;
     display: block;
   }
+
   .logs-table-shell {
     width: 100% !important;
     min-height: 0;
   }
+
   .logs-table {
     flex: 1;
     min-height: 0;
     display: flex;
     flex-direction: column;
   }
+
   .day-jump-bar,
   .event-rail,
   .logs-resize-handle {
     display: none !important;
   }
+
   .logs-thead {
     display: none !important;
   }
+
   .logs-tbody {
     flex: 1;
     min-height: 0;
@@ -5471,6 +5366,7 @@ function paintNameStyle(paint: {
     border-top: 1px solid #1e1e24;
     background: #0d0d10;
   }
+
   .pinned-day-header {
     right: 0;
   }
@@ -5483,16 +5379,20 @@ function paintNameStyle(paint: {
     padding: 3px 12px;
     grid-template-columns: unset !important;
   }
+
   :deep(.log-time-col) {
     min-width: auto;
     margin-right: 0;
   }
+
   :deep(.log-event-label) {
     display: none;
   }
+
   :deep(.log-time) {
     display: none;
   }
+
   :deep(.log-time-short) {
     display: block;
     flex-shrink: 0;
@@ -5500,20 +5400,25 @@ function paintNameStyle(paint: {
     font-size: 11px;
     white-space: nowrap;
   }
+
   :deep(.log-badges) {
     display: none;
   }
+
   :deep(.log-user) {
     display: none;
   }
+
   :deep(.log-msg-wrap) {
     flex: 1;
     min-width: 0;
     display: block;
   }
+
   :deep(.log-msg-wrap:not(.is-system-mod) > .log-msg) {
     display: none;
   }
+
   :deep(.log-mobile-msgline) {
     display: block;
     font-size: 12px;
@@ -5521,6 +5426,7 @@ function paintNameStyle(paint: {
     line-height: 1.6;
     word-break: break-word;
   }
+
   :deep(.log-mobile-badges) {
     display: inline-flex;
     align-items: center;
@@ -5528,26 +5434,32 @@ function paintNameStyle(paint: {
     margin-right: 4px;
     vertical-align: middle;
   }
+
   :deep(.log-mobile-badges .badge-img) {
     width: 16px;
     height: 16px;
   }
+
   :deep(.log-mobile-user) {
     font-weight: 600;
     vertical-align: baseline;
   }
+
   :deep(.log-mobile-user-colon) {
     color: #555;
     margin-right: 5px;
   }
+
   :deep(.log-mobile-msg) {
     display: inline;
   }
+
   :deep(.log-msg) {
     font-size: 12px;
     min-width: 0;
     word-break: break-word;
   }
+
   :deep(.log-share) {
     flex-shrink: 0;
     opacity: 0.5 !important;
