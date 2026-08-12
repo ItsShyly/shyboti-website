@@ -1052,7 +1052,8 @@ body.snippet-dragging * {
   align-items: center;
   height: 30px;
   padding: 0 12px;
-  border: 1px solid transparent;
+  border: 1px solid #333;
+  background: #1e1e26;
   font-size: 12px;
   color: #9d6cff;
   font-weight: 600;
