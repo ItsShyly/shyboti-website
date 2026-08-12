@@ -39,6 +39,9 @@ export interface ChannelRole {
 
 const session = ref<Session | null>(null);
 const availableChannels = ref<string[]>([]);
+// >>> subset of availableChannels the user only sees via admin mode, not a
+// >>> real broadcaster/mod/vip/user relationship - drives the red vs purple badge
+const adminOnlyChannels = ref<string[]>([]);
 const channelRole = ref<ChannelRole | null>(null);
 let accessRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let accessRefreshBound = false;
@@ -50,8 +53,12 @@ async function fetchChannels() {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) return;
-    const data = (await res.json()) as { channels: string[] };
+    const data = (await res.json()) as {
+      channels: string[];
+      adminOnly?: string[];
+    };
     availableChannels.value = data.channels;
+    adminOnlyChannels.value = data.adminOnly ?? [];
   } catch {}
 }
 
@@ -141,6 +148,7 @@ export function useAuth() {
     } catch {
       session.value = null;
       availableChannels.value = [];
+      adminOnlyChannels.value = [];
       channelRole.value = null;
       stopAccessRefresh();
       localStorage.removeItem("shyboti_token");
@@ -173,6 +181,7 @@ export function useAuth() {
   return {
     session: readonly(session),
     availableChannels: readonly(availableChannels),
+    adminOnlyChannels: readonly(adminOnlyChannels),
     channelRole: readonly(channelRole),
     restoreSession,
     switchChannel,

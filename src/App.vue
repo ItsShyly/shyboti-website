@@ -20,6 +20,7 @@ import { useLogsSearch } from "./composables/useLogsSearch";
 const {
   session,
   availableChannels,
+  adminOnlyChannels,
   channelRole,
   restoreSession,
   switchChannel,
@@ -46,12 +47,11 @@ const viewingOtherChannel = computed(
   () => !!session.value && session.value.login !== session.value.channel,
 );
 
-// >>> red accent instead of purple when an admin is god-moded into a channel that isn't their own 
+// >>> red accent instead of purple only when the current channel is admin-only
+// >>> admin mode access - a real mod/vip/broadcaster relationship stays purple
 const viewingAsAdmin = computed(
   () =>
-    !!session.value &&
-    session.value.isAdmin &&
-    session.value.login !== session.value.channel,
+    !!session.value && adminOnlyChannels.value.includes(session.value.channel),
 );
 
 function selectChannel(ch: string) {
@@ -677,7 +677,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <span v-if="showLogsChip && logsQuery" class="search-match-nav">
           <span class="search-match-count">{{
             logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0 matches"
-            }}</span>
+          }}</span>
           <button v-if="logsMatchCount" class="search-match-step" title="Previous match (Shift+Enter)"
             @mousedown.prevent="logsRequestJump(-1)">
             ▲
@@ -757,7 +757,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
             </div>
             <div v-if="showChannelMenu" class="channel-menu">
               <button v-for="ch in availableChannels" :key="ch" class="channel-menu-item"
-                :class="{ active: ch === session.channel, 'admin-channel': session.isAdmin && ch !== session.login }"
+                :class="{ active: ch === session.channel, 'admin-channel': adminOnlyChannels.includes(ch) }"
                 @click="selectChannel(ch)">
                 #{{ ch }}
               </button>
@@ -833,7 +833,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span v-if="showLogsChip && logsQuery" class="search-match-nav">
             <span class="search-match-count">{{
               logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0"
-              }}</span>
+            }}</span>
             <button v-if="logsMatchCount" class="search-match-step" title="Previous match"
               @mousedown.prevent="logsRequestJump(-1)">
               ▲
@@ -919,10 +919,6 @@ provide("searchOpenTrigger", searchOpenTrigger);
           :class="{ active: activeRoute === 'roles', locked: !session }" @click="nav('roles')">
           {{ t("nav.roles") }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <button v-if="session?.isAdmin" class="sidebar-btn admin-nav-btn" :class="{ active: activeRoute === 'admin' }"
-          @click="nav('admin')">
-          {{ t("nav.admin") }}
-        </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'tools', locked: !session }"
           @click="nav('tools')">
           Tools <span v-if="!session" class="lock-icon">🔒</span>
@@ -939,6 +935,10 @@ provide("searchOpenTrigger", searchOpenTrigger);
 
         <div class="sidebar-spacer"></div>
 
+        <button v-if="session?.isAdmin" class="sidebar-btn admin-nav-btn" :class="{ active: activeRoute === 'admin' }"
+          @click="nav('admin')">
+          {{ t("nav.admin") }}
+        </button>
         <button v-if="!session || channelRole?.role === 'broadcaster'" class="sidebar-btn"
           :class="{ active: activeRoute === 'settings', locked: !session }" @click="nav('settings')">
           {{ t("nav.settings") }}
@@ -964,7 +964,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span class="footer-sep">|</span>
           <router-link to="/privacy" class="footer-link">{{
             t("footer.privacy")
-            }}</router-link>
+          }}</router-link>
         </footer>
       </main>
     </div>
@@ -1032,7 +1032,7 @@ body.snippet-dragging * {
   background: #9d6cff;
 }
 
-/* >>> admin god-mode on a channel that isn't theirs - red instead of the
+/* >>> admin mode on a channel that isn't theirs - red instead of the
    regular mod/VIP purple, a stronger "you can break things here" warning */
 .topbar.admin-channel::after {
   background: #f14949;
