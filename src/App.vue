@@ -1065,15 +1065,16 @@ body.snippet-dragging * {
   background: #1e1e26;
 }
 
-/* >>> fills the gap down to the topbar's line instead of just touching it at a point */
+/* >>> full topbar-height backdrop, sitting behind the badge (z-index -1)  */
 .logged-in-as.other-channel::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -19px;
-  height: 19px;
-  background: #9d6cff;
+  z-index: -1;
+  left: -1px;
+  right: -1px;
+  top: -11px;
+  bottom: -15px;
+  background: linear-gradient(to bottom, transparent, #9d6cff33 40%, #9d6cff 100%);
   box-shadow: 0 0 6px #9d6cff99;
 }
 
@@ -1345,16 +1346,16 @@ body.snippet-dragging * {
   border-color: #9d6cff;
 }
 
-/* >>> stub that bridges the channel-btn down to the topbar's bottom line  */
-/* >>> fills the gap down to the topbar's line instead of just touching it */
+/* >>> full topbar-height backdrop behind the button (z-index -1)*/
 .channel-switcher.other-channel::after {
   content: "";
   position: absolute;
-  left: 0;
-  right: 0;
+  z-index: -1;
+  left: -1px;
+  right: -1px;
+  top: -11px;
   bottom: -15px;
-  height: 15px;
-  background: #9d6cff;
+  background: linear-gradient(to bottom, transparent, #9d6cff33 40%, #9d6cff 100%);
   box-shadow: 0 0 6px #9d6cff99;
 }
 
