@@ -1047,6 +1047,7 @@ body.snippet-dragging * {
 
 .logged-in-as {
   position: relative;
+  z-index: 0;
   display: inline-flex;
   align-items: center;
   height: 30px;
@@ -1323,6 +1324,7 @@ body.snippet-dragging * {
 /* channel switcher */
 .channel-switcher {
   position: relative;
+  z-index: 0;
 }
 
 .channel-btn {
