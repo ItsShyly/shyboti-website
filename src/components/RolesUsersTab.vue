@@ -53,7 +53,7 @@ const PERM_GROUPS = computed(() => [
 ]);
 
 const EMPTY_PERMS: Perms = {
-  dashboard: true,
+  dashboard: false,
   commands_view: false,
   commands_toggle: false,
   commands_edit: false,
@@ -233,7 +233,7 @@ onMounted(() => {
       </div>
       <div v-if="addError" class="add-error">{{ addError }}</div>
 
-      <div class="perm-grid">
+      <div v-if="newUsername.trim()" class="perm-grid">
         <div v-for="group in PERM_GROUPS" :key="group.label" class="perm-group">
           <div class="perm-group-label">{{ group.label }}</div>
           <div class="perm-rows">
