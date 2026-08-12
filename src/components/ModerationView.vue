@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
@@ -50,21 +50,21 @@ function spamLabel(f: SpamFilter): { name: string; detail: string } {
   const and = t("mod.spam.and");
   if (f.type === "caps") {
     const minPart = m > 0 ? `min. ${m} ${t("mod.spam.min_letters_hint")} ${and} ` : "";
-    const ignorePart = opts.ignore_7tv ? ` · ${t("mod.spam.ignore_7tv")}` : "";
-    return { name, detail: `${minPart}≥ ${f.threshold}% Caps${ignorePart}` };
+    const ignorePart = opts.ignore_7tv ? ` Â· ${t("mod.spam.ignore_7tv")}` : "";
+    return { name, detail: `${minPart}â‰¥ ${f.threshold}% Caps${ignorePart}` };
   }
   if (f.type === "emoji") {
     const target = opts.emote_target ?? "emoji";
     const minPart = m > 0 ? `min. ${m} ${t("mod.spam.min_letters_hint")} ${and} ` : "";
-    return { name, detail: `${minPart}≥ ${f.threshold} ${t(`mod.spam.target.${target}`)}` };
+    return { name, detail: `${minPart}â‰¥ ${f.threshold} ${t(`mod.spam.target.${target}`)}` };
   }
   if (f.type === "repeat") {
-    return { name, detail: m > 0 ? `min. ${m} ${t("mod.spam.min_letters_hint")} ${and} ≥ ${f.threshold}` : `≥ ${f.threshold}` };
+    return { name, detail: m > 0 ? `min. ${m} ${t("mod.spam.min_letters_hint")} ${and} â‰¥ ${f.threshold}` : `â‰¥ ${f.threshold}` };
   }
   if (f.type === "flood") {
-    return { name, detail: `≥ ${f.threshold} ${t("mod.spam.flood_in")} ${m > 0 ? m : 10}s` };
+    return { name, detail: `â‰¥ ${f.threshold} ${t("mod.spam.flood_in")} ${m > 0 ? m : 10}s` };
   }
-  return { name, detail: `≥ ${f.threshold}` };
+  return { name, detail: `â‰¥ ${f.threshold}` };
 }
 
 function fmtDur(s: number) {
@@ -197,6 +197,54 @@ async function assignGroup(tab: Tab, groupId: number | null) {
       body: JSON.stringify({ group_id: groupId }),
     });
   } catch { error.value = t("mod.error.save") }
+}
+
+// >>> Share - copy a blocked term/spam filter/nuke/group to another channel
+const shareOpen = ref(false);
+const shareKind = ref<Tab | "group">("blocked");
+const shareGroupTab = ref<Tab>("blocked");
+const shareId = ref<number | null>(null);
+const shareLabel = ref("");
+const shareTarget = ref("");
+const shareSaving = ref(false);
+const shareSuccess = ref("");
+const shareError = ref("");
+
+function openShare(kind: Tab, id: number, label: string) {
+  shareKind.value = kind;
+  shareId.value = id;
+  shareLabel.value = label;
+  shareTarget.value = ""; shareSuccess.value = ""; shareError.value = "";
+  shareOpen.value = true;
+}
+function openShareGroup(tab: Tab, id: number, label: string) {
+  shareKind.value = "group";
+  shareGroupTab.value = tab;
+  shareId.value = id;
+  shareLabel.value = label;
+  shareTarget.value = ""; shareSuccess.value = ""; shareError.value = "";
+  shareOpen.value = true;
+}
+async function doShare() {
+  if (!session.value || !shareTarget.value || shareId.value == null) return;
+  shareSaving.value = true;
+  shareError.value = "";
+  try {
+    const path = shareKind.value === "group"
+      ? `${GROUP_PATH[shareGroupTab.value]}/groups/${shareId.value}/share`
+      : `${GROUP_PATH[shareKind.value]}/${shareId.value}/share`;
+    const res = await fetch(`${API}/moderation/${session.value.channel}/${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ target_channel: shareTarget.value }),
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Share failed");
+    shareSuccess.value = `Copied to #${shareTarget.value}!`;
+    setTimeout(() => { shareOpen.value = false }, 1200);
+  } catch (e: any) {
+    shareError.value = e.message ?? "Share failed";
+  }
+  shareSaving.value = false;
 }
 
 
@@ -662,12 +710,12 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               </select>
               <button class="ep-sync-save-btn" @click="saveModSync(activeTab)"
                 :disabled="curSync.saving || !curSync.from">
-                {{ curSync.saving ? '…' : curSync.conf?.is_active ? t('mod.sync.update') : t('mod.sync.enable') }}
+                {{ curSync.saving ? 'â€¦' : curSync.conf?.is_active ? t('mod.sync.update') : t('mod.sync.enable') }}
               </button>
             </div>
             <div class="ep-sync-row">
               <button v-if="curSync.conf?.is_active" class="ep-sync-run-btn" @click="runModSync(activeTab)"
-                :disabled="curSync.running">{{ curSync.running ? '…' : t('mod.sync.pull') }}</button>
+                :disabled="curSync.running">{{ curSync.running ? 'â€¦' : t('mod.sync.pull') }}</button>
               <button v-if="curSync.conf?.is_active" class="ep-sync-stop-btn" @click="stopModSync(activeTab)">{{
                 t('mod.sync.stop') }}</button>
             </div>
@@ -679,7 +727,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
           </div>
         </div>
-        <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
+        <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? 'â€¦' : 'â†º'
           }}</button>
         <button v-if="canManage" class="ep-btn-cancel" @click="openNewGroup(activeTab)">
           + {{ t("mod.group.new") }}
@@ -719,7 +767,9 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 }}{{ section.group.name }}</span>
               <span class="mod-group-count">{{ section.items.length }}</span>
               <div v-if="canManage" class="ep-row-actions">
-                <button class="ep-btn-action del" @click.stop="deleteGroup('blocked', section.group.id)">✕</button>
+                <button class="ep-btn-action share" :title="t('mod.share')"
+                  @click.stop="openShareGroup('blocked', section.group.id, section.group.name)">â†ª</button>
+                <button class="ep-btn-action del" @click.stop="deleteGroup('blocked', section.group.id)">âœ•</button>
               </div>
             </div>
             <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
@@ -743,11 +793,13 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 </div>
                 <div class="ep-row-actions">
                   <button v-if="canManage && term.group_id" class="ep-btn-action" title="Remove from group"
-                    @click.stop="removeFromGroup('blocked', term.id)">⤺</button>
+                    @click.stop="removeFromGroup('blocked', term.id)">â¤º</button>
                   <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
                     }}</button>
+                  <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
+                    @click.stop="openShare('blocked', term.id, term.term)">â†ª</button>
                   <button v-if="canManage" class="ep-btn-action del"
-                    @click.stop="deleteRow('blocked', term.id)">✕</button>
+                    @click.stop="deleteRow('blocked', term.id)">âœ•</button>
                 </div>
               </div>
             </div>
@@ -770,7 +822,9 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 }}{{ section.group.name }}</span>
               <span class="mod-group-count">{{ section.items.length }}</span>
               <div v-if="canManage" class="ep-row-actions">
-                <button class="ep-btn-action del" @click.stop="deleteGroup('spam', section.group.id)">✕</button>
+                <button class="ep-btn-action share" :title="t('mod.share')"
+                  @click.stop="openShareGroup('spam', section.group.id, section.group.name)">â†ª</button>
+                <button class="ep-btn-action del" @click.stop="deleteGroup('spam', section.group.id)">âœ•</button>
               </div>
             </div>
             <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
@@ -784,7 +838,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 <div class="mod-item-main">
                   <div class="spam-label">
                     <span class="spam-name">{{ spamLabel(f).name }}</span>
-                    <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
+                    <span class="spam-detail">Â· {{ spamLabel(f).detail }}</span>
                   </div>
                   <div class="mod-item-meta">
                     <span class="item-action ep-meta-pill" :style="actionPillStyle(f.action)">{{ actionLabel(f.action)
@@ -794,10 +848,12 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 </div>
                 <div class="ep-row-actions">
                   <button v-if="canManage && f.group_id" class="ep-btn-action" title="Remove from group"
-                    @click.stop="removeFromGroup('spam', f.id)">⤺</button>
+                    @click.stop="removeFromGroup('spam', f.id)">â¤º</button>
                   <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit")
                     }}</button>
-                  <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)">✕</button>
+                  <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
+                    @click.stop="openShare('spam', f.id, spamLabel(f).name)">â†ª</button>
+                  <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)">âœ•</button>
                 </div>
               </div>
             </div>
@@ -820,7 +876,9 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 }}{{ section.group.name }}</span>
               <span class="mod-group-count">{{ section.items.length }}</span>
               <div v-if="canManage" class="ep-row-actions">
-                <button class="ep-btn-action del" @click.stop="deleteGroup('nukes', section.group.id)">✕</button>
+                <button class="ep-btn-action share" :title="t('mod.share')"
+                  @click.stop="openShareGroup('nukes', section.group.id, section.group.name)">â†ª</button>
+                <button class="ep-btn-action del" @click.stop="deleteGroup('nukes', section.group.id)">âœ•</button>
               </div>
             </div>
             <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
@@ -842,7 +900,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 <span v-if="n.action !== 'delete'" class="item-dur">{{ fmtDur(n.duration) }}</span>
                 <!-- Lookback override -->
                 <div class="lookback-wrap">
-                  <span class="lookback-lbl">↩</span>
+                  <span class="lookback-lbl">â†©</span>
                   <input type="number" min="1" max="1440" :value="nukeLookbackOverride[n.id] ?? n.lookback ?? 30"
                     @input="nukeLookbackOverride[n.id] = parseInt(($event.target as HTMLInputElement).value)"
                     class="ep-field-input lookback-input" :title="t('mod.nuke.lookback')" />
@@ -854,7 +912,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     :class="{ expired: nukeExpiresIn(n) === t('mod.nuke.expired') }">
                     {{ nukeExpiresIn(n) === t("mod.nuke.expired") ? t("mod.nuke.expired") : `${t("mod.nuke.expires")}
                     ${nukeExpiresIn(n)}` }}
-                    <button v-if="canManage" class="expiry-clear" @click="setNukeExpiry(n, null)">✕</button>
+                    <button v-if="canManage" class="expiry-clear" @click="setNukeExpiry(n, null)">âœ•</button>
                   </span>
                   <select v-else-if="canManage" class="ep-field-select-sm expiry-select"
                     @change="setNukeExpiry(n, parseInt(($event.target as HTMLSelectElement).value))"
@@ -870,14 +928,16 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 </div>
                 <div class="ep-row-actions">
                   <button v-if="canManage && n.group_id" class="ep-btn-action" title="Remove from group"
-                    @click.stop="removeFromGroup('nukes', n.id)">⤺</button>
+                    @click.stop="removeFromGroup('nukes', n.id)">â¤º</button>
                   <button v-if="canManage" class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }"
                     @click="fireNuke(n.id)">
                     {{ nukeConfirm === n.id ? t("mod.nuke.sure") : t("mod.nuke.fire") }}
                   </button>
                   <button v-if="canManage" class="ep-btn-action edit" @click="openEditNuke(n)">{{ t("mod.edit")
                     }}</button>
-                  <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('nukes', n.id)">✕</button>
+                  <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
+                    @click.stop="openShare('nukes', n.id, n.label)">â†ª</button>
+                  <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('nukes', n.id)">âœ•</button>
                 </div>
               </div>
             </div>
@@ -905,7 +965,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
             <div class="ep-panel-sub">#{{ session?.channel }}</div>
           </div>
-          <button class="ep-panel-close" @click="editOpen = false">✕</button>
+          <button class="ep-panel-close" @click="editOpen = false">âœ•</button>
         </div>
 
         <div class="ep-panel-body">
@@ -925,7 +985,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     <span class="ep-toggle-knob"></span>
                   </div>
                   <span class="toggle-text">{{ t("mod.nuke.regex") }}</span>
-                  <span class="info-icon" :title="t('mod.nuke.regex_hint')">ⓘ</span>
+                  <span class="info-icon" :title="t('mod.nuke.regex_hint')">â“˜</span>
                 </label>
               </div>
             </div>
@@ -988,7 +1048,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 <div class="ep-field-group">
                   <label class="ep-field-label">
                     {{fSpamType === 'caps' ? '% Caps' : SPAM_TYPES.find(s => s.value === fSpamType)?.hint}}
-                    <span class="ep-field-hint">≥</span>
+                    <span class="ep-field-hint">â‰¥</span>
                   </label>
                   <input v-model.number="fSpamThreshold" type="number" min="1" class="ep-field-input" />
                 </div>
@@ -996,7 +1056,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <template v-else-if="fSpamType === 'flood'">
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{ t("mod.spam.flood_msgs") }} <span
-                      class="ep-field-hint">≥</span></label>
+                      class="ep-field-hint">â‰¥</span></label>
                   <input v-model.number="fSpamThreshold" type="number" min="1" class="ep-field-input" />
                 </div>
                 <div class="ep-field-group">
@@ -1009,7 +1069,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <template v-else>
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{SPAM_TYPES.find(s => s.value === fSpamType)?.hint}} <span
-                      class="ep-field-hint">≥</span></label>
+                      class="ep-field-hint">â‰¥</span></label>
                   <input v-model.number="fSpamThreshold" type="number" min="1" class="ep-field-input" />
                 </div>
               </template>
@@ -1077,7 +1137,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     <span class="ep-toggle-knob"></span>
                   </div>
                   <span class="toggle-text">{{ t("mod.nuke.stay") }}</span>
-                  <span class="info-icon" :title="t('mod.nuke.stay_hint')">ⓘ</span>
+                  <span class="info-icon" :title="t('mod.nuke.stay_hint')">â“˜</span>
                 </label>
                 <label class="ep-toggle-label" :class="{ dimmed: fNukeIsRegex }">
                   <div class="ep-toggle-btn" :class="{ on: fNukeMatchExact && !fNukeIsRegex }"
@@ -1085,7 +1145,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     <span class="ep-toggle-knob"></span>
                   </div>
                   <span class="toggle-text">{{ t("mod.nuke.exact") }}</span>
-                  <span class="info-icon" :title="t('mod.nuke.exact_hint')">ⓘ</span>
+                  <span class="info-icon" :title="t('mod.nuke.exact_hint')">â“˜</span>
                 </label>
                 <label class="ep-toggle-label">
                   <div class="ep-toggle-btn" :class="{ on: fNukeIsRegex }"
@@ -1093,7 +1153,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     <span class="ep-toggle-knob"></span>
                   </div>
                   <span class="toggle-text">{{ t("mod.nuke.regex") }}</span>
-                  <span class="info-icon" :title="t('mod.nuke.regex_hint')">ⓘ</span>
+                  <span class="info-icon" :title="t('mod.nuke.regex_hint')">â“˜</span>
                 </label>
                 <label class="ep-toggle-label" :class="{ dimmed: !fNukeStay }">
                   <div class="ep-toggle-btn" :class="{ on: fNukeExpiry && fNukeStay }"
@@ -1101,7 +1161,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     <span class="ep-toggle-knob"></span>
                   </div>
                   <span class="toggle-text">{{ t("mod.nuke.expiry") }}</span>
-                  <span class="info-icon" :title="t('mod.nuke.expiry_hint')">ⓘ</span>
+                  <span class="info-icon" :title="t('mod.nuke.expiry_hint')">â“˜</span>
                 </label>
               </div>
             </div>
@@ -1117,13 +1177,13 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         <div class="ep-panel-footer">
           <button v-if="!isNew" class="ep-btn-delete" :class="{ confirm: deleteConfirmPanel }" @click="requestDelete"
             :disabled="saving">
-            {{ saving ? '…' : deleteConfirmPanel ? t('mod.panel.sure') : t('mod.panel.delete') }}
+            {{ saving ? 'â€¦' : deleteConfirmPanel ? t('mod.panel.sure') : t('mod.panel.delete') }}
           </button>
           <div v-else></div>
           <div class="ep-footer-right">
             <button class="ep-btn-cancel" @click="editOpen = false">{{ t("mod.panel.cancel") }}</button>
             <button class="ep-btn-save" @click="savePanel" :disabled="saving || saveDisabled">
-              {{ saving ? '…' : t("mod.panel.save") }}
+              {{ saving ? 'â€¦' : t("mod.panel.save") }}
             </button>
           </div>
         </div>
@@ -1147,7 +1207,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
             <div class="ep-panel-sub">#{{ session?.channel }}</div>
           </div>
-          <button class="ep-panel-close" @click="groupPanelOpen = false">✕</button>
+          <button class="ep-panel-close" @click="groupPanelOpen = false">âœ•</button>
         </div>
         <div class="ep-panel-body">
           <div class="ep-field-group">
@@ -1160,9 +1220,35 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
           <div class="ep-footer-right">
             <button class="ep-btn-cancel" @click="groupPanelOpen = false">{{ t("mod.panel.cancel") }}</button>
             <button class="ep-btn-save" @click="saveGroup" :disabled="saving || !gName">
-              {{ saving ? '…' : t("mod.panel.save") }}
+              {{ saving ? 'â€¦' : t("mod.panel.save") }}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- Share modal -->
+  <Teleport to="body">
+    <div v-if="shareOpen" class="ep-modal-overlay" @click.self="shareOpen = false">
+      <div class="ep-modal">
+        <div class="ep-modal-title">
+          {{ t("mod.share.title") }}
+          <span class="ep-modal-name">{{ shareLabel }}</span>
+        </div>
+        <div class="ep-modal-sub">{{ t("mod.share.sub") }}</div>
+        <select v-model="shareTarget" class="ep-field-select-sm" style="width: 100%; margin-top: 12px">
+          <option value="">{{ t("mod.share.select") }}</option>
+          <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{ ch
+          }}</option>
+        </select>
+        <div v-if="shareError" class="ep-modal-msg err">{{ shareError }}</div>
+        <div v-if="shareSuccess" class="ep-modal-msg ok">{{ shareSuccess }}</div>
+        <div class="ep-modal-footer">
+          <button class="ep-btn-cancel" @click="shareOpen = false">{{ t("mod.panel.cancel") }}</button>
+          <button class="ep-btn-save" @click="doShare" :disabled="shareSaving || !shareTarget">
+            {{ shareSaving ? t("mod.share.copying") : t("mod.share.btn") }}
+          </button>
         </div>
       </div>
     </div>

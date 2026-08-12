@@ -12,7 +12,7 @@ import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
 
-const { session, channelRole } = useAuth();
+const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
 
 const canToggle = computed(
@@ -284,6 +284,43 @@ async function deleteCountdown(name: string) {
   saving.value = null;
 }
 
+// >>> Share
+const shareOpen = ref(false);
+const shareCountdown = ref("");
+const shareTarget = ref("");
+const shareSaving = ref(false);
+const shareSuccess = ref("");
+const shareError = ref("");
+
+function openShare(name: string) {
+  shareCountdown.value = name;
+  shareTarget.value = "";
+  shareSuccess.value = "";
+  shareError.value = "";
+  shareOpen.value = true;
+}
+async function doShare() {
+  if (!session.value || !shareTarget.value) return;
+  shareSaving.value = true;
+  shareError.value = "";
+  try {
+    const res = await fetch(
+      `${API}/countdowns/${session.value.channel}/${encodeURIComponent(shareCountdown.value)}/share`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.value.token}` },
+        body: JSON.stringify({ target_channel: shareTarget.value }),
+      },
+    );
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error);
+    shareSuccess.value = `Copied to #${shareTarget.value}!`;
+    setTimeout(() => { shareOpen.value = false }, 1200);
+  } catch (e: any) {
+    shareError.value = e.message ?? "Share failed";
+  }
+  shareSaving.value = false;
+}
+
 async function controlCountdown(
   name: string,
   action: "start" | "stop" | "reset",
@@ -397,6 +434,10 @@ defineExpose({
         <div class="ep-row-actions">
           <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(cd)" :class="{ disabled: !canEdit }">
             {{ canEdit ? t("countdown.edit") : t("countdown.view") }}
+          </button>
+          <button v-if="canEdit" class="ep-btn-action share" @click.stop="openShare(cd.name)"
+            :title="t('countdown.share')">
+            ↪
           </button>
           <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteCountdown(cd.name)"
             :disabled="saving === cd.name">
@@ -523,6 +564,32 @@ defineExpose({
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Share modal -->
+    <Teleport to="body">
+      <div v-if="shareOpen" class="ep-modal-overlay" @click.self="shareOpen = false">
+        <div class="ep-modal">
+          <div class="ep-modal-title">
+            {{ t("countdown.share.title") }}
+            <span class="ep-modal-name">{{ shareCountdown }}</span>
+          </div>
+          <div class="ep-modal-sub">{{ t("countdown.share.sub") }}</div>
+          <select v-model="shareTarget" class="ep-field-select-sm" style="width: 100%; margin-top: 12px">
+            <option value="">{{ t("countdown.share.select") }}</option>
+            <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{
+              ch }}</option>
+          </select>
+          <div v-if="shareError" class="ep-modal-msg err">{{ shareError }}</div>
+          <div v-if="shareSuccess" class="ep-modal-msg ok">{{ shareSuccess }}</div>
+          <div class="ep-modal-footer">
+            <button class="ep-btn-cancel" @click="shareOpen = false">{{ t("countdown.cancel") }}</button>
+            <button class="ep-btn-save" @click="doShare" :disabled="shareSaving || !shareTarget">
+              {{ shareSaving ? t("countdown.share.copying") : t("countdown.share.btn") }}
+            </button>
           </div>
         </div>
       </div>
