@@ -120,7 +120,7 @@ const PERM_GROUPS = computed(() => [
   },
 ]);
 
-const DEFAULT_PERMS: Omit<RolePermissions, "modsEnabled"> = {
+const DEFAULT_MOD_PERMS: Omit<RolePermissions, "modsEnabled"> = {
   dashboard: true,
   commands_view: true,
   commands_toggle: true,
@@ -138,10 +138,22 @@ const DEFAULT_PERMS: Omit<RolePermissions, "modsEnabled"> = {
   obs_force_preview: false,
 };
 
+// >>> VIPs get no rights anywhere by default - mirrors DEFAULT_VIP_PERMS in
+// >>> apiServer.ts's /role/:channel handler, which this UI must stay in sync with
+const DEFAULT_VIP_PERMS: Omit<RolePermissions, "modsEnabled"> = {
+  ...Object.fromEntries(
+    Object.keys(DEFAULT_MOD_PERMS).map((k) => [k, false]),
+  ),
+} as Omit<RolePermissions, "modsEnabled">;
+
+const DEFAULT_PERMS = computed(() =>
+  isVip.value ? DEFAULT_VIP_PERMS : DEFAULT_MOD_PERMS,
+);
+
 // >>> Global permission defaults for this role tier
 const enabled = ref(true);
 const globalPerms = ref<Omit<RolePermissions, "modsEnabled">>({
-  ...DEFAULT_PERMS,
+  ...DEFAULT_PERMS.value,
 });
 
 // >>> Individual override list (synced membership + per-user overrides)
@@ -190,7 +202,7 @@ async function load() {
       permissions: Omit<RolePermissions, "modsEnabled">;
     };
     enabled.value = (isVip.value ? data.vipsEnabled : data.modsEnabled) ?? true;
-    Object.assign(globalPerms.value, DEFAULT_PERMS, data.permissions);
+    Object.assign(globalPerms.value, DEFAULT_PERMS.value, data.permissions);
   } catch {}
 }
 
