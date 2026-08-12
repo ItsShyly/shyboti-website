@@ -1047,21 +1047,32 @@ body.snippet-dragging * {
 
 .logged-in-as {
   position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid transparent;
   font-size: 12px;
   color: #9d6cff;
   font-weight: 600;
   white-space: nowrap;
+  box-sizing: border-box;
 }
 
-/* >>> same bridge-down idea as .channel-switcher, for the single-channel */
+/* >>> mod-only case (no channel switcher, just this label) */
+.logged-in-as.other-channel {
+  border-color: #9d6cff;
+  background: #1e1e26;
+}
+
+/* >>> fills the gap down to the topbar's line instead of just touching it at a point */
 .logged-in-as.other-channel::after {
   content: "";
   position: absolute;
-  left: 50%;
-  bottom: -18px;
-  transform: translateX(-50%);
-  width: 3px;
-  height: 18px;
+  left: 0;
+  right: 0;
+  bottom: -19px;
+  height: 19px;
   background: #9d6cff;
   box-shadow: 0 0 6px #9d6cff99;
 }
@@ -1335,14 +1346,14 @@ body.snippet-dragging * {
 }
 
 /* >>> stub that bridges the channel-btn down to the topbar's bottom line  */
+/* >>> fills the gap down to the topbar's line instead of just touching it */
 .channel-switcher.other-channel::after {
   content: "";
   position: absolute;
-  left: 50%;
-  bottom: -14px;
-  transform: translateX(-50%);
-  width: 3px;
-  height: 14px;
+  left: 0;
+  right: 0;
+  bottom: -15px;
+  height: 15px;
   background: #9d6cff;
   box-shadow: 0 0 6px #9d6cff99;
 }
