@@ -431,12 +431,9 @@ watch(() => props.kind, reload);
                 :disabled="itemSaving === item.username">
                 {{ t("roles.reset") }}
               </button>
-              <button v-else class="override-btn" @click="setItemOverride(item)">
-                {{ t("roles.set_custom") }}
-              </button>
             </div>
 
-            <div v-if="item.permissions !== null" class="mod-perm-grid">
+            <div class="mod-perm-grid">
               <div v-for="group in PERM_GROUPS" :key="group.label" class="mod-perm-group">
                 <div class="perm-group-label">{{ group.label }}</div>
                 <div class="perm-rows">
@@ -448,27 +445,11 @@ watch(() => props.kind, reload);
                       <span class="default-val" :class="{ active: (globalPerms as any)[perm.key] }">
                         {{ (globalPerms as any)[perm.key] ? t("roles.default_on") : t("roles.default_off") }}
                       </span>
-                      <div class="toggle sm" :class="{ on: (item.permissions as any)[perm.key] }"
+                      <div class="toggle sm"
+                        :class="{ on: (item.permissions as any)?.[perm.key] ?? (globalPerms as any)[perm.key] }"
                         @click="toggleItemPerm(item, perm.key)">
                         <div class="toggle-knob"></div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Read-only view when using defaults -->
-            <div v-else class="mod-perm-grid dimmed">
-              <div v-for="group in PERM_GROUPS" :key="group.label" class="mod-perm-group">
-                <div class="perm-group-label">{{ group.label }}</div>
-                <div class="perm-rows">
-                  <div v-for="perm in group.perms" :key="perm.key" class="perm-row compact">
-                    <div class="perm-info">
-                      <div class="perm-label">{{ perm.label }}</div>
-                    </div>
-                    <div class="toggle sm" :class="{ on: enabled && (globalPerms as any)[perm.key] }">
-                      <div class="toggle-knob"></div>
                     </div>
                   </div>
                 </div>
