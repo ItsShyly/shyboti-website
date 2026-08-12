@@ -737,7 +737,8 @@ provide("searchOpenTrigger", searchOpenTrigger);
           </button>
         </div>
         <template v-if="session">
-          <div class="channel-switcher" v-if="availableChannels.length > 1">
+          <div class="channel-switcher" :class="{ 'other-channel': viewingOtherChannel }"
+            v-if="availableChannels.length > 1">
             <button class="channel-btn" :class="{ 'other-channel': viewingOtherChannel }"
               @click="showChannelMenu = !showChannelMenu">
               #{{ session.channel }} ▾
@@ -749,7 +750,8 @@ provide("searchOpenTrigger", searchOpenTrigger);
               </button>
             </div>
           </div>
-          <span v-else class="logged-in-as hide-mobile">#{{ session.channel }}</span>
+          <span v-else class="logged-in-as hide-mobile" :class="{ 'other-channel': viewingOtherChannel }">#{{
+            session.channel }}</span>
           <button class="auth-btn logout-btn hide-mobile" @click="
             logout();
           router.push('/');
@@ -1044,10 +1046,24 @@ body.snippet-dragging * {
 }
 
 .logged-in-as {
+  position: relative;
   font-size: 12px;
   color: #9d6cff;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* >>> same bridge-down idea as .channel-switcher, for the single-channel */
+.logged-in-as.other-channel::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -18px;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 18px;
+  background: #9d6cff;
+  box-shadow: 0 0 6px #9d6cff99;
 }
 
 .logged-in-float {
@@ -1316,6 +1332,19 @@ body.snippet-dragging * {
 
 .channel-btn.other-channel {
   border-color: #9d6cff;
+}
+
+/* >>> stub that bridges the channel-btn down to the topbar's bottom line  */
+.channel-switcher.other-channel::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -14px;
+  transform: translateX(-50%);
+  width: 3px;
+  height: 14px;
+  background: #9d6cff;
+  box-shadow: 0 0 6px #9d6cff99;
 }
 
 .channel-menu {
