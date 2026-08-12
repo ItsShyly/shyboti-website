@@ -3,6 +3,12 @@ import { defineAsyncComponent } from "vue";
 
 import RouteLoading from "../components/shared/RouteLoading.vue";
 import { routeLoadSignal } from "../composables/routeLoadSignal";
+import { useAuth } from "../auth";
+
+// >>> Off-limits to an admin god-moded into someone else's channel - these hold
+// >>> the broadcaster's own uploaded/personal content, not channel config, so
+// >>> admin mode (full config access everywhere else) deliberately excludes them
+const ADMIN_MODE_BLOCKED_PATHS = ["/obs-control", "/uploads", "/images", "/notes"];
 
 // >>> defineAsyncComponent for navigation
 function lazy(loader: () => Promise<any>) {
@@ -84,6 +90,15 @@ const router = createRouter({
     },
     { path: "/:path(.*)", redirect: "/" },
   ],
+});
+
+router.beforeEach((to) => {
+  if (!ADMIN_MODE_BLOCKED_PATHS.includes(to.path)) return true;
+  const { session, adminMode } = useAuth();
+  const viewingOtherChannel =
+    !!session.value && session.value.login !== session.value.channel;
+  if (adminMode.value && viewingOtherChannel) return "/dashboard";
+  return true;
 });
 
 export default router;

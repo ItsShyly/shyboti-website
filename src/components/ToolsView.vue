@@ -6,8 +6,17 @@ import { useI18n } from "../i18n";
 import { API } from "../api";
 
 const router = useRouter();
-const { session } = useAuth();
+const { session, adminMode } = useAuth();
 const { t } = useI18n();
+
+// >>> hidden while admin mode is on for someone else's channel - OBS Control
+// >>> is treated as the broadcaster's own space, same as Uploads/Images/Notes
+const hideAdminRestricted = computed(
+  () =>
+    !!session.value &&
+    adminMode.value &&
+    session.value.login !== session.value.channel,
+);
 
 // >>> Variables & Counters
 interface Counter {
@@ -184,7 +193,8 @@ async function addEntry() {
     </div>
 
     <!-- OBS Control card -->
-    <div class="service-card" @click="session && router.push('/obs-control')">
+    <div v-if="!hideAdminRestricted" class="service-card"
+      @click="session && router.push('/obs-control')">
       <div class="card-icon obsconn-icon">
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
           <rect x="4" y="10" width="40" height="26" rx="3" stroke="currentColor" stroke-width="2.5" />

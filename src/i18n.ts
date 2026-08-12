@@ -624,6 +624,13 @@ const translations: Record<Locale, Record<string, string>> = {
     "settings.remove.removing": "Removing…",
     "settings.remove.done": "ShyBoti has left the channel.",
     "settings.remove.error": "Could not remove bot.",
+    "settings.delete.title": "Delete All Data",
+    "settings.delete.sub":
+      "Permanently deletes every command, timer, trigger, moderation rule, and setting for ",
+    "settings.delete.type_prompt": "Type ",
+    "settings.delete.btn": "Delete all data",
+    "settings.delete.deleting": "Deleting…",
+    "settings.delete.error": "Could not delete data.",
 
     // >>> Uploads <<<
     "uploads.images": "Images",
@@ -1416,6 +1423,13 @@ const translations: Record<Locale, Record<string, string>> = {
     "settings.remove.removing": "Wird entfernt…",
     "settings.remove.done": "ShyBoti hat den Channel verlassen.",
     "settings.remove.error": "Bot konnte nicht entfernt werden.",
+    "settings.delete.title": "Alle Daten löschen",
+    "settings.delete.sub":
+      "Löscht dauerhaft jeden Command, Timer, Trigger, jede Moderationsregel und Einstellung für ",
+    "settings.delete.type_prompt": "Tippe ",
+    "settings.delete.btn": "Alle Daten löschen",
+    "settings.delete.deleting": "Wird gelöscht…",
+    "settings.delete.error": "Daten konnten nicht gelöscht werden.",
 
     // >>> Uploads <<<
     "uploads.images": "Bilder",

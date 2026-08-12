@@ -49,11 +49,15 @@ const viewingOtherChannel = computed(
   () => !!session.value && session.value.login !== session.value.channel,
 );
 
-// >>> red accent instead of purple only when the current channel is admin-only
-// >>> admin mode access - a real mod/vip/broadcaster relationship stays purple
+// >>> red accent instead of purple whenever admin mode is on and you're on a
+// >>> channel that isn't your own - including real mod/vip channels, since
+// >>> admin mode is a blanket "I could break anything here" warning, not just
+// >>> for the channels you'd have no access to otherwise
 const viewingAsAdmin = computed(
   () =>
-    !!session.value && adminOnlyChannels.value.includes(session.value.channel),
+    !!session.value &&
+    adminMode.value &&
+    session.value.login !== session.value.channel,
 );
 
 // >>> admin-only channels stay hidden from the switcher until admin mode is on,
@@ -312,6 +316,14 @@ function buildStaticIndex(): SearchResult[] {
       sub: "Create a new command",
     },
   ];
+
+  // >>> Uploads/Images/Notes hold the broadcaster's own personal content, so
+  // >>> hide them from search the same way the sidebar link/route are hidden
+  if (adminMode.value && viewingOtherChannel.value) {
+    return items.filter(
+      (i) => !["Uploads", "Images", "Notes"].includes(i.label),
+    );
+  }
   return items;
 }
 
@@ -768,7 +780,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
             </div>
             <div v-if="showChannelMenu" class="channel-menu">
               <button v-for="ch in visibleChannels" :key="ch" class="channel-menu-item"
-                :class="{ active: ch === session.channel, 'admin-channel': adminOnlyChannels.includes(ch) }"
+                :class="{ active: ch === session.channel, 'admin-channel': adminMode && ch !== session.login }"
                 @click="selectChannel(ch)">
                 #{{ ch }}
               </button>
@@ -940,7 +952,8 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
           {{ t("nav.logs") }}
         </button>
-        <button class="sidebar-btn" :class="{ active: activeRoute === 'uploads' }" @click="nav('uploads')">
+        <button v-if="!(adminMode && viewingOtherChannel)" class="sidebar-btn"
+          :class="{ active: activeRoute === 'uploads' }" @click="nav('uploads')">
           Uploads
         </button>
 

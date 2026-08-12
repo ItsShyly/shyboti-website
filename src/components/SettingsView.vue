@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from "vue";
+import { useRouter } from "vue-router";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 
-const { session, adminMode } = useAuth();
+const { session, adminMode, logout, switchChannel } = useAuth();
 const { t } = useI18n();
+const router = useRouter();
 
 const isBroadcaster = ref(false);
 
-// >>> Remove Bot is additionally reachable while admin mode is on
-const canRemoveBot = computed(
+// >>> Danger zone (Remove Bot, Delete All Data) is additionally reachable while
+// >>> admin mode is on, so an admin can act on any channel, not just their own
+const dangerZoneUnlocked = computed(
   () => isBroadcaster.value || (!!session.value?.isAdmin && adminMode.value),
 );
 
@@ -267,7 +270,7 @@ function clickRemoveBot() {
 }
 
 async function doRemoveBot() {
-  if (!session.value || !canRemoveBot.value) return;
+  if (!session.value || !dangerZoneUnlocked.value) return;
   removeConfirm.value = false;
   removeRemoving.value = true;
   removeError.value = "";
@@ -282,6 +285,48 @@ async function doRemoveBot() {
     removeError.value = t("settings.remove.error");
   }
   removeRemoving.value = false;
+}
+
+// >>> Delete all data
+const deleteConfirmInput = ref("");
+const deleting = ref(false);
+const deleteError = ref("");
+const deleteConfirmValid = computed(
+  () => deleteConfirmInput.value.trim() === "DELETE",
+);
+
+async function doDeleteAllData() {
+  if (
+    !session.value ||
+    !dangerZoneUnlocked.value ||
+    !deleteConfirmValid.value
+  )
+    return;
+  const wasSelf = session.value.login === session.value.channel;
+  const targetChannel = session.value.channel;
+  deleting.value = true;
+  deleteError.value = "";
+  try {
+    const res = await fetch(`${API}/account/delete/${targetChannel}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.value.token}`,
+      },
+      body: JSON.stringify({ confirm: deleteConfirmInput.value.trim() }),
+    });
+    if (!res.ok) throw new Error();
+    if (wasSelf) {
+      await logout();
+      router.push("/");
+    } else {
+      await switchChannel(session.value.login);
+      router.push("/dashboard");
+    }
+  } catch {
+    deleteError.value = t("settings.delete.error");
+  }
+  deleting.value = false;
 }
 </script>
 
@@ -508,7 +553,7 @@ async function doRemoveBot() {
       </div>
 
       <!-- Remove Bot - broadcaster, or an admin with admin mode on, danger -->
-      <div class="card card-danger" v-if="canRemoveBot">
+      <div class="card card-danger" v-if="dangerZoneUnlocked">
         <div class="card-header">
           <div class="card-icon card-icon-danger">&#9888;</div>
           <div class="card-title">{{ t("settings.remove.title") }}</div>
@@ -539,6 +584,43 @@ async function doRemoveBot() {
               removeRemoving
                 ? t("settings.remove.removing")
                 : t("settings.remove.btn")
+            }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Delete All Data - broadcaster, or an admin with admin mode on, danger -->
+      <div class="card card-danger" v-if="dangerZoneUnlocked">
+        <div class="card-header">
+          <div class="card-icon card-icon-danger">&#9888;</div>
+          <div class="card-title">{{ t("settings.delete.title") }}</div>
+          <div class="card-sub">
+            {{ t("settings.delete.sub") }}<strong>#{{ session?.channel }}</strong>.
+          </div>
+        </div>
+        <div class="card-body">
+          <div v-if="deleteError" class="card-msg err">{{ deleteError }}</div>
+          <div class="confirm-text">
+            {{ t("settings.delete.type_prompt") }}<strong>DELETE</strong>
+          </div>
+          <input
+            v-model="deleteConfirmInput"
+            class="delete-confirm-input"
+            type="text"
+            placeholder="DELETE"
+            :disabled="deleting"
+          />
+        </div>
+        <div class="card-footer">
+          <button
+            class="remove-btn"
+            :disabled="!deleteConfirmValid || deleting"
+            @click="doDeleteAllData"
+          >
+            {{
+              deleting
+                ? t("settings.delete.deleting")
+                : t("settings.delete.btn")
             }}
           </button>
         </div>
@@ -902,6 +984,24 @@ async function doRemoveBot() {
 .remove-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.delete-confirm-input {
+  width: 100%;
+  max-width: 220px;
+  margin-top: 8px;
+  background: #0d0d10;
+  border: 1px solid #f1494944;
+  color: #e0e0e0;
+  font-family: "Consolas", "Fira Mono", monospace;
+  font-size: 14px;
+  padding: 8px 10px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.delete-confirm-input:focus {
+  border-color: #f14949;
 }
 
 /* ── 7TV card internals ─────────────────────────────────────────────────────── */
