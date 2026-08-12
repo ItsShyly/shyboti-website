@@ -553,13 +553,19 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <div v-if="!blockedTerms.length" class="ep-empty">{{ t("mod.empty.blocked") }}</div>
       <div v-else class="ep-row-list">
         <div v-for="term in blockedTerms" :key="term.id" class="ep-list-row mod-item-row">
-          <span v-if="term.is_regex" class="item-badge regex-badge">{{ t("mod.badge.regex") }}</span>
-          <span class="item-action ep-meta-pill" :style="actionPillStyle(term.action)">
-            {{ term.action === 'delete' ? t('mod.action.delete') : term.action === 'timeout' ? t('mod.action.timeout') :
-              t('mod.action.ban') }}
-          </span>
-          <span class="item-term">{{ term.term }}</span>
-          <span v-if="term.action !== 'delete'" class="item-dur">{{ fmtDur(term.duration) }}</span>
+          <div class="mod-item-main">
+            <div class="mod-item-title">
+              <span v-if="term.is_regex" class="item-badge regex-badge">{{ t("mod.badge.regex") }}</span>
+              <span class="item-term">{{ term.term }}</span>
+            </div>
+            <div class="mod-item-meta">
+              <span class="item-action ep-meta-pill" :style="actionPillStyle(term.action)">
+                {{ term.action === 'delete' ? t('mod.action.delete') : term.action === 'timeout' ? t('mod.action.timeout') :
+                  t('mod.action.ban') }}
+              </span>
+              <span v-if="term.action !== 'delete'" class="item-dur">{{ fmtDur(term.duration) }}</span>
+            </div>
+          </div>
           <div class="ep-row-actions">
             <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
             }}</button>
@@ -574,15 +580,19 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <div v-if="!spamFilters.length" class="ep-empty">{{ t("mod.empty.spam") }}</div>
       <div v-else class="ep-row-list">
         <div v-for="f in spamFilters" :key="f.id" class="ep-list-row mod-item-row">
-          <span class="item-action ep-meta-pill" :style="actionPillStyle(f.action)">
-            {{ f.action === 'delete' ? t('mod.action.delete') : f.action === 'timeout' ? t('mod.action.timeout') :
-              t('mod.action.ban') }}
-          </span>
-          <div class="spam-label">
-            <span class="spam-name">{{ spamLabel(f).name }}</span>
-            <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
+          <div class="mod-item-main">
+            <div class="spam-label">
+              <span class="spam-name">{{ spamLabel(f).name }}</span>
+              <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
+            </div>
+            <div class="mod-item-meta">
+              <span class="item-action ep-meta-pill" :style="actionPillStyle(f.action)">
+                {{ f.action === 'delete' ? t('mod.action.delete') : f.action === 'timeout' ? t('mod.action.timeout') :
+                  t('mod.action.ban') }}
+              </span>
+              <span v-if="f.action !== 'delete'" class="item-dur">{{ fmtDur(f.duration) }}</span>
+            </div>
           </div>
-          <span v-if="f.action !== 'delete'" class="item-dur">{{ fmtDur(f.duration) }}</span>
           <div class="ep-row-actions">
             <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit") }}</button>
             <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)">✕</button>
@@ -899,7 +909,6 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 }
 
 .item-term {
-  flex: 1;
   font-size: 12px;
   color: #e0e0e0;
   font-family: "Consolas", "Fira Mono", monospace;
@@ -907,6 +916,27 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.mod-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.mod-item-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mod-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .item-label {
@@ -917,10 +947,6 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 }
 
 .item-action {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   flex-shrink: 0
 }
 
@@ -939,7 +965,6 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 1;
   min-width: 0
 }
 

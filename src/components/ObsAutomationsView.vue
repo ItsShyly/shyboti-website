@@ -193,10 +193,8 @@ defineExpose({
       <div v-else class="ep-row-list">
         <div v-for="rule in rules" :key="rule.id" class="ep-list-row" :class="{ inactive: !rule.enabled }">
           <div class="timer-toggle-wrap">
-            <button class="ep-toggle-btn" :class="{ on: rule.enabled, disabled: !canEdit }"
-              @click="canEdit && toggleRule(rule)" :title="rule.enabled ? 'Disable' : 'Enable'">
-              <span class="ep-toggle-knob"></span>
-            </button>
+            <button class="square" :class="{ on: rule.enabled, off: !rule.enabled, disabled: !canEdit }"
+              @click="canEdit && toggleRule(rule)" :title="rule.enabled ? 'Disable' : 'Enable'"></button>
           </div>
           <div class="timer-info" @click="canEdit && openEdit(rule.id)">
             <div class="timer-name">{{ ruleTitle(rule) }}</div>

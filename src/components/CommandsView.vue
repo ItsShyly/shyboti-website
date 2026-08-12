@@ -1644,30 +1644,7 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-.square {
-  width: 24px;
-  height: 24px;
-  border: 2px solid #161616;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.square.on {
-  background: #6b35d4;
-}
-
-.square.off {
-  background: #111217;
-}
-
-.square:hover {
-  opacity: 0.8;
-}
-
-.square.disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
+/* .square now comes from shared.css */
 
 .cmd-name {
   font-size: 14px;

@@ -456,10 +456,8 @@ defineExpose({
       <div v-for="timer in timers" :key="timer.id" class="ep-list-row timer-row"
         :class="{ inactive: !timer.is_active }">
         <div class="timer-toggle-wrap">
-          <button class="ep-toggle-btn" :class="{ on: timer.is_active, disabled: !canToggle }"
-            @click="canToggle && toggleActive(timer)" :title="timer.is_active ? 'Disable' : 'Enable'">
-            <span class="ep-toggle-knob"></span>
-          </button>
+          <button class="square" :class="{ on: timer.is_active, off: !timer.is_active, disabled: !canToggle }"
+            @click="canToggle && toggleActive(timer)" :title="timer.is_active ? 'Disable' : 'Enable'"></button>
         </div>
         <div class="timer-info" @click="openEdit(timer)">
           <div class="timer-name">{{ timer.name }}</div>
