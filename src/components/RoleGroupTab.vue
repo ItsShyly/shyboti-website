@@ -363,7 +363,7 @@ watch(() => props.kind, reload);
 
     <!-- VIP scope re-auth warning -->
     <div v-if="isVip && !hasScope" class="scope-warning">
-      {{ t("roles.scope_warning_pre") }}<a href="/auth/add" class="scope-warning-link">{{
+      {{ t("roles.scope_warning_pre") }}<a :href="`${API}/auth/add`" class="scope-warning-link">{{
         t("roles.scope_warning_link") }}</a>{{ t("roles.scope_warning_post") }}
     </div>
 

@@ -428,7 +428,7 @@ const missingFields = computed(() => {
         <div v-if="needsCategoryScope" class="ep-panel-body" style="padding-top: 0">
           <div class="obs-scope-warning">
             Your stored Twitch token doesn't have permission to change the category yet, so this
-            rule won't actually fire until you <a href="/auth/add" class="obs-rule-link">re-authorize</a>.
+            rule won't actually fire until you <a :href="`${API}/auth/add`" class="obs-rule-link">re-authorize</a>.
           </div>
         </div>
 
