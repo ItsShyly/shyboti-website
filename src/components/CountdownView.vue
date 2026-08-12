@@ -6,6 +6,7 @@ import { useI18n } from "../i18n";
 import {
   applyScriptHighlight,
   insertTokenAtCursor,
+  setEditorContent,
 } from "../composables/useContentEditableScript";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
@@ -140,6 +141,7 @@ async function load() {
 }
 
 function openNew() {
+  error.value = "";
   isNew.value = true;
   editOrigName.value = "";
   editCountdown.value = {
@@ -161,6 +163,7 @@ function openNew() {
 }
 
 function openEdit(cd: Countdown) {
+  error.value = "";
   isNew.value = false;
   editOrigName.value = cd.name;
   editCountdown.value = { ...cd };
@@ -179,8 +182,7 @@ function initEditors() {
   ] as [HTMLDivElement | null, keyof typeof editCountdown.value][]) {
     if (ref_) {
       const val = String(editCountdown.value[field] ?? "");
-      ref_.innerText = val;
-      applyScriptHighlight(ref_);
+      setEditorContent(ref_, val);
     }
   }
 }
@@ -204,8 +206,12 @@ function insertRefToken(token: string) {
 const isBroadcaster = computed(() => channelRole.value?.role === "broadcaster");
 
 async function saveCountdown() {
-  if (!session.value || !editCountdown.value.name) return;
+  if (!session.value) return;
   if (!canEdit.value && !isBroadcaster.value) return;
+  if (!editCountdown.value.name?.trim()) {
+    error.value = t("edit.missing_fields") + t("countdown.field.name");
+    return;
+  }
   saving.value = editCountdown.value.name;
   error.value = "";
   try {
@@ -416,6 +422,7 @@ defineExpose({
           </div>
 
           <div class="ep-panel-body">
+            <div v-if="error" class="ep-toast error">{{ error }}</div>
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("countdown.field.seconds") }}
                 <span class="ep-field-hint">{{
@@ -511,7 +518,7 @@ defineExpose({
                 <button class="ep-btn-cancel" @click="editOpen = false">
                   {{ t("countdown.cancel") }}
                 </button>
-                <button class="ep-btn-save" @click="saveCountdown" :disabled="!!saving || !editCountdown.name">
+                <button class="ep-btn-save" @click="saveCountdown" :disabled="!!saving">
                   {{ saving ? t("countdown.saving") : t("countdown.save") }}
                 </button>
               </div>

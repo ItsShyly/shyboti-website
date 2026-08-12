@@ -56,6 +56,7 @@ const { session } = useAuth();
 const overlay = useOverlayClose();
 const saving = ref(false);
 const saved = ref(false);
+const error = ref("");
 const deleting = ref(false);
 const deleteConfirm = ref(false);
 
@@ -99,6 +100,7 @@ watch(
     if (!open) return;
     deleteConfirm.value = false;
     saved.value = false;
+    error.value = "";
     if (!props.editTarget) {
       // new
       fKind.value = "scene";
@@ -161,6 +163,11 @@ watch(fKind, (k) => {
 // --- save ---
 async function save() {
   if (!session.value) return;
+  if (missingFields.value.length) {
+    error.value = "Missing: " + missingFields.value.join(", ");
+    return;
+  }
+  error.value = "";
   saving.value = true;
   try {
     // build new bindings by starting from current ones, mutating the relevant list
@@ -284,11 +291,12 @@ async function deleteCmd() {
 }
 
 // >>> validation
-const saveDisabled = computed(() => {
-  if (!fCommand.value.trim()) return true;
-  if (fKind.value === "scene" && !fTarget.value.trim()) return true;
-  if (fKind.value === "source" && !fTarget.value.trim()) return true;
-  return false;
+const missingFields = computed(() => {
+  const missing: string[] = [];
+  if (!fCommand.value.trim()) missing.push("Command");
+  if ((fKind.value === "scene" || fKind.value === "source") && !fTarget.value.trim())
+    missing.push(fKind.value === "scene" ? "Scene" : "Source");
+  return missing;
 });
 </script>
 
@@ -309,6 +317,7 @@ const saveDisabled = computed(() => {
         </div>
 
         <div class="ep-panel-body">
+          <div v-if="error" class="ep-toast error">{{ error }}</div>
           <!-- command type tabs -->
           <div class="ep-field-group">
             <label class="ep-field-label">Type</label>
@@ -415,7 +424,7 @@ const saveDisabled = computed(() => {
           <div v-else></div>
           <div class="ep-footer-right">
             <button class="ep-btn-cancel" @click="emit('close')">Cancel</button>
-            <button class="ep-btn-save" :disabled="saving || saveDisabled" @click="save">
+            <button class="ep-btn-save" :disabled="saving" @click="save">
               {{ saved ? "saved ✓" : saving ? "…" : "Save" }}
             </button>
           </div>

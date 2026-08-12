@@ -15,6 +15,7 @@ import { useI18n } from "../i18n";
 import {
   applyScriptHighlight,
   insertTokenAtCursor,
+  setEditorContent,
 } from "../composables/useContentEditableScript";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
@@ -158,14 +159,12 @@ function cancelCreate() {
 }
 
 function openEdit(timer: Timer) {
+  error.value = "";
   editOrigName.value = timer.name;
   editTimer.value = { ...timer };
   editOpen.value = true;
   setTimeout(() => {
-    if (editorRef.value) {
-      editorRef.value.innerText = timer.response;
-      applyScriptHighlight(editorRef.value);
-    }
+    if (editorRef.value) setEditorContent(editorRef.value, timer.response);
   }, 50);
 }
 
@@ -184,7 +183,14 @@ function insertRefToken(token: string) {
 }
 
 async function saveTimer() {
-  if (!session.value || !editTimer.value.name) return;
+  if (!session.value) return;
+  const missing: string[] = [];
+  if (!editTimer.value.name?.trim()) missing.push(t("timer.field.name"));
+  if (!editTimer.value.response?.trim()) missing.push(t("timer.field.response"));
+  if (missing.length) {
+    error.value = t("edit.missing_fields") + missing.join(", ");
+    return;
+  }
   saving.value = editTimer.value.name;
   try {
     const name = editTimer.value.name.trim();
@@ -507,6 +513,7 @@ defineExpose({
           </div>
 
           <div class="ep-panel-body">
+            <div v-if="error" class="ep-toast error">{{ error }}</div>
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("timer.field.response") }}
                 <span class="ep-field-hint">{{
@@ -577,8 +584,7 @@ defineExpose({
                 <button class="ep-btn-cancel" @click="editOpen = false">
                   {{ t("timer.cancel") }}
                 </button>
-                <button class="ep-btn-save" @click="saveTimer"
-                  :disabled="!!saving || !editTimer.name || !editTimer.response">
+                <button class="ep-btn-save" @click="saveTimer" :disabled="!!saving">
                   {{ saving ? t("timer.saving") : t("timer.save") }}
                 </button>
               </div>

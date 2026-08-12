@@ -47,6 +47,7 @@ const { session } = useAuth();
 const overlay = useOverlayClose();
 const saving = ref(false);
 const saved = ref(false);
+const error = ref("");
 const deleting = ref(false);
 const deleteConfirm = ref(false);
 
@@ -122,6 +123,7 @@ watch(
   () => props.open,
   async (open) => {
     if (!open) return;
+    error.value = "";
     populating = true;
     deleteConfirm.value = false;
     saved.value = false;
@@ -216,6 +218,10 @@ async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
 // >>> save
 async function save() {
   if (!session.value) return;
+  if (missingFields.value.length) {
+    error.value = "Missing: " + missingFields.value.join(", ");
+    return;
+  }
   saving.value = true;
   try {
     const newRules = props.rules.map((r) => ({ ...r }));
@@ -293,13 +299,14 @@ async function deleteRule() {
 }
 
 // >>> validation
-const saveDisabled = computed(() => {
-  if (fTriggerType.value === "bitrate" && (!fBitrate.value || fBitrate.value <= 0)) return true;
-  if (fTriggerType.value === "category" && !fCategoryId.value) return true;
-  if (fTriggerType.value === "scene" && !fTriggerScene.value.trim()) return true;
-  if (fAction.value === "category" && !fTargetCategoryId.value) return true;
-  if (fAction.value !== "category" && !fTarget.value.trim()) return true;
-  return false;
+const missingFields = computed(() => {
+  const missing: string[] = [];
+  if (fTriggerType.value === "bitrate" && (!fBitrate.value || fBitrate.value <= 0)) missing.push("Bitrate threshold");
+  if (fTriggerType.value === "category" && !fCategoryId.value) missing.push("Category");
+  if (fTriggerType.value === "scene" && !fTriggerScene.value.trim()) missing.push("Scene name");
+  if (fAction.value === "category" && !fTargetCategoryId.value) missing.push("Target category");
+  if (fAction.value !== "category" && !fTarget.value.trim()) missing.push("Target");
+  return missing;
 });
 </script>
 
@@ -316,6 +323,7 @@ const saveDisabled = computed(() => {
         </div>
 
         <div class="ep-panel-body">
+          <div v-if="error" class="ep-toast error">{{ error }}</div>
           <!-- trigger type -->
           <div class="ep-field-group">
             <label class="ep-field-label">Trigger</label>
@@ -432,7 +440,7 @@ const saveDisabled = computed(() => {
           <div v-else></div>
           <div class="ep-footer-right">
             <button class="ep-btn-cancel" @click="emit('close')">Cancel</button>
-            <button class="ep-btn-save" :disabled="saving || saveDisabled" @click="save">
+            <button class="ep-btn-save" :disabled="saving" @click="save">
               {{ saved ? "saved ✓" : saving ? "…" : "Save" }}
             </button>
           </div>

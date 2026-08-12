@@ -28,6 +28,7 @@ const overlay = useOverlayClose()
 const loading = ref(true)
 const saving = ref(false)
 const saved = ref(false)
+const saveError = ref('')
 const deleting = ref(false)
 const deleteConfirm = ref(false)
 
@@ -125,8 +126,7 @@ async function load() {
   const nel = normalEditorRef.value
   if (nel) {
     const src = form.value.response || (props.isBuiltIn ? BUILTIN_PREFIX : '')
-    nel.innerText = src
-    applyNormalHighlight(nel, src)
+    setNormalEditorContent(nel, src)
   }
   updatePreview()
 }
@@ -393,7 +393,7 @@ function removeArgFromResponse(src: string, argNum: number): string {
   return r.replace(/  +/g, ' ').trim()
 }
 
-watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false } })
+watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; saveError.value = '' } })
 onMounted(() => { if (props.open) load() })
 
 watch(() => form.value.response, (src) => {
@@ -405,14 +405,20 @@ watch(() => form.value.response, (src) => {
 
 async function save() {
   if (!session.value) return
+  const newName = form.value.name?.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
+  const missing: string[] = []
+  if (!newName) missing.push(t('edit.name'))
+  if (!props.isBuiltIn && !form.value.response?.trim()) missing.push(t('edit.response'))
+  if (missing.length) {
+    saveError.value = t('edit.missing_fields') + missing.join(', ')
+    return
+  }
+  saveError.value = ''
   saving.value = true
   try {
-    const newName = form.value.name?.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
     const oldName = props.cmdName
     const isNew = !oldName
     const renamed = !props.isBuiltIn && !isNew && newName && newName !== oldName
-
-    if (!newName) { saving.value = false; return } // <<< no name typed yet
 
     // >>> PUT the data under the new name
     const targetName = (renamed || isNew) ? newName : oldName
@@ -515,6 +521,11 @@ function onNormalInput() {
   applyNormalHighlight(el, text)
   updateGhost(el, text)
   syncLineNumbers(el)
+}
+
+// >>> Sets the editor's content on initial panel open, without touching
+function setNormalEditorContent(el: HTMLElement, text: string) {
+  el.innerHTML = highlightScript(text)
 }
 
 function applyNormalHighlight(el: HTMLElement, text: string) {
@@ -792,6 +803,7 @@ function removeArgVariant(i: number) {
 
         <div v-if="loading" class="ep-panel-loading">{{ t('edit.saving').replace('…', '…') || 'Loading…' }}</div>
         <div v-else class="ep-panel-body">
+          <div v-if="saveError" class="ep-toast error">{{ saveError }}</div>
 
           <!-- response / script editor -->
           <div class="ep-field-group">
@@ -913,7 +925,7 @@ function removeArgVariant(i: number) {
             </div>
             <div class="ep-field-group ep-sm">
               <label class="ep-field-label">{{ t('edit.alias') }} <span class="ep-field-hint">{{ t('edit.optional')
-                  }}</span></label>
+              }}</span></label>
               <input v-model="form.alias" class="ep-field-input" placeholder="shortname" />
             </div>
           </div>

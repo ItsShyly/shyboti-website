@@ -14,6 +14,7 @@ import { useI18n } from "../i18n";
 import {
   applyScriptHighlight,
   insertTokenAtCursor,
+  setEditorContent,
 } from "../composables/useContentEditableScript";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
@@ -163,6 +164,7 @@ async function load() {
 }
 
 function openNew() {
+  error.value = "";
   isNew.value = true;
   editOrigName.value = "";
   editTrigger.value = {
@@ -180,23 +182,18 @@ function openNew() {
   };
   editOpen.value = true;
   setTimeout(() => {
-    if (editorRef.value) {
-      editorRef.value.innerText = "";
-      applyScriptHighlight(editorRef.value);
-    }
+    if (editorRef.value) setEditorContent(editorRef.value, "");
   }, 50);
 }
 
 function openEdit(trigger: Trigger) {
+  error.value = "";
   isNew.value = false;
   editOrigName.value = trigger.name;
   editTrigger.value = { ...trigger };
   editOpen.value = true;
   setTimeout(() => {
-    if (editorRef.value) {
-      editorRef.value.innerText = trigger.response;
-      applyScriptHighlight(editorRef.value);
-    }
+    if (editorRef.value) setEditorContent(editorRef.value, trigger.response);
   }, 50);
 }
 
@@ -215,7 +212,14 @@ function insertRefToken(token: string) {
 }
 
 async function saveTrigger() {
-  if (!session.value || !editTrigger.value.name) return;
+  if (!session.value) return;
+  const missing: string[] = [];
+  if (!editTrigger.value.name?.trim()) missing.push(t("trigger.field.name"));
+  if (!editTrigger.value.response?.trim()) missing.push(t("trigger.field.response"));
+  if (missing.length) {
+    error.value = t("edit.missing_fields") + missing.join(", ");
+    return;
+  }
   saving.value = editTrigger.value.name;
   try {
     const name = editTrigger.value.name.trim();
@@ -557,6 +561,7 @@ defineExpose({
           </div>
 
           <div class="ep-panel-body">
+            <div v-if="error" class="ep-toast error">{{ error }}</div>
             <!-- Event type -->
             <div class="ep-field-group">
               <label class="ep-field-label">{{
@@ -663,7 +668,7 @@ defineExpose({
                 <button class="ep-btn-cancel" @click="editOpen = false">
                   {{ t("trigger.cancel") }}
                 </button>
-                <button class="ep-btn-save" @click="saveTrigger" :disabled="!!saving || !editTrigger.name">
+                <button class="ep-btn-save" @click="saveTrigger" :disabled="!!saving">
                   {{ saving ? t("trigger.saving") : t("trigger.save") }}
                 </button>
               </div>

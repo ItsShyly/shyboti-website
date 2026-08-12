@@ -58,6 +58,11 @@ export function applyScriptHighlight(el: HTMLElement) {
   setCaretOffset(el, offset);
 }
 
+// >>> Sets an editor's content on initial panel open, without touching Selection/Range.
+export function setEditorContent(el: HTMLElement, text: string) {
+  el.innerHTML = highlightScript(text);
+}
+
 // Inserts `token` at the current caret position (or at the end if the editor
 // isn't focused), re-highlights, and leaves the caret right after it.
 // Returns the new plain-text content so the caller can sync it into state.
