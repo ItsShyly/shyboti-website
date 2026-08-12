@@ -41,6 +41,11 @@ function shakeLogin() {
 const showChannelMenu = ref(false);
 const sidebarOpen = ref(false);
 
+// >>> purple accent on the navbar + channel switcher when switched
+const viewingOtherChannel = computed(
+  () => !!session.value && session.value.login !== session.value.channel,
+);
+
 function selectChannel(ch: string) {
   switchChannel(ch);
   showChannelMenu.value = false;
@@ -635,7 +640,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
 
 <template>
   <div class="page">
-    <div class="topbar">
+    <div class="topbar" :class="{ 'other-channel': viewingOtherChannel }">
       <div class="topbar-brand" @click="session ? router.push('/dashboard') : router.push('/')" style="cursor: pointer">
         <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
         <span class="brand-name">ShyBoti</span>
@@ -663,7 +668,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <span v-if="showLogsChip && logsQuery" class="search-match-nav">
           <span class="search-match-count">{{
             logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0 matches"
-            }}</span>
+          }}</span>
           <button v-if="logsMatchCount" class="search-match-step" title="Previous match (Shift+Enter)"
             @mousedown.prevent="logsRequestJump(-1)">
             ▲
@@ -733,7 +738,8 @@ provide("searchOpenTrigger", searchOpenTrigger);
         </div>
         <template v-if="session">
           <div class="channel-switcher" v-if="availableChannels.length > 1">
-            <button class="channel-btn" @click="showChannelMenu = !showChannelMenu">
+            <button class="channel-btn" :class="{ 'other-channel': viewingOtherChannel }"
+              @click="showChannelMenu = !showChannelMenu">
               #{{ session.channel }} ▾
             </button>
             <div v-if="showChannelMenu" class="channel-menu">
@@ -811,7 +817,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span v-if="showLogsChip && logsQuery" class="search-match-nav">
             <span class="search-match-count">{{
               logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0"
-              }}</span>
+            }}</span>
             <button v-if="logsMatchCount" class="search-match-step" title="Previous match"
               @mousedown.prevent="logsRequestJump(-1)">
               ▲
@@ -938,7 +944,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span class="footer-sep">|</span>
           <router-link to="/privacy" class="footer-link">{{
             t("footer.privacy")
-            }}</router-link>
+          }}</router-link>
         </footer>
       </main>
     </div>
@@ -994,6 +1000,16 @@ body.snippet-dragging * {
   padding: 0 16px;
   gap: 10px;
   position: relative;
+}
+
+.topbar.other-channel::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 5px;
+  background: #9d6cff;
 }
 
 .topbar-brand {
@@ -1296,6 +1312,10 @@ body.snippet-dragging * {
 .channel-btn:hover {
   background: #252530;
   border-color: #6f2bff55;
+}
+
+.channel-btn.other-channel {
+  border-color: #9d6cff;
 }
 
 .channel-menu {
