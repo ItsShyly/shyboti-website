@@ -31,7 +31,7 @@ export interface RolePermissions {
 }
 
 export interface ChannelRole {
-  role: "broadcaster" | "mod";
+  role: "broadcaster" | "mod" | "vip" | "user";
   permissions: RolePermissions;
 }
 
