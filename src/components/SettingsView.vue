@@ -552,17 +552,17 @@ async function doDeleteAllData() {
         </div>
       </div>
 
-      <!-- Remove Bot - broadcaster, or an admin with admin mode on, danger -->
-      <div class="card card-danger" v-if="dangerZoneUnlocked">
+      <!-- Remove Bot - broadcaster, or an admin with admin mode on, warning (less severe than delete) -->
+      <div class="card card-warning" v-if="dangerZoneUnlocked">
         <div class="card-header">
-          <div class="card-icon card-icon-danger">&#9888;</div>
+          <div class="card-icon card-icon-warning">&#9888;</div>
           <div class="card-title">{{ t("settings.remove.title") }}</div>
           <div class="card-sub">{{ t("settings.remove.sub") }}</div>
         </div>
         <div class="card-body">
           <div v-if="removeMsg" class="card-msg ok">{{ removeMsg }}</div>
           <div v-if="removeError" class="card-msg err">{{ removeError }}</div>
-          <div v-if="removeConfirm" class="confirm-box">
+          <div v-if="removeConfirm" class="confirm-box confirm-box-warning">
             <div class="confirm-text">
               {{ t("settings.remove.confirm")
               }}<strong>#{{ session?.channel }}</strong>?
@@ -572,14 +572,14 @@ async function doDeleteAllData() {
               <button class="confirm-no" @click="removeConfirm = false">
                 {{ t("settings.remove.no") }}
               </button>
-              <button class="confirm-yes" @click="doRemoveBot">
+              <button class="confirm-yes confirm-yes-warning" @click="doRemoveBot">
                 {{ t("settings.remove.yes") }}
               </button>
             </div>
           </div>
         </div>
         <div class="card-footer" v-if="!removeMsg">
-          <button class="remove-btn" @click="clickRemoveBot" :disabled="removeRemoving">
+          <button class="remove-btn warn-btn" @click="clickRemoveBot" :disabled="removeRemoving">
             {{
               removeRemoving
                 ? t("settings.remove.removing")
@@ -719,6 +719,15 @@ async function doDeleteAllData() {
   border-color: #f1494944;
 }
 
+.card-warning {
+  border-color: #f59e0b22;
+  background: #1a1610;
+}
+
+.card-warning:hover {
+  border-color: #f59e0b44;
+}
+
 /* ── Zone 1: header ─────────────────────────────────────────────────────────── */
 .card-header {
   padding: 20px 20px 16px;
@@ -741,6 +750,10 @@ async function doDeleteAllData() {
 
 .card-icon-danger {
   color: #f14949;
+}
+
+.card-icon-warning {
+  color: #f59e0b;
 }
 
 .card-title {
@@ -986,6 +999,16 @@ async function doDeleteAllData() {
   cursor: not-allowed;
 }
 
+.warn-btn {
+  border-color: #f59e0b66;
+  color: #f59e0b;
+}
+
+.warn-btn:hover:not(:disabled) {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: #f59e0b;
+}
+
 .delete-confirm-input {
   width: 100%;
   max-width: 220px;
@@ -1172,6 +1195,19 @@ async function doDeleteAllData() {
 
 .confirm-yes:hover {
   background: #ff5a5a;
+}
+
+.confirm-box-warning {
+  background: rgba(245, 158, 11, 0.04);
+  border-color: #f59e0b30;
+}
+
+.confirm-yes-warning {
+  background: #f59e0b;
+}
+
+.confirm-yes-warning:hover {
+  background: #ffb02e;
 }
 
 /* ── Responsive ─────────────────────────────────────────────────────────────── */
