@@ -43,6 +43,12 @@ const availableChannels = ref<string[]>([]);
 // >>> real broadcaster/mod/vip/user relationship - drives the red vs purple badge
 const adminOnlyChannels = ref<string[]>([]);
 const channelRole = ref<ChannelRole | null>(null);
+
+// >>> Client-side toggle for whether an admin is currently "in" admin mode
+const adminMode = ref(
+  typeof window !== "undefined" &&
+    localStorage.getItem("shyboti_admin_mode") === "1",
+);
 let accessRefreshTimer: ReturnType<typeof setInterval> | null = null;
 let accessRefreshBound = false;
 
@@ -169,7 +175,10 @@ export function useAuth() {
     }).catch(() => {});
     session.value = null;
     availableChannels.value = [];
+    adminOnlyChannels.value = [];
     channelRole.value = null;
+    adminMode.value = false;
+    localStorage.removeItem("shyboti_admin_mode");
     stopAccessRefresh();
     localStorage.removeItem("shyboti_token");
   }
@@ -178,11 +187,19 @@ export function useAuth() {
     window.location.href = `${API}/auth/login`;
   }
 
+  function toggleAdminMode() {
+    if (!session.value?.isAdmin) return;
+    adminMode.value = !adminMode.value;
+    localStorage.setItem("shyboti_admin_mode", adminMode.value ? "1" : "0");
+  }
+
   return {
     session: readonly(session),
     availableChannels: readonly(availableChannels),
     adminOnlyChannels: readonly(adminOnlyChannels),
     channelRole: readonly(channelRole),
+    adminMode: readonly(adminMode),
+    toggleAdminMode,
     restoreSession,
     switchChannel,
     logout,

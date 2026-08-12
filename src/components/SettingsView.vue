@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 
-const { session } = useAuth();
+const { session, adminMode } = useAuth();
 const { t } = useI18n();
 
 const isBroadcaster = ref(false);
+
+// >>> Remove Bot is additionally reachable while admin mode is on
+const canRemoveBot = computed(
+  () => isBroadcaster.value || (!!session.value?.isAdmin && adminMode.value),
+);
 
 // >>> Prefix
 const prefix = ref("+");
@@ -88,7 +93,7 @@ async function load() {
       const d = await nhRes.json();
       nameHistOptedOut.value = d.opted_out ?? false;
     }
-  } catch {}
+  } catch { }
 }
 
 async function load7tvSet() {
@@ -99,7 +104,7 @@ async function load7tvSet() {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (res.ok) emoteSet.value = await res.json();
-  } catch {}
+  } catch { }
   emoteSetLoading.value = false;
 }
 
@@ -262,7 +267,7 @@ function clickRemoveBot() {
 }
 
 async function doRemoveBot() {
-  if (!session.value || !isBroadcaster.value) return;
+  if (!session.value || !canRemoveBot.value) return;
   removeConfirm.value = false;
   removeRemoving.value = true;
   removeError.value = "";
@@ -285,8 +290,7 @@ async function doRemoveBot() {
     <div class="settings-header">
       <h2 class="settings-title">{{ t("settings.title") }}</h2>
       <p class="settings-sub">
-        {{ t("settings.sub") }} <span class="chan">#{{ session?.channel }}</span
-        >.
+        {{ t("settings.sub") }} <span class="chan">#{{ session?.channel }}</span>.
       </p>
     </div>
 
@@ -297,34 +301,20 @@ async function doRemoveBot() {
           <div class="card-icon">&#9000;</div>
           <div class="card-title">{{ t("settings.prefix.title") }}</div>
           <div class="card-sub">
-            {{ t("settings.prefix.sub") }} <code class="code">{{ prefix }}</code
-            >command.
+            {{ t("settings.prefix.sub") }} <code class="code">{{ prefix }}</code>command.
           </div>
         </div>
         <div class="card-body">
           <div class="prefix-row">
-            <input
-              v-model="prefix"
-              class="prefix-input"
-              maxlength="3"
-              placeholder="+"
-              @keydown.enter="savePrefix"
-              spellcheck="false"
-            />
-            <span class="prefix-preview"
-              ><span class="pre">{{ prefix || "+" }}</span
-              >ping</span
-            >
+            <input v-model="prefix" class="prefix-input" maxlength="3" placeholder="+" @keydown.enter="savePrefix"
+              spellcheck="false" />
+            <span class="prefix-preview"><span class="pre">{{ prefix || "+" }}</span>ping</span>
           </div>
           <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
           <div class="section-note">{{ t("settings.prefix.note") }}</div>
         </div>
         <div class="card-footer">
-          <button
-            class="save-btn"
-            @click="savePrefix"
-            :disabled="prefixSaving || !prefix"
-          >
+          <button class="save-btn" @click="savePrefix" :disabled="prefixSaving || !prefix">
             {{
               prefixSaved
                 ? t("settings.saved")
@@ -352,10 +342,7 @@ async function doRemoveBot() {
                 : t("settings.optout.visible")
             }}</span>
             <div class="spacer"></div>
-            <span
-              class="status-badge"
-              :class="optedOut ? 'badge-off' : 'badge-on'"
-            >
+            <span class="status-badge" :class="optedOut ? 'badge-off' : 'badge-on'">
               {{
                 optedOut
                   ? t("settings.optout.badge.out")
@@ -366,12 +353,7 @@ async function doRemoveBot() {
           <div v-if="optMsg" class="card-msg ok">{{ optMsg }}</div>
         </div>
         <div class="card-footer">
-          <button
-            class="toggle-btn"
-            :class="{ 'toggle-btn-on': optedOut }"
-            @click="toggleOptOut"
-            :disabled="optSaving"
-          >
+          <button class="toggle-btn" :class="{ 'toggle-btn-on': optedOut }" @click="toggleOptOut" :disabled="optSaving">
             {{
               optSaving
                 ? "..."
@@ -395,30 +377,20 @@ async function doRemoveBot() {
         </div>
         <div class="card-body">
           <div class="toggle-row">
-            <div
-              class="status-dot"
-              :class="{ active: !nameHistOptedOut }"
-            ></div>
+            <div class="status-dot" :class="{ active: !nameHistOptedOut }"></div>
             <span class="status-text">{{
               nameHistOptedOut ? "Name history hidden" : "Name history visible"
-            }}</span>
+              }}</span>
             <div class="spacer"></div>
-            <span
-              class="status-badge"
-              :class="nameHistOptedOut ? 'badge-off' : 'badge-on'"
-            >
+            <span class="status-badge" :class="nameHistOptedOut ? 'badge-off' : 'badge-on'">
               {{ nameHistOptedOut ? "Hidden" : "Visible" }}
             </span>
           </div>
           <div v-if="nameHistMsg" class="card-msg ok">{{ nameHistMsg }}</div>
         </div>
         <div class="card-footer">
-          <button
-            class="toggle-btn"
-            :class="{ 'toggle-btn-on': nameHistOptedOut }"
-            @click="toggleNameHistOptOut"
-            :disabled="nameHistSaving"
-          >
+          <button class="toggle-btn" :class="{ 'toggle-btn-on': nameHistOptedOut }" @click="toggleNameHistOptOut"
+            :disabled="nameHistSaving">
             {{
               nameHistSaving
                 ? "..."
@@ -445,12 +417,9 @@ async function doRemoveBot() {
             <div class="status-dot" :class="{ active: vanishHide }"></div>
             <span class="status-text">{{
               vanishHide ? "Vanish timeouts hidden" : "All timeouts visible"
-            }}</span>
+              }}</span>
             <div class="spacer"></div>
-            <span
-              class="status-badge"
-              :class="vanishHide ? 'badge-on' : 'badge-off'"
-            >
+            <span class="status-badge" :class="vanishHide ? 'badge-on' : 'badge-off'">
               {{ vanishHide ? "ON" : "OFF" }}
             </span>
           </div>
@@ -462,15 +431,10 @@ async function doRemoveBot() {
           <div v-if="vanishMsg" class="card-msg ok">{{ vanishMsg }}</div>
         </div>
         <div class="card-footer">
-          <button
-            class="toggle-btn"
-            :class="{ 'toggle-btn-on': vanishHide }"
-            @click="
-              vanishHide = !vanishHide;
-              saveVanish();
-            "
-            :disabled="vanishSaving"
-          >
+          <button class="toggle-btn" :class="{ 'toggle-btn-on': vanishHide }" @click="
+            vanishHide = !vanishHide;
+          saveVanish();
+          " :disabled="vanishSaving">
             {{ vanishSaving ? "..." : vanishHide ? "Disable" : "Enable" }}
           </button>
         </div>
@@ -489,16 +453,11 @@ async function doRemoveBot() {
             <div v-if="emoteSet.setId" class="emote-current">
               <span class="emote-name">{{
                 emoteSet.setName ?? emoteSet.setId
-              }}</span>
+                }}</span>
               <span class="emote-id">{{ emoteSet.setId }}</span>
-              <span v-if="emoteSet.emoteCount" class="emote-count"
-                >{{ emoteSet.emoteCount }} {{ t("settings.7tv.emotes") }}</span
-              >
-              <button
-                class="danger-sm"
-                @click="remove7tvSet"
-                :disabled="emoteSetSaving"
-              >
+              <span v-if="emoteSet.emoteCount" class="emote-count">{{ emoteSet.emoteCount }} {{ t("settings.7tv.emotes")
+                }}</span>
+              <button class="danger-sm" @click="remove7tvSet" :disabled="emoteSetSaving">
                 {{
                   emoteSetSaving
                     ? t("settings.7tv.removing")
@@ -509,15 +468,11 @@ async function doRemoveBot() {
             <div v-else class="emote-none">{{ t("settings.7tv.none") }}</div>
             <div class="emote-row">
               <span class="emote-lbl">{{ t("settings.7tv.by_channel") }}</span>
-              <button
-                class="fetch-btn"
-                :disabled="emoteSetSaving"
-                @click="
-                  emoteInput7tv = session?.channel ?? '';
-                  emoteInputId = '';
-                  fetch7tvSet();
-                "
-              >
+              <button class="fetch-btn" :disabled="emoteSetSaving" @click="
+                emoteInput7tv = session?.channel ?? '';
+              emoteInputId = '';
+              fetch7tvSet();
+              ">
                 {{
                   emoteSetSaving
                     ? t("settings.7tv.fetching")
@@ -527,24 +482,14 @@ async function doRemoveBot() {
             </div>
             <div class="emote-row">
               <span class="emote-lbl">{{ t("settings.7tv.by_id") }}</span>
-              <input
-                v-model="emoteInputId"
-                class="field-sm"
-                :placeholder="t('settings.7tv.by_id.ph')"
-                @keydown.enter="
-                  emoteInput7tv = '';
-                  fetch7tvSet();
-                "
-                :disabled="emoteSetSaving"
-              />
-              <button
-                class="fetch-btn"
-                :disabled="emoteSetSaving || !emoteInputId.trim()"
-                @click="
-                  emoteInput7tv = '';
-                  fetch7tvSet();
-                "
-              >
+              <input v-model="emoteInputId" class="field-sm" :placeholder="t('settings.7tv.by_id.ph')" @keydown.enter="
+                emoteInput7tv = '';
+              fetch7tvSet();
+              " :disabled="emoteSetSaving" />
+              <button class="fetch-btn" :disabled="emoteSetSaving || !emoteInputId.trim()" @click="
+                emoteInput7tv = '';
+              fetch7tvSet();
+              ">
                 {{
                   emoteSetSaving
                     ? t("settings.7tv.fetching")
@@ -562,8 +507,8 @@ async function doRemoveBot() {
         </div>
       </div>
 
-      <!-- Remove Bot - broadcaster only, danger -->
-      <div class="card card-danger" v-if="isBroadcaster">
+      <!-- Remove Bot - broadcaster, or an admin with admin mode on, danger -->
+      <div class="card card-danger" v-if="canRemoveBot">
         <div class="card-header">
           <div class="card-icon card-icon-danger">&#9888;</div>
           <div class="card-title">{{ t("settings.remove.title") }}</div>
@@ -575,8 +520,7 @@ async function doRemoveBot() {
           <div v-if="removeConfirm" class="confirm-box">
             <div class="confirm-text">
               {{ t("settings.remove.confirm")
-              }}<strong>#{{ session?.channel }}</strong
-              >?
+              }}<strong>#{{ session?.channel }}</strong>?
               {{ t("settings.remove.confirm2") }}
             </div>
             <div class="confirm-actions">
@@ -590,11 +534,7 @@ async function doRemoveBot() {
           </div>
         </div>
         <div class="card-footer" v-if="!removeMsg">
-          <button
-            class="remove-btn"
-            @click="clickRemoveBot"
-            :disabled="removeRemoving"
-          >
+          <button class="remove-btn" @click="clickRemoveBot" :disabled="removeRemoving">
             {{
               removeRemoving
                 ? t("settings.remove.removing")
@@ -637,20 +577,24 @@ async function doRemoveBot() {
   flex-direction: column;
   gap: 24px;
 }
+
 .settings-header {
   padding-bottom: 16px;
   border-bottom: 1px solid #222;
 }
+
 .settings-title {
   font-size: 18px;
   font-weight: 700;
   color: #e0e0e0;
   margin-bottom: 4px;
 }
+
 .settings-sub {
   font-size: 12px;
   color: #666;
 }
+
 .chan {
   color: #9d6cff;
 }
@@ -660,7 +604,8 @@ async function doRemoveBot() {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
-  align-items: stretch; /* cards in the same row grow to equal height */
+  align-items: stretch;
+  /* cards in the same row grow to equal height */
 }
 
 /* ── Card shell ─────────────────────────────────────────────────────────────── */
@@ -674,16 +619,20 @@ async function doRemoveBot() {
   transition: border-color 0.15s;
   overflow: hidden;
 }
+
 .card:hover {
   border-color: #2a2a36;
 }
+
 .card-wide {
   grid-column: span 2;
 }
+
 .card-danger {
   border-color: #f1494922;
   background: #1a1014;
 }
+
 .card-danger:hover {
   border-color: #f1494944;
 }
@@ -703,9 +652,11 @@ async function doRemoveBot() {
   line-height: 1;
   margin-bottom: 4px;
 }
+
 .card-icon-7tv {
   color: #9d6cff;
 }
+
 .card-icon-danger {
   color: #f14949;
 }
@@ -728,7 +679,8 @@ async function doRemoveBot() {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  flex: 1; /* grows so all cards in a row reach the same total height */
+  flex: 1;
+  /* grows so all cards in a row reach the same total height */
 }
 
 /* ── Zone 3: footer ─────────────────────────────────────────────────────────── */
@@ -738,7 +690,8 @@ async function doRemoveBot() {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  min-height: 56px; /* fixed height keeps footers on the same baseline */
+  min-height: 56px;
+  /* fixed height keeps footers on the same baseline */
 }
 
 /* ── Shared micro-components ────────────────────────────────────────────────── */
@@ -756,6 +709,7 @@ async function doRemoveBot() {
   align-items: center;
   gap: 8px;
 }
+
 .status-dot {
   width: 7px;
   height: 7px;
@@ -764,16 +718,20 @@ async function doRemoveBot() {
   flex-shrink: 0;
   transition: background 0.25s;
 }
+
 .status-dot.active {
   background: #23d18b;
 }
+
 .status-text {
   font-size: 12px;
   color: #777;
 }
+
 .spacer {
   flex: 1;
 }
+
 .status-badge {
   font-size: 9px;
   font-weight: 700;
@@ -781,11 +739,13 @@ async function doRemoveBot() {
   letter-spacing: 0.06em;
   white-space: nowrap;
 }
+
 .badge-on {
   color: #23d18b;
   background: rgba(35, 209, 139, 0.1);
   border: 1px solid rgba(35, 209, 139, 0.28);
 }
+
 .badge-off {
   color: #555;
   background: rgba(85, 85, 85, 0.1);
@@ -811,11 +771,13 @@ async function doRemoveBot() {
   padding: 5px 10px;
   line-height: 1.4;
 }
+
 .card-msg.ok {
   color: #23d18b;
   background: rgba(35, 209, 139, 0.06);
   border-left: 2px solid #23d18b;
 }
+
 .card-msg.err {
   color: #f14949;
   background: rgba(241, 73, 73, 0.06);
@@ -833,6 +795,7 @@ async function doRemoveBot() {
   align-items: center;
   gap: 14px;
 }
+
 .prefix-input {
   width: 54px;
   background: #0d0d10;
@@ -845,14 +808,17 @@ async function doRemoveBot() {
   outline: none;
   text-align: center;
 }
+
 .prefix-input:focus {
   border-color: #6f2bff88;
 }
+
 .prefix-preview {
   font-family: "Consolas", "Fira Mono", monospace;
   font-size: 14px;
   color: #888;
 }
+
 .prefix-preview .pre {
   color: #9d6cff;
   font-weight: 700;
@@ -871,9 +837,11 @@ async function doRemoveBot() {
   cursor: pointer;
   transition: background 0.15s;
 }
+
 .save-btn:hover:not(:disabled) {
   background: #7f3fff;
 }
+
 .save-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -890,18 +858,22 @@ async function doRemoveBot() {
   cursor: pointer;
   transition: all 0.15s;
 }
+
 .toggle-btn:hover:not(:disabled) {
   border-color: #9d6cff55;
   color: #9d6cff;
 }
+
 .toggle-btn.toggle-btn-on {
   border-color: #23d18b44;
   color: #23d18b;
   background: rgba(35, 209, 139, 0.06);
 }
+
 .toggle-btn.toggle-btn-on:hover:not(:disabled) {
   background: rgba(35, 209, 139, 0.14);
 }
+
 .toggle-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -921,10 +893,12 @@ async function doRemoveBot() {
     background 0.15s,
     border-color 0.15s;
 }
+
 .remove-btn:hover:not(:disabled) {
   background: rgba(241, 73, 73, 0.1);
   border-color: #f14949;
 }
+
 .remove-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -940,22 +914,26 @@ async function doRemoveBot() {
   border: 1px solid #1e1e24;
   padding: 8px 12px;
 }
+
 .emote-name {
   font-size: 12px;
   font-weight: 700;
   color: #e0e0e0;
 }
+
 .emote-id {
   font-size: 10px;
   color: #555;
   font-family: monospace;
 }
+
 .emote-count {
   font-size: 11px;
   color: #9d6cff;
   background: rgba(111, 43, 255, 0.1);
   padding: 1px 6px;
 }
+
 .emote-none {
   font-size: 12px;
   color: #555;
@@ -967,6 +945,7 @@ async function doRemoveBot() {
   gap: 8px;
   flex-wrap: wrap;
 }
+
 .emote-lbl {
   font-size: 11px;
   color: #666;
@@ -986,9 +965,11 @@ async function doRemoveBot() {
   padding: 0 8px;
   outline: none;
 }
+
 .field-sm:focus {
   border-color: #6f2bff55;
 }
+
 .field-sm:disabled {
   opacity: 0.4;
 }
@@ -1005,9 +986,11 @@ async function doRemoveBot() {
   cursor: pointer;
   white-space: nowrap;
 }
+
 .fetch-btn:hover:not(:disabled) {
   background: rgba(111, 43, 255, 0.1);
 }
+
 .fetch-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -1024,9 +1007,11 @@ async function doRemoveBot() {
   cursor: pointer;
   margin-left: auto;
 }
+
 .danger-sm:hover:not(:disabled) {
   background: rgba(241, 73, 73, 0.1);
 }
+
 .danger-sm:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -1041,18 +1026,22 @@ async function doRemoveBot() {
   flex-direction: column;
   gap: 10px;
 }
+
 .confirm-text {
   font-size: 12px;
   color: #ccc;
   line-height: 1.6;
 }
+
 .confirm-text strong {
   color: #9d6cff;
 }
+
 .confirm-actions {
   display: flex;
   gap: 8px;
 }
+
 .confirm-no {
   height: 32px;
   padding: 0 14px;
@@ -1063,10 +1052,12 @@ async function doRemoveBot() {
   font-size: 12px;
   cursor: pointer;
 }
+
 .confirm-no:hover {
   border-color: #555;
   color: #e0e0e0;
 }
+
 .confirm-yes {
   height: 32px;
   padding: 0 14px;
@@ -1078,6 +1069,7 @@ async function doRemoveBot() {
   font-weight: 700;
   cursor: pointer;
 }
+
 .confirm-yes:hover {
   background: #ff5a5a;
 }
@@ -1088,6 +1080,7 @@ async function doRemoveBot() {
     grid-column: span 1;
   }
 }
+
 @media (max-width: 520px) {
   .cards-grid {
     grid-template-columns: 1fr;

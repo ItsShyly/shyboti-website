@@ -79,10 +79,6 @@ const router = createRouter({
       component: lazy(() => import("../components/SettingsView.vue")),
     },
     {
-      path: "/admin",
-      component: lazy(() => import("../components/AdminView.vue")),
-    },
-    {
       path: "/privacy",
       component: lazy(() => import("../components/PrivacyView.vue")),
     },

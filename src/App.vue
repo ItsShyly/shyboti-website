@@ -22,6 +22,8 @@ const {
   availableChannels,
   adminOnlyChannels,
   channelRole,
+  adminMode,
+  toggleAdminMode,
   restoreSession,
   switchChannel,
   logout,
@@ -54,6 +56,16 @@ const viewingAsAdmin = computed(
     !!session.value && adminOnlyChannels.value.includes(session.value.channel),
 );
 
+// >>> admin-only channels stay hidden from the switcher until admin mode is on,
+// >>> so the dropdown isn't cluttered with every channel by default
+const visibleChannels = computed(() =>
+  adminMode.value
+    ? availableChannels.value
+    : availableChannels.value.filter(
+        (c) => !adminOnlyChannels.value.includes(c),
+      ),
+);
+
 function selectChannel(ch: string) {
   switchChannel(ch);
   showChannelMenu.value = false;
@@ -68,8 +80,7 @@ type NavItem =
   | "automations"
   | "uploads"
   | "tools"
-  | "settings"
-  | "admin";
+  | "settings";
 const activeRoute = computed(() => {
   return route.path.replace("/", "") || "dashboard";
 });
@@ -746,7 +757,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           </button>
         </div>
         <template v-if="session">
-          <div class="channel-switcher" v-if="availableChannels.length > 1">
+          <div class="channel-switcher" v-if="visibleChannels.length > 1">
             <div class="channel-btn-wrap"
               :class="{ 'other-channel': viewingOtherChannel, 'admin-channel': viewingAsAdmin }">
               <button class="channel-btn"
@@ -756,7 +767,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
               </button>
             </div>
             <div v-if="showChannelMenu" class="channel-menu">
-              <button v-for="ch in availableChannels" :key="ch" class="channel-menu-item"
+              <button v-for="ch in visibleChannels" :key="ch" class="channel-menu-item"
                 :class="{ active: ch === session.channel, 'admin-channel': adminOnlyChannels.includes(ch) }"
                 @click="selectChannel(ch)">
                 #{{ ch }}
@@ -935,12 +946,14 @@ provide("searchOpenTrigger", searchOpenTrigger);
 
         <div class="sidebar-spacer"></div>
 
-        <button v-if="session?.isAdmin" class="sidebar-btn admin-nav-btn" :class="{ active: activeRoute === 'admin' }"
-          @click="nav('admin')">
+        <button v-if="session?.isAdmin" class="sidebar-btn admin-nav-btn" :class="{ active: adminMode }"
+          @click="toggleAdminMode()">
           {{ t("nav.admin") }}
         </button>
-        <button v-if="!session || channelRole?.role === 'broadcaster'" class="sidebar-btn"
-          :class="{ active: activeRoute === 'settings', locked: !session }" @click="nav('settings')">
+        <button
+          v-if="!session || channelRole?.role === 'broadcaster' || (session.isAdmin && adminMode)"
+          class="sidebar-btn" :class="{ active: activeRoute === 'settings', locked: !session }"
+          @click="nav('settings')">
           {{ t("nav.settings") }}
           <span v-if="!session" class="lock-icon">🔒</span>
         </button>
