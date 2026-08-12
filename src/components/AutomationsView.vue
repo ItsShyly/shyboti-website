@@ -76,7 +76,7 @@ async function switchTab(tab: Tab) {
         <div id="auto-sync-slot-triggers"></div>
         <button class="ep-btn-reload" @click="activeChild?.reload?.()" title="Reload">↺</button>
         <button class="ep-btn-new" :disabled="!activeChild?.header?.canCreate" @click="activeChild?.create?.()">
-          {{ activeChild?.header?.createLabel ?? '+ New' }}
+          + {{ activeChild?.header?.createLabel ?? 'New' }}
         </button>
       </div>
     </div>

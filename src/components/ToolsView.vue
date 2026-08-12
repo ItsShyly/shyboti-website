@@ -427,7 +427,7 @@ async function addEntry() {
                 .replace('counter', 'counter')
                 .replace('var', 'var')
               ">
-              {{
+              + {{
                 varsTab === "counters"
                   ? t("feat.vars.add.counter")
                   : varsTab === "vars"

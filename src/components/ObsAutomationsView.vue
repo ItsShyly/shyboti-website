@@ -168,7 +168,7 @@ defineExpose({
   header: computed(() => ({
     count: rules.value.length,
     countLabel: "OBS rules",
-    createLabel: "+ New rule",
+    createLabel: "New rule",
     canCreate: canEdit.value && paired.value,
   })),
   reload: fetchRules,

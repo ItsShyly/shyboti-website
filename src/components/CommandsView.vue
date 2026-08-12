@@ -963,9 +963,9 @@ onUnmounted(() => {
         <button class="ep-btn-reload" @click="reloadAll" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
           }}</button>
         <button v-if="activeTab === 'Custom'" class="ep-btn-new" :disabled="!canEdit"
-          @click="canEdit && startCreate()">{{
+          @click="canEdit && startCreate()">+ {{
             t('cmd.new') }}</button>
-        <button v-else-if="activeTab === 'Obs' && obsPaired" class="ep-btn-new" @click="openObsEdit(null)">{{
+        <button v-else-if="activeTab === 'Obs' && obsPaired" class="ep-btn-new" @click="openObsEdit(null)">+ {{
           t('cmd.new')
           }}</button>
       </div>
@@ -1120,7 +1120,7 @@ onUnmounted(() => {
           <div class="empty-title">{{ t("cmd.empty.title") }}</div>
           <div class="empty-sub">{{ t("cmd.empty.sub") }}</div>
           <button class="ep-btn-new" @click="startCreate">
-            {{ t("cmd.new") }}
+            + {{ t("cmd.new") }}
           </button>
         </div>
 

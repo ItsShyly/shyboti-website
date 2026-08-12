@@ -32,11 +32,11 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.logout": "Log out",
     "nav.login": "Login with Twitch",
     "nav.login_short": "Login",
-    "nav.add_channel": "+ Add to your channel",
+    "nav.add_channel": "Add to your channel",
 
     "banner.welcome":
       'Welcome! Add ShyBoti to your channel to get started. (don\'t forget to add shyboti as a mod "/mod shyboti"!)',
-    "banner.add": "+ Add ShyBoti",
+    "banner.add": "Add ShyBoti",
     "footer.copy": "© 2026 shyboti.de",
     "footer.privacy": "Privacy",
 
@@ -104,7 +104,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.view": "View",
     "cmd.blocked": "Blocked",
     "cmd.no_access": "No access",
-    "cmd.new": "+ New command",
+    "cmd.new": "New command",
     "cmd.create": "Create",
     "cmd.count": "custom command",
     "cmd.count_plural": "custom commands",
@@ -202,7 +202,7 @@ const translations: Record<Locale, Record<string, string>> = {
     // >>> Timers
     "timer.title": "Timers",
     "timer.sub": "Automated messages on an interval for",
-    "timer.new": "+ New timer",
+    "timer.new": "New timer",
     "timer.save": "Save timer",
     "timer.saving": "Saving…",
     "timer.delete": "Delete",
@@ -248,7 +248,7 @@ const translations: Record<Locale, Record<string, string>> = {
     // >>> Triggers <<<
     "trigger.title": "Triggers",
     "trigger.sub": "Automatic actions on events for",
-    "trigger.new": "+ New trigger",
+    "trigger.new": "New trigger",
     "trigger.save": "Save trigger",
     "trigger.saving": "Saving…",
     "trigger.delete": "Delete",
@@ -293,7 +293,7 @@ const translations: Record<Locale, Record<string, string>> = {
     // >>> Countdowns <<<
     "countdown.title": "Countdowns",
     "countdown.sub": "Timed countdowns that fire actions for",
-    "countdown.new": "+ New countdown",
+    "countdown.new": "New countdown",
     "countdown.save": "Save countdown",
     "countdown.saving": "Saving…",
     "countdown.delete": "Delete",
@@ -703,10 +703,10 @@ const translations: Record<Locale, Record<string, string>> = {
     "feat.vars.cancel": "Cancel",
     "feat.vars.edit": "Edit",
     "feat.vars.delete": "✕",
-    "feat.vars.add.counter": "+ Add Counter",
-    "feat.vars.add.var": "+ Add Var",
-    "feat.vars.add.ucounter": "+ Add User Counter",
-    "feat.vars.add.uvar": "+ Add User Var",
+    "feat.vars.add.counter": "Add Counter",
+    "feat.vars.add.var": "Add Var",
+    "feat.vars.add.ucounter": "Add User Counter",
+    "feat.vars.add.uvar": "Add User Var",
     "feat.vars.add.placeholder.name": "name",
     "feat.vars.add.placeholder.value": "value",
     "feat.vars.add.placeholder.user": "username",
@@ -714,7 +714,7 @@ const translations: Record<Locale, Record<string, string>> = {
 
     // >>> OBS Widgets page
     "obs.title": "OBS Browser Sources",
-    "obs.new": "+ New widget",
+    "obs.new": "New widget",
     "obs.loading": "Loading…",
     "obs.empty": "No widgets yet.",
     "obs.empty.hint":
@@ -775,11 +775,11 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.logout": "Abmelden",
     "nav.login": "Mit Twitch anmelden",
     "nav.login_short": "Anmelden",
-    "nav.add_channel": "+ Zu deinem Channel hinzufügen",
+    "nav.add_channel": "Zu deinem Channel hinzufügen",
 
     "banner.welcome":
       'Willkommen! Füge ShyBoti zu deinem Channel hinzu um loszulegen. (Nicht vergessen ShyBoti mit "/mod shyboti" als Moderator hinzuzufügen!)',
-    "banner.add": "+ ShyBoti hinzufügen",
+    "banner.add": "ShyBoti hinzufügen",
 
     "footer.copy": "© 2026 shyboti.de",
     "footer.privacy": "Datenschutz",
@@ -848,7 +848,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.view": "Ansehen",
     "cmd.blocked": "Gesperrt",
     "cmd.no_access": "Kein Zugriff",
-    "cmd.new": "+ Neuer Command",
+    "cmd.new": "Neuer Command",
     "cmd.create": "Erstellen",
     "cmd.count": "eigener Command",
     "cmd.count_plural": "eigene Commands",
@@ -948,7 +948,7 @@ const translations: Record<Locale, Record<string, string>> = {
     // >>> Timers <<<
     "timer.title": "Timer",
     "timer.sub": "Automatische Nachrichten in einem Intervall für",
-    "timer.new": "+ Neuer Timer",
+    "timer.new": "Neuer Timer",
     "timer.save": "Timer speichern",
     "timer.saving": "Wird gespeichert…",
     "timer.delete": "Löschen",
@@ -995,7 +995,7 @@ const translations: Record<Locale, Record<string, string>> = {
     // >>> Triggers <<<
     "trigger.title": "Trigger",
     "trigger.sub": "Automatische Aktionen bei Ereignissen für",
-    "trigger.new": "+ Neuer Trigger",
+    "trigger.new": "Neuer Trigger",
     "trigger.save": "Trigger speichern",
     "trigger.saving": "Wird gespeichert…",
     "trigger.delete": "Löschen",
@@ -1040,7 +1040,7 @@ const translations: Record<Locale, Record<string, string>> = {
     // >>> Countdowns <<<
     "countdown.title": "Countdowns",
     "countdown.sub": "Zeitgesteuerte Countdowns mit Aktionen für",
-    "countdown.new": "+ Neuer Countdown",
+    "countdown.new": "Neuer Countdown",
     "countdown.save": "Countdown speichern",
     "countdown.saving": "Wird gespeichert…",
     "countdown.delete": "Löschen",
@@ -1092,8 +1092,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "mod.tab.spam": "Spam-Filter",
     "mod.tab.nukes": "Nukes",
     "mod.loading": "Wird geladen…",
-    "mod.add": "+ Hinzufügen",
-    "mod.create": "+ Erstellen",
+    "mod.add": "Hinzufügen",
+    "mod.create": "Erstellen",
     "mod.empty.blocked": "Noch keine gesperrten Begriffe.",
     "mod.empty.spam": "Noch keine Spam-Filter.",
     "mod.empty.nukes": "Keine Nukes konfiguriert.",
@@ -1425,7 +1425,7 @@ const translations: Record<Locale, Record<string, string>> = {
 
     // >>> OBS Widgets page
     "obs.title": "OBS Browser-Quellen",
-    "obs.new": "+ Neues Widget",
+    "obs.new": "Neues Widget",
     "obs.loading": "Lädt…",
     "obs.empty": "Noch keine Widgets.",
     "obs.empty.hint":
@@ -1496,10 +1496,10 @@ const translations: Record<Locale, Record<string, string>> = {
     "feat.vars.cancel": "Abbrechen",
     "feat.vars.edit": "Bearbeiten",
     "feat.vars.delete": "✕",
-    "feat.vars.add.counter": "+ Zähler hinzufügen",
-    "feat.vars.add.var": "+ Var hinzufügen",
-    "feat.vars.add.ucounter": "+ User-Zähler hinzufügen",
-    "feat.vars.add.uvar": "+ User-Var hinzufügen",
+    "feat.vars.add.counter": "Zähler hinzufügen",
+    "feat.vars.add.var": "Var hinzufügen",
+    "feat.vars.add.ucounter": "User-Zähler hinzufügen",
+    "feat.vars.add.uvar": "User-Var hinzufügen",
     "feat.vars.add.placeholder.name": "Name",
     "feat.vars.add.placeholder.value": "Wert",
     "feat.vars.add.placeholder.user": "Username",

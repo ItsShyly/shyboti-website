@@ -310,7 +310,7 @@ watch(() => session.value?.channel, load);
       <div class="ep-view-header-right">
         <button class="ep-btn-reload" @click="load" title="Reload">↺</button>
         <button class="ep-btn-new" @click="openNew" :disabled="!canEdit">
-          {{ t("obs.new") }}
+          + {{ t("obs.new") }}
         </button>
       </div>
     </div>

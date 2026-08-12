@@ -765,7 +765,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
       <span>👋 {{ t("banner.welcome") }}</span>
       <div class="banner-actions">
         <button class="banner-btn add" @click="addBot">
-          {{ t("banner.add") }}
+          + {{ t("banner.add") }}
         </button>
         <button class="banner-dismiss" @click="showAddBanner = false">✕</button>
       </div>
@@ -920,7 +920,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         </button>
         <div v-if="session && !availableChannels.includes(session.login)" class="sidebar-bottom">
           <button class="bot-btn add" @click="addBot">
-            {{ t("nav.add_channel") }}
+            + {{ t("nav.add_channel") }}
           </button>
         </div>
       </aside>
