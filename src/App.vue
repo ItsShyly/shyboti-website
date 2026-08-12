@@ -1047,7 +1047,6 @@ body.snippet-dragging * {
 
 .logged-in-as {
   position: relative;
-  z-index: 0;
   display: inline-flex;
   align-items: center;
   height: 30px;
@@ -1064,19 +1063,6 @@ body.snippet-dragging * {
 .logged-in-as.other-channel {
   border-color: #9d6cff;
   background: #1e1e26;
-}
-
-/* >>> full topbar-height backdrop, sitting behind the badge (z-index -1)  */
-.logged-in-as.other-channel::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  left: -1px;
-  right: -1px;
-  top: -11px;
-  bottom: -15px;
-  background: linear-gradient(to bottom, transparent, #9d6cff33 40%, #9d6cff 100%);
-  box-shadow: 0 0 6px #9d6cff99;
 }
 
 .logged-in-float {
@@ -1324,7 +1310,6 @@ body.snippet-dragging * {
 /* channel switcher */
 .channel-switcher {
   position: relative;
-  z-index: 0;
 }
 
 .channel-btn {
@@ -1346,19 +1331,6 @@ body.snippet-dragging * {
 
 .channel-btn.other-channel {
   border-color: #9d6cff;
-}
-
-/* >>> full topbar-height backdrop behind the button (z-index -1)*/
-.channel-switcher.other-channel::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  left: -1px;
-  right: -1px;
-  top: -11px;
-  bottom: -15px;
-  background: linear-gradient(to bottom, transparent, #9d6cff33 40%, #9d6cff 100%);
-  box-shadow: 0 0 6px #9d6cff99;
 }
 
 .channel-menu {
