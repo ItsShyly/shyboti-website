@@ -51,6 +51,11 @@ const PERM_GROUPS = computed(() => [
         label: t("perm.commands_delete"),
         desc: t("perm.commands_delete.desc"),
       },
+      {
+        key: "commands_mod" as keyof Omit<RolePermissions, "modsEnabled">,
+        label: t("perm.commands_mod"),
+        desc: t("perm.commands_mod.desc"),
+      },
     ],
   },
   {
@@ -121,6 +126,7 @@ const DEFAULT_PERMS: Omit<RolePermissions, "modsEnabled"> = {
   commands_toggle: true,
   commands_edit: false,
   commands_delete: false,
+  commands_mod: true,
   automations_view: true,
   automations_toggle: true,
   automations_edit: false,
@@ -295,12 +301,26 @@ async function clearItemOverride(item: RoleEntry) {
   await saveItemOverride(item);
 }
 
+// >>> An override matching the global tier defaults key-for-key isn't a real
+// >>> override anymore - drop it back to null so it stays "default" and keeps
+// >>> tracking future global changes instead of freezing a stale snapshot.
+function matchesGlobal(
+  perms: Omit<RolePermissions, "modsEnabled">,
+): boolean {
+  return (Object.keys(globalPerms.value) as (keyof typeof perms)[]).every(
+    (k) => perms[k] === globalPerms.value[k],
+  );
+}
+
 async function toggleItemPerm(
   item: RoleEntry,
   key: keyof Omit<RolePermissions, "modsEnabled">,
 ) {
   if (!item.permissions) setItemOverride(item);
   item.permissions![key] = !item.permissions![key];
+  if (matchesGlobal(item.permissions!)) {
+    item.permissions = null;
+  }
   await saveItemOverride(item);
 }
 

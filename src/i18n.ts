@@ -531,6 +531,9 @@ const translations: Record<Locale, Record<string, string>> = {
       "Edit responses, cooldowns, and settings. Create new commands.",
     "perm.commands_delete": "Delete",
     "perm.commands_delete.desc": "Permanently delete custom commands.",
+    "perm.commands_mod": "Moderator Status",
+    "perm.commands_mod.desc":
+      "Counts as a moderator for mod-only chat commands.",
     "perm.automations_view": "View",
     "perm.automations_view.desc": "See timers and triggers.",
     "perm.automations_toggle": "Toggle",
@@ -545,7 +548,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.moderation_view.desc": "See blocked terms, spam filters, and nukes.",
     "perm.moderation_manage": "Manage",
     "perm.moderation_manage.desc":
-      "Add, delete, and fire nukes. Full moderation control.",
+      "Add, delete, and edit blocked terms, spam filters, and nukes.",
     "perm.group.obs": "OBS",
     "perm.obs_view": "View",
     "perm.obs_view.desc": "Access the OBS Control page and see scenes.",
@@ -1314,6 +1317,9 @@ const translations: Record<Locale, Record<string, string>> = {
       "Antworten, Cooldowns und Einstellungen bearbeiten. Neue Commands erstellen.",
     "perm.commands_delete": "Löschen",
     "perm.commands_delete.desc": "Eigene Commands dauerhaft löschen.",
+    "perm.commands_mod": "Moderator-Status",
+    "perm.commands_mod.desc":
+      "Zählt als Moderator für nur-Mod Chat-Commands.",
     "perm.automations_view": "Anzeigen",
     "perm.automations_view.desc": "Timer und Trigger sehen.",
     "perm.automations_toggle": "Umschalten",
@@ -1330,7 +1336,7 @@ const translations: Record<Locale, Record<string, string>> = {
       "Gesperrte Begriffe, Spam-Filter und Nukes sehen.",
     "perm.moderation_manage": "Verwalten",
     "perm.moderation_manage.desc":
-      "Hinzufügen, Löschen und Nukes zünden. Vollständige Moderationskontrolle.",
+      "Gesperrte Begriffe, Spam-Filter und Nukes hinzufügen, löschen und bearbeiten.",
     "perm.group.obs": "OBS",
     "perm.obs_view": "Anzeigen",
     "perm.obs_view.desc":

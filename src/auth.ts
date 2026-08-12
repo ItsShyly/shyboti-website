@@ -16,6 +16,7 @@ export interface RolePermissions {
   commands_toggle: boolean;
   commands_edit: boolean;
   commands_delete: boolean;
+  commands_mod: boolean;
   // Automations (Timers + Triggers)
   automations_view: boolean;
   automations_toggle: boolean;
