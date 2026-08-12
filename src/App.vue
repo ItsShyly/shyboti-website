@@ -668,7 +668,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <span v-if="showLogsChip && logsQuery" class="search-match-nav">
           <span class="search-match-count">{{
             logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0 matches"
-            }}</span>
+          }}</span>
           <button v-if="logsMatchCount" class="search-match-step" title="Previous match (Shift+Enter)"
             @mousedown.prevent="logsRequestJump(-1)">
             ▲
@@ -820,7 +820,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span v-if="showLogsChip && logsQuery" class="search-match-nav">
             <span class="search-match-count">{{
               logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0"
-              }}</span>
+            }}</span>
             <button v-if="logsMatchCount" class="search-match-step" title="Previous match"
               @mousedown.prevent="logsRequestJump(-1)">
               ▲
@@ -947,7 +947,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span class="footer-sep">|</span>
           <router-link to="/privacy" class="footer-link">{{
             t("footer.privacy")
-            }}</router-link>
+          }}</router-link>
         </footer>
       </main>
     </div>
@@ -1363,7 +1363,7 @@ body.snippet-dragging * {
   z-index: -1;
   left: -3px;
   right: -3px;
-  top: -11px;
+  top: -3px;
   bottom: -15px;
   background: #9d6cff;
 }
