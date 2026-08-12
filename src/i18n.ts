@@ -24,6 +24,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.moderation": "Moderation",
     "nav.automations": "Automations",
     "nav.roles": "Roles",
+    "nav.admin": "Admin",
     "nav.logs": "Logs",
     "nav.uploads": "Tools",
     "nav.tools": "Tools",
@@ -580,6 +581,15 @@ const translations: Record<Locale, Record<string, string>> = {
     "logs.jump_to_newest": "↓ Jump to newest",
     "logs.copied": "✓ Copied to clipboard",
 
+    // >>> Admin <<<
+    "admin.title": "Admin",
+    "admin.sub": "Every channel the bot is in. Switch into one to manage it as if you were the broadcaster.",
+    "admin.switch": "Switch",
+    "admin.remove_bot": "Remove bot",
+    "admin.remove_confirm": "Confirm",
+    "admin.no_channels": "No channels yet.",
+    "admin.remove_error": "Could not remove bot.",
+
     // >>> Settings <<<
     "settings.save": "Save",
     "settings.saved": "✓ Saved",
@@ -812,6 +822,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.moderation": "Moderation",
     "nav.automations": "Automationen",
     "nav.roles": "Rollen",
+    "nav.admin": "Admin",
     "nav.logs": "Logs",
     "nav.uploads": "Tools",
     "nav.tools": "Tools",
@@ -1369,6 +1380,15 @@ const translations: Record<Locale, Record<string, string>> = {
     "logs.load_newer": "Neuere Nachrichten werden geladen…",
     "logs.jump_to_newest": "↓ Zu neuesten Nachrichten",
     "logs.copied": "✓ In Zwischenablage kopiert",
+
+    // >>> Admin <<<
+    "admin.title": "Admin",
+    "admin.sub": "Jeder Channel, in dem der Bot ist. Wechsle hinein, um ihn wie der Broadcaster zu verwalten.",
+    "admin.switch": "Wechseln",
+    "admin.remove_bot": "Bot entfernen",
+    "admin.remove_confirm": "Bestätigen",
+    "admin.no_channels": "Noch keine Channels.",
+    "admin.remove_error": "Bot konnte nicht entfernt werden.",
 
     // >>> Settings <<<
     "settings.save": "Speichern",

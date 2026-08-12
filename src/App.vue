@@ -46,6 +46,14 @@ const viewingOtherChannel = computed(
   () => !!session.value && session.value.login !== session.value.channel,
 );
 
+// >>> red accent instead of purple when an admin is god-moded into a channel that isn't their own 
+const viewingAsAdmin = computed(
+  () =>
+    !!session.value &&
+    session.value.isAdmin &&
+    session.value.login !== session.value.channel,
+);
+
 function selectChannel(ch: string) {
   switchChannel(ch);
   showChannelMenu.value = false;
@@ -60,7 +68,8 @@ type NavItem =
   | "automations"
   | "uploads"
   | "tools"
-  | "settings";
+  | "settings"
+  | "admin";
 const activeRoute = computed(() => {
   return route.path.replace("/", "") || "dashboard";
 });
@@ -640,7 +649,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
 
 <template>
   <div class="page">
-    <div class="topbar" :class="{ 'other-channel': viewingOtherChannel }">
+    <div class="topbar" :class="{ 'other-channel': viewingOtherChannel, 'admin-channel': viewingAsAdmin }">
       <div class="topbar-brand" @click="session ? router.push('/dashboard') : router.push('/')" style="cursor: pointer">
         <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
         <span class="brand-name">ShyBoti</span>
@@ -668,7 +677,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <span v-if="showLogsChip && logsQuery" class="search-match-nav">
           <span class="search-match-count">{{
             logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0 matches"
-          }}</span>
+            }}</span>
           <button v-if="logsMatchCount" class="search-match-step" title="Previous match (Shift+Enter)"
             @mousedown.prevent="logsRequestJump(-1)">
             ▲
@@ -738,21 +747,25 @@ provide("searchOpenTrigger", searchOpenTrigger);
         </div>
         <template v-if="session">
           <div class="channel-switcher" v-if="availableChannels.length > 1">
-            <div class="channel-btn-wrap" :class="{ 'other-channel': viewingOtherChannel }">
-              <button class="channel-btn" :class="{ 'other-channel': viewingOtherChannel }"
+            <div class="channel-btn-wrap"
+              :class="{ 'other-channel': viewingOtherChannel, 'admin-channel': viewingAsAdmin }">
+              <button class="channel-btn"
+                :class="{ 'other-channel': viewingOtherChannel, 'admin-channel': viewingAsAdmin }"
                 @click="showChannelMenu = !showChannelMenu">
                 #{{ session.channel }} ▾
               </button>
             </div>
             <div v-if="showChannelMenu" class="channel-menu">
               <button v-for="ch in availableChannels" :key="ch" class="channel-menu-item"
-                :class="{ active: ch === session.channel }" @click="selectChannel(ch)">
+                :class="{ active: ch === session.channel, 'admin-channel': session.isAdmin && ch !== session.login }"
+                @click="selectChannel(ch)">
                 #{{ ch }}
               </button>
             </div>
           </div>
-          <span v-else class="logged-in-as hide-mobile" :class="{ 'other-channel': viewingOtherChannel }">#{{
-            session.channel }}</span>
+          <span v-else class="logged-in-as hide-mobile"
+            :class="{ 'other-channel': viewingOtherChannel, 'admin-channel': viewingAsAdmin }">#{{
+              session.channel }}</span>
           <button class="auth-btn logout-btn hide-mobile" @click="
             logout();
           router.push('/');
@@ -820,7 +833,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span v-if="showLogsChip && logsQuery" class="search-match-nav">
             <span class="search-match-count">{{
               logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0"
-            }}</span>
+              }}</span>
             <button v-if="logsMatchCount" class="search-match-step" title="Previous match"
               @mousedown.prevent="logsRequestJump(-1)">
               ▲
@@ -906,6 +919,10 @@ provide("searchOpenTrigger", searchOpenTrigger);
           :class="{ active: activeRoute === 'roles', locked: !session }" @click="nav('roles')">
           {{ t("nav.roles") }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
+        <button v-if="session?.isAdmin" class="sidebar-btn admin-nav-btn" :class="{ active: activeRoute === 'admin' }"
+          @click="nav('admin')">
+          {{ t("nav.admin") }}
+        </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'tools', locked: !session }"
           @click="nav('tools')">
           Tools <span v-if="!session" class="lock-icon">🔒</span>
@@ -947,7 +964,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span class="footer-sep">|</span>
           <router-link to="/privacy" class="footer-link">{{
             t("footer.privacy")
-          }}</router-link>
+            }}</router-link>
         </footer>
       </main>
     </div>
@@ -1015,6 +1032,12 @@ body.snippet-dragging * {
   background: #9d6cff;
 }
 
+/* >>> admin god-mode on a channel that isn't theirs - red instead of the
+   regular mod/VIP purple, a stronger "you can break things here" warning */
+.topbar.admin-channel::after {
+  background: #f14949;
+}
+
 .topbar-brand {
   display: flex;
   align-items: center;
@@ -1078,6 +1101,15 @@ body.snippet-dragging * {
   top: -4px;
   bottom: -15px;
   background: #9d6cff;
+}
+
+.logged-in-as.admin-channel {
+  border-color: #f14949;
+  color: #f14949;
+}
+
+.logged-in-as.admin-channel::after {
+  background: #f14949;
 }
 
 .logged-in-float {
@@ -1348,6 +1380,11 @@ body.snippet-dragging * {
   border-color: #9d6cff;
 }
 
+.channel-btn.admin-channel {
+  border-color: #f14949;
+  color: #f14949;
+}
+
 /* >>> stacking context scoped to JUST the button, so channel-menu's z-index below stays unaffected */
 .channel-btn-wrap {
   position: relative;
@@ -1367,6 +1404,10 @@ body.snippet-dragging * {
   top: -3px;
   bottom: -15px;
   background: #9d6cff;
+}
+
+.channel-btn-wrap.admin-channel::after {
+  background: #f14949;
 }
 
 .channel-menu {
@@ -1396,6 +1437,10 @@ body.snippet-dragging * {
 .channel-menu-item:hover {
   background: #222;
   color: #fff;
+}
+
+.channel-menu-item.admin-channel {
+  color: #f14949;
 }
 
 .channel-menu-item.active {
@@ -1683,6 +1728,16 @@ body.snippet-dragging * {
   font-weight: 700;
   background: rgba(111, 43, 255, 0.08);
   border-left: 2px solid #6f2bff;
+}
+
+.admin-nav-btn {
+  color: #d15a5a;
+}
+
+.admin-nav-btn.active {
+  color: #f14949;
+  background: rgba(241, 73, 73, 0.08);
+  border-left: 2px solid #f14949;
 }
 
 .sidebar-btn.locked {

@@ -5,6 +5,7 @@ interface Session {
   login: string;
   channel: string;
   token: string;
+  isAdmin: boolean;
 }
 
 export interface RolePermissions {
@@ -123,8 +124,17 @@ export function useAuth() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error();
-      const data = (await res.json()) as { login: string; channel: string };
-      session.value = { login: data.login, channel: data.channel, token };
+      const data = (await res.json()) as {
+        login: string;
+        channel: string;
+        isAdmin: boolean;
+      };
+      session.value = {
+        login: data.login,
+        channel: data.channel,
+        token,
+        isAdmin: data.isAdmin,
+      };
       localStorage.setItem("shyboti_token", token);
       await refreshAccessState();
       startAccessRefresh();
