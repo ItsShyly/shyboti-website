@@ -737,12 +737,13 @@ provide("searchOpenTrigger", searchOpenTrigger);
           </button>
         </div>
         <template v-if="session">
-          <div class="channel-switcher" :class="{ 'other-channel': viewingOtherChannel }"
-            v-if="availableChannels.length > 1">
-            <button class="channel-btn" :class="{ 'other-channel': viewingOtherChannel }"
-              @click="showChannelMenu = !showChannelMenu">
-              #{{ session.channel }} ▾
-            </button>
+          <div class="channel-switcher" v-if="availableChannels.length > 1">
+            <div class="channel-btn-wrap" :class="{ 'other-channel': viewingOtherChannel }">
+              <button class="channel-btn" :class="{ 'other-channel': viewingOtherChannel }"
+                @click="showChannelMenu = !showChannelMenu">
+                #{{ session.channel }} ▾
+              </button>
+            </div>
             <div v-if="showChannelMenu" class="channel-menu">
               <button v-for="ch in availableChannels" :key="ch" class="channel-menu-item"
                 :class="{ active: ch === session.channel }" @click="selectChannel(ch)">
@@ -1061,8 +1062,21 @@ body.snippet-dragging * {
 
 /* >>> mod-only case (no channel switcher, just this label) */
 .logged-in-as.other-channel {
+  z-index: 0;
   border-color: #9d6cff;
   background: #1e1e26;
+}
+
+/* >>> solid backdrop behind the badge, surrounding it and reaching down to the topbar's bottom line */
+.logged-in-as.other-channel::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -3px;
+  right: -3px;
+  top: -11px;
+  bottom: -15px;
+  background: #9d6cff;
 }
 
 .logged-in-float {
@@ -1331,6 +1345,27 @@ body.snippet-dragging * {
 
 .channel-btn.other-channel {
   border-color: #9d6cff;
+}
+
+/* >>> stacking context scoped to JUST the button, so channel-menu's z-index below stays unaffected */
+.channel-btn-wrap {
+  position: relative;
+}
+
+.channel-btn-wrap.other-channel {
+  z-index: 0;
+}
+
+/* >>> solid backdrop behind the button, surrounding it and reaching down to the topbar's bottom line */
+.channel-btn-wrap.other-channel::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -3px;
+  right: -3px;
+  top: -11px;
+  bottom: -15px;
+  background: #9d6cff;
 }
 
 .channel-menu {
