@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, reactive, computed, onMounted, onUnmounted } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOverlayClose } from "../composables/useOverlayClose";
 
-const { session, channelRole } = useAuth();
+const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
 
 const canView = computed(() => channelRole.value?.permissions.moderation_view ?? false);
@@ -375,6 +375,73 @@ const saveDisabled = computed(() => {
   return false;
 });
 
+// >>> Sync/Import - one config per tab (blocked terms/spam filters/nukes sync independently)
+interface ModSyncConf { sync_from: string; is_active: number; last_synced: number }
+interface ModSyncState { conf: ModSyncConf | null; open: boolean; from: string; saving: boolean; running: boolean; msg: string }
+function freshModSync(): ModSyncState { return { conf: null, open: false, from: "", saving: false, running: false, msg: "" } }
+const modSync: Record<Tab, ModSyncState> = reactive({ blocked: freshModSync(), spam: freshModSync(), nukes: freshModSync() });
+const curSync = computed(() => modSync[activeTab.value]);
+
+async function fetchModSync(tab: Tab) {
+  if (!session.value) return;
+  try {
+    const res = await fetch(`${API}/mod-sync/${tab}/${session.value.channel}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    const data = await res.json();
+    modSync[tab].conf = data.sync;
+    modSync[tab].from = data.sync?.sync_from ?? "";
+  } catch { }
+}
+async function saveModSync(tab: Tab) {
+  if (!session.value || !modSync[tab].from) return;
+  modSync[tab].saving = true;
+  try {
+    await fetch(`${API}/mod-sync/${tab}/${session.value.channel}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ sync_from: modSync[tab].from, is_active: true }),
+    });
+    await fetchModSync(tab);
+  } catch {
+    modSync[tab].msg = "Failed to save.";
+  }
+  modSync[tab].saving = false;
+}
+async function stopModSync(tab: Tab) {
+  if (!session.value || !modSync[tab].conf) return;
+  modSync[tab].saving = true;
+  try {
+    await fetch(`${API}/mod-sync/${tab}/${session.value.channel}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ sync_from: modSync[tab].conf!.sync_from, is_active: false }),
+    });
+    modSync[tab].conf = { ...modSync[tab].conf!, is_active: 0 };
+    modSync[tab].msg = "Sync stopped.";
+  } catch {
+    modSync[tab].msg = "Failed.";
+  }
+  modSync[tab].saving = false;
+}
+async function runModSync(tab: Tab) {
+  if (!session.value) return;
+  modSync[tab].running = true;
+  modSync[tab].msg = "";
+  try {
+    const res = await fetch(`${API}/mod-sync/${tab}/${session.value.channel}/run`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    const data = await res.json();
+    modSync[tab].msg = `Synced ${data.count} from #${modSync[tab].conf?.sync_from}.`;
+    await load();
+  } catch (e: any) {
+    modSync[tab].msg = e?.message ?? "Sync failed";
+  }
+  modSync[tab].running = false;
+}
+
 // >>> SSE
 const reloading = ref(false);
 async function reload() { reloading.value = true; await load(); reloading.value = false }
@@ -399,7 +466,13 @@ function startModSSE() {
     }).catch(() => { });
 }
 
-onMounted(() => { load(); startModSSE() });
+onMounted(() => {
+  load();
+  startModSSE();
+  fetchModSync("blocked");
+  fetchModSync("spam");
+  fetchModSync("nukes");
+});
 onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 </script>
 
@@ -415,6 +488,43 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         </div>
       </div>
       <div class="ep-view-header-right">
+        <div class="ep-sync-wrap">
+          <button v-if="curSync.conf?.is_active" class="ep-sync-indicator" @click="curSync.open = !curSync.open"
+            :title="`${t('mod.sync.active')} #${curSync.conf.sync_from}`">
+            <span class="ep-sync-dot"></span>{{ t("mod.sync.active") }} #{{ curSync.conf.sync_from }}
+            <span class="ep-sync-chevron" :class="{ open: curSync.open }"></span>
+          </button>
+          <button v-else class="ep-sync-config-btn" @click="curSync.open = !curSync.open">
+            {{ t("mod.sync.config") }} <span class="ep-sync-chevron" :class="{ open: curSync.open }"></span>
+          </button>
+          <div v-if="curSync.open" class="ep-sync-panel">
+            <div class="ep-sync-modes">
+              <button class="ep-sync-mode-btn active">Sync (ongoing)</button>
+              <button class="ep-sync-mode-btn" @click="curSync.open = false">Import (one-time)</button>
+            </div>
+            <div class="ep-sync-row">
+              <select v-model="curSync.from" class="ep-field-select-sm">
+                <option value="">{{ curSync.conf?.is_active ? t("mod.sync.change") : t("mod.sync.select") }}</option>
+                <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{
+                  ch }}</option>
+              </select>
+              <button class="ep-sync-save-btn" @click="saveModSync(activeTab)" :disabled="curSync.saving || !curSync.from">
+                {{ curSync.saving ? '…' : curSync.conf?.is_active ? t('mod.sync.update') : t('mod.sync.enable') }}
+              </button>
+            </div>
+            <div class="ep-sync-row">
+              <button v-if="curSync.conf?.is_active" class="ep-sync-run-btn" @click="runModSync(activeTab)"
+                :disabled="curSync.running">{{ curSync.running ? '…' : t('mod.sync.pull') }}</button>
+              <button v-if="curSync.conf?.is_active" class="ep-sync-stop-btn" @click="stopModSync(activeTab)">{{
+                t('mod.sync.stop') }}</button>
+            </div>
+            <div v-if="curSync.conf?.last_synced" class="ep-sync-last">{{ t('mod.sync.last') }} {{ new
+              Date(curSync.conf.last_synced).toLocaleString() }}</div>
+            <div v-if="curSync.msg" class="ep-sync-msg" :class="{ err: curSync.msg.includes('fail') || curSync.msg.includes('Error') }">
+              {{ curSync.msg }}
+            </div>
+          </div>
+        </div>
         <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
         }}</button>
         <button class="ep-btn-new" @click="
@@ -444,11 +554,11 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <div v-else class="ep-row-list">
         <div v-for="term in blockedTerms" :key="term.id" class="ep-list-row mod-item-row">
           <span v-if="term.is_regex" class="item-badge regex-badge">{{ t("mod.badge.regex") }}</span>
-          <span class="item-term">{{ term.term }}</span>
           <span class="item-action ep-meta-pill" :style="actionPillStyle(term.action)">
             {{ term.action === 'delete' ? t('mod.action.delete') : term.action === 'timeout' ? t('mod.action.timeout') :
               t('mod.action.ban') }}
           </span>
+          <span class="item-term">{{ term.term }}</span>
           <span v-if="term.action !== 'delete'" class="item-dur">{{ fmtDur(term.duration) }}</span>
           <div class="ep-row-actions">
             <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
@@ -464,14 +574,14 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <div v-if="!spamFilters.length" class="ep-empty">{{ t("mod.empty.spam") }}</div>
       <div v-else class="ep-row-list">
         <div v-for="f in spamFilters" :key="f.id" class="ep-list-row mod-item-row">
-          <div class="spam-label">
-            <span class="spam-name">{{ spamLabel(f).name }}</span>
-            <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
-          </div>
           <span class="item-action ep-meta-pill" :style="actionPillStyle(f.action)">
             {{ f.action === 'delete' ? t('mod.action.delete') : f.action === 'timeout' ? t('mod.action.timeout') :
               t('mod.action.ban') }}
           </span>
+          <div class="spam-label">
+            <span class="spam-name">{{ spamLabel(f).name }}</span>
+            <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
+          </div>
           <span v-if="f.action !== 'delete'" class="item-dur">{{ fmtDur(f.duration) }}</span>
           <div class="ep-row-actions">
             <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit") }}</button>

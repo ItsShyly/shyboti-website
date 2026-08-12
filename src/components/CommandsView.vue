@@ -923,13 +923,12 @@ onUnmounted(() => {
         <!-- sync (Custom tab only) -->
         <div class="ep-sync-wrap">
           <button v-if="activeTab === 'Custom' && syncConf?.is_active" class="ep-sync-indicator"
-            @click="syncOpen = !syncOpen" :title="`Syncing from #${syncConf.sync_from}`">
-            <span class="ep-sync-dot"></span>sync #{{ syncConf.sync_from }}<span class="ep-sync-chevron">{{ syncOpen ?
-              '▲'
-              : '▼' }}</span>
+            @click="syncOpen = !syncOpen" :title="`${t('cmd.sync.active')} #${syncConf.sync_from}`">
+            <span class="ep-sync-dot"></span>{{ t('cmd.sync.active') }} #{{ syncConf.sync_from }}<span
+              class="ep-sync-chevron" :class="{ open: syncOpen }"></span>
           </button>
           <button v-else-if="activeTab === 'Custom'" class="ep-sync-config-btn" @click="syncOpen = !syncOpen">
-            {{ t('cmd.sync.config') }}<span class="ep-sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
+            {{ t('cmd.sync.config') }}<span class="ep-sync-chevron" :class="{ open: syncOpen }"></span>
           </button>
           <div v-if="syncOpen && activeTab === 'Custom'" class="ep-sync-panel">
             <div class="ep-sync-modes">
@@ -948,7 +947,7 @@ onUnmounted(() => {
               </button>
             </div>
             <div class="ep-sync-row">
-              <button v-if="syncConf?.is_active" class="sync-run-btn" @click="runSync" :disabled="syncRunning">{{
+              <button v-if="syncConf?.is_active" class="ep-sync-run-btn" @click="runSync" :disabled="syncRunning">{{
                 syncRunning
                   ? '…' : t('cmd.sync.pull') }}</button>
               <button v-if="syncConf?.is_active" class="ep-sync-stop-btn" @click="stopSync">{{ t('cmd.sync.stop')
@@ -1981,26 +1980,7 @@ onUnmounted(() => {
   background: rgba(78, 201, 176, 0.1);
 }
 
-/* select/save/stop for sync now come from shared.css.  */
-.sync-run-btn {
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid #23d18b44;
-  background: rgba(35, 209, 139, 0.08);
-  color: #23d18b;
-  font-family: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.sync-run-btn:hover:not(:disabled) {
-  background: rgba(35, 209, 139, 0.2);
-}
-
-.sync-run-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+/* select/save/stop/run for sync now come from shared.css.  */
 
 /* Share modal */
 .modal-overlay {

@@ -790,9 +790,18 @@
   flex-shrink: 0;
 }
 .ep-sync-chevron {
-  font-size: 8px;
-  opacity: 0.6;
+  width: 6px;
+  height: 6px;
   margin-left: 4px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  opacity: 0.6;
+  flex-shrink: 0;
+  transform: rotate(45deg);
+  transition: transform 0.15s;
+}
+.ep-sync-chevron.open {
+  transform: rotate(-135deg);
 }
 @keyframes ep-pulse-dot {
   0%,
@@ -911,6 +920,23 @@
 }
 .ep-sync-stop-btn:hover {
   background: rgba(241, 73, 73, 0.1);
+}
+.ep-sync-run-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #23d18b44;
+  background: rgba(35, 209, 139, 0.08);
+  color: #23d18b;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ep-sync-run-btn:hover:not(:disabled) {
+  background: rgba(35, 209, 139, 0.2);
+}
+.ep-sync-run-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* Script highlight tokens (scriptHighlight.ts output) - shared across every editor */

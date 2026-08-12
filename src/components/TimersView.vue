@@ -414,10 +414,10 @@ defineExpose({
         <button v-if="syncConf?.is_active" class="ep-sync-indicator" @click="syncOpen = !syncOpen"
           :title="`${t('timer.sync.active')} #${syncConf.sync_from}`">
           <span class="ep-sync-dot"></span>{{ t("timer.sync.active") }} #{{ syncConf.sync_from }}
-          <span class="ep-sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
+          <span class="ep-sync-chevron" :class="{ open: syncOpen }"></span>
         </button>
         <button v-else class="ep-sync-config-btn" @click="syncOpen = !syncOpen">
-          {{ t("timer.sync.config") }} <span class="ep-sync-chevron">{{ syncOpen ? '▲' : '▼' }}</span>
+          {{ t("timer.sync.config") }} <span class="ep-sync-chevron" :class="{ open: syncOpen }"></span>
         </button>
         <div v-if="syncOpen" class="ep-sync-panel">
           <div class="ep-sync-modes">
@@ -434,6 +434,8 @@ defineExpose({
             </button>
           </div>
           <div v-if="syncConf?.is_active" class="ep-sync-row">
+            <button class="ep-sync-run-btn" @click="runSync" :disabled="syncRunning">{{ syncRunning ? '…' :
+              t("timer.sync.pull") }}</button>
             <button class="ep-sync-stop-btn" @click="stopSync">{{ t("timer.sync.stop") }}</button>
           </div>
           <div v-if="syncConf?.last_synced" class="ep-sync-last">{{ t("timer.sync.last") }} {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
