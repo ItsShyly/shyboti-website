@@ -11,10 +11,10 @@ const { t } = useI18n();
 const canView = computed(() => channelRole.value?.permissions.moderation_view ?? false);
 const canManage = computed(() => channelRole.value?.permissions.moderation_manage ?? false);
 
-interface BlockedTerm { id: number; term: string; action: string; duration: number; is_regex: number }
-interface SpamFilter { id: number; type: string; threshold: number; min_letters: number; options: string; action: string; duration: number }
+interface BlockedTerm { id: number; term: string; action: string; duration: number; is_regex: number; is_active: number; group_id: number | null }
+interface SpamFilter { id: number; type: string; threshold: number; min_letters: number; options: string; action: string; duration: number; is_active: number; group_id: number | null }
 interface SpamOptions { emote_target?: "emoji" | "7tv" | "twitch" | "all"; ignore_7tv?: boolean }
-interface NukeConfig { id: number; trigger: string; duration: number; label: string; lookback: number; stay_active: number; match_exact: number; is_regex: number; expires_at: number | null }
+interface NukeConfig { id: number; trigger: string; duration: number; label: string; lookback: number; stay_active: number; match_exact: number; is_regex: number; expires_at: number | null; group_id: number | null }
 
 type Tab = "blocked" | "spam" | "nukes";
 const activeTab = ref<Tab>("blocked");
@@ -77,6 +77,144 @@ const ACTION_COLORS: Record<string, string> = { delete: "#e5c07b", timeout: "#c7
 function actionPillStyle(action: string) {
   const c = ACTION_COLORS[action] ?? "#888";
   return { color: c, borderColor: c + "44", background: c + "11" };
+}
+function actionLabel(action: string) {
+  return action === "delete" ? t("mod.action.delete") : action === "timeout" ? t("mod.action.timeout") : t("mod.action.ban");
+}
+
+// >>> Groups - bundle several terms/filters/nukes under one shared action+
+// >>> duration+reason (like Fossabot's word-list groups). Backend applies the
+// >>> group's action/duration to every grouped item automatically.
+interface ModGroup { id: number; name: string; action: string; duration: number }
+const GROUP_PATH: Record<Tab, string> = { blocked: "blocked-terms", spam: "spam-filters", nukes: "nukes" };
+const modGroups: Record<Tab, ModGroup[]> = reactive({ blocked: [], spam: [], nukes: [] });
+const openGroups = reactive(new Set<number>());
+function toggleGroupOpen(id: number) {
+  if (openGroups.has(id)) openGroups.delete(id); else openGroups.add(id);
+}
+
+async function fetchGroups(tab: Tab) {
+  if (!session.value) return;
+  try {
+    const res = await fetch(`${API}/moderation/${session.value.channel}/${GROUP_PATH[tab]}/groups`, {
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    if (res.ok) modGroups[tab] = (await res.json()).items ?? [];
+  } catch { }
+}
+
+function itemsOf(tab: Tab): { id: number; group_id: number | null }[] {
+  return tab === "blocked" ? blockedTerms.value : tab === "spam" ? spamFilters.value : nukes.value;
+}
+function membersOf(tab: Tab, groupId: number) {
+  return itemsOf(tab).filter((i) => i.group_id === groupId);
+}
+function ungroupedOf(tab: Tab) {
+  return itemsOf(tab).filter((i) => !i.group_id);
+}
+// >>> Groups + a trailing "ungrouped" bucket, so every row template only
+// >>> needs one v-for (over section.items) regardless of grouping.
+function sectionsOf(tab: Tab): { group: ModGroup | null; items: any[] }[] {
+  return [
+    ...modGroups[tab].map((g) => ({ group: g, items: membersOf(tab, g.id) })),
+    { group: null, items: ungroupedOf(tab) },
+  ];
+}
+const blockedSections = computed(() => sectionsOf("blocked"));
+const spamSections = computed(() => sectionsOf("spam"));
+const nukeSections = computed(() => sectionsOf("nukes"));
+
+async function removeFromGroup(tab: Tab, id: number) {
+  if (!session.value) return;
+  const item = itemsOf(tab).find((i) => i.id === id);
+  if (item) item.group_id = null;
+  try {
+    await fetch(`${API}/moderation/${session.value.channel}/${GROUP_PATH[tab]}/${id}/group`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ group_id: null }),
+    });
+  } catch { error.value = t("mod.error.save") }
+}
+
+// >>> Group create/edit panel
+const groupPanelOpen = ref(false);
+const groupPanelTab = ref<Tab>("blocked");
+const editingGroupId = ref<number | null>(null);
+const gName = ref("");
+const gAction = ref("delete");
+const gDuration = ref(300);
+
+function openNewGroup(tab: Tab) {
+  groupPanelTab.value = tab;
+  editingGroupId.value = null;
+  gName.value = "";
+  gAction.value = tab === "nukes" ? "timeout" : "delete";
+  gDuration.value = tab === "nukes" ? 600 : 300;
+  groupPanelOpen.value = true;
+}
+function openEditGroup(tab: Tab, g: ModGroup) {
+  groupPanelTab.value = tab;
+  editingGroupId.value = g.id;
+  gName.value = g.name;
+  gAction.value = g.action;
+  gDuration.value = g.duration;
+  groupPanelOpen.value = true;
+}
+
+async function saveGroup() {
+  if (!session.value || !gName.value) return;
+  saving.value = true;
+  const ch = session.value.channel;
+  const path = GROUP_PATH[groupPanelTab.value];
+  const h = { "Content-Type": "application/json", Authorization: `Bearer ${session.value.token}` };
+  const body = JSON.stringify({ name: gName.value, action: gAction.value, duration: gDuration.value });
+  try {
+    if (editingGroupId.value) {
+      await fetch(`${API}/moderation/${ch}/${path}/groups/${editingGroupId.value}`, { method: "PUT", headers: h, body });
+      const g = modGroups[groupPanelTab.value].find((x) => x.id === editingGroupId.value);
+      if (g) { g.name = gName.value; g.action = gAction.value; g.duration = gDuration.value; }
+    } else {
+      const res = await fetch(`${API}/moderation/${ch}/${path}/groups`, { method: "POST", headers: h, body });
+      const data = await res.json();
+      modGroups[groupPanelTab.value].push(data.item);
+    }
+    groupPanelOpen.value = false;
+  } catch { error.value = t("mod.error.save") }
+  saving.value = false;
+}
+
+async function deleteGroup(tab: Tab, id: number) {
+  if (!session.value) return;
+  try {
+    await fetch(`${API}/moderation/${session.value.channel}/${GROUP_PATH[tab]}/groups/${id}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    modGroups[tab] = modGroups[tab].filter((g) => g.id !== id);
+    for (const item of itemsOf(tab)) if (item.group_id === id) item.group_id = null;
+  } catch { error.value = t("mod.error.remove") }
+}
+
+// >>> Drag a row onto a group header (or the ungrouped zone) to move it
+const draggingId = ref<number | null>(null);
+function onDragStart(id: number) {
+  draggingId.value = id;
+}
+async function assignGroup(tab: Tab, groupId: number | null) {
+  if (!session.value || draggingId.value == null) return;
+  const id = draggingId.value;
+  draggingId.value = null;
+  const item = itemsOf(tab).find((i) => i.id === id);
+  if (!item || item.group_id === groupId) return;
+  item.group_id = groupId;
+  try {
+    await fetch(`${API}/moderation/${session.value.channel}/${GROUP_PATH[tab]}/${id}/group`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ group_id: groupId }),
+    });
+  } catch { error.value = t("mod.error.save") }
 }
 
 
@@ -312,6 +450,24 @@ async function deleteRow(kind: Tab, id: number) {
   } catch { error.value = t("mod.error.remove") }
 }
 
+async function toggleActive(kind: "blocked" | "spam", item: BlockedTerm | SpamFilter) {
+  if (!session.value || !canManage.value) return;
+  const next = item.is_active ? 0 : 1;
+  item.is_active = next;
+  try {
+    const ch = session.value.channel;
+    const path = kind === "blocked" ? "blocked-terms" : "spam-filters";
+    await fetch(`${API}/moderation/${ch}/${path}/${item.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ is_active: !!next }),
+    });
+  } catch {
+    item.is_active = next ? 0 : 1;
+    error.value = t("mod.error.save");
+  }
+}
+
 const deleteConfirmPanel = ref(false);
 function requestDelete() {
   if (!deleteConfirmPanel.value) {
@@ -472,6 +628,9 @@ onMounted(() => {
   fetchModSync("blocked");
   fetchModSync("spam");
   fetchModSync("nukes");
+  fetchGroups("blocked");
+  fetchGroups("spam");
+  fetchGroups("nukes");
 });
 onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 </script>
@@ -527,6 +686,9 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         </div>
         <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
         }}</button>
+        <button v-if="canManage" class="ep-btn-cancel" @click="openNewGroup(activeTab)">
+          + {{ t("mod.group.new") }}
+        </button>
         <button class="ep-btn-new" @click="
           activeTab === 'blocked' ? openNewBlocked() :
             activeTab === 'spam' ? openNewSpam() : openNewNuke()
@@ -550,111 +712,187 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 
     <!-- Blocked Terms list -->
     <template v-else-if="activeTab === 'blocked'">
-      <div v-if="!blockedTerms.length" class="ep-empty">{{ t("mod.empty.blocked") }}</div>
-      <div v-else class="ep-row-list">
-        <div v-for="term in blockedTerms" :key="term.id" class="ep-list-row mod-item-row">
-          <div class="mod-item-main">
-            <div class="mod-item-title">
-              <span v-if="term.is_regex" class="item-badge regex-badge">{{ t("mod.badge.regex") }}</span>
-              <span class="item-term">{{ term.term }}</span>
-            </div>
-            <div class="mod-item-meta">
-              <span class="item-action ep-meta-pill" :style="actionPillStyle(term.action)">
-                {{ term.action === 'delete' ? t('mod.action.delete') : term.action === 'timeout' ? t('mod.action.timeout') :
-                  t('mod.action.ban') }}
-              </span>
-              <span v-if="term.action !== 'delete'" class="item-dur">{{ fmtDur(term.duration) }}</span>
+      <div v-if="!blockedTerms.length && !modGroups.blocked.length" class="ep-empty">{{ t("mod.empty.blocked") }}</div>
+      <template v-else>
+      <template v-for="section in blockedSections" :key="section.group?.id ?? 'ungrouped'">
+        <div class="mod-section" @dragover.prevent @drop="assignGroup('blocked', section.group ? section.group.id : null)">
+          <div v-if="section.group" class="mod-group-header">
+            <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
+              @click="toggleGroupOpen(section.group.id)"></span>
+            <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{ section.group.name }}</span>
+            <span class="item-action ep-meta-pill" :style="actionPillStyle(section.group.action)">{{
+              actionLabel(section.group.action) }}</span>
+            <span v-if="section.group.action !== 'delete'" class="item-dur">{{ fmtDur(section.group.duration) }}</span>
+            <span class="mod-group-count">{{ section.items.length }}</span>
+            <div v-if="canManage" class="ep-row-actions">
+              <button class="ep-btn-action edit" @click.stop="openEditGroup('blocked', section.group)">{{ t("mod.edit")
+              }}</button>
+              <button class="ep-btn-action del" @click.stop="deleteGroup('blocked', section.group.id)">✕</button>
             </div>
           </div>
-          <div class="ep-row-actions">
-            <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
-            }}</button>
-            <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('blocked', term.id)">✕</button>
+          <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
+            :class="{ 'mod-group-members': section.group }">
+            <div v-for="term in section.items" :key="term.id" class="ep-list-row mod-item-row"
+              :class="{ inactive: !term.is_active }" draggable="true" @dragstart="onDragStart(term.id)">
+              <div class="timer-toggle-wrap">
+                <button class="square" :class="{ on: term.is_active, off: !term.is_active, disabled: !canManage }"
+                  @click="toggleActive('blocked', term)" :title="term.is_active ? 'Disable' : 'Enable'"></button>
+              </div>
+              <div class="mod-item-main">
+                <div class="mod-item-title">
+                  <span v-if="term.is_regex" class="item-badge regex-badge">{{ t("mod.badge.regex") }}</span>
+                  <span class="item-term">{{ term.term }}</span>
+                </div>
+                <div v-if="!term.group_id" class="mod-item-meta">
+                  <span class="item-action ep-meta-pill" :style="actionPillStyle(term.action)">{{
+                    actionLabel(term.action) }}</span>
+                  <span v-if="term.action !== 'delete'" class="item-dur">{{ fmtDur(term.duration) }}</span>
+                </div>
+              </div>
+              <div class="ep-row-actions">
+                <button v-if="canManage && term.group_id" class="ep-btn-action" title="Remove from group"
+                  @click.stop="removeFromGroup('blocked', term.id)">⤺</button>
+                <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
+                }}</button>
+                <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('blocked', term.id)">✕</button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </template>
+      </template>
     </template>
 
     <!-- Spam Filters list -->
     <template v-else-if="activeTab === 'spam'">
-      <div v-if="!spamFilters.length" class="ep-empty">{{ t("mod.empty.spam") }}</div>
-      <div v-else class="ep-row-list">
-        <div v-for="f in spamFilters" :key="f.id" class="ep-list-row mod-item-row">
-          <div class="mod-item-main">
-            <div class="spam-label">
-              <span class="spam-name">{{ spamLabel(f).name }}</span>
-              <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
-            </div>
-            <div class="mod-item-meta">
-              <span class="item-action ep-meta-pill" :style="actionPillStyle(f.action)">
-                {{ f.action === 'delete' ? t('mod.action.delete') : f.action === 'timeout' ? t('mod.action.timeout') :
-                  t('mod.action.ban') }}
-              </span>
-              <span v-if="f.action !== 'delete'" class="item-dur">{{ fmtDur(f.duration) }}</span>
+      <div v-if="!spamFilters.length && !modGroups.spam.length" class="ep-empty">{{ t("mod.empty.spam") }}</div>
+      <template v-else>
+      <template v-for="section in spamSections" :key="section.group?.id ?? 'ungrouped'">
+        <div class="mod-section" @dragover.prevent @drop="assignGroup('spam', section.group ? section.group.id : null)">
+          <div v-if="section.group" class="mod-group-header">
+            <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
+              @click="toggleGroupOpen(section.group.id)"></span>
+            <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{ section.group.name }}</span>
+            <span class="item-action ep-meta-pill" :style="actionPillStyle(section.group.action)">{{
+              actionLabel(section.group.action) }}</span>
+            <span v-if="section.group.action !== 'delete'" class="item-dur">{{ fmtDur(section.group.duration) }}</span>
+            <span class="mod-group-count">{{ section.items.length }}</span>
+            <div v-if="canManage" class="ep-row-actions">
+              <button class="ep-btn-action edit" @click.stop="openEditGroup('spam', section.group)">{{ t("mod.edit")
+              }}</button>
+              <button class="ep-btn-action del" @click.stop="deleteGroup('spam', section.group.id)">✕</button>
             </div>
           </div>
-          <div class="ep-row-actions">
-            <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit") }}</button>
-            <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)">✕</button>
+          <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
+            :class="{ 'mod-group-members': section.group }">
+            <div v-for="f in section.items" :key="f.id" class="ep-list-row mod-item-row"
+              :class="{ inactive: !f.is_active }" draggable="true" @dragstart="onDragStart(f.id)">
+              <div class="timer-toggle-wrap">
+                <button class="square" :class="{ on: f.is_active, off: !f.is_active, disabled: !canManage }"
+                  @click="toggleActive('spam', f)" :title="f.is_active ? 'Disable' : 'Enable'"></button>
+              </div>
+              <div class="mod-item-main">
+                <div class="spam-label">
+                  <span class="spam-name">{{ spamLabel(f).name }}</span>
+                  <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
+                </div>
+                <div v-if="!f.group_id" class="mod-item-meta">
+                  <span class="item-action ep-meta-pill" :style="actionPillStyle(f.action)">{{ actionLabel(f.action)
+                  }}</span>
+                  <span v-if="f.action !== 'delete'" class="item-dur">{{ fmtDur(f.duration) }}</span>
+                </div>
+              </div>
+              <div class="ep-row-actions">
+                <button v-if="canManage && f.group_id" class="ep-btn-action" title="Remove from group"
+                  @click.stop="removeFromGroup('spam', f.id)">⤺</button>
+                <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit") }}</button>
+                <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)">✕</button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </template>
+      </template>
     </template>
 
     <!-- Nukes list -->
     <template v-else-if="activeTab === 'nukes'">
-      <div v-if="!nukes.length" class="ep-empty">{{ t("mod.empty.nukes") }}</div>
-      <div v-else class="ep-row-list">
-        <div v-for="n in nukes" :key="n.id" class="ep-list-row nuke-item-row">
-          <div class="nuke-row-badges">
-            <span v-if="n.stay_active" class="item-badge stay-badge" :title="t('mod.nuke.stay_hint')">{{
-              t("mod.badge.stay") }}</span>
-            <span v-if="n.is_regex" class="item-badge regex-badge" :title="t('mod.nuke.regex_hint')">{{
-              t("mod.badge.regex") }}</span>
-            <span v-if="n.match_exact" class="item-badge exact-badge" :title="t('mod.nuke.exact_hint')">{{
-              t("mod.badge.exact") }}</span>
+      <div v-if="!nukes.length && !modGroups.nukes.length" class="ep-empty">{{ t("mod.empty.nukes") }}</div>
+      <template v-else>
+      <template v-for="section in nukeSections" :key="section.group?.id ?? 'ungrouped'">
+        <div class="mod-section" @dragover.prevent @drop="assignGroup('nukes', section.group ? section.group.id : null)">
+          <div v-if="section.group" class="mod-group-header">
+            <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
+              @click="toggleGroupOpen(section.group.id)"></span>
+            <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{ section.group.name }}</span>
+            <span class="item-action ep-meta-pill" :style="actionPillStyle(section.group.action)">{{
+              actionLabel(section.group.action) }}</span>
+            <span v-if="section.group.action !== 'delete'" class="item-dur">{{ fmtDur(section.group.duration) }}</span>
+            <span class="mod-group-count">{{ section.items.length }}</span>
+            <div v-if="canManage" class="ep-row-actions">
+              <button class="ep-btn-action edit" @click.stop="openEditGroup('nukes', section.group)">{{ t("mod.edit")
+              }}</button>
+              <button class="ep-btn-action del" @click.stop="deleteGroup('nukes', section.group.id)">✕</button>
+            </div>
           </div>
-          <span class="item-label">{{ n.label }}</span>
-          <span class="item-term nuke-trigger">{{ n.trigger }}</span>
-          <span class="item-dur">{{ fmtDur(n.duration) }}</span>
-          <!-- Lookback override -->
-          <div class="lookback-wrap">
-            <span class="lookback-lbl">↩</span>
-            <input type="number" min="1" max="1440" :value="nukeLookbackOverride[n.id] ?? n.lookback ?? 30"
-              @input="nukeLookbackOverride[n.id] = parseInt(($event.target as HTMLInputElement).value)"
-              class="ep-field-input lookback-input" :title="t('mod.nuke.lookback')" />
-            <span class="lookback-hint">{{ t("mod.nuke.min") }}</span>
-          </div>
-          <!-- Expiry -->
-          <div v-if="n.stay_active" class="expiry-wrap">
-            <span v-if="n.expires_at" class="expiry-badge"
-              :class="{ expired: nukeExpiresIn(n) === t('mod.nuke.expired') }">
-              {{ nukeExpiresIn(n) === t("mod.nuke.expired") ? t("mod.nuke.expired") : `${t("mod.nuke.expires")}
-              ${nukeExpiresIn(n)}` }}
-              <button v-if="canManage" class="expiry-clear" @click="setNukeExpiry(n, null)">✕</button>
-            </span>
-            <select v-else-if="canManage" class="ep-field-select-sm expiry-select"
-              @change="setNukeExpiry(n, parseInt(($event.target as HTMLSelectElement).value))"
-              :title="t('mod.nuke.expiry')">
-              <option value="0">{{ t("mod.nuke.set_expiry") }}</option>
-              <option value="15">{{ t("mod.nuke.expiry_15") }}</option>
-              <option value="30">{{ t("mod.nuke.expiry_30") }}</option>
-              <option value="60">{{ t("mod.nuke.expiry_1h") }}</option>
-              <option value="120">{{ t("mod.nuke.expiry_2h") }}</option>
-              <option value="240">{{ t("mod.nuke.expiry_4h") }}</option>
-              <option value="480">{{ t("mod.nuke.expiry_8h") }}</option>
-            </select>
-          </div>
-          <div class="ep-row-actions">
-            <button v-if="canManage" class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }"
-              @click="fireNuke(n.id)">
-              {{ nukeConfirm === n.id ? t("mod.nuke.sure") : t("mod.nuke.fire") }}
-            </button>
-            <button v-if="canManage" class="ep-btn-action edit" @click="openEditNuke(n)">{{ t("mod.edit") }}</button>
-            <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('nukes', n.id)">✕</button>
+          <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
+            :class="{ 'mod-group-members': section.group }">
+            <div v-for="n in section.items" :key="n.id" class="ep-list-row nuke-item-row" draggable="true"
+              @dragstart="onDragStart(n.id)">
+              <div class="nuke-row-badges">
+                <span v-if="n.stay_active" class="item-badge stay-badge" :title="t('mod.nuke.stay_hint')">{{
+                  t("mod.badge.stay") }}</span>
+                <span v-if="n.is_regex" class="item-badge regex-badge" :title="t('mod.nuke.regex_hint')">{{
+                  t("mod.badge.regex") }}</span>
+                <span v-if="n.match_exact" class="item-badge exact-badge" :title="t('mod.nuke.exact_hint')">{{
+                  t("mod.badge.exact") }}</span>
+              </div>
+              <span class="item-label">{{ n.label }}</span>
+              <span class="item-term nuke-trigger">{{ n.trigger }}</span>
+              <span v-if="!n.group_id" class="item-dur">{{ fmtDur(n.duration) }}</span>
+              <!-- Lookback override -->
+              <div class="lookback-wrap">
+                <span class="lookback-lbl">↩</span>
+                <input type="number" min="1" max="1440" :value="nukeLookbackOverride[n.id] ?? n.lookback ?? 30"
+                  @input="nukeLookbackOverride[n.id] = parseInt(($event.target as HTMLInputElement).value)"
+                  class="ep-field-input lookback-input" :title="t('mod.nuke.lookback')" />
+                <span class="lookback-hint">{{ t("mod.nuke.min") }}</span>
+              </div>
+              <!-- Expiry -->
+              <div v-if="n.stay_active" class="expiry-wrap">
+                <span v-if="n.expires_at" class="expiry-badge"
+                  :class="{ expired: nukeExpiresIn(n) === t('mod.nuke.expired') }">
+                  {{ nukeExpiresIn(n) === t("mod.nuke.expired") ? t("mod.nuke.expired") : `${t("mod.nuke.expires")}
+                  ${nukeExpiresIn(n)}` }}
+                  <button v-if="canManage" class="expiry-clear" @click="setNukeExpiry(n, null)">✕</button>
+                </span>
+                <select v-else-if="canManage" class="ep-field-select-sm expiry-select"
+                  @change="setNukeExpiry(n, parseInt(($event.target as HTMLSelectElement).value))"
+                  :title="t('mod.nuke.expiry')">
+                  <option value="0">{{ t("mod.nuke.set_expiry") }}</option>
+                  <option value="15">{{ t("mod.nuke.expiry_15") }}</option>
+                  <option value="30">{{ t("mod.nuke.expiry_30") }}</option>
+                  <option value="60">{{ t("mod.nuke.expiry_1h") }}</option>
+                  <option value="120">{{ t("mod.nuke.expiry_2h") }}</option>
+                  <option value="240">{{ t("mod.nuke.expiry_4h") }}</option>
+                  <option value="480">{{ t("mod.nuke.expiry_8h") }}</option>
+                </select>
+              </div>
+              <div class="ep-row-actions">
+                <button v-if="canManage && n.group_id" class="ep-btn-action" title="Remove from group"
+                  @click.stop="removeFromGroup('nukes', n.id)">⤺</button>
+                <button v-if="canManage" class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }"
+                  @click="fireNuke(n.id)">
+                  {{ nukeConfirm === n.id ? t("mod.nuke.sure") : t("mod.nuke.fire") }}
+                </button>
+                <button v-if="canManage" class="ep-btn-action edit" @click="openEditNuke(n)">{{ t("mod.edit") }}</button>
+                <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('nukes', n.id)">✕</button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </template>
+      </template>
     </template>
   </div>
 
@@ -879,6 +1117,59 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       </div>
     </div>
   </Teleport>
+
+  <!-- Group panel -->
+  <Teleport to="body">
+    <div v-if="groupPanelOpen" class="ep-overlay" @click.self="groupPanelOpen = false">
+      <div class="ep-panel">
+        <div class="ep-panel-header">
+          <div>
+            <div class="ep-panel-title">
+              {{ editingGroupId ? t("mod.group.edit") : t("mod.group.new") }}
+              <span class="ep-panel-tab-label">
+                {{ groupPanelTab === 'blocked' ? t('mod.tab.blocked') : groupPanelTab === 'spam' ? t('mod.tab.spam') :
+                  t('mod.tab.nukes') }}
+              </span>
+            </div>
+            <div class="ep-panel-sub">#{{ session?.channel }}</div>
+          </div>
+          <button class="ep-panel-close" @click="groupPanelOpen = false">✕</button>
+        </div>
+        <div class="ep-panel-body">
+          <div class="ep-field-group">
+            <label class="ep-field-label">{{ t("mod.group.name") }} <span class="ep-field-hint">{{
+              t("mod.group.name_hint") }}</span></label>
+            <input v-model="gName" class="ep-field-input" :placeholder="t('mod.group.name_placeholder')" />
+          </div>
+          <div class="ep-field-group">
+            <label class="ep-field-label">{{ t("mod.field.action") }}</label>
+            <select v-model="gAction" class="ep-field-select">
+              <option value="delete">{{ t("mod.action.delete") }}</option>
+              <option value="timeout">{{ t("mod.action.timeout") }}</option>
+              <option value="ban">{{ t("mod.action.ban") }}</option>
+            </select>
+          </div>
+          <div v-if="gAction !== 'delete'" class="ep-field-group">
+            <label class="ep-field-label">{{ t("mod.field.duration") }} <span class="ep-field-hint">s</span></label>
+            <input v-model.number="gDuration" type="number" min="1" class="ep-field-input" />
+          </div>
+        </div>
+        <div class="ep-panel-footer">
+          <button v-if="editingGroupId" class="ep-btn-delete" :disabled="saving"
+            @click="deleteGroup(groupPanelTab, editingGroupId); groupPanelOpen = false">
+            {{ t("mod.panel.delete") }}
+          </button>
+          <div v-else></div>
+          <div class="ep-footer-right">
+            <button class="ep-btn-cancel" @click="groupPanelOpen = false">{{ t("mod.panel.cancel") }}</button>
+            <button class="ep-btn-save" @click="saveGroup" :disabled="saving || !gName">
+              {{ saving ? '…' : t("mod.panel.save") }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -895,6 +1186,52 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 .nuke-hint strong {
   color: #888;
   font-weight: 600
+}
+
+/* Groups */
+.mod-section {
+  display: flex;
+  flex-direction: column;
+}
+.mod-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #1c1c20;
+  border-bottom: 1px solid #1e1e1e;
+  cursor: pointer;
+}
+.mod-group-chevron {
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid #888;
+  border-bottom: 1.5px solid #888;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+  flex-shrink: 0;
+}
+.mod-group-chevron.open {
+  transform: rotate(45deg);
+}
+.mod-group-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mod-group-count {
+  font-size: 10px;
+  color: #555;
+  flex-shrink: 0;
+}
+.mod-group-members {
+  border-left: 2px solid #2a2a30;
+  margin-left: 20px;
 }
 
 /* list rows */
@@ -916,6 +1253,10 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.timer-toggle-wrap {
+  flex-shrink: 0;
 }
 
 .mod-item-main {
