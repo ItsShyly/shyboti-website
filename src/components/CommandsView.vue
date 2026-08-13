@@ -1128,7 +1128,7 @@ onUnmounted(() => {
           <div class="empty-icon">✦</div>
           <div class="empty-title">{{ t("cmd.empty.title") }}</div>
           <div class="empty-sub">{{ t("cmd.empty.sub") }}</div>
-          <button class="ep-btn-new" @click="startCreate">
+          <button v-if="canEdit" class="ep-btn-new" @click="startCreate">
             + {{ t("cmd.new") }}
           </button>
         </div>

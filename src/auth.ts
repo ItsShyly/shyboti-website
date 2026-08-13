@@ -196,6 +196,11 @@ export function useAuth() {
     if (!session.value?.isAdmin) return;
     adminMode.value = !adminMode.value;
     localStorage.setItem("shyboti_admin_mode", adminMode.value ? "1" : "0");
+    // >>> Turning admin mode off while admin-moded into someone else's channel shouldn't leave you sitting there with full access and no visible
+    // indication
+    if (!adminMode.value && session.value.channel !== session.value.login) {
+      switchChannel(session.value.login);
+    }
   }
 
   return {

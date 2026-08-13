@@ -320,7 +320,7 @@ function buildStaticIndex(): SearchResult[] {
 
   // >>> Uploads/Images/Notes hold the broadcaster's own personal content, so
   // >>> hide them from search the same way the sidebar link/route are hidden
-  if (adminMode.value && viewingOtherChannel.value) {
+  if (viewingOtherChannel.value) {
     return items.filter(
       (i) => !["Uploads", "Images", "Notes"].includes(i.label),
     );
@@ -953,7 +953,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
           {{ t("nav.logs") }}
         </button>
-        <button v-if="!(adminMode && viewingOtherChannel)" class="sidebar-btn"
+        <button v-if="!viewingOtherChannel" class="sidebar-btn"
           :class="{ active: activeRoute === 'uploads' }" @click="nav('uploads')">
           Uploads
         </button>

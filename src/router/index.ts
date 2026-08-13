@@ -5,10 +5,11 @@ import RouteLoading from "../components/shared/RouteLoading.vue";
 import { routeLoadSignal } from "../composables/routeLoadSignal";
 import { useAuth } from "../auth";
 
-// >>> Off-limits to an admin god-moded into someone else's channel - these hold
-// >>> the broadcaster's own uploaded/personal content, not channel config, so
-// >>> admin mode (full config access everywhere else) deliberately excludes them
-const ADMIN_MODE_BLOCKED_PATHS = ["/obs-control", "/uploads", "/images", "/notes"];
+// >>> Personal content (owned by the logged-in user, not scoped to whichever channel is currently selected)
+const OWN_CHANNEL_ONLY_PATHS = ["/uploads", "/images", "/notes"];
+
+// >>> Additionally off-limits specifically while admin-moded via admin mode
+const ADMIN_MODE_BLOCKED_PATHS = ["/obs-control"];
 
 // >>> defineAsyncComponent for navigation
 function lazy(loader: () => Promise<any>) {
@@ -93,11 +94,20 @@ const router = createRouter({
 });
 
 router.beforeEach((to) => {
-  if (!ADMIN_MODE_BLOCKED_PATHS.includes(to.path)) return true;
   const { session, adminMode } = useAuth();
   const viewingOtherChannel =
     !!session.value && session.value.login !== session.value.channel;
-  if (adminMode.value && viewingOtherChannel) return "/dashboard";
+
+  if (OWN_CHANNEL_ONLY_PATHS.includes(to.path) && viewingOtherChannel) {
+    return "/dashboard";
+  }
+  if (
+    ADMIN_MODE_BLOCKED_PATHS.includes(to.path) &&
+    adminMode.value &&
+    viewingOtherChannel
+  ) {
+    return "/dashboard";
+  }
   return true;
 });
 
