@@ -626,14 +626,12 @@ async function onAddCategorySelect(item: TypeaheadItem) {
         box_art_url: item.iconUrl ?? "",
       }),
     });
+    // >>> item.iconUrl is the low-res search thumbnail (instant paint above)
+    await loadCategoryHistory();
   } catch { }
 }
 
-// >>> name/boxArt are only needed for the optimistic update (existing cards
-// >>> already have them; the add-picker passes them from the search result) -
-// >>> updates the strip immediately instead of waiting on a re-fetch, which
-// >>> was the "takes 20 seconds" complaint (webhook-driven log entry can lag
-// >>> a few seconds behind the actual Twitch category switch)
+// >>> name/boxArt are only needed for the optimistic update 
 async function switchCategory(categoryId: string, name?: string, boxArt?: string) {
   if (!session.value || !canFilterScenes.value || switchingCategory.value) return;
   switchingCategory.value = categoryId;
