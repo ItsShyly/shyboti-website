@@ -227,8 +227,8 @@ onMounted(() => {
       <div class="add-row">
         <input v-model="newUsername" class="username-input" :placeholder="t('roles.username_placeholder')"
           @keydown.enter="addUser" />
-        <button class="copy-btn" @click="copyModDefaults">{{ t("roles.copy_mod") }}</button>
-        <button class="copy-btn" @click="copyVipDefaults">{{ t("roles.copy_vip") }}</button>
+        <button v-if="newUsername.trim()" class="copy-btn" @click="copyModDefaults">{{ t("roles.copy_mod") }}</button>
+        <button v-if="newUsername.trim()" class="copy-btn" @click="copyVipDefaults">{{ t("roles.copy_vip") }}</button>
         <button class="add-btn" :disabled="!newUsername.trim() || adding" @click="addUser">
           {{ t("roles.add_user") }}
         </button>
