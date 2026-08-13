@@ -1263,24 +1263,6 @@ watch(
             </div>
           </div>
 
-          <div v-if="agentConnected" class="ep-field-group">
-            <label class="ep-field-label">Disconnect agent</label>
-            <button class="ep-btn-delete" :class="{ confirm: disconnectConfirm }" :disabled="disconnectingAgent"
-              @click="disconnectAgent">
-              {{
-                disconnectingAgent
-                  ? "disconnecting..."
-                  : disconnectConfirm
-                    ? "click again to confirm"
-                    : "disconnect agent"
-              }}
-            </button>
-            <div class="ep-field-hint">
-              Shuts down the agent process on your PC. Run the launcher again
-              to reconnect.
-            </div>
-          </div>
-
           <div class="ep-field-group">
             <label class="ep-field-label">Scene previews</label>
             <div class="obs-toggle-row">
@@ -1305,6 +1287,24 @@ watch(
             <div class="ep-field-hint">
               Only you (the broadcaster) can change this - moderators can see
               previews if they're on, but can't turn them on or off.
+            </div>
+          </div>
+
+          <div v-if="agentConnected" class="ep-field-group">
+            <label class="ep-field-label">Disconnect agent</label>
+            <button class="ep-btn-delete" :class="{ confirm: disconnectConfirm }" :disabled="disconnectingAgent"
+              @click="disconnectAgent">
+              {{
+                disconnectingAgent
+                  ? "disconnecting..."
+                  : disconnectConfirm
+                    ? "click again to confirm"
+                    : "disconnect agent"
+              }}
+            </button>
+            <div class="ep-field-hint">
+              Shuts down the agent process on your PC. Run the launcher again
+              to reconnect.
             </div>
           </div>
 
