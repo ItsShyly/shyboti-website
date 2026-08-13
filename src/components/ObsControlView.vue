@@ -598,31 +598,87 @@ async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
     return [];
   }
 }
+// >>> just adds it to the strip - does NOT switch the live category. It won't
+// >>> get an .active border since it isn't actually live; click it later to switch.
 async function onAddCategorySelect(item: TypeaheadItem) {
   showAddCategory.value = false;
   addCategoryQuery.value = "";
-  if (item.id) await switchCategory(item.id);
+  if (!item.id || !session.value || !canFilterScenes.value) return;
+
+  const entry: CategoryHistoryEntry = {
+    category_id: item.id,
+    category_name: item.label,
+    box_art_url: item.iconUrl ?? "",
+    changed_at: Date.now(),
+  };
+  categoryHistory.value = [
+    entry,
+    ...categoryHistory.value.filter((c) => c.category_id !== item.id),
+  ].slice(0, MAX_CATEGORY_CARDS);
+
+  try {
+    await fetch(`${API}/obs/${session.value.channel}/category-history`, {
+      method: "POST",
+      headers: { ...authHeaders.value, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category_id: item.id,
+        category_name: item.label,
+        box_art_url: item.iconUrl ?? "",
+      }),
+    });
+  } catch { }
 }
 
-async function switchCategory(categoryId: string) {
+// >>> name/boxArt are only needed for the optimistic update (existing cards
+// >>> already have them; the add-picker passes them from the search result) -
+// >>> updates the strip immediately instead of waiting on a re-fetch, which
+// >>> was the "takes 20 seconds" complaint (webhook-driven log entry can lag
+// >>> a few seconds behind the actual Twitch category switch)
+async function switchCategory(categoryId: string, name?: string, boxArt?: string) {
   if (!session.value || !canFilterScenes.value || switchingCategory.value) return;
   switchingCategory.value = categoryId;
   categorySwitchError.value = "";
+
+  const existing = categoryHistory.value.find((c) => c.category_id === categoryId);
+  const entry: CategoryHistoryEntry = {
+    category_id: categoryId,
+    category_name: name ?? existing?.category_name ?? "",
+    box_art_url: boxArt ?? existing?.box_art_url ?? "",
+    changed_at: Date.now(),
+  };
+  categoryHistory.value = [
+    entry,
+    ...categoryHistory.value.filter((c) => c.category_id !== categoryId),
+  ].slice(0, MAX_CATEGORY_CARDS);
+  currentCategoryId.value = categoryId;
+
   try {
     const res = await fetch(`${API}/obs/${session.value.channel}/category`, {
       method: "POST",
       headers: { ...authHeaders.value, "Content-Type": "application/json" },
       body: JSON.stringify({ category_id: categoryId }),
     });
-    if (res.ok) await loadCategoryHistory();
-    else {
+    if (!res.ok) {
       const d = (await res.json().catch(() => ({}))) as { error?: string };
       categorySwitchError.value = d.error ?? "Could not switch category";
+      await loadCategoryHistory(); // <<< roll back the optimistic update
     }
   } catch {
     categorySwitchError.value = "Could not switch category";
+    await loadCategoryHistory();
   }
   switchingCategory.value = null;
+}
+
+async function removeCategory(categoryId: string) {
+  if (!session.value || !canFilterScenes.value) return;
+  categoryHistory.value = categoryHistory.value.filter((c) => c.category_id !== categoryId);
+  try {
+    await fetch(
+      `${API}/obs/${session.value.channel}/category-history/${encodeURIComponent(categoryId)}`,
+      { method: "DELETE", headers: authHeaders.value },
+    );
+  } catch { }
 }
 
 async function copyToken() {
@@ -1048,7 +1104,6 @@ watch(
     <div class="obsconn-header">
       <div>
         <div class="obsconn-title">OBS Control</div>
-        <div class="obsconn-sub">#{{ session?.channel }}</div>
       </div>
       <div class="obsconn-header-right">
         <div class="obs-status-bar" :class="connStatusClass">
@@ -1056,6 +1111,9 @@ watch(
           <span class="obs-status-text">{{ connStatusLabel }}</span>
           <span v-if="agentStatus?.version" class="obs-status-version">v{{ agentStatus.version }}</span>
         </div>
+        <button v-if="obsConnected && canFilterScenes" class="obs-refresh-btn" @click="refreshScenes"
+          title="Refresh scene list"> ↻
+        </button>
         <button v-if="obsConnected && canFilterScenes" class="obsconn-gear-btn" title="Filter scenes"
           @click="openFilter">
           <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -1117,55 +1175,51 @@ watch(
       <template v-if="agentConnected && obsConnected">
         <div class="ep-field-group">
           <div class="ep-field-label obs-section-label">
-            Scenes
-            <button class="obs-refresh-btn" @click="refreshScenes" title="Refresh scene list">
-              ↻
-            </button>
           </div>
           <div class="obs-scenes">
             <div class="obs-scenes-live-row" v-if="liveScene">
-             <div class="obs-live-scene-wrap">
-              <div class="obs-scene-card obs-scene-card-live active"
-                :class="{ picked: liveScene.sceneName === selectedScene }" @click="switchScene(liveScene.sceneName)">
-                <div class="obs-scene-thumb">
-                  <img v-if="sceneShots[liveScene.sceneName]" :src="sceneShots[liveScene.sceneName]"
-                    :alt="liveScene.sceneName" />
-                  <div v-else class="obs-scene-thumb-empty">
-                    {{ agentStatus?.screenshots ? "…" : "previews off" }}
+              <div class="obs-live-scene-wrap">
+                <div class="obs-scene-card obs-scene-card-live active"
+                  :class="{ picked: liveScene.sceneName === selectedScene }" @click="switchScene(liveScene.sceneName)">
+                  <div class="obs-scene-thumb">
+                    <img v-if="sceneShots[liveScene.sceneName]" :src="sceneShots[liveScene.sceneName]"
+                      :alt="liveScene.sceneName" />
+                    <div v-else class="obs-scene-thumb-empty">
+                      {{ agentStatus?.screenshots ? "…" : "previews off" }}
+                    </div>
+                  </div>
+                  <div class="obs-scene-name">{{ liveScene.sceneName }}</div>
+                  <div class="obs-scene-live">live</div>
+                </div>
+                <div class="obs-live-stats">
+                  <div class="obs-live-stat" :class="{ bad: bitrateBad }">
+                    <span class="obs-live-stat-label">bitrate</span>
+                    <span class="obs-live-stat-value">{{
+                      bitrateLabel ?? "not streaming"
+                    }}</span>
+                  </div>
+                  <div class="obs-live-stat">
+                    <span class="obs-live-stat-label">preview size</span>
+                    <span class="obs-live-stat-value">{{
+                      liveShotStats.kb != null
+                        ? liveShotStats.kb + " kb"
+                        : agentStatus?.screenshots
+                          ? "--"
+                          : "off"
+                    }}</span>
+                  </div>
+                  <div class="obs-live-stat">
+                    <span class="obs-live-stat-label">preview cpu</span>
+                    <span class="obs-live-stat-value">{{
+                      liveShotStats.cpuMs != null
+                        ? liveShotStats.cpuMs + " ms"
+                        : agentStatus?.screenshots
+                          ? "--"
+                          : "off"
+                    }}</span>
                   </div>
                 </div>
-                <div class="obs-scene-name">{{ liveScene.sceneName }}</div>
-                <div class="obs-scene-live">live</div>
               </div>
-              <div class="obs-live-stats">
-                <div class="obs-live-stat" :class="{ bad: bitrateBad }">
-                  <span class="obs-live-stat-label">bitrate</span>
-                  <span class="obs-live-stat-value">{{
-                    bitrateLabel ?? "not streaming"
-                  }}</span>
-                </div>
-                <div class="obs-live-stat">
-                  <span class="obs-live-stat-label">preview size</span>
-                  <span class="obs-live-stat-value">{{
-                    liveShotStats.kb != null
-                      ? liveShotStats.kb + " kb"
-                      : agentStatus?.screenshots
-                        ? "--"
-                        : "off"
-                  }}</span>
-                </div>
-                <div class="obs-live-stat">
-                  <span class="obs-live-stat-label">preview cpu</span>
-                  <span class="obs-live-stat-value">{{
-                    liveShotStats.cpuMs != null
-                      ? liveShotStats.cpuMs + " ms"
-                      : agentStatus?.screenshots
-                        ? "--"
-                        : "off"
-                  }}</span>
-                </div>
-              </div>
-             </div>
             </div>
             <div class="obs-scenes-others">
               <div v-for="s in nonLiveScenes" :key="s.sceneName" class="obs-scene-card"
@@ -1283,17 +1337,18 @@ watch(
           <label class="ep-field-label">Switch categories</label>
           <div class="obs-category-strip">
             <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
-              :class="{ disabled: !canFilterScenes, active: c.category_id === currentCategoryId }"
+              :class="{ disabled: !canFilterScenes, active: c.category_id === currentCategoryId, switching: switchingCategory === c.category_id }"
               :disabled="switchingCategory === c.category_id" :title="c.category_name"
-              @click="switchCategory(c.category_id)">
+              @click="switchCategory(c.category_id, c.category_name, c.box_art_url)">
+              <span v-if="canFilterScenes" class="obs-category-remove" title="Remove"
+                @click.stop="removeCategory(c.category_id)">×</span>
               <img v-if="c.box_art_url" :src="c.box_art_url" :alt="c.category_name" />
               <div v-else class="obs-category-empty">{{ c.category_name.slice(0, 2) }}</div>
               <span class="obs-category-name">{{ c.category_name }}</span>
             </button>
             <template v-if="canFilterScenes">
-              <button v-for="n in emptyCategorySlots" :key="'empty' + n"
-                class="obs-category-card obs-category-add" title="Add a category"
-                @click="showAddCategory = true">
+              <button v-for="n in emptyCategorySlots" :key="'empty' + n" class="obs-category-card obs-category-add"
+                title="Add a category" @click="showAddCategory = true">
                 <div class="obs-category-empty obs-category-plus">+</div>
               </button>
             </template>
@@ -2327,6 +2382,33 @@ watch(
   background: transparent;
   cursor: pointer;
   font-family: inherit;
+  position: relative;
+}
+
+.obs-category-remove {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(13, 13, 16, 0.85);
+  border: 1px solid #2a2a30;
+  color: #888;
+  font-size: 12px;
+  line-height: 1;
+  z-index: 1;
+}
+
+.obs-category-remove:hover {
+  border-color: #f14949;
+  color: #f14949;
+}
+
+.obs-category-card.switching {
+  opacity: 0.6;
 }
 
 .obs-category-card img,
