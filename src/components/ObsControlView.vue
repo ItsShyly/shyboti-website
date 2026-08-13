@@ -1365,18 +1365,17 @@ watch(
 
         <div class="ep-panel-body">
           <div class="ep-field-group">
-            <label class="ep-field-label">Scenes shown in "others"</label>
+            <label class="ep-field-label">Which scenes to show?</label>
             <div class="ep-field-hint">
-              Unchecked scenes stay out of the others row and don't get
-              screenshotted - unless they go live, then they show up like
-              normal until they're not live anymore.
+              Unchecked scenes stay out of the scenes unless live - saves resources aswell
             </div>
             <div class="obs-filter-list">
-              <label v-for="s in scenes" :key="s.sceneName" class="obs-filter-row">
-                <input type="checkbox" :checked="!hiddenScenes.has(s.sceneName)"
-                  @change="toggleSceneHidden(s.sceneName)" />
+              <div v-for="s in scenes" :key="s.sceneName" class="ep-list-row"
+                :class="{ inactive: hiddenScenes.has(s.sceneName) }">
+                <div class="square" :class="hiddenScenes.has(s.sceneName) ? 'off' : 'on'"
+                  @click="toggleSceneHidden(s.sceneName)"></div>
                 <span>{{ s.sceneName }}</span>
-              </label>
+              </div>
               <div v-if="!scenes.length" class="ep-field-hint">no scenes loaded yet</div>
             </div>
           </div>
@@ -1985,29 +1984,19 @@ watch(
 .obs-filter-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
   margin-top: 8px;
   max-height: 320px;
   overflow-y: auto;
+  border: 1px solid #1e1e1e;
 }
 
-.obs-filter-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 4px;
+.obs-filter-list .ep-list-row {
   font-size: 13px;
   color: #ccc;
-  cursor: pointer;
 }
 
-.obs-filter-row:hover {
-  background: #1a1a1e;
-}
-
-.obs-filter-row input[type="checkbox"] {
-  accent-color: #9d6cff;
-  cursor: pointer;
+.obs-filter-list .ep-list-row:last-child {
+  border-bottom: none;
 }
 
 .obs-toggle {
