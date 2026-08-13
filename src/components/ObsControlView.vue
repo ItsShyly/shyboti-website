@@ -1124,6 +1124,7 @@ watch(
           </div>
           <div class="obs-scenes">
             <div class="obs-scenes-live-row" v-if="liveScene">
+             <div class="obs-live-scene-wrap">
               <div class="obs-scene-card obs-scene-card-live active"
                 :class="{ picked: liveScene.sceneName === selectedScene }" @click="switchScene(liveScene.sceneName)">
                 <div class="obs-scene-thumb">
@@ -1164,6 +1165,7 @@ watch(
                   }}</span>
                 </div>
               </div>
+             </div>
             </div>
             <div class="obs-scenes-others">
               <div v-for="s in nonLiveScenes" :key="s.sceneName" class="obs-scene-card"
@@ -1920,9 +1922,13 @@ watch(
   display: flex;
   justify-content: center;
   align-items: stretch;
-  gap: 14px;
   width: 100%;
-  flex-wrap: wrap;
+}
+
+/* >>> sizes exactly to the live scene card (stats is positioned out of flow
+   inside it), so centering the row centers the card, not the card+stats pair */
+.obs-live-scene-wrap {
+  position: relative;
 }
 
 .obs-scenes-others {
@@ -2843,12 +2849,18 @@ watch(
     width: calc(50% - 4px);
   }
 
-  .obs-scenes-live-row {
+  .obs-live-scene-wrap {
+    display: flex;
     flex-direction: column;
     align-items: center;
+    width: 100%;
   }
 
   .obs-live-stats {
+    position: static;
+    transform: none;
+    margin-left: 0;
+    margin-top: 14px;
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
@@ -2927,6 +2939,13 @@ watch(
   gap: 8px;
   min-width: 130px;
   flex-shrink: 0;
+  /* >>> taken out of flow, anchored to .obs-live-scene-wrap - so it can't
+     pull the live scene card off-center, regardless of the card's own width */
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 14px;
 }
 
 .obs-live-stat {
