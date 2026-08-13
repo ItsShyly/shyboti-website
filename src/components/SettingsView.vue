@@ -350,7 +350,6 @@ async function doDeleteAllData() {
       <!-- Command Prefix - broadcaster only -->
       <div class="card" v-if="isBroadcaster">
         <div class="card-header">
-          <div class="card-icon">&#9000;</div>
           <div class="card-title">{{ t("settings.prefix.title") }}</div>
           <div class="card-sub">
             {{ t("settings.prefix.sub") }} <code class="code">{{ prefix }}</code>command.
@@ -381,7 +380,6 @@ async function doDeleteAllData() {
       <!-- Log Opt-Out - all users -->
       <div class="card">
         <div class="card-header">
-          <div class="card-icon">&#128065;</div>
           <div class="card-title">{{ t("settings.optout.title") }}</div>
           <div class="card-sub">{{ t("settings.optout.sub") }}</div>
         </div>
@@ -420,7 +418,6 @@ async function doDeleteAllData() {
       <!-- Name History Opt-Out -->
       <div class="card">
         <div class="card-header">
-          <div class="card-icon">&#128221;</div>
           <div class="card-title">Previous Usernames</div>
           <div class="card-sub">
             Hide your previous Twitch usernames from being shown on other users'
@@ -457,7 +454,6 @@ async function doDeleteAllData() {
       <!-- Hide Vanish Timeouts - broadcaster only -->
       <div class="card" v-if="isBroadcaster">
         <div class="card-header">
-          <div class="card-icon">&#128168;</div>
           <div class="card-title">Hide Vanish Timeouts</div>
           <div class="card-sub">
             Hides short timeouts from the dashboard when the user typed a vanish
@@ -636,7 +632,6 @@ async function doDeleteAllData() {
       <!-- Show all hidden Infos again - all users -->
       <div class="card">
         <div class="card-header">
-          <div class="card-icon">&#128161;</div>
           <div class="card-title">Hidden Tips</div>
           <div class="card-sub">
             Restore all info tips you've dismissed (e.g. the snippet hint in
