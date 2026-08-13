@@ -1128,35 +1128,34 @@ watch(
           </svg>
           <span v-if="!loading && !agentStatus?.paired" class="obs-gear-badge" title="OBS agent not set up yet">!</span>
         </button>
-      </div>
-    </div>
-
-    <div class="obs-live-stats">
-      <div class="obs-live-stat" :class="{ bad: bitrateBad }">
-        <span class="obs-live-stat-label">bitrate</span>
-        <span class="obs-live-stat-value">{{
-          bitrateLabel ?? "not streaming"
-          }}</span>
-      </div>
-      <div class="obs-live-stat">
-        <span class="obs-live-stat-label">preview size</span>
-        <span class="obs-live-stat-value">{{
-          liveShotStats.kb != null
-            ? liveShotStats.kb + " kb"
-            : agentStatus?.screenshots
-              ? "--"
-              : "off"
-          }}</span>
-      </div>
-      <div class="obs-live-stat">
-        <span class="obs-live-stat-label">preview cpu</span>
-        <span class="obs-live-stat-value">{{
-          liveShotStats.cpuMs != null
-            ? liveShotStats.cpuMs + " ms"
-            : agentStatus?.screenshots
-              ? "--"
-              : "off"
-          }}</span>
+        <div class="obs-live-stats">
+          <div class="obs-live-stat" :class="{ bad: bitrateBad }">
+            <span class="obs-live-stat-label">bitrate</span>
+            <span class="obs-live-stat-value">{{
+              bitrateLabel ?? "not streaming"
+              }}</span>
+          </div>
+          <div class="obs-live-stat">
+            <span class="obs-live-stat-label">preview size</span>
+            <span class="obs-live-stat-value">{{
+              liveShotStats.kb != null
+                ? liveShotStats.kb + " kb"
+                : agentStatus?.screenshots
+                  ? "--"
+                  : "off"
+              }}</span>
+          </div>
+          <div class="obs-live-stat">
+            <span class="obs-live-stat-label">preview cpu</span>
+            <span class="obs-live-stat-value">{{
+              liveShotStats.cpuMs != null
+                ? liveShotStats.cpuMs + " ms"
+                : agentStatus?.screenshots
+                  ? "--"
+                  : "off"
+              }}</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1600,6 +1599,7 @@ watch(
 }
 
 .obsconn-header {
+  position: relative;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -2941,7 +2941,12 @@ watch(
   }
 
   .obs-live-stats {
+    position: static;
+    margin-top: 10px;
+    flex-direction: row;
+    flex-wrap: wrap;
     justify-content: center;
+    width: 100%;
   }
 
   .obs-live-stat {
@@ -3007,13 +3012,16 @@ watch(
   }
 }
 
-/* Bitrate/preview stats row, under the header */
+/* Bitrate/preview stats, floats under the header without taking layout space */
 .obs-live-stats {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
   display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 10px 0;
+  flex-direction: column;
+  gap: 6px;
+  z-index: 5;
 }
 
 .obs-live-stat {
