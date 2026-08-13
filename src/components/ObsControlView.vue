@@ -1194,7 +1194,7 @@ watch(
                     <span class="obs-live-stat-label">bitrate</span>
                     <span class="obs-live-stat-value">{{
                       bitrateLabel ?? "not streaming"
-                    }}</span>
+                      }}</span>
                   </div>
                   <div class="obs-live-stat">
                     <span class="obs-live-stat-label">preview size</span>
@@ -1258,7 +1258,7 @@ watch(
             <label class="ep-field-label">sources
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obs-source-list">
               <div v-for="src in sources as any[]" :key="src.sceneItemId" class="obs-source-row">
                 <span class="obs-source-name">{{ src.sourceName }}</span>
@@ -1287,7 +1287,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row">
                 <div class="obs-mixer-top">
@@ -1331,7 +1331,7 @@ watch(
           </div>
         </template>
 
-        <div v-if="agentStatus?.paired" class="ep-field-group obs-box obs-box-builder">
+        <div v-if="agentStatus?.paired" class="ep-field-group obs-box obs-box-cat">
           <label class="ep-field-label">Switch categories</label>
           <div class="obs-category-strip">
             <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
@@ -2345,10 +2345,11 @@ watch(
   max-width: 400px;
 }
 
-.obs-box-builder {
+.obs-box-cat {
   flex: 0 0 590px;
   max-width: 590px;
   width: 590px;
+  max-height: 200px
 }
 
 .obs-box-links {
@@ -2356,6 +2357,7 @@ watch(
   max-width: 180px;
   width: 180px;
   gap: 8px;
+  max-height: 200px
 }
 
 .obs-link-btn {
@@ -2904,7 +2906,7 @@ watch(
   }
 
   .obs-box,
-  .obs-box-builder,
+  .obs-box-cat,
   .obs-box-links {
     max-width: 100%;
     width: 100%;
@@ -3007,7 +3009,7 @@ watch(
     overflow-x: auto;
   }
 
-  .obs-box-builder {
+  .obs-box-cat {
     padding: 12px;
   }
 }
