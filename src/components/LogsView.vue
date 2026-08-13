@@ -19,23 +19,23 @@ import {
 } from "../composables/useLogsSearch";
 import { VueDatePicker } from "@vuepic/vue-datepicker";
 import "@vuepic/vue-datepicker/dist/main.css";
-// vue-virtual-scroller removed 
+// >>> vue-virtual-scroller removed, rolled our own below
 const _rowDomCache = new Map<string, Element>();
 const _ROW_CACHE_MAX = 600;
 
 function _applyCachedHtml(el: HTMLElement, id: string, html: string) {
-  if (el.dataset.cid === id) return; // same item → nothing to do
+  if (el.dataset.cid === id) return; // <<< same item, nothing to do
 
-  // detach old content and save to cache
+  // >>> detach old content into cache
   const oldId = el.dataset.cid;
   if (oldId && el.firstElementChild) {
     _rowDomCache.set(oldId, el.removeChild(el.firstElementChild) as Element);
   }
-  while (el.lastChild) el.removeChild(el.lastChild); // clear leftovers
+  while (el.lastChild) el.removeChild(el.lastChild); // <<< clear leftovers
 
   el.dataset.cid = id;
 
-  // restore from cache or create new
+  // >>> restore from cache or create new
   const cached = _rowDomCache.get(id);
   if (cached) {
     el.appendChild(cached);
@@ -44,7 +44,7 @@ function _applyCachedHtml(el: HTMLElement, id: string, html: string) {
     if (el.firstElementChild) _rowDomCache.set(id, el.firstElementChild);
   }
 
-  // simple eviction: drop oldest entries
+  // >>> simple eviction: drop oldest entries
   while (_rowDomCache.size > _ROW_CACHE_MAX) {
     const first = _rowDomCache.keys().next().value;
     if (first === undefined) break;
@@ -68,12 +68,7 @@ const vCachedHtml: Directive<HTMLElement, { id: string; html: string }> = {
   },
 };
 
-// ─── Scroll / render timing logs ─────────────────────────────────────────────
-// Set any of these to true in the browser console to enable that category:
-//   window.__logsDbg.rowMount   = true
-//   window.__logsDbg.rowActive  = true
-//   window.__logsDbg.badgeLoad  = true
-//   window.__logsDbg.recycleEvt = true
+// >>> toggle window.__logsDbg.{rowMount,rowActive,badgeLoad,recycleEvt} in console to debug
 const _dbgDefaults = {
   rowMount: false,
   rowActive: false,
@@ -93,11 +88,9 @@ function dbg(category: keyof typeof _dbgDefaults): boolean {
   );
 }
 
-// Row DOM lifecycle timing.
-// rowMounted  → row first created (pool expansion, not scroll-recycle)
-// rowBeforeUpdate + rowUpdated → row recycled for a new item on scroll (most common case)
-const _rowMountTimes = new Map<string, number>(); // id → t0 from rowBecameActive
-const _rowUpdateT0 = new Map<string, number>(); // id → t0 from rowBeforeUpdate
+// >>> rowMounted = new row (pool expansion); rowBeforeUpdate/rowUpdated = recycled row on scroll
+const _rowMountTimes = new Map<string, number>(); // <<< id -> t0 from rowBecameActive
+const _rowUpdateT0 = new Map<string, number>(); // <<< id -> t0 from rowBeforeUpdate
 const visibleStartIndex = ref(0);
 function rowBecameActive(id: string) {
   _rowMountTimes.set(id, performance.now());
@@ -133,7 +126,7 @@ function rowUpdated(el: Element) {
   }
 }
 
-// Badge / emote image timing.
+// >>> badge/emote image timing
 function badgeLoadStart(src: string) {
   if (dbg("badgeLoad")) _badgeT0.set(src, performance.now());
 }
@@ -154,15 +147,10 @@ function badgeError(ev: Event) {
   _badgeT0.delete(src);
 }
 
-// visibleStartIndex is now computed inside vUpdateWindow() from the same
-// prefix-sum pass used for the render window - this replaced a DOM-child-index
-// walk that silently went out of sync with displayItems under virtualization
-// (DOM children include spacers/loaders and only ever contain the windowed
-// slice, not the full list, so a raw child index never matched a data index).
+// >>> visibleStartIndex computed in vUpdateWindow - a raw DOM-child-index walk drifted from displayItems under virtualization
 
-// Emote load timing via event delegation on the scroller container.
-// Emotes are injected as v-html so Vue hooks can't reach them directly.
-const _emoteT0 = new Map<string, number>(); // src → performance.now() when img was parsed into DOM
+// >>> emote load timing via event delegation - emotes are v-html, vue hooks can't reach them
+const _emoteT0 = new Map<string, number>(); // <<< src -> t0 when img was parsed into dom
 function _onEmoteLoad(ev: Event) {
   if (!dbg("emoteLoad")) return;
   const img = ev.target as HTMLImageElement;
@@ -180,7 +168,7 @@ function _onEmoteError(ev: Event) {
   console.debug(`[scroll:emote-err] ${img.alt || img.src.split("/").pop()}`);
   _emoteT0.delete(img.src);
 }
-// MutationObserver stamps a start time as soon as each chat-emote img enters the DOM.
+// >>> mutationobserver stamps a start time as soon as each chat-emote img enters the dom
 let _emoteMutObs: MutationObserver | null = null;
 function attachEmoteObserver(container: Element) {
   _emoteMutObs = new MutationObserver((mutations) => {
@@ -222,7 +210,7 @@ interface LogMsg {
   channel: string;
   timestamp: string;
   tags?: Record<string, string>;
-  // Server pre-rendered fields (present when render=1 is requested)
+  // >>> present when render=1 is requested
   _rowHtml?: string;
   _eventMeta?: { label: string; icon: string; tone: string } | null;
   _isMod?: boolean;
@@ -256,13 +244,12 @@ interface SevenTvBadgeAsset {
   title: string;
 }
 
-// Input refs - read directly from DOM, not tracked by Vue reactivity.
-// This prevents any re-render on every keystroke.
+// >>> read directly from DOM (not v-model) so typing doesn't trigger a re-render
 const channelInputRef = ref<HTMLInputElement | null>(null);
 const userInputRef = ref<HTMLInputElement | null>(null);
 const termInputRef = ref<HTMLInputElement | null>(null);
 
-// These are only updated when a search actually runs (for URL sync and summary bar)
+// >>> only updated when a search actually runs, for url sync + summary bar
 const channel = ref("");
 const userFilter = ref("");
 const termFilter = ref("");
@@ -291,29 +278,21 @@ interface AutomodMsg {
   _status: string;
 }
 
-// Sliding window: max messages kept in memory/DOM-virtualized at once. Since only
-// the visible slice is ever actually mounted in the DOM (see virtual scroller
-// below), raising this doesn't cost render performance - it just bounds how much
-// history an extremely long scroll-back session keeps in memory. We now load a
-// full day per step (see loadOlder) instead of 1000-message chunks, so this is
-// sized generously - a few busy days' worth - rather than tightly.
+// >>> sliding window cap - only the visible slice is mounted, so raising this is memory-only cost
 const MSG_MAX_SHOWN = 6000;
 
-// ─── Virtual scroller ────────────────────────────────────────────────────
-// Only rows within [vWinStart, vWinEnd) of displayItems are rendered.
-// Spacer divs above/below maintain correct scrollHeight.
-// Heights are measured by ResizeObserver and cached per item id.
-const VIRT_OVERSCAN = 40; // extra rows above/below viewport
-const VIRT_EST_H = 28; // estimated px per row before measurement
+// vvv virtual scroller vvv
+// >>> only [vWinStart, vWinEnd) of displayItems is rendered; spacers keep scrollHeight correct, ResizeObserver measures real heights
+const VIRT_OVERSCAN = 40; // <<< extra rows above/below viewport
+const VIRT_EST_H = 28; // <<< estimated px per row before measurement
 const vWinStart = ref(0);
 const vWinEnd = ref(150);
-const vHeightCache = new Map<string, number>(); // item.id → measured px
+const vHeightCache = new Map<string, number>(); // <<< item.id -> measured px
 let vRO: ResizeObserver | null = null;
 let vMutObs: MutationObserver | null = null;
 let vRafPending = false;
 
-// ─── Memoised prefix sums ────────────────────────────────────────────────
-// Computed once per displayItems change, not per scroll.
+// >>> prefix sums recomputed only on displayItems change, not per scroll
 const prefixSums = computed(() => {
   const items = displayItems.value;
   const total = items.length;
@@ -325,7 +304,7 @@ const prefixSums = computed(() => {
   return pref;
 });
 
-// O(log n) binary search on prefix sums.
+// >>> binary search on prefix sums, O(log n)
 function findIndexFromOffset(target: number): number {
   const pref = prefixSums.value;
   const total = displayItems.value.length;
@@ -341,7 +320,6 @@ function findIndexFromOffset(target: number): number {
   return lo;
 }
 
-// Now vUpdateWindow is cheap.
 function vUpdateWindow() {
   const body = getBody();
   if (!body) return;
@@ -364,9 +342,7 @@ function vUpdateWindow() {
   );
   const visIdx = findIndexFromOffset(scrollTop);
 
-  // Only update if changed - avoids the spacer oscillation loop where a
-  // 1-item window shift changes scrollHeight which triggers another scroll
-  // event which shifts the window back, causing 583px ↔ 611px flicker.
+  // >>> only update if changed - avoids scrollHeight oscillation loop (583px<->611px flicker)
   if (startIdx !== vWinStart.value) vWinStart.value = startIdx;
   if (endIdx !== vWinEnd.value) vWinEnd.value = endIdx;
   if (visIdx !== visibleStartIndex.value) visibleStartIndex.value = visIdx;
@@ -405,27 +381,17 @@ function vAttachObserver(el: HTMLElement) {
       requestAnimationFrame(() => {
         vRafPending = false;
         vUpdateWindow();
-        // Rows (images, badges, paints) can finish loading and change height
-        // *after* the initial scrollToBottom() already ran. If the user was
-        // already pinned to the bottom at that point, keep them pinned instead
-        // of leaving them stranded a few rows short of the true bottom.
+        // >>> rows can grow after initial scrollToBottom(); keep pinned if user was already at bottom
         const body = getBody();
         if (body && isNearBottom.value) body.scrollTop = body.scrollHeight;
       });
     }
   });
 
-  // Rows already present at attach time.
   for (const child of Array.from(el.children))
     vRegisterRow(child as HTMLElement);
 
-  // Every row kind (day separator / automod / server-rendered v-cached-html /
-  // client-rendered fallback) shares the same data-vit-id attribute. A single
-  // MutationObserver on the scroller container keeps ALL of them measured as
-  // they're added or removed by Vue's v-for - previously only the client-rendered
-  // fallback branch had a per-row mount hook, so server-rendered rows (the common
-  // "fast path") were never measured and silently assumed to be VIRT_EST_H tall,
-  // which is what made the window (and therefore scroll position) drift.
+  // >>> single mutationobserver measures every row kind via shared data-vit-id - server-rendered rows used to go unmeasured (assumed VIRT_EST_H), which drifted the scroll window
   vMutObs = new MutationObserver((mutations) => {
     for (const m of mutations) {
       for (const node of m.addedNodes) {
@@ -454,14 +420,14 @@ const virtualSlice = computed(() =>
 
 const msgs = ref<LogMsg[]>([]);
 const automodMsgs = ref<AutomodMsg[]>([]);
-const showAutomod = ref(false); // toggled by user; only shown to broadcaster
-const isBroadcaster = ref(false); // true when viewing own channel
+const showAutomod = ref(false); // <<< toggled by user, only shown to broadcaster
+const isBroadcaster = ref(false); // <<< true when viewing own channel
 const loading = ref(false);
 const loadingMore = ref(false);
 const loadingNewer = ref(false);
 const noMore = ref(false);
-const noNewer = ref(true); // true = we're at the most-recent data
-const isNearBottom = ref(true); // false = user has scrolled up; show "jump to newest" button
+const noNewer = ref(true); // <<< true = at the most-recent data
+const isNearBottom = ref(true); // <<< false = scrolled up, shows jump-to-newest button
 const error = ref("");
 const searched = ref(false);
 const emoteMap = ref<EmoteMap>({});
@@ -480,18 +446,17 @@ const tableWrapRef = ref<HTMLElement | null>(null);
 const tableShellRef = ref<HTMLElement | null>(null);
 const isMobileView = ref(false);
 const desktopLogWidth = ref<number | null>(null);
-// Returns the scroll container DOM element.
 function getBody(): HTMLElement | null {
   return scrollerRef.value ?? null;
 }
 const highlightId = ref<string | null>(null);
 const copyToast = ref(false);
 const searchExpanded = ref(true);
-const direction = ref<"newest" | "oldest">("newest"); // sort direction
+const direction = ref<"newest" | "oldest">("newest");
 
 let cursorDate: Date | null = null;
 let cursorMonth: { y: number; m: number } | null = null;
-// Cursors for loading newer (re-fetching trimmed content going forward in time)
+// >>> cursors for loading newer (trimmed content going forward)
 let cursorNewerDate: Date | null = null;
 let cursorNewerMonth: { y: number; m: number } | null = null;
 let abortCtrl = new AbortController();
@@ -505,9 +470,8 @@ const pendingPaintJobs = ref(0);
 let domSettleToken = 0;
 type SearchJobPhase = "idle" | "fetch" | "display" | "visuals";
 
-// In-memory cache for fetched log days/months so scrolling back up is instant.
-// Keys include all query params that affect the result, TTL prevents stale data.
-const FETCH_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// >>> in-memory day/month cache; keys include all query params, TTL avoids stale data
+const FETCH_CACHE_TTL = 5 * 60 * 1000;
 const dayFetchCache = new Map<string, { data: LogMsg[]; ts: number }>();
 const monthFetchCache = new Map<string, { data: LogMsg[]; ts: number }>();
 const searchJobPhase = ref<SearchJobPhase>("idle");
@@ -527,10 +491,7 @@ function syncViewportMode() {
   if (isMobileView.value) desktopLogWidth.value = null;
 }
 
-// Single-select: showing 7TV paints/badges and forcing plain white names are
-// mutually exclusive display modes, not two independent toggles - having both
-// buttons "on" at once didn't make sense (white always wins visually) and was
-// just confusing to look at.
+// >>> single-select: 7tv paints and plain-white names are mutually exclusive, not independent toggles
 const nameVisual = ref<"7tv" | "white">("7tv");
 const hide7tv = computed(() => nameVisual.value === "white");
 const plainUsernames = computed(() => nameVisual.value === "white");
@@ -541,11 +502,7 @@ function formatDateSingle(d: Date | null): string {
   return d.toISOString().slice(0, 10);
 }
 
-// Single-date picker: one date is what people actually need day-to-day
-// ("what happened yesterday", "find that message from the 12th"). A real
-// multi-day range is rare enough that it's not worth the extra UI weight -
-// dateUntil is just kept in sync with dateFrom under the hood so the
-// existing range-capable search()/fetch logic keeps working unchanged.
+// >>> single date picker; dateUntil silently mirrors dateFrom so the range-capable fetch logic still works
 const dateSingle = computed({
   get: (): Date | null => {
     if (!dateFrom.value) return null;
@@ -573,10 +530,7 @@ function onDocClickVisuals(e: MouseEvent) {
   }
 }
 
-// >>> URL state sync
-// /logs/<channel>/<user> instead of ?channel=&user= - shorter and shareable.
-// term/from/until stay as query params since they're optional refinements,
-// not identity of "what page is this".
+// >>> /logs/<channel>/<user> path (shorter/shareable); term/from/until stay as query params (optional refinements)
 function buildUrl(msgId: string | null = null) {
   const ch = channel.value.trim().toLowerCase().replace(/^#/, "");
   const u = userFilter.value.trim();
@@ -604,7 +558,6 @@ function pushHash(msgId: string) {
 }
 
 function readUrlState() {
-  // New path-based format: /logs/channel/user
   const segments = window.location.pathname.split("/").filter(Boolean);
   if (segments[0] === "logs") {
     if (segments[1]) channel.value = decodeURIComponent(segments[1]);
@@ -612,15 +565,15 @@ function readUrlState() {
   }
 
   const p = new URLSearchParams(window.location.search);
-  // Legacy support: old ?channel=&user= links still work.
+  // >>> legacy ?channel=&user= links still work
   if (!channel.value && p.get("channel")) channel.value = p.get("channel")!;
   if (!userFilter.value && p.get("user")) userFilter.value = p.get("user")!;
   if (p.get("term")) termFilter.value = p.get("term")!;
-  // Support legacy ?date= and new ?from=&until=
+  // >>> legacy ?date= still supported alongside ?from=&until=
   if (p.get("from")) dateFrom.value = p.get("from")!;
   else if (p.get("date")) dateFrom.value = p.get("date")!;
   if (p.get("until")) dateUntil.value = p.get("until")!;
-  else if (dateFrom.value) dateUntil.value = dateFrom.value; // single-date is now the default
+  else if (dateFrom.value) dateUntil.value = dateFrom.value; // <<< single-date is now the default
   dateFilter.value = dateFrom.value;
 }
 
@@ -649,11 +602,9 @@ watch(
   { flush: "post" },
 );
 
-// >>> Emotes
+// vvv emotes vvv
 async function fetchEmotes(ch: string) {
-  // Accumulate into a plain object first, then assign once.
-  // A single ref replacement is the cheapest way to trigger reactivity watchers
-  // and ensures the row cache is invalidated only once (not on every emote mutation).
+  // >>> accumulate into a plain object, assign ref once - single reactivity trigger + single row-cache bust
   const next: EmoteMap = {};
   for (const path of [`/emotes/${ch}`, `/emotes/twitch/${ch}`]) {
     try {
@@ -690,7 +641,7 @@ async function fetchTwitchBadges(ch: string) {
       });
     }
     twitchBadgeMap.value = m;
-    // Pre-warm + decode badge images so they paint instantly in the virtual list.
+    // >>> pre-warm/decode badge images so they paint instantly
     preDecodeUrls(
       Array.from(m.values(), (b) => b.imageUrl),
       "badges",
@@ -713,14 +664,14 @@ function preDecodeUrls(urls: string[], label?: string) {
   for (const url of fresh) {
     const img = new Image();
     img.src = url;
-    img.decode().catch(() => { }); // pre-decode to raster - instant paint later
+    img.decode().catch(() => { }); // <<< pre-decode to raster for instant paint later
   }
 }
 
 /* ── Eager channel-level image preload (emotes + badges) ── */
 let _assetPreloadChannel = "";
 async function preloadChannelAssets(ch: string) {
-  if (_assetPreloadChannel === ch) return; // already warming this channel
+  if (_assetPreloadChannel === ch) return; // <<< already warming this channel
   _assetPreloadChannel = ch;
   try {
     const r = await fetch(
@@ -856,16 +807,7 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   const deduped = newMsgs.filter((m) => !existingIds.has(m.id));
   if (!deduped.length) return;
 
-  // Snapshot a stable anchor: the id + in-viewport pixel offset of the first
-  // (partially) visible row. We use this - not a scrollHeight delta - to restore
-  // position after the prepend. A scrollHeight-delta correction is only accurate
-  // if newly-inserted rows already have their TRUE height reflected in the DOM,
-  // but far rows are spacer-estimated at VIRT_EST_H (28px) until ResizeObserver
-  // measures them later. Real rows (multi-line, badges, emotes) are often taller,
-  // so the delta under-corrects and scrollTop lands too high - which then
-  // re-triggers loadOlder() immediately (scrollTop < 120) → "stuck at top,
-  // keeps loading the previous day" bug. Re-measuring the exact same DOM row
-  // before/after is immune to this because it doesn't depend on estimates at all.
+  // >>> anchor = id + pixel offset of first visible row; a scrollHeight-delta alone under-corrects since far rows are height-estimated until measured, which caused a "stuck at top" reload loop
   let anchorId: string | null = null;
   let anchorOffset = 0;
   if (body) {
@@ -874,7 +816,7 @@ async function prependMsgs(newMsgs: LogMsg[]) {
     for (const el of rows) {
       const r = el.getBoundingClientRect();
       if (r.bottom > containerTop) {
-        // first row still (at least partially) visible
+        // <<< first row still (at least partially) visible
         anchorId = el.id;
         anchorOffset = r.top - containerTop;
         break;
@@ -882,8 +824,7 @@ async function prependMsgs(newMsgs: LogMsg[]) {
     }
   }
 
-  // Fallback metrics, used only if the anchor row can't be found again after insert
-  // (e.g. it happened to be one of the trimmed-off newest messages).
+  // >>> fallback metrics if anchor row was trimmed off
   const preScrollTop = body?.scrollTop ?? 0;
   const preScrollHeight = body?.scrollHeight ?? 0;
 
@@ -893,20 +834,13 @@ async function prependMsgs(newMsgs: LogMsg[]) {
     const ts = new Date(firstTrimmed.timestamp);
     cursorNewerDate = new Date(ts.getFullYear(), ts.getMonth(), ts.getDate());
     cursorNewerMonth = { y: ts.getFullYear(), m: ts.getMonth() + 1 };
-    // Evict cached heights for messages falling off the newest end so the map
-    // doesn't grow unbounded across a long scroll-back session.
+    // >>> evict cached heights for trimmed messages so the map doesn't grow unbounded
     for (const m of next.slice(MSG_MAX_SHOWN)) vHeightCache.delete(m.id);
     next = next.slice(0, MSG_MAX_SHOWN);
     noNewer.value = false;
   }
 
-  // Shift the render window by the number of newly inserted items *before* the
-  // reactive update lands, so the very first render pass after this mutation
-  // still points at the same underlying messages the user was looking at. Without
-  // this, vWinStart/vWinEnd keep their old numeric values, which after the array
-  // grows at the front now resolve to a completely different (shifted) slice of
-  // items - that one-frame mismatch is what caused the "jumps to the middle of
-  // the list" symptom.
+  // >>> shift vWinStart/vWinEnd by insert count before the reactive update lands, else the next render points at a stale slice - caused a "jumps to the middle" bug
   const shift = deduped.length;
   vWinStart.value += shift;
   vWinEnd.value += shift;
@@ -915,9 +849,7 @@ async function prependMsgs(newMsgs: LogMsg[]) {
   await nextTick();
   if (!body) return;
 
-  // Make sure the anchor row is actually mounted in the DOM before re-measuring
-  // it - the approximate `shift` above can be off by one or two items whenever
-  // a day separator got inserted, so the render window might not include it yet.
+  // >>> ensure anchor row is mounted before re-measuring - the shift estimate can be off by 1-2 when a day separator was inserted
   if (anchorId) {
     const idx = displayItems.value.findIndex(
       (it) => domIdForDisplayItem(it) === anchorId,
@@ -927,21 +859,18 @@ async function prependMsgs(newMsgs: LogMsg[]) {
 
   const anchorEl = anchorId ? document.getElementById(anchorId) : null;
   if (anchorEl) {
-    // Precise correction: put the exact same row back at the exact same
-    // on-screen offset it had before, regardless of estimated vs. real heights.
+    // >>> put the exact same row back at the exact same on-screen offset
     const containerTop = body.getBoundingClientRect().top;
     const newOffset = anchorEl.getBoundingClientRect().top - containerTop;
     body.scrollTop += newOffset - anchorOffset;
   } else {
-    // Fallback: classic scrollHeight-delta correction (only reached if the
-    // anchor row itself got trimmed off, which is rare).
+    // >>> fallback: scrollHeight-delta correction if anchor row got trimmed (rare)
     const postScrollHeight = body.scrollHeight;
     const delta = postScrollHeight - preScrollHeight;
     if (delta !== 0) body.scrollTop = preScrollTop + delta;
   }
 
-  // Re-snap the window to the corrected scroll position - heals any small drift
-  // from the approximate index shift above (e.g. an inserted day separator).
+  // >>> re-snap window to corrected scroll pos, heals drift from the index-shift estimate
   vUpdateWindow();
   updateCustomScrollbar();
 }
@@ -963,12 +892,7 @@ async function appendMsgs(newMsgs: LogMsg[]) {
     const ts = new Date(lastTrimmed.timestamp);
     cursorDate = new Date(ts.getFullYear(), ts.getMonth(), ts.getDate());
     cursorMonth = { y: ts.getFullYear(), m: ts.getMonth() + 1 };
-    // Height of the region being trimmed off the *oldest* (top) end - this is
-    // exactly how far scrollTop needs to move up, since that content currently
-    // sits above wherever the user is scrolled to. New content appended at the
-    // bottom never needs this correction (it doesn't affect anything above the
-    // viewport), so we compute the trim-region height separately rather than
-    // using a whole-list scrollHeight delta, which would conflate the two.
+    // >>> track height trimmed off the oldest end - that's exactly how far scrollTop must move up
     for (let i = 0; i < trimCount; i++) {
       const m = next[i]!;
       removedHeight += vHeightCache.get(m.id) ?? VIRT_EST_H;
@@ -993,7 +917,7 @@ async function appendMsgs(newMsgs: LogMsg[]) {
 
   vUpdateWindow();
   updateCustomScrollbar();
-  // Browser scroll anchoring keeps viewport in place automatically for pure appends
+  // >>> browser scroll anchoring handles pure appends automatically
 }
 
 async function loadOlder() {
@@ -1062,8 +986,7 @@ async function loadOlder() {
     } catch { }
     loadingMore.value = false;
   }
-  // Guard: after prepend + scroll correction, ensure scrollTop is well past
-  // the trigger threshold so mobile doesn't immediately re-fire loadOlder.
+  // >>> guard: keep scrollTop past the trigger threshold so mobile doesn't immediately re-fire loadOlder
   await nextTick();
   const body = getBody();
   if (body && body.scrollTop < 180) body.scrollTop = 180;
@@ -1225,10 +1148,7 @@ async function jumpOneDayUp() {
     (it) => it.kind === "day" && it.label === targetLabel,
   );
   if (targetIndex < 0) {
-    // Walk backward through days with zero chat activity until one with actual
-    // messages turns up (or we hit the same 2-year lookback bound used
-    // elsewhere) - otherwise the button silently did nothing on a quiet day,
-    // which was the reported bug.
+    // >>> walk backward through empty days until one has messages, else the button silently did nothing on a quiet day
     const cutoff = new Date();
     cutoff.setFullYear(cutoff.getFullYear() - 2);
     let safety = 0;
@@ -1240,9 +1160,7 @@ async function jumpOneDayUp() {
         targetIndex = displayItems.value.findIndex(
           (it) => it.kind === "day" && it.label === targetLabel,
         );
-        // Keep the regular scroll-triggered loadOlder() cursor in sync with
-        // whatever this jump just walked past, so scrolling further back
-        // continues seamlessly instead of re-fetching the same empty days.
+        // >>> keep loadOlder()'s cursor in sync with what this jump walked past, so scroll-back doesn't re-fetch the same empty days
         if (!userFilter.value.trim()) {
           const dayBefore = new Date(target);
           dayBefore.setDate(dayBefore.getDate() - 1);
@@ -1258,11 +1176,7 @@ async function jumpOneDayUp() {
     }
   }
 
-  // Bug fix: after a prepend, the virtual-scroll window is shifted to keep
-  // pointing at the same messages the user was already looking at - which
-  // means the newly-prepended target day is *not* inside [vWinStart, vWinEnd)
-  // yet, so its DOM element doesn't exist and a plain scrollToDisplayIndex()
-  // silently does nothing. ensureIndexRendered() widens the window first.
+  // >>> after prepend the target day isn't in the render window yet; ensureIndexRendered() widens it first
   if (targetIndex >= 0) await scrollToDisplayIndexAsync(targetIndex);
 }
 
@@ -1330,7 +1244,7 @@ function onScroll() {
       loadOlder();
     if (!loadingNewer.value && !noNewer.value && distFromBottom < 120)
       loadNewer();
-    // In oldest-first mode the list is reversed: reaching the bottom means going further back in time
+    // >>> oldest-first mode is reversed: hitting bottom means going further back in time
     if (direction.value === "oldest") {
       if (!loadingNewer.value && !noNewer.value && body.scrollTop < 120)
         loadNewer();
@@ -1368,10 +1282,9 @@ function onCustomScrollbarTrackPointerDown(ev: PointerEvent) {
   const trackH = rect.height;
   const thumbH = customThumbH.value;
   const clickY = ev.clientY - rect.top;
-  // If clicking on the thumb itself, don't jump - let onThumbDragStart handle it
+  // >>> clicking the thumb itself shouldn't jump - let onThumbDragStart handle it
   if (clickY >= customThumbTop.value && clickY <= customThumbTop.value + thumbH)
     return;
-  // Center thumb on the click position
   const newTop = Math.max(0, Math.min(trackH - thumbH, clickY - thumbH / 2));
   const maxScroll = body.scrollHeight - body.clientHeight;
   body.scrollTop =
@@ -1470,18 +1383,18 @@ async function fetchOldestDate(ch: string): Promise<Date> {
       };
       const months = data.months ?? [];
       if (months.length) {
-        const oldest = months[months.length - 1]!; // sorted newest-first, so last = oldest
+        const oldest = months[months.length - 1]!; // <<< sorted newest-first, so last = oldest
         return new Date(Date.UTC(oldest.year, oldest.month - 1, 1));
       }
     }
   } catch { }
-  // fallback: 2 years ago
+  // >>> fallback: 2 years ago
   const d = new Date();
   d.setFullYear(d.getFullYear() - 2);
   return d;
 }
 
-// >>> Main search
+// vvv main search vvv
 async function search() {
   readInputs();
   if (!channel.value.trim()) {
@@ -1517,7 +1430,7 @@ async function search() {
   noNewer.value = true;
   loadingNewer.value = false;
   isNearBottom.value = true;
-  _rowCache.clear(); // ensure badges re-track twitchBadgeMap on the first render
+  _rowCache.clear(); // <<< ensure badges re-track twitchBadgeMap on first render
   vHeightCache.clear();
   vWinStart.value = 0;
   vWinEnd.value = 150;
@@ -1538,13 +1451,13 @@ async function search() {
   const today = new Date();
   const isUser = !!userFilter.value.trim();
 
-  // >>> Date range: fetch each day individually and merge
+  // >>> date range: fetch each day individually and merge
   if (dateFrom.value) {
     const startDate = new Date(dateFrom.value + "T00:00:00");
     const endDate = dateUntil.value
       ? new Date(dateUntil.value + "T00:00:00")
       : startDate;
-    // Safety: cap range at 90 days
+    // >>> safety cap: max 90 day range
     const maxRange = 90;
     const diffDays = Math.round(
       (endDate.getTime() - startDate.getTime()) / 86_400_000,
@@ -1561,10 +1474,7 @@ async function search() {
     }
 
     try {
-      // Fetch every day in the range concurrently (capped) instead of one-at-a-time.
-      // Each fetchDay/fetchMonth call already hits its own day/month cache key, so
-      // this is safe to parallelize - a multi-day search used to take N sequential
-      // round-trips; now it's ceil(N / CONCURRENCY).
+      // >>> fetch days concurrently (capped) instead of serially - each hits its own cache key so it's safe to parallelize
       const RANGE_FETCH_CONCURRENCY = 6;
       const days: Date[] = [];
       for (
@@ -1612,10 +1522,7 @@ async function search() {
     loading.value = false;
     noMore.value = true;
     await nextTick();
-    // Without this, the scroll listener never gets attached for a date search,
-    // so the virtual-scroll window, custom scrollbar and jump-to-newest state
-    // never update once the user actually scrolls - this was the root cause
-    // of the logs view looking "stuck" right after a date-scoped search.
+    // >>> must attach scroll listener here or the virtual window/scrollbar/jump-to-newest never update after a date search (view looked "stuck")
     attachScrollListener();
     vUpdateWindow();
     updateCustomScrollbar();
@@ -1640,7 +1547,7 @@ async function search() {
       try {
         msgs.value = await fetchMonth(ch, cur.y, cur.m, abortCtrl.signal);
       } catch { }
-      // Walk forward until we find messages
+      // >>> walk forward until we find messages
       while (!msgs.value.length && !abortCtrl.signal.aborted) {
         cur = nextMonth(cur);
         if (new Date(cur.y, cur.m - 1, 1) > today) break;
@@ -1648,7 +1555,7 @@ async function search() {
           msgs.value = await fetchMonth(ch, cur.y, cur.m, abortCtrl.signal);
         } catch { }
       }
-      // cursorMonth now points to the NEXT month (for loading newer)
+      // >>> cursorMonth now points to the next month, for loading newer
       cursorMonth = nextMonth(cur);
     } else {
       let d = new Date(startDate);
@@ -1680,7 +1587,7 @@ async function search() {
     attachScrollListener();
     vUpdateWindow();
     updateCustomScrollbar();
-    // Oldest-first: scroll to top (earliest messages)
+    // >>> oldest-first: scroll to top (earliest messages)
     nextTick(() => {
       const b = getBody();
       if (b) b.scrollTop = 0;
@@ -1813,7 +1720,7 @@ async function autoFillIfShort() {
 async function setDirection(d: "newest" | "oldest") {
   if (d === direction.value) return;
   if (!searched.value) {
-    // Nothing loaded yet - just set and let the next search() use it
+    // >>> nothing loaded yet, let the next search() use it
     direction.value = d;
     return;
   }
@@ -1826,8 +1733,7 @@ async function setDirection(d: "newest" | "oldest") {
   }
 
   direction.value = d;
-  // Heights are per-item-id and still valid after reversal, but the virtual
-  // window needs a full reset since cumulative positions have changed.
+  // >>> heights stay valid per-id after reversal, but the window needs a full reset (cumulative positions changed)
   vHeightCache.clear();
   vWinStart.value = 0;
   vWinEnd.value = Math.min(150, displayItems.value.length);
@@ -1863,9 +1769,7 @@ async function jumpToNewest() {
 }
 
 async function scrollToMsg(id: string, highlight = false): Promise<void> {
-  // Under virtualization the target row may exist in `msgs` but not currently be
-  // rendered (outside vWinStart..vWinEnd). Widen the window to include it before
-  // trying to find it in the DOM, otherwise this silently does nothing.
+  // >>> target row may exist in msgs but be virtualized out - widen the window before searching the dom, else this silently no-ops
   const idx = displayItems.value.findIndex(
     (it) => it.kind !== "day" && (it as any).msg?.id === id,
   );
@@ -1898,7 +1802,7 @@ async function jumpToMessage(id: string): Promise<void> {
     return;
   }
 
-  // If the target is not loaded yet, keep loading older chunks until found or exhausted.
+  // >>> keep loading older chunks until target is found or exhausted
   let safety = 0;
   while (!hasMsg(targetId) && !noMore.value && safety++ < 60) {
     await loadOlder();
@@ -1927,23 +1831,13 @@ function shareMsg(m: LogMsg) {
 
 onMounted(async () => {
   document.body.classList.add("logs-open");
-  // Warm logo decode once so the floating indicator appears instantly.
+  // >>> warm logo decode once so the indicator appears instantly
   const preload = new Image();
   preload.src = loadingOverlayLogoUrl;
   readUrlState();
   if (!channel.value && session.value?.channel)
     channel.value = session.value.channel;
-  // The channel/user/term inputs are read directly from the DOM (not v-model,
-  // to avoid a re-render on every keystroke - see readInputs()), so whatever
-  // readUrlState()/session fallback just put into the *data* refs above also
-  // has to be written into the actual <input> elements here. Without this,
-  // the inputs stay empty on a fresh page load even though channel.value is
-  // set, and the first search() call's readInputs() then reads that empty
-  // DOM value back OVER channel.value (readInputs only falls back to the
-  // existing value on null/undefined, and an empty string from an untouched
-  // input is neither) - producing "Channel is required." despite the URL
-  // (or session) clearly having it. Same for direct /logs/<channel>/<user>
-  // links and the legacy ?channel=&user= query params.
+  // >>> inputs are read from DOM not v-model; must also write DOM here, or readInputs() reads back an empty value over channel.value -> false "Channel is required"
   await nextTick();
   if (channelInputRef.value) channelInputRef.value.value = channel.value;
   if (userInputRef.value) userInputRef.value.value = userFilter.value;
@@ -1972,7 +1866,7 @@ onUnmounted(() => {
   _rowDomCache.clear();
 });
 
-// Attach/detach the emote MutationObserver + event delegation whenever the scroller mounts.
+// >>> attach/detach emote observer + event delegation whenever the scroller mounts
 watch(scrollerRef, (newVal, oldVal) => {
   if (oldVal) {
     const el = oldVal as HTMLElement | null;
@@ -1993,12 +1887,10 @@ watch(scrollerRef, (newVal, oldVal) => {
   }
 });
 
-// >>> Event delegation for server-rendered rows (v-html content has no Vue handlers).
-// Also works for client-rendered rows that share the same CSS classes.
+// >>> event delegation - v-html rows have no vue handlers, but this also covers client-rendered rows via shared css classes
 function onRowClick(e: MouseEvent) {
   const t = e.target as HTMLElement;
 
-  // Username click
   const userEl = t.closest(
     ".log-user-clickable[data-username]",
   ) as HTMLElement | null;
@@ -2012,7 +1904,6 @@ function onRowClick(e: MouseEvent) {
     return;
   }
 
-  // Share button click
   const shareEl = t.closest(".log-share[data-msg-id]") as HTMLElement | null;
   if (shareEl) {
     e.stopPropagation();
@@ -2021,7 +1912,6 @@ function onRowClick(e: MouseEvent) {
     return;
   }
 
-  // Reply context click
   const replyEl = t.closest(
     ".reply-context-link[data-reply-parent-id]",
   ) as HTMLElement | null;
@@ -2032,9 +1922,7 @@ function onRowClick(e: MouseEvent) {
   }
 }
 
-// >>> Dynamic paint CSS for server-rendered rows.
-// Paint styles are applied via a <style> sheet instead of per-row inline styles,
-// so all rows (including pre-rendered v-html content) update simultaneously.
+// >>> paint styles applied via a <style> sheet (not inline) so v-html rows update too
 let _paintStyleEl: HTMLStyleElement | null = null;
 
 function jsToCssProp(prop: string): string {
@@ -2050,9 +1938,9 @@ function jsToCssProp(prop: string): string {
   return prop.replace(/([A-Z])/g, "-$1").toLowerCase();
 }
 
-// NOTE: the paint CSS watcher is registered below, after paintStyles is declared.
+// >>> paint css watcher registered below, after paintStyles is declared
 
-// >>> Rendering
+// vvv rendering vvv
 function fmtTs(ts: string) {
   const d = new Date(ts);
   return (
@@ -2093,7 +1981,7 @@ function domIdForDisplayItem(it: DisplayItem): string {
   return it.kind === "day" ? `day-${it.id}` : `log-${it.msg.id}`;
 }
 
-// Optimised displayItems: merge sorted arrays, avoid full sort.
+// >>> merge sorted arrays instead of a full sort
 function buildItems(
   messages: (LogMsg | AutomodMsg)[],
   _: any[],
@@ -2101,7 +1989,7 @@ function buildItems(
   const items: DisplayItem[] = [];
   let lastDay = "";
   const seenIds = new Set<string>();
-  const seenDays = new Set<string>(); // guard against duplicate separators if msgs aren't perfectly sorted
+  const seenDays = new Set<string>(); // <<< guards against duplicate separators if msgs aren't perfectly sorted
   for (const m of messages) {
     const msgId = m.id || `${m.timestamp}:${m.username}`;
     if (seenIds.has(msgId)) continue;
@@ -2125,21 +2013,21 @@ function buildItems(
 
 const displayItems = computed<DisplayItem[]>(() => {
   let regular = msgs.value;
-  // In oldest-first mode, reverse so newest messages appear at the top.
+  // >>> oldest-first mode: reverse so newest is at the top
   if (direction.value === "oldest") regular = [...regular].reverse();
   const automod = automodMsgs.value;
   if (!showAutomod.value || !isBroadcaster.value) {
     return buildItems(regular, []);
   }
-  // Merge two sorted arrays by timestamp.
+  // >>> merge two sorted arrays by timestamp
   const merged: (LogMsg | AutomodMsg)[] = [];
   let i = 0,
     j = 0;
   while (i < regular.length && j < automod.length) {
     if (regular[i]!.timestamp <= automod[j]!.timestamp) {
-      merged.push(regular[i++]!); // <-- added !
+      merged.push(regular[i++]!);
     } else {
-      merged.push(automod[j++]!); // <-- added !
+      merged.push(automod[j++]!);
     }
   }
   while (i < regular.length) merged.push(regular[i++]!);
@@ -2174,12 +2062,12 @@ function parseDayLabel(label: string): Date | null {
 function dayLabelForIndex(idx: number): string | null {
   const list = displayItems.value;
   const i0 = Math.max(0, Math.min(idx, list.length - 1));
-  // Scan backward until we find a day separator; if none, derive from the message timestamp
+  // >>> scan backward for a day separator; else derive from the message timestamp
   for (let i = i0; i >= 0; i--) {
     const it = list[i]!;
     if (it.kind === "day") return it.label;
   }
-  // No day separator found above - use the timestamp of the item at idx
+  // >>> no separator found above, use the timestamp of the item at idx
   const fallback = list[i0];
   if (fallback && fallback.kind !== "day" && fallback.msg)
     return fmtDayLabel(fallback.msg.timestamp);
@@ -2282,9 +2170,7 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
   return out;
 });
 
-// Widens the render window so a given displayItems index is guaranteed to be
-// mounted in the DOM. Used by deep-linking / jump-to-day / timeline-marker jumps,
-// where the target data is loaded but may currently be virtualized out of view.
+// >>> widens the render window so a given index is guaranteed mounted, for deep-links/jump-to-day/timeline jumps
 async function ensureIndexRendered(targetIndex: number, pad = 20) {
   const total = displayItems.value.length;
   if (targetIndex < 0 || targetIndex >= total) return;
@@ -2316,7 +2202,7 @@ async function jumpToTimelineMarker(marker: TimelineMarker) {
   if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
-// Paint loading is background-only - it must NOT block the UI phase or overlay.
+// >>> paint loading is background-only, must not block ui phase or overlay
 const hasRunningJobs = computed(
   () => loading.value || loadingMore.value || domSettling.value,
 );
@@ -2396,27 +2282,20 @@ function renderMsg(text: string): string {
   return renderMsgWithMap(text, emoteMap.value);
 }
 
-// Render a message with emote substitution and zero-width/overlay stacking.
-// Zero-width emotes (overlay: true) are positioned absolutely over the
-// previous base emote using a .emote-stack wrapper span.
-// e.g. "LULW BTTV_RainbowPls" where RainbowPls is overlay:
-//   → <span class="emote-stack"><img LULW><img class="emote-overlay" RainbowPls></span>
-// Multiple consecutive overlays all stack on the same base:
-//   "A B B B" where B is overlay → one stack with 1 base + 3 overlays
+// >>> overlay (zero-width) emotes stack absolutely over the preceding base emote via .emote-stack
 function renderMsgWithMap(text: string, em: EmoteMap): string {
   if (!Object.keys(em).length) return esc(text);
 
-  // Tokenise: each token is either a word or whitespace run
-  // We need to preserve spaces so the output looks natural
+  // >>> tokenize into words/whitespace runs, preserving spaces for natural output
   const tokens = text.split(/( +)/);
 
-  // Build a list of rendered pieces first, then assemble stacks
+  // >>> build rendered pieces first, then assemble stacks
   type Piece = { html: string; isOverlay: boolean; isEmote: boolean };
   const pieces: Piece[] = [];
 
   for (const tok of tokens) {
     if (!tok) continue;
-    // Whitespace token - keep as-is, not an emote
+    // >>> whitespace token, keep as-is
     if (/^ +$/.test(tok)) {
       pieces.push({ html: tok, isOverlay: false, isEmote: false });
       continue;
@@ -2431,16 +2310,14 @@ function renderMsgWithMap(text: string, em: EmoteMap): string {
     pieces.push({ html: img, isOverlay: entry.overlay, isEmote: true });
   }
 
-  // Now merge: overlay emotes immediately following a base emote (ignoring
-  // whitespace between them) get wrapped together into .emote-stack.
-  // Whitespace between a base and its overlays is consumed (not rendered).
+  // >>> overlays immediately after a base (whitespace ignored) get wrapped into .emote-stack; that whitespace is consumed
   let out = "";
   let i = 0;
   while (i < pieces.length) {
     const p = pieces[i]!;
-    // If this is a base emote, look ahead for overlay emotes
+    // >>> base emote: look ahead for overlays
     if (p.isEmote && !p.isOverlay) {
-      // Collect any overlays that follow (skip whitespace-only gaps)
+      // >>> collect overlays that follow, skipping whitespace-only gaps
       let j = i + 1;
       const overlays: string[] = [];
       while (j < pieces.length) {
@@ -2613,14 +2490,7 @@ function eventToneClass(m: LogMsg): string {
   return meta ? `tone-${meta.tone}` : "";
 }
 
-// >>> Per-row render cache ─────────────────────────────────────────────────────
-// Each message is expensive to render: badge chip building, paint style lookup,
-// HTML generation, etc. are all called 2× per row (desktop + mobile layout) on
-// every Vue update pass. We cache the results by message-id and bust the cache
-// only when the underlying data (emotes, badges, paints…) actually changes.
-//
-// This avoids repeating the same expensive derivations during virtual row recycling.
-// ─────────────────────────────────────────────────────────────────────────────
+// >>> per-row render cache: badge/paint/html derivation is expensive and runs 2x/row (desktop+mobile); cache by id, bust on data change
 
 interface RowData {
   html: string;
@@ -2632,19 +2502,15 @@ interface RowData {
 }
 
 const _rowCache = new Map<string, RowData>();
-// Incremented every time the row cache is invalidated (any visual dep changes).
-// getRowData reads this ref so Vue always tracks it - even when every row is a
-// cache-hit and no other reactive dep is accessed during that render pass.
-// Without this, a second render triggered by nameColWidth (post-watcher) loses
-// twitchBadgeMap from the component's dep list and badges never appear on re-search.
+// >>> bumped on every cache invalidation so getRowData always has a reactive dep - without it, a nameColWidth re-render can lose the twitchBadgeMap dependency and badges won't reappear
 const _rowCacheVersion = ref(0);
-// The watch is registered after paintStyles/personalEmoteMaps are declared (see below).
+// >>> watch registered below, after paintStyles/personalEmoteMaps are declared
 
 function getRowData(m: LogMsg): RowData {
-  _rowCacheVersion.value; // track - forces re-render when cache is cleared
+  _rowCacheVersion.value; // <<< forces re-render when cache is cleared
   const key = m.id ?? `${m.timestamp}:${m.username}`;
   const cached = _rowCache.get(key);
-  if (cached) return cached; // O(1) path - no reactive access beyond _rowCacheVersion
+  if (cached) return cached; // <<< O(1) path, no reactive access beyond _rowCacheVersion
   const d: RowData = {
     html: renderMsgForMessage(m),
     badges: buildBadgeChips(m),
@@ -2665,8 +2531,7 @@ function esc(s: string) {
     .replace(/"/g, "&quot;");
 }
 
-// >>> 7TV paint: fetched via backend /twitch/user which resolves Twitch ID → 7TV
-// >>> Keyed by lowercase username. null = no paint, undefined = not fetched yet.
+// >>> 7tv paint via /twitch/user (resolves twitch id -> 7tv); keyed by lowercase username, null=no paint, undefined=not fetched
 const paintCache = new Map<
   string,
   {
@@ -2682,9 +2547,7 @@ const paintCache = new Map<
 const paintStyles = ref<Map<string, Record<string, string>>>(new Map());
 const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map());
 
-// Bust the row cache whenever any visual dependency changes.
-// emoteMap, personalEmoteMaps and paintStyles are replaced atomically (never
-// mutated in-place after our fetchEmotes fix) so a shallow watch is sufficient.
+// >>> bust row cache on any visual dep change; these maps are replaced atomically so a shallow watch is enough
 watch(
   [
     emoteMap,
@@ -2732,8 +2595,8 @@ watch([paintStyles, plainUsernames, hide7tv], () => {
   _paintStyleEl.textContent = css;
 });
 
-const PAINT_MAX_CONCURRENT = 16; // higher concurrency - network is the bottleneck, not CPU
-const PAINT_AUTO_LIMIT = 80; // cover a large viewport's worth of unique users
+const PAINT_MAX_CONCURRENT = 16; // <<< network bound, not cpu bound
+const PAINT_AUTO_LIMIT = 80; // <<< covers a large viewport's worth of unique users
 let paintConcurrent = 0;
 const paintQueue: Array<{ key: string; jobId: number }> = [];
 let paintAutoRequested = 0;
@@ -2751,7 +2614,7 @@ function intToOpaqueOnDark(c: number): string {
   const g = (c >>> 16) & 0xff;
   const b = (c >>> 8) & 0xff;
   const a = (c & 0xff) / 255;
-  // Match snippet background (#0d0d10) so translucent paints keep their true hue.
+  // >>> match snippet bg (#0d0d10) so translucent paints keep their true hue
   const bgR = 13;
   const bgG = 13;
   const bgB = 16;
@@ -2828,7 +2691,7 @@ function buildPaintStyle(
     styles["--snippet-paint-preview"] = intToOpaqueOnDark(paint.color);
     styles["color"] = intToRgba(paint.color);
   } else if (fallbackColor) {
-    // Some 7TV paints are glow-only and provide no fill stops/color.
+    // >>> some 7tv paints are glow-only, no fill stops/color
     styles["--snippet-paint-preview"] = fallbackColor;
     styles["color"] = fallbackColor;
   }
@@ -2857,8 +2720,7 @@ function drainPaintQueue() {
   }
 }
 
-// Applies one user's cosmetic payload into plain accumulator maps (no reactive writes).
-// Call commitCosmetics() once after the loop to do a single atomic reactive update.
+// >>> writes into plain accumulator maps (no reactivity); call commitCosmetics() once after the loop for one atomic update
 function applyCosmetic(
   key: string,
   data: {
@@ -2914,7 +2776,7 @@ function applyCosmetic(
   }
 }
 
-// Write accumulated cosmetics to reactive state in one batch → one DOM re-render.
+// >>> writes accumulated cosmetics in one batch, one dom re-render
 function commitCosmetics(acc: {
   paints: Map<string, Record<string, string>>;
   badges: Map<string, { imageUrl: string; title: string }>;
@@ -2929,7 +2791,7 @@ function commitCosmetics(acc: {
     const m = new Map(sevenTvBadgeMap.value);
     acc.badges.forEach((v, k) => m.set(k, v));
     sevenTvBadgeMap.value = m;
-    // Pre-warm browser image cache for 7TV badge images
+    // >>> pre-warm browser image cache for 7tv badges
     if (typeof requestIdleCallback !== "undefined") {
       requestIdleCallback(
         () => {
@@ -2962,11 +2824,10 @@ function makeAcc() {
   };
 }
 
-// Bulk fetch cosmetics for multiple users in one request.
-// Processes results as they arrive so the UI updates progressively.
+// >>> bulk-fetches cosmetics for many users at once, applying results as they arrive
 async function fetchBulkCosmetics(logins: string[], jobId: number) {
   if (logins.length === 0) return;
-  const CHUNK = 80; // 7TV GQL aliases per request; keep well below any size limit
+  const CHUNK = 80; // <<< 7tv gql aliases per request, keep below size limit
   for (let i = 0; i < logins.length; i += CHUNK) {
     if (jobId !== activeSearchJob.value) return;
     const chunk = logins.slice(i, i + CHUNK);
@@ -2987,14 +2848,14 @@ async function fetchBulkCosmetics(logins: string[], jobId: number) {
       if (!res.ok || jobId !== activeSearchJob.value) continue;
       const data = (await res.json()) as { results: Record<string, any> };
       if (jobId !== activeSearchJob.value) continue;
-      // Accumulate all changes, then commit once → single re-render for the whole chunk.
+      // >>> accumulate all changes, commit once - single re-render for the whole chunk
       const acc = makeAcc();
       for (const [login, cosmetic] of Object.entries(data.results ?? {})) {
         applyCosmetic(login, cosmetic, acc);
       }
       commitCosmetics(acc);
     } catch {
-      // Non-fatal: fall back to per-user queue for this chunk
+      // >>> non-fatal: fall back to per-user queue for this chunk
       for (const login of chunk) ensurePaint(login);
     }
   }
@@ -3042,14 +2903,12 @@ async function fetchPaint(key: string, jobId: number) {
 async function ensurePaint(username: string) {
   const key = username.toLowerCase();
   if (paintCache.has(key)) return;
-  paintCache.set(key, null); // mark queued/fetching
+  paintCache.set(key, null); // <<< mark queued/fetching
   paintQueue.push({ key, jobId: activeSearchJob.value });
   drainPaintQueue();
 }
 
-// Called when visuals phase activates (initial load) or on scroll (new users entering view).
-// On initial load, collect ALL unique users and send one bulk request.
-// On scroll, new users trickle into the per-user queue.
+// >>> initial load bulk-fetches all users; on scroll, new users trickle into the per-user queue
 let bulkFetchDone = false;
 function checkPaints(bulk = false) {
   if (!visualsPhaseActive.value) return;
@@ -3063,19 +2922,19 @@ function checkPaints(bulk = false) {
     if (u && !seen.has(u) && !paintCache.has(u)) {
       seen.add(u);
       newUsers.push(u);
-      // Pre-mark as queued so concurrent calls don't double-enqueue
+      // >>> pre-mark as queued so concurrent calls don't double-enqueue
       paintCache.set(u, null);
     }
   }
   if (newUsers.length === 0) return;
 
   if (bulk || !bulkFetchDone) {
-    // Initial load: send all at once
+    // >>> initial load: send all at once
     bulkFetchDone = true;
     paintAutoRequested += newUsers.length;
     void fetchBulkCosmetics(newUsers, activeSearchJob.value);
   } else {
-    // Scroll: only enqueue newly visible users (cap at PAINT_AUTO_LIMIT)
+    // >>> scroll: only enqueue newly visible users, capped at PAINT_AUTO_LIMIT
     for (const u of newUsers) {
       if (paintAutoRequested >= PAINT_AUTO_LIMIT) break;
       paintAutoRequested++;
@@ -3085,7 +2944,6 @@ function checkPaints(bulk = false) {
   }
 }
 
-// Debounced displayItems watcher.
 let displayItemsTimer: number | null = null;
 watch(
   displayItems,
@@ -3127,7 +2985,7 @@ watch(
         if (jobId !== activeSearchJob.value) return;
         visualsPhaseActive.value = true;
         setSearchJobPhase("visuals");
-        checkPaints(true); // bulk=true: send all users in one request
+        checkPaints(true); // <<< bulk=true sends all users in one request
       });
   },
   { flush: "post" },
@@ -3136,7 +2994,7 @@ watch(
 watch(
   paintStyles,
   () => {
-    // Avoid retriggering DOM settling for each background paint update.
+    // >>> avoid retriggering dom settling for each background paint update
     if (loading.value || loadingMore.value) markDomSettling();
   },
   { flush: "post" },
@@ -3151,12 +3009,7 @@ watch(
   { immediate: true },
 );
 
-// ─── In-page search (Discord-style "find in loaded messages") ───────────────
-// Driven by the shared useLogsSearch composable so the global nav search bar
-// (App.vue) can act as a scoped find-in-page tool while on this view. Matching
-// runs entirely over the already-fetched `msgs` array - no network request per
-// keystroke - and highlights every match, while the actual jump happens only
-// when the user explicitly presses Enter or chooses a result from the dropdown.
+// >>> in-page find, driven by useLogsSearch; matches run over already-fetched msgs (no per-keystroke request), jump only on enter/select
 const logsSearch = useLogsSearch();
 
 const searchMatchResults = computed<LogSearchResult[]>(() => {
@@ -3223,7 +3076,7 @@ watch(
   { flush: "post" },
 );
 
-// Enter / Shift+Enter (or explicit next/previous) from the nav search bar.
+// >>> enter/shift+enter (or explicit next/previous) from the nav search bar
 watch(
   () => logsSearch.jumpToken.value,
   () => {
@@ -3252,7 +3105,7 @@ watch(
   },
 );
 
-// >>> User popup
+// vvv user popup vvv
 interface TwitchUser {
   login: string;
   displayName: string;
@@ -3415,7 +3268,7 @@ function paintNameStyle(paint: {
       <div class="logs-sub">{{ t("logs.sub") }}</div>
     </div>
 
-    <!-- Mobile: collapsed summary bar -->
+    <!-- >>> mobile: collapsed summary bar -->
     <div class="search-summary show-mobile" @click="searchExpanded = !searchExpanded">
       <span class="summary-text">
         <span class="summary-ch">#{{ channel || "?" }}</span>
@@ -3455,8 +3308,7 @@ function paintNameStyle(paint: {
             <VueDatePicker v-model="dateSingle" no-time-picker dark auto-apply :format="formatDateSingle"
               placeholder="Any date" class="dp-logs dp-logs-single" :teleport="true" />
           </div>
-          <!-- Options: sort direction + cosmetic visuals, merged into one dropdown so -->
-          <!-- the bar doesn't sprawl into a wall of separate controls. -->
+          <!-- >>> sort + visuals merged into one dropdown so the bar doesn't sprawl -->
           <div class="field-wrap visuals-bar" ref="visualsBarRef">
             <label class="field-lbl hide-mobile">Options</label>
             <button class="visuals-toggle hide-mobile" :class="{ open: visualsOpen }"
@@ -3492,11 +3344,10 @@ function paintNameStyle(paint: {
         </div>
       </div>
       <div class="snippet-info" v-if="false">
-        <!-- moved to global SnippetOverlay -->
+        <!-- >>> moved to global SnippetOverlay -->
       </div>
     </div>
 
-    <!-- Automod toggle -->
     <div v-if="searched && isBroadcaster && automodMsgs.length > 0" class="automod-bar">
       <button class="automod-toggle" :class="{ active: showAutomod }" @click="showAutomod = !showAutomod">
         ⚠ AutoMod ({{ automodMsgs.length }})
@@ -3506,7 +3357,6 @@ function paintNameStyle(paint: {
 
     <div v-if="error" class="logs-error">{{ error }}</div>
 
-    <!-- Copy toast -->
     <transition name="toast-fade">
       <div v-if="copyToast" class="copy-toast">{{ t("logs.copied") }}</div>
     </transition>
@@ -3537,14 +3387,7 @@ function paintNameStyle(paint: {
               </button>
             </div>
             <div class="logs-tbody-wrap">
-              <!-- Pinned day header: rendered independently of the virtual-scroll window
-                 (unlike the in-flow .log-day-sep rows below, which only exist in the DOM
-                 while their index is inside [vWinStart, vWinEnd)). Relying on the in-flow
-                 rows' own `position: sticky` to stay pinned meant it only worked when the
-                 actual separator for the current day happened to still be rendered - once
-                 scrolled far enough that it fell outside the render window, there was
-                 nothing left to stick and the header disappeared. This one always reflects
-                 viewportDayLabel, which is derived from whatever's actually visible. -->
+              <!-- >>> pinned header always reflects viewportDayLabel - relying on in-flow rows' position:sticky broke once the day separator scrolled outside the render window -->
               <div v-if="viewportDayLabel" class="pinned-day-header">
                 {{ viewportDayLabel }}
               </div>
@@ -3556,7 +3399,7 @@ function paintNameStyle(paint: {
                   {{ t("logs.no_older") }}
                 </div>
 
-                <!-- Virtual scroll: spacer for items above rendered slice -->
+                <!-- >>> spacer for items above rendered slice -->
                 <div :style="{ height: vSpacerTop + 'px', flexShrink: 0 }" aria-hidden="true"></div>
 
                 <template v-for="item in virtualSlice" :key="item.id">
@@ -3581,7 +3424,7 @@ function paintNameStyle(paint: {
                     </div>
                   </div>
 
-                  <!-- Server pre-rendered row (fast path: single v-html, zero per-row reactive work) -->
+                  <!-- >>> server pre-rendered row: fast path, single v-html, no per-row reactive work -->
                   <div v-else-if="item.msg?._rowHtml" :id="`log-${item.msg.id}`" :data-vit-id="item.id"
                     class="log-row-outer" :class="{
                       highlighted: highlightId === item.msg.id,
@@ -3591,7 +3434,7 @@ function paintNameStyle(paint: {
                       'search-current': searchCurrentId === item.msg.id,
                     }" v-cached-html="{ id: item.msg.id, html: item.msg._rowHtml }"></div>
 
-                  <!-- Client-rendered fallback (when server did not pre-render) -->
+                  <!-- >>> client-rendered fallback when server didn't pre-render -->
                   <div v-else :id="`log-${item.msg.id}`" :data-vit-id="item.id" class="log-row-outer" :class="{
                     highlighted: highlightId === item.msg.id,
                     'log-row-reply':
@@ -3695,14 +3538,14 @@ function paintNameStyle(paint: {
                   </div>
                 </template>
 
-                <!-- Virtual scroll: spacer for items below rendered slice -->
+                <!-- >>> spacer for items below rendered slice -->
                 <div :style="{ height: vSpacerBottom + 'px', flexShrink: 0 }" aria-hidden="true"></div>
 
                 <div class="top-loader" v-show="loadingNewer">
                   <span class="spinner">⟳</span> {{ t("logs.load_newer") }}
                 </div>
               </div>
-              <!-- Custom scrollbar overlay (desktop only) -->
+              <!-- >>> custom scrollbar overlay, desktop only -->
               <div v-if="!isMobileView" class="logs-custom-scrollbar" ref="customScrollbarRef"
                 @pointerdown.stop="onCustomScrollbarTrackPointerDown">
                 <div class="logs-custom-thumb" :style="customThumbStyle" @pointerdown.stop.prevent="onThumbDragStart">
@@ -3711,7 +3554,7 @@ function paintNameStyle(paint: {
             </div>
           </div>
 
-          <!-- Jump-to-newest pill: appears when the user has scrolled up -->
+          <!-- >>> jump-to-newest pill, appears when scrolled up -->
           <transition name="jump-fade">
             <button v-if="searched && !isNearBottom" class="jump-to-newest-btn" @click="jumpToNewest">
               {{ t("logs.jump_to_newest") }}
@@ -3729,9 +3572,8 @@ function paintNameStyle(paint: {
       </div>
     </div>
 
-    <!-- Screenshot toast moved to global SnippetOverlay -->
+    <!-- >>> screenshot toast moved to global SnippetOverlay -->
 
-    <!-- User popup -->
     <div v-if="popup" class="user-popup" :style="{ top: popup.y + 'px', left: popup.x + 'px' }" @click.stop>
       <div class="popup-header" @mousedown.stop="startPopupDrag">
         <div class="popup-avatar-wrap">

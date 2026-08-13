@@ -10,10 +10,10 @@ const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 
-// >>> View mode
+// vvv view mode vvv
 const view = ref<"upload" | "gallery">("upload");
 
-// >>> Upload state
+// vvv upload state vvv
 const isDragging = ref(false);
 const uploading = ref(false);
 const uploadError = ref("");
@@ -21,7 +21,7 @@ const lastLink = ref("");
 const lastCopied = ref(false);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
-// >>> Gallery state
+// vvv gallery state vvv
 interface UploadedImage {
   id: string;
   filename: string;
@@ -38,7 +38,7 @@ const deleteId = ref<string | null>(null);
 const isGuest = computed(() => !session.value);
 const imageUrl = (id: string) => `https://i.shyboti.de/${id}`;
 
-// >>> Upload from URL
+// vvv upload from url vvv
 const urlInput = ref("");
 const urlUploading = ref(false);
 const urlError = ref("");
@@ -65,7 +65,7 @@ async function uploadFromUrl() {
   urlUploading.value = false;
 }
 
-// >>> Crop state
+// vvv crop state vvv
 const cropOpen = ref(false);
 const cropCanvas = ref<HTMLCanvasElement | null>(null);
 const cropImg = ref<HTMLImageElement | null>(null);
@@ -139,7 +139,7 @@ function drawCrop() {
   }
 }
 
-// >>> Draw image on canvas when crop modal opens
+// >>> redraw canvas when crop modal opens
 watch(cropOpen, async (val) => {
   if (!val) return;
   await nextTick();
@@ -178,12 +178,12 @@ async function applyCrop() {
   );
 }
 
-// >>> If ?gallery=1 was passed from UploadsView, open gallery directly
+// >>> ?gallery=1 in query opens gallery directly
 onMounted(() => {
   if (route.query.gallery) switchView("gallery");
 });
 
-// >>> Drag events
+// vvv drag events vvv
 function onDragEnter(e: DragEvent) {
   e.preventDefault();
   isDragging.value = true;
@@ -215,12 +215,9 @@ function onFileInputChange(e: Event) {
   if (files.length) uploadFiles(files);
 }
 
-// >>> Client-side image compression using Canvas
-// >>> Reduces large images to at most maxMB at quality 0.82 before sending.
-// >>> GIFs are not compressed (Canvas loses animation).
+// >>> canvas compression: shrinks to maxMB at quality 0.82, skips gifs
 async function compressImage(file: File, maxMB = 3): Promise<Blob> {
   const maxBytes = maxMB * 1024 * 1024;
-  // >>> Don't compress GIFs - Canvas destroys animation
   if (file.type === "image/gif" || file.size <= maxBytes) return file;
 
   return new Promise((resolve, reject) => {
@@ -230,7 +227,7 @@ async function compressImage(file: File, maxMB = 3): Promise<Blob> {
       URL.revokeObjectURL(url);
       let { width, height } = img;
 
-      // >>> Scale down if image is very large (> 4K in either dimension)
+      // >>> downscale if over 4K in either dimension
       const MAX_DIM = 3840;
       if (width > MAX_DIM || height > MAX_DIM) {
         const scale = Math.min(MAX_DIM / width, MAX_DIM / height);
@@ -244,7 +241,7 @@ async function compressImage(file: File, maxMB = 3): Promise<Blob> {
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0, width, height);
 
-      // >>> Try JPEG at decreasing quality until under maxBytes
+      // >>> try jpeg at decreasing quality until under maxBytes
       let quality = 0.82;
       const tryEncode = () => {
         canvas.toBlob(
@@ -269,25 +266,20 @@ async function compressImage(file: File, maxMB = 3): Promise<Blob> {
     img.onerror = () => {
       URL.revokeObjectURL(url);
       resolve(file);
-    }; // fallback: upload original
+    }; // <<< fallback: upload original
     img.src = url;
   });
 }
 
-// >>> Video pre-compression: shrink videos over 50MB via canvas frame extraction (best-effort)
-// >>> Full video transcoding isn't possible in-browser without ffmpeg.wasm.
-// >>> We shrink images aggressively. Videos over 50MB are rejected with a clear message.
+// >>> no in-browser video transcode (needs ffmpeg.wasm), videos over 50MB get rejected
 async function prepareFile(file: File): Promise<Blob | null> {
   const MAX = 50 * 1024 * 1024;
   if (file.type.startsWith("video/")) {
-    // >>> Videos: try to shrink images only; full video transcode needs server-side ffmpeg
-    // >>> If the file is under 50MB, upload as-is. Over 50MB, reject clearly.
     if (file.size > MAX) return null;
     return file;
   }
-  // >>> Images: compress with Canvas
-  if (file.type === "image/gif") return file; // GIFs lose animation in Canvas
-  if (file.size <= 3 * 1024 * 1024) return file; // small enough, skip compression
+  if (file.type === "image/gif") return file; // <<< gifs lose animation in canvas
+  if (file.size <= 3 * 1024 * 1024) return file; // <<< already small enough
   try {
     return await compressImage(file, 3);
   } catch {
@@ -301,27 +293,27 @@ async function uploadFiles(files: File[]) {
   lastLink.value = "";
   try {
     for (const file of files) {
-      // >>> Hard reject: not an accepted type
+      // >>> hard reject: not an accepted type
       if (!isAcceptedFile(file)) {
         uploadError.value = `${file.name} is not an accepted image or video`;
         continue;
       }
 
-      // >>> Pre-compress / validate size before upload
+      // >>> pre-compress / validate size before upload
       const blob = await prepareFile(file);
       if (!blob) {
         uploadError.value = `${file.name} exceeds 50 MB and cannot be compressed in-browser. Please compress it first.`;
         continue;
       }
 
-      // >>> Hard server-side limit guard
+      // >>> hard server-side limit guard
       if (blob.size > 50 * 1024 * 1024) {
         uploadError.value = `${file.name} is too large (max 50 MB)`;
         continue;
       }
 
       const fd = new FormData();
-      // >>> Use compressed/validated blob, keep original filename
+      // >>> use compressed/validated blob, keep original filename
       fd.append(
         "file",
         new File([blob], file.name, { type: blob.type || file.type }),
@@ -337,7 +329,7 @@ async function uploadFiles(files: File[]) {
         body: fd,
       });
 
-      // >>> Always try to parse JSON - but handle plain-text 404/errors gracefully
+      // >>> server sometimes returns plain-text errors, not just json
       let data: any = {};
       const ct = res.headers.get("content-type") ?? "";
       if (ct.includes("application/json")) {
@@ -367,7 +359,7 @@ async function copyLink(url: string) {
   setTimeout(() => (lastCopied.value = false), 1800);
 }
 
-// >>> Gallery
+// vvv gallery vvv
 async function loadGallery() {
   galleryLoad.value = true;
   try {
@@ -420,7 +412,6 @@ function switchView(v: "upload" | "gallery") {
 
 <template>
   <div class="images-page">
-    <!-- Gallery view -->
     <div v-if="view === 'gallery'" class="gallery-view">
       <div class="gallery-header">
         <button class="back-btn" @click="view = 'upload'">
@@ -461,15 +452,12 @@ function switchView(v: "upload" | "gallery") {
       </div>
     </div>
 
-    <!-- Upload view -->
     <div v-else class="upload-view">
-      <!-- Guest warning -->
       <div v-if="isGuest" class="guest-banner">
         <span class="guest-icon">ⓘ</span>
         {{ t("images.guest_note") }}
       </div>
 
-      <!-- Drop zone -->
       <div class="dropzone" :class="{ dragging: isDragging, has_link: !!lastLink }" @dragenter="onDragEnter"
         @dragleave="onDragLeave" @dragover="onDragOver" @drop="onDrop"
         @click="!uploading && !lastLink && fileInputRef?.click()">
@@ -477,13 +465,11 @@ function switchView(v: "upload" | "gallery") {
           accept="image/*,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/mpeg" multiple
           class="file-input-hidden" @change="onFileInputChange" />
 
-        <!-- Uploading state -->
         <div v-if="uploading" class="drop-state">
           <div class="upload-spinner"></div>
           <div class="drop-label">{{ t("images.uploading") }}</div>
         </div>
 
-        <!-- Link result state -->
         <div v-else-if="lastLink" class="drop-state link-state" @click.stop>
           <img :src="lastLink" class="upload-preview" alt="uploaded" />
           <div class="link-bar">
@@ -502,7 +488,6 @@ function switchView(v: "upload" | "gallery") {
           </div>
         </div>
 
-        <!-- Idle state -->
         <div v-else class="drop-state">
           <svg class="drop-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
             <rect x="4" y="10" width="56" height="44" rx="5" stroke="currentColor" stroke-width="2.5"
@@ -525,7 +510,6 @@ function switchView(v: "upload" | "gallery") {
         </div>
       </div>
 
-      <!-- Upload from URL -->
       <div class="url-bar">
         <input v-model="urlInput" class="url-input" placeholder="Paste any image URL to upload it…"
           @keydown.enter="uploadFromUrl" :disabled="urlUploading" />
@@ -535,7 +519,6 @@ function switchView(v: "upload" | "gallery") {
       </div>
       <div v-if="urlError" class="url-error">{{ urlError }}</div>
 
-      <!-- Bottom bar -->
       <div class="bottom-bar">
         <button class="your-btn" @click.stop="switchView('gallery')">
           <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" class="your-icon">
@@ -551,7 +534,6 @@ function switchView(v: "upload" | "gallery") {
     </div>
   </div>
 
-  <!-- Crop modal -->
   <Teleport to="body">
     <div v-if="cropOpen" class="crop-backdrop" @click.self="cropOpen = false">
       <div class="crop-modal">

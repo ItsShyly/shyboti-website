@@ -46,7 +46,7 @@ const activeTypes = ref<Set<string>>(new Set());
 // >>> Collapsed day groups - only today open by default
 const collapsedDays = ref<Set<string>>(new Set());
 
-// >>> User popup
+// vvv user popup vvv
 interface TwitchUser {
   login: string;
   displayName: string;
@@ -70,7 +70,7 @@ const popupUser = ref<TwitchUser | null>(null);
 const popupLoading = ref(false);
 
 let sseSource: EventSource | null = null;
-// >>> fetchActivity()/startSSE() cross an await 
+// >>> fetchActivity()/startSSE() cross an await
 let disposed = false;
 
 const TYPE_GROUPS = computed(() => [
@@ -225,14 +225,14 @@ async function startSSE() {
     try {
       const entry = JSON.parse(e.data) as ActivityEntry;
       activity.value = [entry, ...activity.value].slice(0, 200);
-      // Ensure today is never collapsed when new entries arrive
+      // >>> today should never end up collapsed when new entries arrive
       const todayLabel = fmtDate(Date.now());
       collapsedDays.value.delete(todayLabel);
     } catch { }
   };
 }
 
-// >>> Grouping & collapse
+// vvv grouping & collapse vvv
 function fmtTime(ts: number) {
   return new Date(ts).toLocaleTimeString([], {
     hour: "2-digit",
@@ -339,22 +339,18 @@ const TYPE_META = computed(
     }) as Record<string, { icon: string; color: string; label: string }>,
 );
 
-// >>> Actions
-
-// >>> Navigate to commands view and open the edit panel for this command
+// vvv actions vvv
 function goToCommand(e: ActivityEntry) {
   const name = e.target.replace(/^\+/, "");
   router.push({ path: "/commands", query: { edit: name } });
 }
 
-// >>> Open logs filtered to this user around the time of the event
 function goToLogs(e: ActivityEntry) {
   const ch = e.channel;
   const user = e.target;
   router.push({ path: "/logs", query: { channel: ch, user } });
 }
 
-// >>> Navigate to automations for timer/trigger events
 function goToAutomations(e: ActivityEntry) {
   const tab = e.type.startsWith("timer") ? "timers" : "triggers";
   router.push({ path: "/automations", query: { tab } });
@@ -441,7 +437,7 @@ function paintNameStyle(paint: {
   shadows: any[];
 }): Record<string, string> {
   const styles: Record<string, string> = {};
-  // Convert 7TV int32 color to rgba
+  // >>> convert 7tv int32 color to rgba
   function intToRgba(c: number): string {
     const r = (c >>> 24) & 0xff;
     const g = (c >>> 16) & 0xff;
@@ -517,7 +513,6 @@ function fmtActor(actor: string) {
       </div>
     </div>
 
-    <!-- Type filter chips grouped -->
     <div class="type-filters">
       <button v-for="group in TYPE_GROUPS" :key="group.label" class="group-chip"
         :class="{ active: group.types.every((t) => activeTypes.has(t)) }" @click="toggleGroup(group.types)">
@@ -538,7 +533,6 @@ function fmtActor(actor: string) {
 
     <div v-else class="feed">
       <template v-for="group in groupedActivity()" :key="group.date">
-        <!-- Day header - clickable to collapse -->
         <div class="feed-day-header" @click.stop="toggleDay(group.date)">
           <span class="day-chevron">{{
             collapsedDays.has(group.date) ? "▶" : "▼"
@@ -547,7 +541,6 @@ function fmtActor(actor: string) {
           <span class="day-count">{{ group.entries.length }}</span>
         </div>
 
-        <!-- Entries -->
         <template v-if="!collapsedDays.has(group.date)">
           <div v-for="e in group.entries" :key="e.id" class="feed-row">
             <div class="feed-icon" :style="{
@@ -560,35 +553,28 @@ function fmtActor(actor: string) {
             <div class="feed-body">
               <span class="feed-type" :style="{ color: TYPE_META[e.type]?.color }">{{ TYPE_META[e.type]?.label }}</span>
 
-              <!-- Target: clickable to open user popup -->
               <span class="feed-target" :class="{ 'mod-target': !!e.target }" @click.stop="
                 e.target && openUserPopup(e.target, e.channel, $event)
                 ">{{ e.target }}</span>
 
-              <!-- by actor (only if not 'mod' for cmd events) -->
               <span class="feed-by" v-if="e.actor">by {{ fmtActor(e.actor) }}</span>
 
-              <!-- detail (reason / duration) -->
               <span v-if="fmtDetail(e)" class="feed-detail">· {{ fmtDetail(e) }}</span>
 
               <span v-if="viewChannel === ALL_CHANNELS" class="feed-ch">#{{ e.channel }}</span>
             </div>
 
             <div class="feed-right">
-              <!-- Action buttons -->
               <div class="feed-actions">
-                <!-- Log link for ban/timeout/unban -->
                 <button v-if="['ban', 'timeout', 'unban'].includes(e.type)" class="act-btn" title="View user logs"
                   @click.stop="goToLogs(e)">
                   logs
                 </button>
-                <!-- Edit command for cmd events -->
                 <button v-if="
                   ['cmd_added', 'cmd_changed', 'cmd_removed'].includes(e.type)
                 " class="act-btn" title="Edit command" @click.stop="goToCommand(e)">
                   edit
                 </button>
-                <!-- Go to automations for timer/trigger events -->
                 <button v-if="
                   e.type.startsWith('timer') || e.type.startsWith('trigger')
                 " class="act-btn" title="View in Automations" @click.stop="goToAutomations(e)">
@@ -602,7 +588,6 @@ function fmtActor(actor: string) {
       </template>
     </div>
 
-    <!-- User popup -->
     <div v-if="popup" class="user-popup" :style="{ top: popup.y + 'px', left: popup.x + 'px' }" @click.stop>
       <div class="popup-header">
         <div class="popup-avatar-wrap">
@@ -620,17 +605,14 @@ function fmtActor(actor: string) {
         <button class="popup-close" @click="closePopup">✕</button>
       </div>
 
-      <!-- Profile body -->
       <div class="popup-body">
         <div v-if="popupLoading" class="popup-loading">Loading…</div>
         <template v-else-if="popupUser">
           <div class="popup-stats">
-            <!-- Account age -->
             <div class="popup-stat">
               <span class="stat-val">{{ fmtJoined(popupUser.createdAt) }}</span>
               <span class="stat-lbl">account created</span>
             </div>
-            <!-- Own channel followers -->
             <div v-if="popupUser.ownFollowers !== null" class="popup-stat">
               <span class="stat-val">{{
                 fmtFollowers(popupUser.ownFollowers)
@@ -638,7 +620,6 @@ function fmtActor(actor: string) {
               <span class="stat-lbl">followers</span>
             </div>
           </div>
-          <!-- Follow / Sub relationship rows -->
           <div class="popup-relations">
             <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">
               <span class="rel-icon">{{
@@ -664,7 +645,6 @@ function fmtActor(actor: string) {
             </div>
           </div>
 
-          <!-- Paint cosmetic -->
           <div v-if="popupUser?.paint" class="popup-paint">
             <div class="popup-paint-label">7TV Paint</div>
             <div class="popup-paint-display">
@@ -672,7 +652,6 @@ function fmtActor(actor: string) {
             </div>
           </div>
 
-          <!-- Name history -->
           <div v-if="popupUser.nameHistory?.length" class="popup-names">
             <div class="popup-names-label">Previous names</div>
             <div v-for="n in popupUser.nameHistory" :key="n.name" class="popup-name-row">

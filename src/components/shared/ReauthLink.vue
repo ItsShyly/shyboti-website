@@ -3,12 +3,7 @@ import { computed } from "vue";
 import { useAuth } from "../../auth";
 import { API } from "../../api";
 
-// >>> Drop-in for any "your stored Twitch token is missing scope X, re-authorize
-// >>> to fix it" prompt. Re-auth only makes sense for the real broadcaster's own
-// >>> Twitch consent - an admin god-moded into someone else's channel clicking
-// >>> the link would authorize under the ADMIN's own account instead, silently
-// >>> doing nothing for the channel that's actually missing the scope. So this
-// >>> renders the link only on your own channel, and inert text otherwise.
+// >>> admin mode would re-auth as the admin's own account, not the broadcaster - only render the link on your own channel
 const { session } = useAuth();
 const isOwnChannel = computed(
   () => !!session.value && session.value.login === session.value.channel,

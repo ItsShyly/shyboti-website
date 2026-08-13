@@ -46,7 +46,7 @@ const saving = ref<string | null>(null);
 const error = ref("");
 const success = ref("");
 
-// >>> Edit panel <<<
+// vvv edit panel vvv
 const editOpen = ref(false);
 const isNew = ref(false);
 const editOrigName = ref(""); // <<< name before rename, so we know which row to delete
@@ -87,7 +87,7 @@ function fmtDuration(s: number) {
 }
 
 function fmtRemaining(cd: Countdown): string {
-  void tick.value; // subscribe to tick so Vue re-runs this on every second
+  void tick.value; // <<< subscribes to tick, forces rerun every second
   if (cd.status !== "running" || !cd.started_at)
     return fmtDuration(cd.duration_sec);
   const elapsed = Math.floor((Date.now() - cd.started_at) / 1000);
@@ -95,7 +95,7 @@ function fmtRemaining(cd: Countdown): string {
   return fmtDuration(rem);
 }
 
-// >>> Tick: recompute remaining every second <<<
+// vvv tick, recompute remaining every second vvv
 const tick = ref(0);
 let tickInterval: ReturnType<typeof setInterval> | null = null;
 let pollInterval: ReturnType<typeof setInterval> | null = null;
@@ -382,10 +382,8 @@ defineExpose({
 
     <div v-else class="ep-row-list">
       <div v-for="cd in countdowns" :key="cd.id" class="ep-list-row countdown-row" :class="{ inactive: !cd.is_active }">
-        <!-- Status indicator -->
         <div class="cd-status-dot" :class="cd.status ?? 'idle'"></div>
 
-        <!-- Main info -->
         <div class="cd-info" @click="openEdit(cd)">
           <div class="cd-name">{{ cd.name }}</div>
           <div class="cd-meta">
@@ -395,7 +393,6 @@ defineExpose({
             <span v-if="cd.enabled_when !== 'always'" class="ep-meta-pill when">{{ cd.enabled_when }}</span>
             <span v-if="cd.condition" class="ep-meta-pill cond">if …</span>
           </div>
-          <!-- Running countdown: show live remaining -->
           <div v-if="cd.status === 'running'" class="cd-remaining">
             {{ fmtRemaining(cd) }} {{ t("countdown.status.running") }}
           </div>
@@ -407,7 +404,6 @@ defineExpose({
           </div>
         </div>
 
-        <!-- Controls -->
         <div class="cd-controls">
           <button v-if="canToggle" class="ctrl-btn start" :class="{ active: cd.status === 'running' }" @click.stop="
             controlCountdown(
@@ -430,7 +426,6 @@ defineExpose({
           </button>
         </div>
 
-        <!-- Edit / Delete -->
         <div class="ep-row-actions">
           <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(cd)" :class="{ disabled: !canEdit }">
             {{ canEdit ? t("countdown.edit") : t("countdown.view") }}
@@ -447,7 +442,7 @@ defineExpose({
       </div>
     </div>
 
-    <!-- >>> Edit panel <<< -->
+    <!-- vvv edit panel vvv -->
     <Teleport to="body">
       <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => (editOpen = false))">
         <div class="ep-panel">
@@ -475,7 +470,6 @@ defineExpose({
               </div>
             </div>
 
-            <!-- On start message -->
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("countdown.field.msg_start") }}
                 <span class="ep-field-hint">{{
@@ -486,7 +480,6 @@ defineExpose({
                 @focus="activeField = 'msg_start'" @input="onEditorInput(startEditorRef, 'msg_start')"></div>
             </div>
 
-            <!-- Tick -->
             <div class="ep-row-2">
               <div class="ep-field-group">
                 <label class="ep-field-label">{{ t("countdown.field.msg_tick") }}
@@ -504,7 +497,6 @@ defineExpose({
               </div>
             </div>
 
-            <!-- On finish message -->
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("countdown.field.msg_end") }}
                 <span class="ep-field-hint">{{
@@ -515,11 +507,10 @@ defineExpose({
                 @input="onEditorInput(endEditorRef, 'msg_end')"></div>
             </div>
 
-            <!-- Variable reference - inserts into whichever message field was last focused -->
+            <!-- >>> inserts into whichever field was last focused -->
             <RefPanel :title="`${t('edit.var_ref')} · → ${activeField.replace('msg_', '')}`" context="countdown"
               @insert="insertRefToken" />
 
-            <!-- Conditions -->
             <div class="ep-row-2">
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
@@ -569,7 +560,7 @@ defineExpose({
       </div>
     </Teleport>
 
-    <!-- Share modal -->
+    <!-- vvv share modal vvv -->
     <Teleport to="body">
       <div v-if="shareOpen" class="ep-modal-overlay" @click.self="shareOpen = false">
         <div class="ep-modal">

@@ -22,18 +22,17 @@ const {
   onSnippetImgLoad,
 } = useSnippet();
 
-// Injected from App.vue - the .main-panel element ref
+// >>> injected from App.vue, the .main-panel element
 const mainPanelRef = inject<Ref<HTMLElement | null>>("mainPanelRef");
 const route = useRoute();
 
-// Only activate snippet tool on the logs route
 const snippetEnabled = computed(() => route.path === "/logs");
 
 function getPanel(): HTMLElement | null {
   return mainPanelRef?.value ?? null;
 }
 
-// Convert scroll-relative coords → fixed viewport coords for the overlay rect
+// >>> scroll-relative coords -> fixed viewport coords
 function toFixed(
   scrollRel: number,
   panelScrollPos: number,
@@ -70,16 +69,13 @@ onMounted(() => {
   window.addEventListener("mousemove", handleMouseMove);
   window.addEventListener("mouseup", handleMouseUp);
 
-  // Watch for panel ref changes to attach/detach listeners
   watch(
     () => mainPanelRef?.value,
     (newPanel) => {
-      // Detach from old panel
       if (panel) {
         panel.removeEventListener("mousedown", handleMouseDown);
         panel.removeEventListener("contextmenu", handleCtxMenu);
       }
-      // Attach to new panel
       panel = newPanel || null;
       if (panel) {
         panel.addEventListener("mousedown", handleMouseDown);
@@ -89,7 +85,7 @@ onMounted(() => {
     { immediate: true },
   );
 
-  // When navigating away from logs mid-drag, cancel the drag
+  // >>> navigating away from logs mid-drag cancels the drag
   watch(snippetEnabled, (enabled) => {
     if (!enabled && screenshotDrag.value) {
       screenshotDrag.value = false;
@@ -107,7 +103,6 @@ onUnmounted(() => {
   }
 });
 
-// Compute fixed-position rect for the visual overlay
 function fixedRect() {
   const panel = getPanel();
   const sel = screenshotRect.value;
@@ -124,7 +119,6 @@ function fixedRect() {
 
 <template>
   <Teleport to="body">
-    <!-- Selection rectangle -->
     <div
       v-if="screenshotRect && screenshotDrag && fixedRect()"
       class="snippet-global-rect"
@@ -136,7 +130,6 @@ function fixedRect() {
       }"
     />
 
-    <!-- Toast -->
     <transition name="snippet-toast-fade">
       <div v-if="screenshotToast" class="snippet-toast-global">
         <template v-if="screenshotToast.state === 'uploading'">

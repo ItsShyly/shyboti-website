@@ -35,7 +35,7 @@ const RULE_ACTION_LABEL: Record<string, string> = {
   category: "category",
 };
 
-// >>> trigger_type absent
+// >>> no trigger_type means a legacy bitrate-only rule
 function ruleTitle(rule: ObsRule): string {
   const type = rule.trigger_type ?? "bitrate";
   if (type === "bitrate") return `${rule.condition} ${rule.bitrate_kbps} kbps`;
@@ -154,7 +154,7 @@ onMounted(() => {
   fetchRules();
   fetchCategoryScope();
 });
-// >>> session and channelRole 
+// >>> refetch on channel switch or view-permission change
 watch(
   [() => session.value?.channel, canView],
   () => {

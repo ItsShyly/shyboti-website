@@ -119,7 +119,7 @@ function onEditSaved() {
 }
 
 function startCreate() {
-  // >>> Open the edit panel immediately with an empty name.
+  // >>> opens edit panel with an empty name
   openEdit('', false);
 }
 
@@ -860,7 +860,7 @@ async function reloadAll() {
 }
 
 let _sseSource: EventSource | null = null;
-// >>> startCommandSSE()'s fetch crosses an await 
+// >>> guards the fetch's post-await callback firing after unmount
 let _sseDisposed = false;
 function startCommandSSE() {
   _sseSource?.close();
@@ -937,7 +937,7 @@ onUnmounted(() => {
         </div>
       </div>
       <div class="ep-view-header-right">
-        <!-- sync (Custom tab only) -->
+        <!-- >>> Custom tab only -->
         <div v-if="botPresent" class="ep-sync-wrap">
           <button v-if="activeTab === 'Custom' && syncConf?.is_active" class="ep-sync-indicator"
             @click="syncOpen = !syncOpen" :title="`${t('cmd.sync.active')} #${syncConf.sync_from}`">
@@ -1004,7 +1004,7 @@ onUnmounted(() => {
     </div>
 
     <div class="cmd-body">
-      <!-- Default tab -->
+      <!-- vvv default tab vvv -->
       <template v-if="activeTab === 'Default'">
         <div v-if="loading" class="state-msg">{{ t("cmd.loading") }}</div>
         <div v-else-if="!botPresent" class="state-msg">{{ t("cmd.no_bot") }}</div>
@@ -1114,7 +1114,7 @@ onUnmounted(() => {
         </template>
       </template>
 
-      <!-- Custom tab -->
+      <!-- vvv custom tab vvv -->
       <template v-if="activeTab === 'Custom'">
 
         <div v-if="!customLoading && filteredCustom().length > 0" class="table-header custom-table-header">
@@ -1236,7 +1236,7 @@ onUnmounted(() => {
         </template>
       </template>
 
-      <!-- OBS tab -->
+      <!-- vvv obs tab vvv -->
       <template v-if="activeTab === 'Obs'">
         <div v-if="obsLoading" class="state-msg">{{ t("cmd.loading") }}</div>
 
@@ -1253,7 +1253,7 @@ onUnmounted(() => {
         </template>
 
         <template v-else>
-          <!-- count and new button now live in ep-view-header -->
+          <!-- >>> count and new button live in ep-view-header -->
 
           <div v-if="obsCommandCount === 0" class="custom-empty">
             <div class="empty-icon">✦</div>
@@ -1404,7 +1404,7 @@ onUnmounted(() => {
         </template>
       </template>
 
-      <!-- Extras tab -->
+      <!-- vvv extras tab vvv -->
       <template v-if="activeTab === 'Extras'">
         <div v-if="extrasLoading" class="state-msg">Loading…</div>
         <div v-else-if="!botPresent" class="state-msg">{{ t("cmd.no_bot") }}</div>
@@ -1448,7 +1448,7 @@ onUnmounted(() => {
     :sourceBindings="obsSourceBindings" :argCommands="obsArgCommands" :editTarget="obsEditTarget" :prefix="prefix"
     :scenes="obsKnownScenes" :sources="obsKnownSources" @close="obsEditOpen = false" @saved="onObsSaved" />
 
-  <!-- Share modal -->
+  <!-- vvv share modal vvv -->
   <Teleport to="body">
     <div v-if="shareOpen" class="modal-overlay" @click.self="shareOpen = false">
       <div class="modal">

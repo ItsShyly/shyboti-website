@@ -1,10 +1,4 @@
-// composables/useVarRefs.ts
-//
-// Shared "live variables" loader - fetches the channel's actual counters/vars
-// from /variables/:channel so every script editor (custom commands, OBS
-// widgets, triggers, timers, countdowns) can show and click-to-insert the
-// SAME list of real variable names, instead of only OBS widgets having this
-// (which is where it originally lived, as a one-off).
+// >>> shared live-variables loader so every script editor can show/click-insert the same real counter/var names (used to be OBS-widgets-only)
 
 import { ref } from "vue";
 import { API } from "../api";
@@ -46,7 +40,7 @@ export function useVarRefs() {
         loaded.value = true;
       }
     } catch {
-      /* best-effort */
+      // >>> best-effort
     }
     loading.value = false;
   }

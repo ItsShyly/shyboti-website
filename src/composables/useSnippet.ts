@@ -3,7 +3,7 @@ import { API } from "../api";
 import { useAuth } from "../auth";
 import { toCanvas } from "html-to-image";
 
-// Shared reactive state - single instance across the whole app
+// >>> shared instance across the whole app
 const screenshotDrag = ref(false);
 const screenshotRect = ref<{
   x: number;
@@ -24,7 +24,7 @@ let suppressContextMenuUntil = 0;
 let activeUploadController: AbortController | null = null;
 let activeSnippetRunId = 0;
 
-// rAF throttle flag - one pending frame max
+// >>> rAF throttle, one pending frame max
 let rafPending = false;
 const SNIPPET_CAPTURE_DELAY_MS = 0;
 const SNIPPET_DEBUG = true;
@@ -79,18 +79,18 @@ function nearestRowAtLocalY(
 export function useSnippet() {
   const { session } = useAuth();
 
-  /** Attach to @contextmenu on the host element */
+  // >>> attach to @contextmenu on the host element
   function onSnippetContextMenu(e: MouseEvent) {
     if (screenshotDrag.value || Date.now() < suppressContextMenuUntil) {
       e.preventDefault();
     }
   }
 
-  /** Attach to @mousedown on the host element */
+  // >>> attach to @mousedown on the host element
   function onSnippetMouseDown(e: MouseEvent, containerEl: HTMLElement) {
     if (e.button !== 2) return;
     const target = e.target as HTMLElement;
-    // Don't interfere with interactive elements
+    // >>> don't interfere with interactive elements
     if (target.closest("a, button, input, textarea, select, [data-no-snippet]"))
       return;
 
@@ -103,7 +103,7 @@ export function useSnippet() {
     e.preventDefault();
   }
 
-  /** Attach to window mousemove - rAF throttled so no lag */
+  // >>> attach to window mousemove, rAF throttled so no lag
   function onWindowMouseMove(e: MouseEvent, containerEl: HTMLElement | null) {
     if (!screenshotDrag.value || !screenshotAnchor.value || !containerEl)
       return;
@@ -126,7 +126,7 @@ export function useSnippet() {
     });
   }
 
-  /** Attach to window mouseup */
+  // >>> attach to window mouseup
   async function onWindowMouseUp(
     e: MouseEvent,
     containerEl: HTMLElement | null,
@@ -138,10 +138,10 @@ export function useSnippet() {
     screenshotAnchor.value = null;
     if (!sel || sel.w < 10 || sel.h < 10 || !containerEl) return;
 
-    // Suppress the native context menu that fires on mouseup after a drag
+    // >>> suppress the native context menu that fires after a drag
     suppressContextMenuUntil = Date.now() + 500;
 
-    // Same-session behavior: cancel any in-flight upload if a new snippet starts.
+    // >>> cancel in-flight upload if a new snippet starts
     activeSnippetRunId += 1;
     const runId = activeSnippetRunId;
     if (activeUploadController) {
@@ -149,16 +149,14 @@ export function useSnippet() {
       activeUploadController = null;
     }
 
-    // Capture the inner scroller so we can force-expand it to full content height.
-    // html-to-image clones the DOM but resets scroll positions to 0, so we must
-    // render the full scrollable content and crop using content-space coordinates.
+    // >>> html-to-image resets scroll to 0 on clone, so render full content height and crop in content-space coords
     const captureRoot =
       (containerEl.querySelector(".logs-tbody") as HTMLElement | null) ??
       containerEl;
     const hostRect = containerEl.getBoundingClientRect();
     const captureRect = captureRoot.getBoundingClientRect();
 
-    // Convert selection from host-local space → viewport → capture-root content space
+    // >>> host-local space -> viewport -> capture-root content space
     const selViewportLeft = hostRect.left + sel.x - containerEl.scrollLeft;
     const selViewportTop = hostRect.top + sel.y - containerEl.scrollTop;
     const selInCapture = {
@@ -169,7 +167,7 @@ export function useSnippet() {
     };
 
     if (SNIPPET_DEBUG) {
-      // Debug-only: inspect selected usernames and paint-related style vars.
+      // >>> debug-only: inspect selected usernames/paint vars
       try {
         const panel = containerEl.getBoundingClientRect();
         const selLeft = panel.left + sel.x - containerEl.scrollLeft;
@@ -302,10 +300,7 @@ export function useSnippet() {
 
       let cropCanvas: HTMLCanvasElement;
       try {
-        // Force html-to-image to render the FULL scrollable content of the inner
-        // scroller by overriding overflow/height on the cloned node.  This way
-        // scroll position is irrelevant - all rows are physically laid out and
-        // content-space coordinates map 1:1 to canvas pixels.
+        // >>> override overflow/height on the clone to force full content render, so scroll pos is irrelevant and coords map 1:1 to canvas pixels
         const contentH = captureRoot.scrollHeight;
         const contentW = captureRoot.scrollWidth;
 
@@ -323,7 +318,7 @@ export function useSnippet() {
           },
         });
 
-        // Content-space coordinates → scaled canvas pixels
+        // >>> content-space coords -> scaled canvas pixels
         const srcX = Math.max(0, Math.round(selInCapture.x * scale));
         const srcY = Math.max(0, Math.round(selInCapture.y * scale));
         const reqW = Math.max(1, Math.round(selInCapture.w * scale));
@@ -453,7 +448,7 @@ export function useSnippet() {
     }
   }
 
-  /** Call from the toast image's @load event */
+  // >>> call from the toast image's @load event
   function onSnippetImgLoad() {
     if (!screenshotToast.value) return;
     screenshotToast.value = { ...screenshotToast.value, imgReady: true };

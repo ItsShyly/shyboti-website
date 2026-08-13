@@ -86,8 +86,7 @@ function actionLabel(action: string) {
   return action === "delete" ? t("mod.action.delete") : action === "timeout" ? t("mod.action.timeout") : t("mod.action.ban");
 }
 
-// >>> Groups - just a shared reason. Action/duration always come from the
-// >>> item itself; joining a group only overwrites its reason.
+// >>> groups are just a shared reason - action/duration always come from the item itself
 interface ModGroup { id: number; name: string }
 const GROUP_PATH: Record<Tab, string> = { blocked: "blocked-terms", spam: "spam-filters", nukes: "nukes" };
 const modGroups: Record<Tab, ModGroup[]> = reactive({ blocked: [], spam: [], nukes: [] });
@@ -115,8 +114,7 @@ function membersOf(tab: Tab, groupId: number) {
 function ungroupedOf(tab: Tab) {
   return itemsOf(tab).filter((i) => !i.group_id);
 }
-// >>> Groups + a trailing "ungrouped" bucket, so every row template only
-// >>> needs one v-for (over section.items) regardless of grouping.
+// >>> trailing "ungrouped" bucket lets every row template use one v-for regardless of grouping
 function sectionsOf(tab: Tab): { group: ModGroup | null; items: any[] }[] {
   return [
     ...modGroups[tab].map((g) => ({ group: g, items: membersOf(tab, g.id) })),
@@ -648,7 +646,7 @@ const reloading = ref(false);
 async function reload() { reloading.value = true; await load(); reloading.value = false }
 
 let _sseSource: EventSource | null = null;
-// >>> startModSSE()'s fetch crosses an await 
+// >>> guards the fetch's post-await callback firing after unmount
 let _sseDisposed = false;
 function startModSSE() {
   _sseSource?.close();
@@ -757,7 +755,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 
     <div v-if="loading" class="ep-empty">{{ t("mod.loading") }}</div>
 
-    <!-- Blocked Terms list -->
+    <!-- vvv blocked terms list vvv -->
     <template v-else-if="activeTab === 'blocked'">
       <div v-if="!blockedTerms.length && !modGroups.blocked.length" class="ep-empty">{{ botPresent ? t("mod.empty.blocked") : t("mod.no_bot") }}</div>
       <template v-else>
@@ -812,7 +810,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       </template>
     </template>
 
-    <!-- Spam Filters list -->
+    <!-- vvv spam filters list vvv -->
     <template v-else-if="activeTab === 'spam'">
       <div v-if="!spamFilters.length && !modGroups.spam.length" class="ep-empty">{{ botPresent ? t("mod.empty.spam") : t("mod.no_bot") }}</div>
       <template v-else>
@@ -866,7 +864,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       </template>
     </template>
 
-    <!-- Nukes list -->
+    <!-- vvv nukes list vvv -->
     <template v-else-if="activeTab === 'nukes'">
       <div v-if="!nukes.length && !modGroups.nukes.length" class="ep-empty">{{ botPresent ? t("mod.empty.nukes") : t("mod.no_bot") }}</div>
       <template v-else>
@@ -902,7 +900,6 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 <span class="item-action ep-meta-pill" :style="actionPillStyle(n.action)">{{ actionLabel(n.action)
                 }}</span>
                 <span v-if="n.action !== 'delete'" class="item-dur">{{ fmtDur(n.duration) }}</span>
-                <!-- Lookback override -->
                 <div class="lookback-wrap">
                   <span class="lookback-lbl">↩</span>
                   <input type="number" min="1" max="1440" :value="nukeLookbackOverride[n.id] ?? n.lookback ?? 30"
@@ -910,7 +907,6 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     class="ep-field-input lookback-input" :title="t('mod.nuke.lookback')" />
                   <span class="lookback-hint">{{ t("mod.nuke.min") }}</span>
                 </div>
-                <!-- Expiry -->
                 <div v-if="n.stay_active" class="expiry-wrap">
                   <span v-if="n.expires_at" class="expiry-badge"
                     :class="{ expired: nukeExpiresIn(n) === t('mod.nuke.expired') }">
@@ -952,12 +948,11 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   </div>
 
 
-  <!-- Edit panel -->
+  <!-- vvv edit panel vvv -->
   <Teleport to="body">
     <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => editOpen = false)">
       <div class="ep-panel">
 
-        <!-- Header -->
         <div class="ep-panel-header">
           <div>
             <div class="ep-panel-title">
@@ -974,7 +969,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 
         <div class="ep-panel-body">
 
-          <!-- BLOCKED TERM FORM -->
+          <!-- vvv blocked term form vvv -->
           <template v-if="editTab === 'blocked'">
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.field.term") }}</label>
@@ -1012,7 +1007,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
           </template>
 
-          <!-- SPAM FILTER FORM -->
+          <!-- vvv spam filter form vvv -->
           <template v-if="editTab === 'spam'">
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.field.spam_type") }}</label>
@@ -1097,7 +1092,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
           </template>
 
-          <!-- NUKE FORM -->
+          <!-- vvv nuke form vvv -->
           <template v-if="editTab === 'nukes'">
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.nuke.trigger_ph") }}</label>
@@ -1196,7 +1191,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
     </div>
   </Teleport>
 
-  <!-- Group panel -->
+  <!-- vvv group panel vvv -->
   <Teleport to="body">
     <div v-if="groupPanelOpen" class="ep-overlay" @click.self="groupPanelOpen = false">
       <div class="ep-panel">
@@ -1232,7 +1227,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
     </div>
   </Teleport>
 
-  <!-- Share modal -->
+  <!-- vvv share modal vvv -->
   <Teleport to="body">
     <div v-if="shareOpen" class="ep-modal-overlay" @click.self="shareOpen = false">
       <div class="ep-modal">

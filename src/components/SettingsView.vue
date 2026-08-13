@@ -13,8 +13,7 @@ const isBroadcaster = ref(false);
 // >>> default true so real users don't see Remove Bot flash away before channelRole loads
 const botPresent = computed(() => channelRole.value?.botPresent ?? true);
 
-// >>> Danger zone (Remove Bot, Delete All Data) is additionally reachable while
-// >>> admin mode is on, so an admin can act on any channel, not just their own
+// >>> danger zone also unlocks in admin mode, so an admin can act on any channel
 const dangerZoneUnlocked = computed(
   () => isBroadcaster.value || (!!session.value?.isAdmin && adminMode.value),
 );
@@ -347,7 +346,7 @@ async function doDeleteAllData() {
     </div>
 
     <div class="cards-grid">
-      <!-- Command Prefix - broadcaster only -->
+      <!-- >>> broadcaster only -->
       <div class="card" v-if="isBroadcaster">
         <div class="card-header">
           <div class="card-title">{{ t("settings.prefix.title") }}</div>
@@ -377,7 +376,6 @@ async function doDeleteAllData() {
         </div>
       </div>
 
-      <!-- Log Opt-Out - all users -->
       <div class="card">
         <div class="card-header">
           <div class="card-title">{{ t("settings.optout.title") }}</div>
@@ -415,7 +413,6 @@ async function doDeleteAllData() {
         </div>
       </div>
 
-      <!-- Name History Opt-Out -->
       <div class="card">
         <div class="card-header">
           <div class="card-title">Previous Usernames</div>
@@ -451,7 +448,7 @@ async function doDeleteAllData() {
         </div>
       </div>
 
-      <!-- Hide Vanish Timeouts - broadcaster only -->
+      <!-- >>> broadcaster only -->
       <div class="card" v-if="isBroadcaster">
         <div class="card-header">
           <div class="card-title">Hide Vanish Timeouts</div>
@@ -488,7 +485,7 @@ async function doDeleteAllData() {
         </div>
       </div>
 
-      <!-- 7TV Emote Set - broadcaster only, spans 2 cols -->
+      <!-- >>> broadcaster only, spans 2 cols -->
       <div class="card card-wide" v-if="isBroadcaster">
         <div class="card-header">
           <div class="card-icon card-icon-7tv">&#10022;</div>
@@ -555,7 +552,7 @@ async function doDeleteAllData() {
         </div>
       </div>
 
-      <!-- Remove Bot - broadcaster, or an admin with admin mode on, warning (less severe than delete) -->
+      <!-- >>> broadcaster or admin-mode admin - warning, less severe than delete -->
       <div class="card card-warning" v-if="canRemoveBotCard">
         <div class="card-header">
           <div class="card-icon card-icon-warning">&#9888;</div>
@@ -592,7 +589,7 @@ async function doDeleteAllData() {
         </div>
       </div>
 
-      <!-- Delete All Data - broadcaster, or an admin with admin mode on, danger -->
+      <!-- >>> broadcaster or admin-mode admin -->
       <div class="card card-danger" v-if="dangerZoneUnlocked">
         <div class="card-header">
           <div class="card-icon card-icon-danger">&#9888;</div>
@@ -629,7 +626,6 @@ async function doDeleteAllData() {
         </div>
       </div>
 
-      <!-- Show all hidden Infos again - all users -->
       <div class="card">
         <div class="card-header">
           <div class="card-title">Hidden Tips</div>

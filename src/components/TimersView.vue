@@ -92,7 +92,7 @@ function fmtNextFire(timer: Timer): string {
   return `in ${s}s`;
 }
 
-// >>> Edit panel
+// vvv edit panel vvv
 const editOpen = ref(false);
 const overlay = useOverlayClose();
 const editTimer = ref<Partial<Timer> & { name: string }>({
@@ -253,7 +253,7 @@ async function toggleActive(timer: Timer) {
   timer.is_active = next;
 }
 
-// >>> Share
+// vvv share vvv
 const shareOpen = ref(false);
 const shareTimer = ref("");
 const shareTarget = ref("");
@@ -295,7 +295,7 @@ async function doShare() {
   shareSaving.value = false;
 }
 
-// >>> Sync
+// vvv sync vvv
 const syncConf = ref<{
   sync_from: string;
   is_active: number;
@@ -497,7 +497,7 @@ defineExpose({
       </div>
     </div>
 
-    <!-- Edit panel -->
+    <!-- >>> edit panel -->
     <Teleport to="body">
       <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => (editOpen = false))">
         <div class="ep-panel">
@@ -594,7 +594,7 @@ defineExpose({
       </div>
     </Teleport>
 
-    <!-- Share modal -->
+    <!-- >>> share modal -->
     <Teleport to="body">
       <div v-if="shareOpen" class="ep-modal-overlay" @click.self="shareOpen = false">
         <div class="ep-modal">

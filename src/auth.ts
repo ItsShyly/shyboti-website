@@ -10,23 +10,23 @@ interface Session {
 
 export interface RolePermissions {
   modsEnabled: boolean;
-  // Dashboard
+  // vvv Dashboard vvv
   dashboard: boolean;
-  // Commands
+  // vvv Commands vvv
   commands_view: boolean;
   commands_toggle: boolean;
   commands_edit: boolean;
   commands_delete: boolean;
   commands_mod: boolean;
-  // Automations (Timers + Triggers)
+  // vvv Automations (Timers + Triggers) vvv
   automations_view: boolean;
   automations_toggle: boolean;
   automations_edit: boolean;
   automations_delete: boolean;
-  // Moderation
+  // vvv Moderation vvv
   moderation_view: boolean;
   moderation_manage: boolean;
-  // OBS
+  // vvv OBS vvv
   obs_view: boolean;
   obs_edit: boolean;
   obs_force_preview: boolean;
@@ -40,8 +40,7 @@ export interface ChannelRole {
 
 const session = ref<Session | null>(null);
 const availableChannels = ref<string[]>([]);
-// >>> subset of availableChannels the user only sees via admin mode, not a
-// >>> real broadcaster/mod/vip/user relationship - drives the red vs purple badge
+// >>> channels only visible via admin mode, not a real role - drives red vs purple badge
 const adminOnlyChannels = ref<string[]>([]);
 // >>> whether the bot is in the LOGGED-IN user's own channel specifically
 const ownChannelHasBot = ref(true);
@@ -196,8 +195,7 @@ export function useAuth() {
     if (!session.value?.isAdmin) return;
     adminMode.value = !adminMode.value;
     localStorage.setItem("shyboti_admin_mode", adminMode.value ? "1" : "0");
-    // >>> Turning admin mode off while admin-moded into someone else's channel shouldn't leave you sitting there with full access and no visible
-    // indication
+    // >>> don't leave admin sitting with full access + no visible indication after toggling off
     if (!adminMode.value && session.value.channel !== session.value.login) {
       switchChannel(session.value.login);
     }

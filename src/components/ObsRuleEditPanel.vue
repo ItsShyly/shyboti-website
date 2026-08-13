@@ -11,13 +11,13 @@ import ReauthLink from "./shared/ReauthLink.vue";
 export interface ObsRule {
   id: string;
   trigger_type?: "bitrate" | "category" | "scene";
-  // bitrate trigger
+  // >>> bitrate trigger
   condition?: "below" | "above";
   bitrate_kbps?: number;
-  // category trigger
+  // >>> category trigger
   category_id?: string;
   category_name?: string;
-  // scene trigger
+  // >>> scene trigger
   trigger_scene?: string;
 
   action: string;
@@ -25,7 +25,7 @@ export interface ObsRule {
   target_category_id?: string;
   value?: number;
   chat_message_enabled?: boolean;
-  chat_message?: string; // supports $scene / $category placeholders
+  chat_message?: string; // <<< supports $scene / $category placeholders
   enabled: boolean;
 }
 
@@ -93,7 +93,7 @@ const fEnabled = ref(true);
 const fChatMsgEnabled = ref(false);
 const fChatMsg = ref("");
 
-// >>> what to prefill the chat message with the first time the toggle is
+// >>> default text for the chat message field
 function defaultChatMessage(action: string): string {
   if (action === "scene") return "Scene changed to $scene";
   if (action === "category") return "Category changed to $category";
@@ -102,11 +102,12 @@ function defaultChatMessage(action: string): string {
 function toggleChatMessage() {
   fChatMsgEnabled.value = !fChatMsgEnabled.value;
   if (fChatMsgEnabled.value && !fChatMsg.value.trim()) {
+    // >>> prefill only if turning on and field's still empty
     fChatMsg.value = defaultChatMessage(fAction.value);
   }
 }
 
-// guard: suppress field-change watchers while populate() is bulk-filling the form
+// >>> guards field watchers while populate() bulk-fills the form
 let populating = false;
 
 watch(fAction, (a) => {
@@ -162,7 +163,7 @@ watch(
         fChatMsg.value = r.chat_message ?? "";
       }
     }
-    // released after Vue's next DOM patch, which happens after any pre-flush
+    // >>> flips off after Vue's next DOM patch
     await nextTick();
     populating = false;
   },
@@ -171,7 +172,7 @@ watch(
 // >>> Deliberately NOT a watch(fTriggerType, ...)
 function selectTrigger(type: "bitrate" | "category" | "scene") {
   fTriggerType.value = type;
-  // a scene trigger's whole point is usually to change the category
+  // >>> scene triggers usually exist to change the category
   fAction.value = type === "scene" ? "category" : "scene";
   fTarget.value = "";
 }

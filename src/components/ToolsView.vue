@@ -9,8 +9,7 @@ const router = useRouter();
 const { session, adminMode } = useAuth();
 const { t } = useI18n();
 
-// >>> hidden while admin mode is on for someone else's channel - OBS Control
-// >>> is treated as the broadcaster's own space, same as Uploads/Images/Notes
+// >>> hidden in admin mode on someone else's channel - OBS Control is broadcaster-only space
 const hideAdminRestricted = computed(
   () =>
     !!session.value &&
@@ -156,7 +155,6 @@ async function addEntry() {
 
 <template>
   <div class="tools-view">
-    <!-- OBS Widgets card -->
     <div class="service-card" @click="router.push('/obs-widgets')">
       <div class="card-icon obs-icon">
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -175,7 +173,6 @@ async function addEntry() {
       </div>
     </div>
 
-    <!-- Variables & Counters card -->
     <div class="service-card" @click="openVars">
       <div class="card-icon vars-icon">
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -192,7 +189,6 @@ async function addEntry() {
       </div>
     </div>
 
-    <!-- OBS Control card -->
     <div v-if="!hideAdminRestricted" class="service-card"
       @click="session && router.push('/obs-control')">
       <div class="card-icon obsconn-icon">
@@ -212,7 +208,7 @@ async function addEntry() {
     </div>
   </div>
 
-  <!-- Variables & Counters modal -->
+  <!-- vvv variables & counters modal vvv -->
   <Teleport to="body">
     <div v-if="showVars" class="vars-backdrop" @click.self="showVars = false">
       <div class="vars-modal">

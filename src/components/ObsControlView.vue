@@ -1,7 +1,5 @@
 <script setup lang="ts">
-// >>> obs control page, agent-relay model, no port/password fields
-// >>> generate token, download agent, paste token, done
-// >>> routed page, settings panel is a teleport overlay
+// >>> agent-relay model (token-based, no port/password) - settings panel is a teleport overlay
 
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { API } from "../api";
@@ -33,7 +31,7 @@ interface AgentStatus {
   congested: boolean;
   streaming: boolean;
   screenshots: boolean;
-  // broadcaster-only - backend omits these for non-broadcasters
+  // >>> broadcaster-only - backend omits these for non-broadcasters
   enabled?: boolean;
   screenshot_interval_sec?: number;
 }
@@ -68,8 +66,7 @@ interface ArgCommand {
   command: string;
   access: AccessLevel;
 }
-// >>> bitrate rules - trigger is bitrate, no chat command, runs agent-side
-// >>> see agent/src/rules.js
+// >>> bitrate rules run agent-side, no chat command - see agent/src/rules.js
 interface ObsRule {
   id: string;
   condition: "below" | "above";
@@ -119,7 +116,7 @@ const BUILDER_ACTION_LABEL: Record<string, string> = Object.fromEntries(
 const loading = ref(false);
 const agentStatus = ref<AgentStatus | null>(null);
 
-const token = ref(""); // shown once after (re)generate
+const token = ref(""); // <<< shown once after (re)generate
 const tokenVisible = ref(false);
 const generatingToken = ref(false);
 const tokenJustCopied = ref(false);
@@ -169,14 +166,14 @@ const addDisabled = computed(() => {
   if (needsTarget && !builderTarget.value.trim()) return true;
   const cmd = builderCmd.value.trim().replace(/^\+/, "").toLowerCase();
   if (unifiedCommands.value.some((c) => c.command === cmd)) return true;
-  // Don't allow names that clash with existing custom commands
+  // >>> don't allow names that clash with existing custom commands
   if (existingCmdNames.value.includes(cmd)) return true;
   return false;
 });
 
 const knownSources = ref<string[]>([]);
 const pendingSources = ref<Set<number>>(new Set());
-const existingCmdNames = ref<string[]>([]); // all custom command names for this channel
+const existingCmdNames = ref<string[]>([]); // <<< all custom command names for this channel
 watch(sources, (list) => {
   for (const s of list)
     if (!knownSources.value.includes(s.sourceName))
@@ -341,7 +338,7 @@ function restartShotLoop() {
   if (!agentStatus.value?.screenshots) return;
   const intervalMs =
     Math.max(1, agentStatus.value?.screenshot_interval_sec ?? 5) * 1000;
-  refreshAllShots(); // don't wait a full interval for the first paint
+  refreshAllShots(); // <<< don't wait a full interval for the first paint
   shotTimer = setInterval(refreshAllShots, intervalMs);
 }
 
@@ -380,7 +377,7 @@ const bitrateBad = computed(
   () => !!agentStatus.value?.streaming && !!agentStatus.value?.congested,
 );
 
-// derived
+// >>> derived
 const agentConnected = computed(() => agentStatus.value?.connected ?? false);
 const obsConnected = computed(() => agentStatus.value?.obs_connected ?? false);
 const currentScene = computed(() => agentStatus.value?.current_scene ?? "");
@@ -702,11 +699,11 @@ const unifiedCommands = computed<UnifiedCommand[]>(() => {
 
     let actionHint = "";
     if (isVolArg) {
-      actionHint = " <volume>"; // fixed source, volume from chat
+      actionHint = " <volume>"; // <<< fixed source, volume from chat
     } else if (b.action === "volume") {
-      actionHint = ""; // fixed value binding, no chat argument
+      actionHint = ""; // <<< fixed value binding, no chat argument
     } else if (badgeClass === "fixed-type") {
-      actionHint = ""; // fixed source action (show/hide/toggle etc.)
+      actionHint = ""; // <<< fixed source action (show/hide/toggle etc.)
     }
 
     list.push({
@@ -943,7 +940,6 @@ watch(
     </div>
 
     <div class="obsconn-body">
-      <!-- loading -->
       <template v-if="loading">
         <div class="obs-loading">
           <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="loading"
@@ -951,8 +947,7 @@ watch(
         </div>
       </template>
 
-      <!-- setup prompt, shown til agent + obs are both connected -->
-      <!-- full instructions live in the gear panel, broadcaster only -->
+      <!-- >>> setup prompt til agent+obs connect - full instructions live in the gear panel -->
       <template v-else-if="!agentConnected || !obsConnected">
         <div class="obs-setup-card obs-setup-compact">
           <template v-if="isBroadcaster">
@@ -983,9 +978,7 @@ watch(
         </div>
       </template>
 
-      <!-- live controls -->
       <template v-if="agentConnected && obsConnected">
-        <!-- Scenes -->
         <div class="ep-field-group">
           <div class="ep-field-label obs-section-label">
             Scenes
@@ -1067,11 +1060,10 @@ watch(
         </div>
       </template>
 
-      <!-- sources | audio mixer | command builder, builder still works if obs itself isn't connected -->
+      <!-- >>> builder still works even if obs itself isn't connected -->
       <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"
         :class="{ 'obs-boxes-single': !(agentConnected && obsConnected) }">
         <template v-if="agentConnected && obsConnected">
-          <!-- Sources -->
           <div class="ep-field-group obs-box">
             <label class="ep-field-label">sources
               <span v-if="selectedScene" class="ep-field-hint">{{
@@ -1101,7 +1093,6 @@ watch(
             </div>
           </div>
 
-          <!-- Audio mixer -->
           <div class="ep-field-group obs-box">
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
@@ -1150,20 +1141,18 @@ watch(
           </div>
         </template>
 
-        <!-- Command builder / Rule builder -->
         <div v-if="agentStatus?.paired" class="ep-field-group obs-box obs-box-builder">
           <!-- @TODO: Maybe Command builder / Rule builder buttons to link to it? -->
         </div>
       </div>
     </div>
-    <!-- end body -->
 
     <div v-if="bindingsSaving || bindingsSaved" class="obsconn-autosave">
       {{ bindingsSaving ? "saving…" : "saved" }}
     </div>
   </div>
 
-  <!-- settings panel, broadcaster only -->
+  <!-- >>> broadcaster only -->
   <Teleport to="body">
     <div v-if="showSettings && isBroadcaster" class="ep-overlay"
       v-bind="settingsOverlay.handlers(() => (showSettings = false))">

@@ -1,9 +1,4 @@
-/**
- * scriptMockEval.ts
- * Client-side mock evaluator for the Normal Mode editor preview.
- * Uses fake/static values for all Twitch-live variables.
- */
-
+// >>> client-side mock evaluator for the editor preview, uses fake/static values for Twitch-live vars
 export interface MockContext {
   user: string;
   channel: string;
@@ -65,15 +60,13 @@ interface MockEnv {
   calls: number;
 }
 
-//  Condition evaluation
-// After evalSrc resolves all $-vars in a condition, the raw string may still
-// contain comparison operators (>, <, ==, etc.) and boolean operators.
-// evalCondStr evaluates those operators on the resulting values.
+// vvv condition evaluation vvv
+// >>> evalCondStr applies comparison/boolean ops after evalSrc has resolved $-vars
 
 function evalCondStr(s: string): string {
   const t = s.trim();
 
-  // Boolean: "and" / "or" (low precedence, left-to-right, split on first occurrence)
+  // >>> and/or: low precedence, left-to-right, split on first occurrence
   const orIdx = findLogicalOp(t, " or ");
   if (orIdx !== -1) {
     return String(
@@ -91,7 +84,6 @@ function evalCondStr(s: string): string {
   const notM = t.match(/^not\s+(.+)$/i);
   if (notM) return String(!isTruthy(evalCondStr(notM[1]!)));
 
-  // Comparison operators (==, =, !=, >=, <=, >, <)
   const cmpM = t.match(/^(.+?)\s*(==|!=|>=|<=|=|>|<)\s*(.+)$/);
   if (cmpM) {
     const left = cmpM[1]!.trim(),
@@ -119,7 +111,7 @@ function evalCondStr(s: string): string {
   return t;
 }
 
-/** Find a logical operator string outside any parens, right-to-left so we respect precedence */
+// >>> finds op outside parens, scans right-to-left to respect precedence
 function findLogicalOp(s: string, op: string): number {
   let depth = 0;
   for (let i = s.length - op.length; i >= 0; i--) {
@@ -131,12 +123,9 @@ function findLogicalOp(s: string, op: string): number {
   return -1;
 }
 
-//  Source evaluator
+// vvv source evaluator vvv
 
-// >>> Find a brace-delimited block body starting at/after `from` (mirrors the
-// >>> same helper in the backend's scriptEngine.ts so the preview matches what
-// >>> the real bot will do). Returns null if there's no `{` there so callers can
-// >>> fall back to the legacy $end-terminated form.
+// >>> mirrors the backend's scriptEngine.ts brace-body finder, keep in sync
 function findBraceBody(
   src: string,
   from: number,
@@ -167,13 +156,13 @@ function evalSrc(src: string, env: MockEnv): string {
   while (i < src.length) {
     const rest = src.slice(i);
 
-    // $if(<cond>){ ... }[$else{ ... }]  (new)  or  $if(<cond>) ... [$else ...] $end  (legacy)
+    // >>> $if(cond){}[$else{}] new syntax, or $if(cond)...[$else...]$end legacy
     const ifM = rest.match(/^\$if\s*\(/);
     if (ifM) {
       const condStart = i + ifM[0].length;
       const condEnd = findMatchingParen(src, condStart - 1);
       const cond = src.slice(condStart, condEnd);
-      // Evaluate vars in condition first, then evaluate comparison
+      // >>> resolve vars first, then evaluate comparison
       const condVal = evalCondStr(evalSrc(cond.trim(), env));
       const truthy = isTruthy(condVal);
 
@@ -201,7 +190,7 @@ function evalSrc(src: string, env: MockEnv): string {
       continue;
     }
 
-    // $foreach(item in list){ ... }  (new)  or  ... $end  (legacy)
+    // >>> $foreach(item in list){} new syntax, or ...$end legacy
     const feM = rest.match(/^\$foreach\s*\(/);
     if (feM) {
       const argStart = i + feM[0].length;
@@ -228,7 +217,7 @@ function evalSrc(src: string, env: MockEnv): string {
       continue;
     }
 
-    // $repeat(n){ ... }  (new)  or  ... $end  (legacy)
+    // >>> $repeat(n){} new syntax, or ...$end legacy
     const repM = rest.match(/^\$repeat\s*\(/);
     if (repM) {
       const argStart = i + repM[0].length;
@@ -247,7 +236,7 @@ function evalSrc(src: string, env: MockEnv): string {
       continue;
     }
 
-    // $define name(params){ ... }  (new)  or  ... $end  (legacy)
+    // >>> $define name(params){} new syntax, or ...$end legacy
     const defM = rest.match(/^\$define\s+(\w+)\s*\(([^)]*)\)/);
     if (defM) {
       const name = defM[1]!;
@@ -263,7 +252,6 @@ function evalSrc(src: string, env: MockEnv): string {
       continue;
     }
 
-    // $-expression
     if (src[i] === "$") {
       const exprEnd = findExprEnd(src, i);
       out += evalExpr(src.slice(i, exprEnd), env);
@@ -295,7 +283,7 @@ function evalExpr(raw: string, env: MockEnv): string {
   const dolN = inner.match(/^(\d)$/);
   if (dolN) return env.ctx.argList[parseInt(dolN[1]!) - 1] ?? "";
 
-  // $user.*
+  // >>> $user.*
   if (inner.startsWith("user")) {
     const prop = inner.slice(4).replace(/^\./, "");
     if (!prop || prop === "name") return env.ctx.user;
@@ -314,7 +302,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // $target.*
+  // >>> $target.*
   if (inner.startsWith("target")) {
     const arg0 = env.ctx.argList[0]?.replace("@", "") ?? "targetuser";
     const prop = inner.slice(6).replace(/^\./, "");
@@ -324,7 +312,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // $channel.*
+  // >>> $channel.*
   if (inner.startsWith("channel")) {
     const prop = inner.slice(7).replace(/^\./, "");
     if (!prop || prop === "name") return env.ctx.channel;
@@ -336,7 +324,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // $command.*
+  // >>> $command.*
   if (inner.startsWith("command")) {
     const prop = inner.slice(7).replace(/^\./, "");
     if (!prop || prop === "name") return "testcmd";
@@ -345,7 +333,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // $message.*
+  // >>> $message.*
   if (inner.startsWith("message")) {
     const prop = inner.slice(7).replace(/^\./, "");
     if (!prop || prop === "text") return env.ctx.messageText;
@@ -354,9 +342,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // $counter.<n>[.op]
-  // In preview: bare $counter.name shows current value without incrementing.
-  // Only explicit .add / .set / .reset mutate the mock state.
+  // >>> $counter.<n>[.op] - bare form reads without incrementing, only .add/.set/.reset mutate
   const counterM = inner.match(/^counter\.(\w+)(?:\.(.+))?$/);
   if (counterM) {
     const name = counterM[1]!;
@@ -381,7 +367,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // $ucounter
+  // >>> $ucounter
   const ucounterM = inner.match(/^ucounter\.(\w+)(?:\.(.+))?$/);
   if (ucounterM) {
     const key = `u_${ucounterM[1]}`;
@@ -391,7 +377,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // $var.<n>[.op]
+  // >>> $var.<n>[.op]
   const varM = inner.match(/^var\.(\w+)(?:\.(.+))?$/);
   if (varM) {
     const name = varM[1]!;
@@ -409,7 +395,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // $uvar
+  // >>> $uvar
   const uvarM = inner.match(/^uvar\.(\w+)(?:\.(.+))?$/);
   if (uvarM) {
     const name = `u_${uvarM[1]}`;
@@ -423,7 +409,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // $list.<n>[.op]
+  // >>> $list.<n>[.op]
   const listM = inner.match(/^list\.(\w+)(?:\.(.+))?$/);
   if (listM) {
     const name = listM[1]!;
@@ -445,7 +431,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // $random.*
+  // >>> $random.*
   if (inner.startsWith("random")) {
     const prop = inner.slice(6).replace(/^\./, "");
     const intM = prop.match(/^int\((.+),(.+)\)$/);
@@ -468,7 +454,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // $time.*
+  // >>> $time.*
   if (inner.startsWith("time")) {
     const prop = inner.slice(4).replace(/^\./, "");
     if (!prop || prop === "now") return new Date().toISOString();
@@ -476,7 +462,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "2025-01-01T00:00:00Z";
   }
 
-  // $text.*
+  // >>> $text.*
   if (inner.startsWith("text.")) {
     const call = inner.slice(5);
     const fnM = call.match(/^(\w+)\((.+)?\)$/);
@@ -514,7 +500,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     }
   }
 
-  // $regex.*
+  // >>> $regex.*
   if (inner.startsWith("regex.")) {
     const call = inner.slice(6);
     const matchM = call.match(/^match\((.+)\)$/);
@@ -544,7 +530,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // $calc
+  // >>> $calc
   const calcM = inner.match(/^calc\((.+)\)$/);
   if (calcM) {
     try {
@@ -575,7 +561,7 @@ function evalExpr(raw: string, env: MockEnv): string {
   )
     return "";
 
-  // User macro call
+  // >>> user macro call
   const macroCallM = inner.match(/^([a-z_]\w*)\((.*)?\)$/);
   if (macroCallM && env.macros[macroCallM[1]!]) {
     const macro = env.macros[macroCallM[1]!]!;
@@ -590,7 +576,7 @@ function evalExpr(raw: string, env: MockEnv): string {
   return "";
 }
 
-//  Parser helpers
+// vvv parser helpers vvv
 
 function findExprEnd(src: string, start: number): number {
   let i = start + 1,
@@ -637,7 +623,7 @@ function findIfBody(
     elseStart = -1,
     endIdx = src.length;
   while (i < src.length) {
-    // Track nested blocks that consume a $end
+    // >>> nested blocks also consume a $end, track depth to skip past those
     if (
       src.slice(i).match(/^\$if\s*\(/) ||
       src.slice(i).match(/^\$foreach\s*\(/) ||

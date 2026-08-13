@@ -102,7 +102,6 @@ watch(
     saved.value = false;
     error.value = "";
     if (!props.editTarget) {
-      // new
       fKind.value = "scene";
       fAction.value = "scene";
       fCommand.value = "";
@@ -133,7 +132,7 @@ watch(
       fCooldown.value = b?.cooldown ?? 0;
       fUserCd.value = b?.userCooldown ?? 0;
     } else {
-      // arg - find which action maps to this command
+      // >>> arg: find which action maps to this command
       const match = Object.entries(props.argCommands).find(
         ([, e]) => (typeof e === "string" ? e : e.command) === command,
       );
@@ -160,7 +159,7 @@ watch(fKind, (k) => {
   fValue.value = "";
 });
 
-// --- save ---
+// vvv save vvv
 async function save() {
   if (!session.value) return;
   if (missingFields.value.length) {
@@ -170,7 +169,7 @@ async function save() {
   error.value = "";
   saving.value = true;
   try {
-    // build new bindings by starting from current ones, mutating the relevant list
+    // >>> clone current bindings, mutate the relevant list before saving
     const newScenes = props.sceneBindings.map((b) => ({ ...b }));
     const newSources = props.sourceBindings.map((b) => ({ ...b }));
     const newArgs = { ...props.argCommands };
@@ -207,8 +206,7 @@ async function save() {
       if (idx >= 0) newSources[idx] = entry;
       else newSources.push(entry);
     } else {
-      // arg - key is the action, value is { command, access, cooldown, userCooldown }
-      // if editing, remove the old key first (action may have changed)
+      // >>> arg: key is the action; if editing, drop the old key first (action may've changed)
       if (isEdit.value) {
         const oldKey = Object.entries(props.argCommands).find(
           ([, e]) =>
@@ -318,9 +316,7 @@ const missingFields = computed(() => {
 
         <div class="ep-panel-body">
           <div v-if="error" class="ep-toast error">{{ error }}</div>
-          <!-- command type tabs -->
           <div class="ep-field-group">
-            <label class="ep-field-label">Type</label>
             <div class="obs-kind-tabs">
               <button class="obs-kind-tab" :class="{ active: fKind === 'scene' }" @click="fKind = 'scene'"
                 :disabled="isEdit">
@@ -338,12 +334,11 @@ const missingFields = computed(() => {
             <div class="ep-field-hint">
               <template v-if="fKind === 'scene'">One command always switches to one specific scene.</template>
               <template v-else-if="fKind === 'source'">One command always acts on one specific source.</template>
-              <template v-else>Chatter passes the scene/source name as part of the command —
+              <template v-else>Chatter passes the scene/source name as part of the command -
                 e.g. <code class="ep-mono">+scene cam</code>.</template>
             </div>
           </div>
 
-          <!-- action (source + arg kinds) -->
           <div v-if="fKind !== 'scene'" class="ep-field-group">
             <label class="ep-field-label">Action</label>
             <select v-model="fAction" class="ep-field-select">
@@ -356,7 +351,6 @@ const missingFields = computed(() => {
             </select>
           </div>
 
-          <!-- target (scene/source kinds only) -->
           <div v-if="fKind !== 'arg'" class="ep-field-group">
             <label class="ep-field-label">{{ fKind === "scene" ? "Scene" : "Source" }}
             </label>
@@ -364,15 +358,13 @@ const missingFields = computed(() => {
               :placeholder="fKind === 'scene' ? 'Scene name' : 'Source name'" mono />
           </div>
 
-          <!-- volume value (source kind, volume action) -->
           <div v-if="fKind === 'source' && fAction === 'volume'" class="ep-field-group">
             <label class="ep-field-label">Fixed volume
-              <span class="ep-field-hint">0–100, leave blank to take from chat</span></label>
+              <span class="ep-field-hint">0-100, leave blank to take from chat</span></label>
             <input v-model.number="fValue" type="number" min="0" max="100" class="ep-field-input"
               placeholder="e.g. 50" />
           </div>
 
-          <!-- usage preview for arg kind -->
           <div v-if="fKind === 'arg'" class="ep-field-group">
             <label class="ep-field-label">Usage</label>
             <div class="obs-usage-preview ep-mono">
@@ -386,7 +378,6 @@ const missingFields = computed(() => {
             </div>
           </div>
 
-          <!-- access -->
           <div class="ep-field-group">
             <label class="ep-field-label">Access</label>
             <div class="obs-access-row">
@@ -403,7 +394,6 @@ const missingFields = computed(() => {
             </div>
           </div>
 
-          <!-- cooldowns -->
           <div class="ep-row-3">
             <div class="ep-field-group ep-sm">
               <label class="ep-field-label">Global cooldown <span class="ep-field-hint">s</span></label>

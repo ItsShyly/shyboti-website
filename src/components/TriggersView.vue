@@ -286,7 +286,7 @@ async function toggleActive(trigger: Trigger) {
   trigger.is_active = next;
 }
 
-// >>> Share
+// vvv share vvv
 const shareOpen = ref(false);
 const shareTrigger = ref("");
 const shareTarget = ref("");
@@ -328,7 +328,7 @@ async function doShare() {
   shareSaving.value = false;
 }
 
-// >>> Sync
+// vvv sync vvv
 const syncConf = ref<{
   sync_from: string;
   is_active: number;
@@ -562,7 +562,6 @@ defineExpose({
 
           <div class="ep-panel-body">
             <div v-if="error" class="ep-toast error">{{ error }}</div>
-            <!-- Event type -->
             <div class="ep-field-group">
               <label class="ep-field-label">{{
                 t("trigger.field.event")
@@ -576,7 +575,6 @@ defineExpose({
               </div>
             </div>
 
-            <!-- Match pattern -->
             <div v-if="needsPattern(editTrigger.event_type ?? 'message')" class="ep-field-group">
               <label class="ep-field-label">{{
                 t("trigger.field.match")
@@ -591,7 +589,6 @@ defineExpose({
               </div>
             </div>
 
-            <!-- Action type -->
             <div class="ep-field-group">
               <label class="ep-field-label">{{
                 t("trigger.field.action")
@@ -604,7 +601,6 @@ defineExpose({
               </div>
             </div>
 
-            <!-- Response -->
             <div class="ep-field-group">
               <label class="ep-field-label">
                 {{

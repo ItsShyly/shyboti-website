@@ -1,12 +1,5 @@
 <script setup lang="ts">
-// Shared type-as-you-go input, styled like the topbar search bar - matches
-// below the input as you type instead of a native <datalist> popup. Used
-// anywhere an OBS scene/source name or a Twitch category needs picking.
-//
-// Two modes:
-//   local  - pass `items` (string[]), filtered client-side as you type
-//   remote - pass `fetchItems`, called (debounced) with the query, for
-//            things that need a server round-trip (Twitch category search)
+// >>> local mode filters items client-side; remote mode debounces fetchItems()
 import { ref, computed, watch } from "vue";
 
 export interface TypeaheadItem {
@@ -104,7 +97,7 @@ function onFocus() {
   }
 }
 function onBlur() {
-  // small delay so a click on a dropdown item registers before we close it
+  // >>> delay close so a dropdown click (mousedown) registers before blur
   setTimeout(() => {
     open.value = false;
   }, 150);

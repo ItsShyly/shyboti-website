@@ -15,7 +15,7 @@ export function useLocale() {
   return { locale: _locale, setLocale };
 }
 
-// >>> Translations
+// vvv Translations vvv
 
 const translations: Record<Locale, Record<string, string>> = {
   en: {
@@ -45,7 +45,7 @@ const translations: Record<Locale, Record<string, string>> = {
       "A Twitch bot with some extra features.\nLogin to access manage commands, add moderation or use tools like obs widgets.",
     "home.login": "Login with Twitch",
 
-    // >>> Dashboard <<<
+    // vvv Dashboard vvv
     "dash.title": "Dashboard",
     "dash.sub": "Activity feed for",
     "dash.all": "All channels",
@@ -83,7 +83,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "type.countdown_started": "Countdown started",
     "type.countdown_stopped": "Countdown stopped",
 
-    // >>> Commands <<<
+    // vvv Commands vvv
     "cmd.title": "Commands",
     "cmd.title_default": "Default",
     "cmd.title_custom": "Custom",
@@ -161,7 +161,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.share.btn": "Copy command",
     "cmd.share.copying": "Copying…",
 
-    // >>> Command Edit Panel
+    // vvv Command Edit Panel vvv
     "edit.response": "Response",
     "edit.response_hint": "full scripting language · $ to start a variable",
     "edit.description": "Description",
@@ -204,13 +204,13 @@ const translations: Record<Locale, Record<string, string>> = {
     "edit.tab_complete": "Tab to complete",
     "edit.builtin_locked": "locked - wrap your script around this",
 
-    // >>> Automations
+    // vvv Automations vvv
     "auto.timers": "Timers",
     "auto.triggers": "Triggers",
     "auto.countdowns": "Countdowns",
     "auto.title": "Automations",
 
-    // >>> Timers
+    // vvv Timers vvv
     "timer.title": "Timers",
     "timer.sub": "Automated messages on an interval for",
     "timer.new": "New timer",
@@ -256,7 +256,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "timer.sync.pull": "Pull now",
     "timer.sync.last": "Last pull:",
 
-    // >>> Triggers <<<
+    // vvv Triggers vvv
     "trigger.title": "Triggers",
     "trigger.sub": "Automatic actions on events for",
     "trigger.new": "New trigger",
@@ -301,7 +301,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "trigger.sync.pull": "Pull now",
     "trigger.sync.last": "Last pull:",
 
-    // >>> Countdowns <<<
+    // vvv Countdowns vvv
     "countdown.title": "Countdowns",
     "countdown.sub": "Timed countdowns that fire actions for",
     "countdown.new": "New countdown",
@@ -348,7 +348,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "countdown.var.elapsed": "$countdown.name.elapsed",
     "countdown.var.percent": "$countdown.name.percent",
 
-    // >>> Moderation <<<
+    // vvv Moderation vvv
     "mod.title": "Moderation",
     "mod.sub": "Automod rules for",
     "mod.tab.blocked": "Blocked Terms",
@@ -480,7 +480,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "mod.badge.stay": "active",
     "mod.badge.exact": "exact",
 
-    // >>> Roles <<<
+    // vvv Roles vvv
     "roles.title": "Roles",
     "roles.sub": "Control what mods can access in",
     "roles.save": "Save changes",
@@ -570,7 +570,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.obs_force_preview.desc":
       "Be able to Force scene previews (opens an OBS projector, only possible if scene previews are enabled).",
 
-    // >>> Logs <<<
+    // vvv Logs vvv
     "logs.title": "Logs",
     "logs.sub": "Search chat history via Spanix",
     "logs.field.channel": "Channel",
@@ -592,7 +592,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "logs.jump_to_newest": "↓ Jump to newest",
     "logs.copied": "✓ Copied to clipboard",
 
-    // >>> Settings <<<
+    // vvv Settings vvv
     "settings.save": "Save",
     "settings.saved": "✓ Saved",
     "settings.saving": "Saving…",
@@ -643,7 +643,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "settings.delete.deleting": "Deleting…",
     "settings.delete.error": "Could not delete data.",
 
-    // >>> Uploads <<<
+    // vvv Uploads vvv
     "uploads.images": "Images",
     "uploads.images.sub": "Host images, share links",
     "uploads.images.your": "Your Images",
@@ -654,7 +654,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "uploads.chatterino.bind_hint":
       "To bind uploads to your account (shows in gallery, counts toward your limit):",
 
-    // >>> Images page <<<
+    // vvv Images page vvv
     "images.title": "Image Hosting",
     "images.drop": "Drop images here or click to upload",
     "images.drop_hint": "PNG, JPG, GIF, WEBP · max 20 MB each",
@@ -672,7 +672,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "images.limit": "max 100 active",
     "images.delete_sure": "Delete this image?",
 
-    // >>> Notes page <<<
+    // vvv Notes page vvv
     "notes.title": "Notes",
     "notes.placeholder": "Paste or type your note here…",
     "notes.expiry": "Expires",
@@ -699,7 +699,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "notes.expired": "Expired",
     "notes.delete_sure": "Delete this note?",
 
-    // >>> Command descriptions <<<
+    // vvv Command descriptions vvv
     "cmddesc.ping": "Check if the bot is online.",
     "cmddesc.commands": "List all available commands.",
     "cmddesc.ask": "Ask the bot a yes/no question.",
@@ -744,7 +744,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.wstm": "Who Sent This - guess who wrote a random chat message.",
     "cmddesc.bans": "Look up active bans for a user across tracked channels.",
 
-    // >>> Features page
+    // vvv Features page vvv
     "feat.obs.title": "OBS Widgets",
     "feat.obs.sub": "Live browser sources for OBS",
     "feat.obs.btn": "Manage",
@@ -778,7 +778,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "feat.vars.add.placeholder.user": "username",
     "feat.vars.add.btn": "Add",
 
-    // >>> OBS Widgets page
+    // vvv OBS Widgets page vvv
     "obs.title": "OBS Browser Sources",
     "obs.new": "New widget",
     "obs.loading": "Loading…",
@@ -855,7 +855,7 @@ const translations: Record<Locale, Record<string, string>> = {
       "Ein Twitch-Bot mit ein paar extra Features.\nMelde dich an um Commands zu verwalten, Moderation zu nutzen oder Tools wie OBS Widgets zu verwenden.",
     "home.login": "Mit Twitch anmelden",
 
-    // >>> Dashboard <<<
+    // vvv Dashboard vvv
     "dash.title": "Dashboard",
     "dash.sub": "Aktivitätsfeed für",
     "dash.all": "Alle Kanäle",
@@ -893,7 +893,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "type.countdown_started": "Countdown gestartet",
     "type.countdown_stopped": "Countdown gestoppt",
 
-    // >>> Commands <<<
+    // vvv Commands vvv
     "cmd.title": "Befehle",
     "cmd.title_default": "Default",
     "cmd.title_custom": "Eigene",
@@ -973,7 +973,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.share.btn": "Command kopieren",
     "cmd.share.copying": "Wird kopiert…",
 
-    // >>> Command Edit Panel <<<
+    // vvv Command Edit Panel vvv
     "edit.response": "Antwort",
     "edit.response_hint": "vollständige Skriptsprache · $ für eine Variable",
     "edit.description": "Beschreibung",
@@ -1016,13 +1016,13 @@ const translations: Record<Locale, Record<string, string>> = {
     "edit.tab_complete": "Tab zum Vervollständigen",
     "edit.builtin_locked": "gesperrt - schreibe dein Skript darum herum",
 
-    // >>> Automations <<<
+    // vvv Automations vvv
     "auto.timers": "Timer",
     "auto.triggers": "Trigger",
     "auto.countdowns": "Countdowns",
     "auto.title": "Automationen",
 
-    // >>> Timers <<<
+    // vvv Timers vvv
     "timer.title": "Timer",
     "timer.sub": "Automatische Nachrichten in einem Intervall für",
     "timer.new": "Neuer Timer",
@@ -1069,7 +1069,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "timer.sync.pull": "Jetzt laden",
     "timer.sync.last": "Letzter Abruf:",
 
-    // >>> Triggers <<<
+    // vvv Triggers vvv
     "trigger.title": "Trigger",
     "trigger.sub": "Automatische Aktionen bei Ereignissen für",
     "trigger.new": "Neuer Trigger",
@@ -1114,7 +1114,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "trigger.sync.pull": "Jetzt laden",
     "trigger.sync.last": "Letzter Abruf:",
 
-    // >>> Countdowns <<<
+    // vvv Countdowns vvv
     "countdown.title": "Countdowns",
     "countdown.sub": "Zeitgesteuerte Countdowns mit Aktionen für",
     "countdown.new": "Neuer Countdown",
@@ -1162,7 +1162,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "countdown.var.elapsed": "$countdown.name.elapsed",
     "countdown.var.percent": "$countdown.name.percent",
 
-    // >>> Moderation <<<
+    // vvv Moderation vvv
     "mod.title": "Moderation",
     "mod.sub": "Automod-Regeln für",
     "mod.tab.blocked": "Gesperrte Begriffe",
@@ -1284,7 +1284,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "mod.badge.stay": "aktiv",
     "mod.badge.exact": "exakt",
 
-    // >>> Roles <<<
+    // vvv Roles vvv
     "roles.title": "Rollen",
     "roles.sub": "Stelle ein, was Mods sehen können in",
     "roles.save": "Änderungen speichern",
@@ -1381,7 +1381,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.obs_force_preview.desc":
       "Möglichkeit Scene Previews zu forcen (Öffnen eines OBS-Projektors. Nur möglich, wenn Szenenpreviews aktiviert sind).",
 
-    // >>> Logs <<<
+    // vvv Logs vvv
     "logs.title": "Logs",
     "logs.sub": "Chatverlauf über Spanix durchsuchen",
     "logs.field.channel": "Channel",
@@ -1403,7 +1403,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "logs.jump_to_newest": "↓ Zu neuesten Nachrichten",
     "logs.copied": "✓ In Zwischenablage kopiert",
 
-    // >>> Settings <<<
+    // vvv Settings vvv
     "settings.save": "Speichern",
     "settings.saved": "✓ Gespeichert",
     "settings.saving": "Wird gespeichert…",
@@ -1455,7 +1455,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "settings.delete.deleting": "Wird gelöscht…",
     "settings.delete.error": "Daten konnten nicht gelöscht werden.",
 
-    // >>> Uploads <<<
+    // vvv Uploads vvv
     "uploads.images": "Bilder",
     "uploads.images.sub": "Bilder hosten, Links teilen",
     "uploads.images.your": "Deine Bilder",
@@ -1466,7 +1466,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "uploads.chatterino.bind_hint":
       "Um Uploads mit deinem Account zu verknüpfen (erscheint in der Galerie, zählt zu deinem Limit):",
 
-    // >>> Images page <<<
+    // vvv Images page vvv
     "images.title": "Bild-Hosting",
     "images.drop": "Bilder hier ablegen oder klicken zum Hochladen",
     "images.drop_hint": "PNG, JPG, GIF, WEBP · max. 20 MB pro Bild",
@@ -1484,7 +1484,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "images.limit": "max. 100 aktiv",
     "images.delete_sure": "Dieses Bild löschen?",
 
-    // >>> Notes page <<<
+    // vvv Notes page vvv
     "notes.title": "Notizen",
     "notes.placeholder": "Notiz hier einfügen oder eingeben…",
     "notes.expiry": "Ablauf",
@@ -1511,7 +1511,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "notes.expired": "Abgelaufen",
     "notes.delete_sure": "Diese Notiz löschen?",
 
-    // >>> Command descriptions <<<
+    // vvv Command descriptions vvv
     "cmddesc.ping": "Prüft ob der Bot online ist.",
     "cmddesc.commands": "Listet alle verfügbaren Commands auf.",
     "cmddesc.ask": "Stelle dem Bot eine Ja/Nein-Frage.",
@@ -1556,7 +1556,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.wstm": "Wer hat das geschrieben - errate, wer eine zufällige Nachricht verfasst hat.",
     "cmddesc.bans": "Zeigt aktive Bans eines Nutzers über verfolgte Channels.",
 
-    // >>> OBS Widgets page
+    // vvv OBS Widgets page vvv
     "obs.title": "OBS Browser-Quellen",
     "obs.new": "Neues Widget",
     "obs.loading": "Lädt…",
@@ -1604,7 +1604,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "obs.panel.save": "Speichern",
     "obs.panel.saving": "Speichert…",
 
-    // >>> Features page
+    // vvv Features page vvv
     "feat.obs.title": "OBS Widgets",
     "feat.obs.sub": "Live-Browserquellen für OBS",
     "feat.obs.btn": "Verwalten",

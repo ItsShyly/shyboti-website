@@ -1,18 +1,4 @@
-// composables/useOverlayClose.ts
-//
-// Shared "click backdrop to close" behaviour for slide-in edit panels.
-//
-// Closing on a plain @click.self is what OBS widgets used to do, and it has a
-// bug: if you mousedown inside the panel (e.g. to select text) and drag the
-// pointer out over the backdrop before releasing, some browsers still fire a
-// click on the backdrop and the panel slams shut mid-selection. Custom
-// commands / triggers / timers / countdowns avoided this by only closing when
-// BOTH the mousedown and the mouseup happened on the backdrop itself. This
-// composable is that same guarded behaviour, shared so every panel gets it
-// (including OBS widgets, which previously didn't).
-//
-// Usage in a template:
-//   <div class="panel-overlay" v-bind="overlay.handlers(() => editOpen = false)">
+// >>> plain @click.self closes on drag-out-of-panel too (some browsers still fire the click), so only close when BOTH mousedown and mouseup land on the backdrop itself
 export function useOverlayClose() {
   let mousedownOnSelf = false;
 

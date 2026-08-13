@@ -1,7 +1,5 @@
 <script setup lang="ts">
-// Click-to-rename header used by every script editor panel (custom commands,
-// triggers, timers, countdowns, OBS widgets). Click the name to turn it into
-// an input; blur/Enter/Esc commits and falls back to origName if left blank.
+// >>> blank name on blur/enter/esc reverts to origName
 import { ref, nextTick, onMounted } from "vue";
 
 const props = withDefaults(
@@ -20,7 +18,7 @@ const emit = defineEmits<{ (e: "update:modelValue", v: string): void }>();
 const editing = ref(false);
 const inputEl = ref<HTMLInputElement | null>(null);
 
-// >>> Auto-enter edit mode when opened with no name
+// >>> auto-enter edit mode when opened with no name
 onMounted(() => { if (!props.modelValue && !props.disabled) start(); });
 
 function start() {

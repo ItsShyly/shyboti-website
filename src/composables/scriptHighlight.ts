@@ -1,9 +1,4 @@
-/**
- * scriptHighlight.ts
- * Syntax highlighter for the ShyBoti scripting language.
- * Returns an HTML string with <span class="sh-*"> tokens for the editor.
- */
-
+// >>> syntax highlighter for the scripting language, returns HTML with sh-* span tokens
 const CUSTOM_FAMILIES = [
   "$counter.",
   "$ucounter.",
@@ -53,14 +48,11 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// 3 levels of nested $if color palettes
-// kw   = $if keyword color
-// cond = ( condition ) color
-// body = { body } color
+// >>> kw/cond/body colors per nested $if level
 const IF_COLORS = [
-  { kw: "#569cd6", cond: "#7ec8e3", body: "#4ec9b0" }, // level 0: blue / cyan / teal
-  { kw: "#c792ea", cond: "#dda0ff", body: "#f9a84d" }, // level 1: purple / lavender / orange
-  { kw: "#4ec9b0", cond: "#98d9c8", body: "#82aaff" }, // level 2: teal / mint / periwinkle
+  { kw: "#569cd6", cond: "#7ec8e3", body: "#4ec9b0" }, // <<< level 0: blue/cyan/teal
+  { kw: "#c792ea", cond: "#dda0ff", body: "#f9a84d" }, // <<< level 1: purple/lavender/orange
+  { kw: "#4ec9b0", cond: "#98d9c8", body: "#82aaff" }, // <<< level 2: teal/mint/periwinkle
 ];
 
 function colorAt(level: number) {
@@ -77,14 +69,13 @@ export function highlightScript(src: string, ifLevel = 0): string {
     i = 0;
 
   while (i < src.length) {
-    // Newline - preserve as-is
     if (src[i] === "\n") {
       out += "\n";
       i++;
       continue;
     }
 
-    // Quoted string
+    // >>> quoted string
     if (src[i] === '"' || src[i] === "'") {
       const q = src[i]!;
       let j = i + 1;
@@ -98,7 +89,7 @@ export function highlightScript(src: string, ifLevel = 0): string {
       continue;
     }
 
-    // Number literal (only when not following a $token char)
+    // >>> number literal, skip if right after a $token char
     if (/\d/.test(src[i]!) && (i === 0 || !/[$\w]/.test(src[i - 1]!))) {
       let j = i;
       while (j < src.length && /[\d.]/.test(src[j]!)) j++;
@@ -107,14 +98,13 @@ export function highlightScript(src: string, ifLevel = 0): string {
       continue;
     }
 
-    // ── $if block ─────────────────────────────────────────────────────────────
+    // vvv $if block vvv
     if (src.startsWith("$if(", i) || src.startsWith("$if (", i)) {
       const col = colorAt(ifLevel);
 
-      // Find condition: $if(...)
       const parenStart = src.indexOf("(", i + 3);
       if (parenStart === -1) {
-        // Malformed - just emit $if as keyword
+        // >>> malformed, just emit $if as keyword
         out += `<span class="sh-kw" style="color:${col.kw}">$if</span>`;
         i += 3;
         continue;
@@ -134,7 +124,7 @@ export function highlightScript(src: string, ifLevel = 0): string {
       }
 
       if (condEnd === -1) {
-        // Unclosed paren
+        // >>> unclosed paren
         out += `<span class="sh-kw" style="color:${col.kw}">$if</span>`;
         out += esc(src.slice(i + 3));
         i = src.length;
@@ -145,10 +135,8 @@ export function highlightScript(src: string, ifLevel = 0): string {
       const afterCond = src.slice(condEnd + 1);
       const braceMatch = afterCond.match(/^\s*\{/);
 
-      // - $if keyword (no background, just color)
       out += `<span class="sh-if-kw" style="color:${col.kw}">$if</span>`;
 
-      // - condition slot: ( ... )
       const condTrimmed = condSrc.trim();
       const condValid = isValidCondition(condSrc);
       let condClass = "";
@@ -157,12 +145,12 @@ export function highlightScript(src: string, ifLevel = 0): string {
 
       out += `<span class="sh-if-cond${condClass ? " " + condClass : ""}" style="color:${col.cond}">`;
       out += `<span class="sh-if-paren" style="color:${col.kw}">(</span>`;
-      out += highlightScript(condSrc, ifLevel); // highlight condition contents too
+      out += highlightScript(condSrc, ifLevel); // <<< recurse into condition
       out += `<span class="sh-if-paren" style="color:${col.kw}">)</span>`;
       out += `</span>`;
 
       if (braceMatch) {
-        // Brace syntax: $if(...){ body }
+        // >>> brace syntax: $if(...){ body }
         const braceStart = condEnd + 1 + afterCond.indexOf("{");
         let bdepth = 0,
           bodyEnd = -1;
@@ -177,12 +165,12 @@ export function highlightScript(src: string, ifLevel = 0): string {
           }
         }
 
-        // Emit gap whitespace between ) and {
+        // >>> preserve whitespace gap between ) and {
         const gapText = src.slice(condEnd + 1, braceStart);
         if (gapText.trim() === "" && gapText.length > 0) out += gapText;
 
         if (bodyEnd === -1) {
-          // Unclosed brace - emit body open, recurse, leave open
+          // >>> unclosed brace, leave it open
           const body = src.slice(braceStart + 1);
           const bodyTrimmed = body.trim();
           out += `<span class="sh-if-body${bodyTrimmed === "" ? " sh-if-body-empty" : ""}" style="color:${col.body}">`;
@@ -203,7 +191,7 @@ export function highlightScript(src: string, ifLevel = 0): string {
         out += `</span>`;
         i = bodyEnd + 1;
       } else {
-        // Legacy $end syntax - kept for backward compat with old saved commands
+        // >>> legacy $end syntax, kept for old saved commands
         const endRel = afterCond.indexOf("$end");
         if (endRel === -1) {
           i = condEnd + 1;
@@ -212,7 +200,7 @@ export function highlightScript(src: string, ifLevel = 0): string {
           const bodyEnd = condEnd + 1 + endRel;
           const body = src.slice(bodyStart, bodyEnd);
           const bodyTrimmed = body.trim();
-          // Render as brace-style visually, just without the actual braces in text
+          // >>> renders like brace-style, without the actual braces in text
           out += `<span class="sh-if-body${bodyTrimmed === "" ? " sh-if-body-empty" : ""}" style="color:${col.body}">`;
           out += `<span class="sh-if-paren sh-end-compat" style="color:${col.kw}">{</span>`;
           out += highlightScript(body, ifLevel + 1);
@@ -228,21 +216,19 @@ export function highlightScript(src: string, ifLevel = 0): string {
       continue;
     }
 
-    // $else - simple keyword, no background
     if (src.startsWith("$else", i) && !/\w/.test(src[i + 5] ?? "")) {
       out += `<span class="sh-if-kw" style="color:#569cd6">$else</span>`;
       i += 5;
       continue;
     }
 
-    // $end - legacy, show faded/small
+    // >>> $end legacy, shown faded
     if (src.startsWith("$end", i) && !/\w/.test(src[i + 4] ?? "")) {
       out += `<span class="sh-end-legacy"><span class="sh-kw sh-end" style="opacity:0.35;font-size:0.85em">$end</span></span>`;
       i += 4;
       continue;
     }
 
-    // Other block keywords: $foreach, $repeat, $define
     const blockKw = BLOCK_KEYWORDS_PAREN.find((k) => src.startsWith(k, i));
     if (blockKw) {
       out += `<span class="sh-kw">${esc(blockKw)}</span>`;
@@ -250,11 +236,11 @@ export function highlightScript(src: string, ifLevel = 0): string {
       continue;
     }
 
-    // $-token
+    // vvv $-token vvv
     if (src[i] === "$") {
       let j = i + 1;
       while (j < src.length && /[\w.]/.test(src[j]!)) j++;
-      // Consume function call parens
+      // >>> consume function call parens
       if (src[j] === "(") {
         let depth = 0;
         while (j < src.length) {
@@ -302,7 +288,6 @@ export function highlightScript(src: string, ifLevel = 0): string {
       continue;
     }
 
-    // Operators
     if ("=!<>".includes(src[i]!)) {
       const two = src.slice(i, i + 2);
       if (["==", "!=", "<=", ">="].includes(two)) {
@@ -330,7 +315,7 @@ export function highlightScript(src: string, ifLevel = 0): string {
       continue;
     }
 
-    // Regular punctuation (no special highlight for standalone parens outside $if)
+    // >>> plain punctuation, parens outside $if aren't special-cased
     out += esc(src[i]!);
     i++;
   }

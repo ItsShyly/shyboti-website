@@ -71,8 +71,7 @@ const EMPTY_PERMS: Perms = {
   obs_force_preview: false,
 };
 
-// >>> Mod/VIP global defaults, fetched once for the "copy defaults" shortcuts (one-time
-// >>> snapshot into the new user's own permissions, not a live link back to those tiers)
+// >>> mod/VIP defaults for the copy-defaults shortcut - one-time snapshot, not a live link
 const modDefaults = ref<Perms>({ ...EMPTY_PERMS });
 const vipDefaults = ref<Perms>({ ...EMPTY_PERMS });
 

@@ -9,10 +9,10 @@ const { session } = useAuth();
 const { t } = useI18n();
 const route = useRoute();
 
-// >>> View mode <<<
+// vvv view mode vvv
 const view = ref<"write" | "list">("write");
 
-// >>> If navigated with ?list=1, switch to list and load
+// >>> ?list=1 in url switches straight to list view
 onMounted(() => {
   if (route.query.list === "1") {
     view.value = "list";
@@ -29,7 +29,7 @@ watch(
   },
 );
 
-// >>> Write state <<<
+// vvv write state vvv
 const noteText = ref("");
 const expiry = ref<"1h" | "1d" | "7d" | "30d" | "forever">("7d");
 const creating = ref(false);
@@ -38,7 +38,7 @@ const lastLink = ref("");
 const lastCopied = ref(false);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
 
-// >>> List state <<<
+// vvv list state vvv
 interface SavedNote {
   id: string;
   preview: string;
@@ -49,16 +49,16 @@ interface SavedNote {
 const notes = ref<SavedNote[]>([]);
 const listLoad = ref(false);
 const deleteId = ref<string | null>(null);
-const recreateId = ref<string | null>(null); // note being restored
+const recreateId = ref<string | null>(null); // <<< note being restored
 const recreateExpiry = ref<"1h" | "1d" | "7d" | "30d" | "forever">("7d");
-const recreating = ref<string | null>(null); // id currently in-flight
+const recreating = ref<string | null>(null); // <<< id currently in-flight
 
-// >>> Derived <<<
+// vvv derived vvv
 const isGuest = computed(() => !session.value);
 const charCount = computed(() => noteText.value.length);
 const noteUrl = (id: string) => `https://n.shyboti.de/${id}`;
 
-// >>> Expiry options - filtered for guests (max 30d) <<<
+// vvv expiry options, guests capped at 30d vvv
 const expiryOptions = computed(() => {
   const base = [
     { value: "1h", label: t("notes.expiry.1h") },
@@ -67,7 +67,6 @@ const expiryOptions = computed(() => {
     { value: "30d", label: t("notes.expiry.30d") },
     { value: "forever", label: t("notes.expiry.forever") },
   ];
-  // Guests can't use "forever"
   return isGuest.value ? base.filter((o) => o.value !== "forever") : base;
 });
 
@@ -82,7 +81,7 @@ async function createNote() {
     };
     if (session.value)
       headers["Authorization"] = `Bearer ${session.value.token}`;
-    // Clamp expiry for guests
+    // >>> clamp for guests
     const effectiveExpiry =
       isGuest.value && expiry.value === "forever" ? "30d" : expiry.value;
     const res = await fetch(`${API}/notes/create`, {
@@ -118,7 +117,7 @@ function newNote() {
   setTimeout(() => textareaRef.value?.focus(), 50);
 }
 
-// >>> List <<<
+// vvv list vvv
 async function loadList() {
   listLoad.value = true;
   try {
@@ -164,7 +163,6 @@ async function recreateNote(id: string) {
     });
     if (!res.ok) throw new Error();
     const data = (await res.json()) as { id: string };
-    // Replace the old note in the list with the new id and updated expiry
     const expiryMs: Record<string, number> = {
       "1h": 3_600_000,
       "1d": 86_400_000,
@@ -187,7 +185,7 @@ async function recreateNote(id: string) {
     );
     recreateId.value = null;
   } catch {
-    /* leave panel open so user can retry */
+    // >>> leave panel open so user can retry
   }
   recreating.value = null;
 }
@@ -218,7 +216,7 @@ function switchView(v: "write" | "list") {
 
 <template>
   <div class="notes-page">
-    <!-- >>> List view <<< -->
+    <!-- vvv list view vvv -->
     <div v-if="view === 'list'" class="list-view">
       <div class="list-header">
         <button class="back-btn" @click="view = 'write'">
@@ -242,7 +240,6 @@ function switchView(v: "write" | "list") {
             'is-expired': note.expires_at && note.expires_at < Date.now(),
           }"
         >
-          <!-- Preview: link if active, plain text if expired -->
           <a
             v-if="!note.expires_at || note.expires_at >= Date.now()"
             :href="noteUrl(note.id)"
@@ -274,7 +271,6 @@ function switchView(v: "write" | "list") {
           </div>
 
           <div class="note-actions">
-            <!-- Link: show URL if active, dash if expired -->
             <code
               v-if="!note.expires_at || note.expires_at >= Date.now()"
               class="note-link-code"
@@ -288,7 +284,6 @@ function switchView(v: "write" | "list") {
               </button>
             </template>
 
-            <!-- Restore button for expired notes -->
             <button
               v-if="note.expires_at && note.expires_at < Date.now()"
               class="restore-btn-sm"
@@ -306,7 +301,6 @@ function switchView(v: "write" | "list") {
             </button>
           </div>
 
-          <!-- Restore panel: expiry picker + confirm -->
           <div v-if="recreateId === note.id" class="restore-panel">
             <span class="restore-label">New expiry:</span>
             <select v-model="recreateExpiry" class="expiry-select">
@@ -331,15 +325,13 @@ function switchView(v: "write" | "list") {
       </div>
     </div>
 
-    <!-- >>> Write view <<< -->
+    <!-- vvv write view vvv -->
     <div v-else class="write-view">
-      <!-- Guest warning -->
       <div v-if="isGuest" class="guest-banner">
         <span class="guest-icon">ⓘ</span>
         {{ t("notes.guest_note") }}
       </div>
 
-      <!-- Result state: show link after creation -->
       <div v-if="lastLink" class="result-state">
         <div class="result-box">
           <div class="result-label">{{ t("notes.link") }}</div>
@@ -353,9 +345,7 @@ function switchView(v: "write" | "list") {
         </div>
       </div>
 
-      <!-- Editor state -->
       <template v-else>
-        <!-- Full-height textarea -->
         <textarea
           ref="textareaRef"
           v-model="noteText"
@@ -364,7 +354,6 @@ function switchView(v: "write" | "list") {
           spellcheck="false"
         ></textarea>
 
-        <!-- Bottom bar -->
         <div class="bottom-bar">
           <div class="bottom-left">
             <span class="char-count"

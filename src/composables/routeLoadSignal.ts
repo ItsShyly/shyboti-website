@@ -1,6 +1,4 @@
 import { ref } from 'vue'
 
-// >>> ticks up the instant a lazy route's real chunk finishes downloading -
-// >>> RouteLoading.vue watches this to snap its bar to 100% before the real
-// >>> page swaps in, instead of just vanishing mid-fill at ~90%
+// >>> ticks on chunk-load so RouteLoading.vue can snap its bar to 100% instead of vanishing mid-fill
 export const routeLoadSignal = ref(0)

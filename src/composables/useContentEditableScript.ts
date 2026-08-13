@@ -1,10 +1,4 @@
-// composables/useContentEditableScript.ts
-//
-// Shared caret-preserving highlight + insert-at-cursor logic for the plain
-// contenteditable script editors (triggers, timers, countdowns). Custom
-// commands has its own richer version of this (ghost autocomplete, line
-// numbers) and keeps its own copy, but these three views had byte-for-byte
-// identical copies of applyHL/onEditorInput - centralised here instead.
+// >>> shared caret-preserving highlight + insert logic for the plain contenteditable editors (triggers/timers/countdowns); CommandEditPanel keeps its own richer copy
 import { highlightScript } from "./scriptHighlight";
 
 export function getCaretOffset(el: HTMLElement): number {
@@ -51,21 +45,19 @@ export function setCaretOffset(el: HTMLElement, offset: number) {
   }
 }
 
-// Re-highlights `el` in place, keeping the caret at its current character offset.
+// >>> re-highlights el in place, keeps caret at its current offset
 export function applyScriptHighlight(el: HTMLElement) {
   const offset = getCaretOffset(el);
   el.innerHTML = highlightScript((el.innerText || "").replace(/\n$/, ""));
   setCaretOffset(el, offset);
 }
 
-// >>> Sets an editor's content on initial panel open, without touching Selection/Range.
+// >>> setCaretOffset's addRange() steals focus in Chrome, even on first render - use this instead to populate content on panel open
 export function setEditorContent(el: HTMLElement, text: string) {
   el.innerHTML = highlightScript(text);
 }
 
-// Inserts `token` at the current caret position (or at the end if the editor
-// isn't focused), re-highlights, and leaves the caret right after it.
-// Returns the new plain-text content so the caller can sync it into state.
+// >>> inserts token at caret (or at end if unfocused), re-highlights, returns new plain text
 export function insertTokenAtCursor(el: HTMLElement, token: string): string {
   el.focus();
   const text = (el.innerText || "").replace(/\n$/, "");

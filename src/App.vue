@@ -50,10 +50,7 @@ const viewingOtherChannel = computed(
   () => !!session.value && session.value.login !== session.value.channel,
 );
 
-// >>> red accent instead of purple whenever admin mode is on and you're on a
-// >>> channel that isn't your own - including real mod/vip channels, since
-// >>> admin mode is a blanket "I could break anything here" warning, not just
-// >>> for the channels you'd have no access to otherwise
+// >>> red accent when admin mode is on + off your own channel - blanket warning, covers real mod/vip channels too
 const viewingAsAdmin = computed(
   () =>
     !!session.value &&
@@ -61,8 +58,7 @@ const viewingAsAdmin = computed(
     session.value.login !== session.value.channel,
 );
 
-// >>> admin-only channels stay hidden from the switcher until admin mode is on,
-// >>> so the dropdown isn't cluttered with every channel by default
+// >>> admin-only channels stay hidden from the switcher until admin mode is on
 const visibleChannels = computed(() =>
   adminMode.value
     ? availableChannels.value
@@ -117,8 +113,7 @@ const searchInputMobile = ref<HTMLInputElement | null>(null);
 const searchResults = ref<SearchResult[]>([]);
 
 // vvv logs in-page search scope vvv
-// >>> on /logs, search bar scopes to loaded messages instead of the global index
-// >>> the chip's x switches back to universal search for the rest of the visit
+// >>> on /logs, search bar scopes to loaded messages; chip's x switches back to universal search
 const {
   query: logsQuery,
   results: logsSearchResults,
@@ -149,7 +144,6 @@ watch(onLogsPage, (isLogs, wasLogs) => {
   searchOpen.value = false;
 });
 
-// >>> Focus whichever search bar is currently visible
 function focusSearch() {
   const desktop = searchInputDesktop.value;
   const mobile = searchInputMobile.value;
@@ -325,8 +319,7 @@ function buildStaticIndex(): SearchResult[] {
     },
   ];
 
-  // >>> Uploads/Images/Notes hold the broadcaster's own personal content, so
-  // >>> hide them from search the same way the sidebar link/route are hidden
+  // >>> Uploads/Images/Notes are personal content, hide from search like the sidebar link/route
   let result = items;
   if (viewingOtherChannel.value) {
     result = result.filter(
@@ -691,7 +684,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <span class="brand-name">ShyBoti</span>
       </div>
 
-      <!-- Universal search bar - desktop only -->
+      <!-- >>> universal search bar, desktop only -->
       <div class="search-wrap hide-mobile" :class="{
         open: searchOpen && searchResults.length > 0,
         'has-chip': showLogsChip,
@@ -733,7 +726,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           ✕
         </button>
 
-        <!-- Results dropdown -->
+        <!-- >>> results dropdown -->
         <div v-if="showLogsChip && searchOpen && logsSearchResults.length > 0" class="search-results">
           <div class="result-group-label">Messages</div>
           <button v-for="(r, idx) in logsSearchResults" :key="r.id" class="result-item"
@@ -846,7 +839,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           </template>
         </div>
 
-        <!-- Search bar inside sidebar - mobile only -->
+        <!-- >>> search bar inside sidebar, mobile only -->
         <div class="sidebar-search show-mobile" :class="{
           open: searchOpen && searchResults.length > 0,
           'has-chip': showLogsChip,
@@ -887,7 +880,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           ">
             ✕
           </button>
-          <!-- Results dropdown -->
+          <!-- >>> results dropdown -->
           <div v-if="showLogsChip && searchOpen && logsSearchResults.length > 0" class="search-results">
             <div class="result-group-label">Messages</div>
             <button v-for="(r, idx) in logsSearchResults" :key="r.id" class="result-item"

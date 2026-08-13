@@ -6,7 +6,7 @@ const { locale } = useI18n();
 <template>
   <div class="privacy">
     <div class="privacy-inner">
-      <!--  GERMAN  -->
+      <!-- vvv german vvv -->
       <template v-if="locale === 'de'">
         <h1 class="privacy-title">Datenschutzerklärung</h1>
         <p class="privacy-meta">Zuletzt aktualisiert: März 2026 · shyboti.de</p>
@@ -157,7 +157,7 @@ const { locale } = useI18n();
         </section>
       </template>
 
-      <!--  ENGLISH  -->
+      <!-- vvv english vvv -->
       <template v-else>
         <h1 class="privacy-title">Privacy Policy</h1>
         <p class="privacy-meta">Last updated: March 2026 · shyboti.de</p>

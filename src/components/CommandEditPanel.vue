@@ -107,7 +107,6 @@ async function removeAlias(alias: string) {
   } catch { }
   aliasSaving.value = false
 }
-// ^^^ Built-in aliases + flags reference ^^^
 
 function addParam(type: 'text' | 'regex') {
   const prefix = type === 'regex' ? 'regex' : 'text'
@@ -590,7 +589,7 @@ function onNormalInput() {
   syncLineNumbers(el)
 }
 
-// >>> Sets the editor's content on initial panel open, without touching
+// >>> content-only, no Selection/Range touched - avoids stealing focus on panel open
 function setNormalEditorContent(el: HTMLElement, text: string) {
   el.innerHTML = highlightScript(text)
 }
@@ -872,31 +871,28 @@ function removeArgVariant(i: number) {
         <div v-else class="ep-panel-body">
           <div v-if="saveError" class="ep-toast error">{{ saveError }}</div>
 
-          <!-- response / script editor -->
           <div class="ep-field-group">
             <label class="ep-field-label">
               {{ t('edit.response') }}
               <span class="ep-field-hint">{{ t('edit.response_hint') }}</span>
             </label>
 
-            <!-- locked $command.output prefix for built-in commands -->
+            <!-- >>> locked prefix for built-in commands -->
             <div v-if="isBuiltIn" class="builtin-prefix-row">
               <span class="builtin-prefix-token">$command.output</span>
               <span class="builtin-prefix-hint">{{ t('edit.builtin_locked') }}</span>
             </div>
 
             <div class="editor-wrapper">
-              <!-- Line numbers gutter (scrolls in sync with editor) -->
+              <!-- >>> scrolls in sync with editor -->
               <div class="line-numbers" ref="lineNumbersRef">
                 <div v-for="n in lineCount" :key="n" class="line-number">{{ n }}</div>
               </div>
-              <!-- Editor + validation badge -->
               <div class="normal-editor-container">
                 <div ref="normalEditorRef" class="normal-editor" contenteditable="true" spellcheck="false"
                   :data-placeholder="isBuiltIn ? '$text.upper($command.output)' : 'Hello $user.mention! $if($args){ You said: $args }'"
                   @input="onNormalInput" @keydown="onNormalKeydown" @keyup="onEditorKeyupClearGhost"
                   @click="onEditorClick" @scroll="onEditorScroll" @blur="removeGhostSpan"></div>
-                <!-- Validation error badge -->
                 <div v-if="validationMessage" class="validation-badge">
                   <span v-for="(err, idx) in validationErrors" :key="idx" class="validation-pill" :class="err.type">
                     {{ err.message }}
@@ -908,10 +904,9 @@ function removeArgVariant(i: number) {
             <div class="normal-hint">{{ t('edit.tab_complete') }} &nbsp;·&nbsp; <code>$</code></div>
           </div>
 
-          <!-- Variable reference -->
           <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
 
-          <!-- description + arg variants, just docs, doesn't touch the script itself -->
+          <!-- >>> docs only, doesn't touch the script itself -->
           <details class="ep-field-group desc-details">
             <summary class="ep-field-label desc-summary">
               {{ t('edit.description') }} <span class="ep-field-hint">&amp; usage</span>
@@ -922,7 +917,7 @@ function removeArgVariant(i: number) {
               <input v-else v-model="form.description" class="ep-field-input" :placeholder="t('edit.desc_placeholder')"
                 maxlength="120" />
 
-              <!-- arg variants, usage is auto-detected, only the description text is editable -->
+              <!-- >>> usage is auto-detected, only the description text is editable -->
               <template v-if="!isBuiltIn">
                 <div class="arg-descs-header">
                   <span class="arg-descs-title">Argument usage <span class="ep-field-hint">auto-detected - describe what
@@ -948,7 +943,7 @@ function removeArgVariant(i: number) {
             </div>
           </details>
 
-          <!-- aliases + flags reference, built-ins only -->
+          <!-- >>> built-ins only -->
           <details v-if="isBuiltIn" class="ep-field-group desc-details" open>
             <summary class="ep-field-label desc-summary">
               {{ t('edit.aliases') }} <span class="ep-field-hint">{{ t('edit.aliases_hint') }}</span>
@@ -988,7 +983,6 @@ function removeArgVariant(i: number) {
             </div>
           </details>
 
-          <!-- preview + mock values, closed by default -->
           <details class="ep-field-group preview-details">
             <summary class="ep-field-label preview-summary">
               {{ t('edit.preview') }} <span class="preview-note">{{ t('edit.preview_note') }}</span>
@@ -1054,7 +1048,7 @@ function removeArgVariant(i: number) {
 
         </div>
 
-        <!-- Footer pinned outside scroll area -->
+        <!-- >>> footer pinned outside scroll -->
         <div class="ep-panel-footer">
           <button v-if="!isBuiltIn" class="ep-btn-delete" :class="{ confirm: deleteConfirm }" :disabled="deleting"
             @click="deleteCmd">

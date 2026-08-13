@@ -1,11 +1,5 @@
 <script setup lang="ts">
-// Shared "variable reference" panel used by every script editor (custom
-// commands, OBS widgets, triggers, timers, countdowns). Single source for
-// both lists shown:
-//   1. the channel's actual counters/vars (fetched live), and
-//   2. the static $token documentation (from composables/scriptReference.ts)
-// Click any row to insert its token - previously only OBS widgets supported
-// click-to-insert, everywhere else the reference list was read-only.
+// >>> shared ref panel: click-to-insert used to be OBS-only, now everywhere
 import { onMounted } from "vue";
 import {
   getRefGroups,

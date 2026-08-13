@@ -36,7 +36,7 @@ const saveSuccess = ref("");
 const editOpen = ref(false);
 const overlay = useOverlayClose();
 const isNew = ref(false);
-const editOrigName = ref(""); // name before any in-progress rename, used to know which row to PUT/DELETE
+const editOrigName = ref(""); // <<< name before rename, so we know which row to PUT/DELETE
 const contentInputEl = ref<HTMLInputElement | null>(null);
 const form = ref({
   name: "",
@@ -178,7 +178,7 @@ async function previewContent() {
           ((await r2.json()) as { value: string }).value || "(empty)";
     }
   } catch { }
-  // >>> The PUT above persists a real "___preview" widget row purely to reuse the save endpoint for evaluation 
+  // >>> persists a real "___preview" row just to reuse the save endpoint for eval
   try {
     await fetch(`${API}/obs-widgets/${session.value.channel}/___preview`, {
       method: "DELETE",
@@ -385,7 +385,7 @@ watch(() => session.value?.channel, load);
           </div>
 
           <div class="ep-panel-body">
-            <!-- Name (new only - existing widgets are renamed via the clickable header title above) -->
+            <!-- >>> new only - renames happen via the header title -->
             <div v-if="isNew" class="ep-field-group">
               <label class="ep-field-label">{{ t("obs.panel.name") }}
                 <span class="ep-field-hint">{{
@@ -394,7 +394,6 @@ watch(() => session.value?.channel, load);
               <input v-model="form.name" class="ep-field-input" placeholder="kills-counter" />
             </div>
 
-            <!-- Content -->
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("obs.panel.content") }}
                 <span class="ep-field-hint">{{
@@ -404,10 +403,9 @@ watch(() => session.value?.channel, load);
                 placeholder="$counter.kills.get" />
             </div>
 
-            <!-- Variable Reference - shared list, click a row to insert into Content above -->
+            <!-- >>> click a row to insert into Content above -->
             <RefPanel :title="t('obs.panel.ref')" @insert="insertRefToken" />
 
-            <!-- Preview -->
             <div class="preview-section">
               <div class="preview-bar">
                 <span class="ep-field-label">{{ t("obs.panel.preview") }}</span>
@@ -426,7 +424,6 @@ watch(() => session.value?.channel, load);
               </div>
             </div>
 
-            <!-- Refresh -->
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("obs.panel.refresh") }}</label>
               <div class="refresh-row">
@@ -440,7 +437,6 @@ watch(() => session.value?.channel, load);
 
             <div class="obs-cache-hint">{{ t("obs.panel.cache.hint") }}</div>
 
-            <!-- Style -->
             <div class="style-section">
               <div class="style-title">{{ t("obs.panel.style") }}</div>
               <div class="style-grid">
@@ -533,7 +529,7 @@ watch(() => session.value?.channel, load);
             </div>
           </div>
 
-          <!-- Footer pinned outside scroll -->
+          <!-- >>> footer pinned outside scroll -->
           <div class="ep-panel-footer">
             <div v-if="saveError" class="save-error">{{ saveError }}</div>
             <div v-else></div>

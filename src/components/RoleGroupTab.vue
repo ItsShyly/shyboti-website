@@ -139,8 +139,7 @@ const DEFAULT_MOD_PERMS: Omit<RolePermissions, "modsEnabled"> = {
   obs_force_preview: false,
 };
 
-// >>> VIPs get no rights anywhere by default - mirrors DEFAULT_VIP_PERMS in
-// >>> apiServer.ts's /role/:channel handler, which this UI must stay in sync with
+// >>> VIPs default to no rights - mirrors apiServer.ts's DEFAULT_VIP_PERMS, keep in sync
 const DEFAULT_VIP_PERMS: Omit<RolePermissions, "modsEnabled"> = {
   ...Object.fromEntries(
     Object.keys(DEFAULT_MOD_PERMS).map((k) => [k, false]),
@@ -151,11 +150,7 @@ const DEFAULT_PERMS = computed(() =>
   isVip.value ? DEFAULT_VIP_PERMS : DEFAULT_MOD_PERMS,
 );
 
-// >>> Global permission defaults for this role tier - VIPs start disabled,
-// >>> mirroring channel_roles.vipsEnabled's DB default of 0 (mods default
-// >>> enabled). Matters before load() resolves too, not just after: without
-// >>> this the VIP tab would flash "on" on every visit to a never-configured
-// >>> channel, then flip off once the real value comes back.
+// >>> VIPs default off (matches DB default), so the tab doesn't flash "on" before load() resolves
 const enabled = ref(!isVip.value);
 const globalPerms = ref<Omit<RolePermissions, "modsEnabled">>({
   ...DEFAULT_PERMS.value,
@@ -319,9 +314,7 @@ async function clearItemOverride(item: RoleEntry) {
   await saveItemOverride(item);
 }
 
-// >>> An override matching the global tier defaults key-for-key isn't a real
-// >>> override anymore - drop it back to null so it stays "default" and keeps
-// >>> tracking future global changes instead of freezing a stale snapshot.
+// >>> override matching global defaults exactly isn't real - drop to null so it keeps tracking global changes
 function matchesGlobal(
   perms: Omit<RolePermissions, "modsEnabled">,
 ): boolean {

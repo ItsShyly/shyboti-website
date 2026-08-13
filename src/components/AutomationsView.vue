@@ -71,7 +71,7 @@ async function switchTab(tab: Tab) {
         </div>
       </div>
       <div class="ep-view-header-right">
-        <!-- separate, always-present teleport targets per tab  -->
+        <!-- >>> teleport targets for the sync panel, one per tab -->
         <div id="auto-sync-slot-timers"></div>
         <div id="auto-sync-slot-triggers"></div>
         <button class="ep-btn-reload" @click="activeChild?.reload?.()" title="Reload">↺</button>
@@ -97,7 +97,7 @@ async function switchTab(tab: Tab) {
     </div>
 
     <div class="auto-body">
-      <!-- KeepAlive -->
+      <!-- >>> keepalive: avoids Teleport+unmount crash, see CLAUDE.md -->
       <KeepAlive>
         <TimersView v-if="activeTab === 'timers'" key="timers" ref="timersRef" />
         <TriggersView v-else-if="activeTab === 'triggers'" key="triggers" ref="triggersRef" />

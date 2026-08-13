@@ -47,7 +47,6 @@ async function openChatterino() {
 
 <template>
   <div class="uploads-view">
-    <!-- Images card -->
     <div class="service-card" @click="router.push('/images')">
       <div class="card-icon images-icon">
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -85,7 +84,6 @@ async function openChatterino() {
       </div>
     </div>
 
-    <!-- Notes card -->
     <div class="service-card" @click="router.push('/notes')">
       <div class="card-icon notes-icon">
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -114,7 +112,6 @@ async function openChatterino() {
     </div>
   </div>
 
-  <!-- Chatterino popup -->
   <Teleport to="body">
     <div v-if="showChatterino" class="modal-backdrop" @click.self="
       showChatterino = false;

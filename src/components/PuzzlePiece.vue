@@ -10,7 +10,7 @@ interface Props {
 }
 const props = defineProps<Props>();
 
-//  constants (must match puzzleSVG in CommandEditPanel)
+// >>> must match puzzleSVG constants in CommandEditPanel
 const H = 32;
 const R = 4;
 const TW = 8;
@@ -37,22 +37,22 @@ const geo = computed(() => {
   const rightNotch = props.rightFlat ? false : true;
 
   const bw = Math.max(52, Math.ceil(props.label.length * CW) + PX * 2);
-  // Body at x=0..bw; left tab protrudes to -TH when present (same as puzzleSVG)
+  // >>> left tab protrudes to -TH, matches puzzleSVG
   const x0 = 0,
     y0 = 0,
     x1 = bw,
     y1 = H;
   const midY = H / 2;
   const vbX = leftTab ? -TH : 0;
-  const vbW = bw + TH; // always wide enough to show left tab without clipping
+  const vbW = bw + TH; // <<< wide enough to show left tab without clipping
 
   const top = `M${x0 + R},${y0} L${x1 - R},${y0} Q${x1},${y0} ${x1},${y0 + R}`;
-  // Right: notch cuts INWARD to x1-TH
+  // >>> notch cuts inward to x1-TH
   const right = rightNotch
     ? `L${x1},${midY - TW} L${x1 - TH + TR},${midY - TW} Q${x1 - TH},${midY - TW} ${x1 - TH},${midY - TW + TR} L${x1 - TH},${midY + TW - TR} Q${x1 - TH},${midY + TW} ${x1 - TH + TR},${midY + TW} L${x1},${midY + TW} L${x1},${y1 - R} Q${x1},${y1} ${x1 - R},${y1}`
     : `L${x1},${y1 - R} Q${x1},${y1} ${x1 - R},${y1}`;
   const bottom = `L${x0 + R},${y1} Q${x0},${y1} ${x0},${y1 - R}`;
-  // Left: tab protrudes OUTWARD to x0-TH = -TH
+  // >>> tab protrudes outward to x0-TH
   const left = leftTab
     ? `L${x0},${midY + TW} L${x0 - TH + TR},${midY + TW} Q${x0 - TH},${midY + TW} ${x0 - TH},${midY + TW - TR} L${x0 - TH},${midY - TW + TR} Q${x0 - TH},${midY - TW} ${x0 - TH + TR},${midY - TW} L${x0},${midY - TW} L${x0},${y0 + R} Q${x0},${y0} ${x0 + R},${y0}`
     : `L${x0},${y0 + R} Q${x0},${y0} ${x0 + R},${y0}`;

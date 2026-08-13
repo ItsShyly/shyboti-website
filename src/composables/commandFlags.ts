@@ -1,11 +1,4 @@
-// composables/commandFlags.ts
-//
-// Static reference of the -flag arguments each built-in command actually parses
-// (lib/core/chatFlags.ts on the backend). Purely documentation for the "Flags"
-// field in CommandEditPanel.vue - flags aren't stored anywhere, they're hardcoded
-// per command file, so this list has to be kept in sync by hand when a command's
-// flags change.
-
+// >>> static reference of -flag args per built-in command (mirrors backend lib/core/chatFlags.ts), for CommandEditPanel's Flags field - flags are hardcoded per command file, keep this in sync by hand
 export interface FlagItem {
   flag: string;
   desc: string;

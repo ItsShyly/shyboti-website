@@ -1,12 +1,4 @@
-// composables/scriptReference.ts
-//
-// Single shared source of truth for the "variable reference" list shown in
-// every script editor (custom commands, countdowns, triggers, timers). Keeping
-// this in one file means a new $token only has to be documented once and it
-// shows up identically everywhere, instead of drifting out of sync the way the
-// old per-component copies did (the countdown/command control tokens below
-// were missing entirely from the old CommandEditPanel-only copy of this list).
-
+// >>> single source of truth for the variable reference list across every script editor, avoids per-component copies drifting out of sync
 export interface RefItem {
   token: string;
   desc: string;
@@ -492,13 +484,7 @@ export const REF_GROUPS: RefGroup[] = [
   },
 ];
 
-// >>> Returns the reference groups for a given editor context. Items marked
-// >>> `only: 'countdown'` (the bare $countdown.remaining/total/elapsed/percent/
-// >>> running tokens) only resolve to a real value inside that countdown's own
-// >>> msg_start/msg_tick/msg_end, so they're hidden everywhere else - unlike
-// >>> $countdown.name.<x>, which names a specific countdown and therefore works
-// >>> (and stays listed) in every editor: commands, timers, triggers, and other
-// >>> countdowns alike.
+// >>> only: 'countdown' items only resolve inside that countdown's own msg_start/tick/end, so hide them elsewhere
 export function getRefGroups(context?: "countdown"): RefGroup[] {
   return REF_GROUPS.map((g) => ({
     ...g,
@@ -506,8 +492,7 @@ export function getRefGroups(context?: "countdown"): RefGroup[] {
   })).filter((g) => g.items.length > 0);
 }
 
-// >>> Renders a $token with the "name" portion (e.g. counter/list/countdown/command
-// >>> name, and bracketed args) styled distinctly, for display in the reference list.
+// >>> styles the name/arg portion of a $token distinctly for display
 export function renderRefToken(token: string): string {
   let result = token;
   const namePrefixes = [
