@@ -6,6 +6,8 @@ import { API } from "../api";
 import { useAuth } from "../auth";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
+import TypeaheadInput from "./shared/TypeaheadInput.vue";
+import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 
 const { session, channelRole } = useAuth();
 const settingsOverlay = useOverlayClose();
@@ -550,8 +552,13 @@ interface CategoryHistoryEntry {
   changed_at: number;
 }
 const categoryHistory = ref<CategoryHistoryEntry[]>([]);
+const currentCategoryId = ref<string | null>(null);
 const switchingCategory = ref<string | null>(null);
 const categorySwitchError = ref("");
+const MAX_CATEGORY_CARDS = 5;
+const emptyCategorySlots = computed(() =>
+  Math.max(0, MAX_CATEGORY_CARDS - categoryHistory.value.length),
+);
 
 async function loadCategoryHistory() {
   if (!session.value) return;
@@ -560,10 +567,39 @@ async function loadCategoryHistory() {
       headers: authHeaders.value,
     });
     if (res.ok) {
-      const d = (await res.json()) as { history: CategoryHistoryEntry[] };
+      const d = (await res.json()) as {
+        history: CategoryHistoryEntry[];
+        current_category_id: string | null;
+      };
       categoryHistory.value = d.history ?? [];
+      currentCategoryId.value = d.current_category_id ?? null;
     }
   } catch { }
+}
+
+const showAddCategory = ref(false);
+const addCategoryOverlay = useOverlayClose();
+const addCategoryQuery = ref("");
+async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
+  if (!session.value) return [];
+  try {
+    const res = await fetch(
+      `${API}/obs/twitch/categories?q=${encodeURIComponent(query)}`,
+      { headers: authHeaders.value },
+    );
+    if (!res.ok) return [];
+    const d = (await res.json()) as {
+      categories: { id: string; name: string; box_art_url: string }[];
+    };
+    return (d.categories ?? []).map((c) => ({ id: c.id, label: c.name, iconUrl: c.box_art_url }));
+  } catch {
+    return [];
+  }
+}
+async function onAddCategorySelect(item: TypeaheadItem) {
+  showAddCategory.value = false;
+  addCategoryQuery.value = "";
+  if (item.id) await switchCategory(item.id);
 }
 
 async function switchCategory(categoryId: string) {
@@ -1243,13 +1279,20 @@ watch(
           <label class="ep-field-label">recent categories</label>
           <div class="obs-category-strip">
             <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
-              :class="{ disabled: !canFilterScenes }" :disabled="switchingCategory === c.category_id"
-              :title="c.category_name" @click="switchCategory(c.category_id)">
+              :class="{ disabled: !canFilterScenes, active: c.category_id === currentCategoryId }"
+              :disabled="switchingCategory === c.category_id" :title="c.category_name"
+              @click="switchCategory(c.category_id)">
               <img v-if="c.box_art_url" :src="c.box_art_url" :alt="c.category_name" />
               <div v-else class="obs-category-empty">{{ c.category_name.slice(0, 2) }}</div>
               <span class="obs-category-name">{{ c.category_name }}</span>
             </button>
-            <div v-if="!categoryHistory.length" class="ep-empty">no category history yet</div>
+            <template v-if="canFilterScenes">
+              <button v-for="n in emptyCategorySlots" :key="'empty' + n"
+                class="obs-category-card obs-category-add" title="Add a category"
+                @click="showAddCategory = true">
+                <div class="obs-category-empty obs-category-plus">+</div>
+              </button>
+            </template>
           </div>
           <div v-if="categorySwitchError" class="obs-category-error">{{ categorySwitchError }}</div>
         </div>
@@ -1455,6 +1498,29 @@ watch(
       </div>
     </div>
   </Teleport>
+
+  <Teleport to="body">
+    <div v-if="showAddCategory" class="ep-overlay"
+      v-bind="addCategoryOverlay.handlers(() => (showAddCategory = false))">
+      <div class="ep-panel obs-add-category-panel">
+        <div class="ep-panel-header">
+          <div>
+            <div class="ep-panel-title">Switch category</div>
+          </div>
+          <button class="ep-panel-close" @click="showAddCategory = false">
+            x
+          </button>
+        </div>
+        <div class="ep-panel-body">
+          <div class="ep-field-group">
+            <label class="ep-field-label">Category</label>
+            <TypeaheadInput v-model="addCategoryQuery" :fetch-items="fetchCategories" :min-chars="1"
+              placeholder="Search a Twitch category..." @select="onAddCategorySelect" />
+          </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -1549,6 +1615,10 @@ watch(
 
 .obsconn-settings-panel {
   width: min(560px, 92vw);
+}
+
+.obs-add-category-panel {
+  width: min(420px, 92vw);
 }
 
 /* Status bar */
@@ -2251,7 +2321,12 @@ watch(
 
 .obs-category-card:hover img,
 .obs-category-card:hover .obs-category-empty {
-  border-color: #9d6cff;
+  border-color: rgb(58, 58, 68);
+}
+
+.obs-category-card.active img,
+.obs-category-card.active .obs-category-empty {
+  border-color: rgb(111, 43, 255);
 }
 
 .obs-category-card:disabled {
@@ -2261,6 +2336,16 @@ watch(
 .obs-category-card.disabled {
   cursor: default;
   opacity: 0.7;
+}
+
+.obs-category-plus {
+  color: #444;
+  font-size: 34px;
+  font-weight: 400;
+}
+
+.obs-category-add:hover .obs-category-plus {
+  color: #888;
 }
 
 .obs-category-name {
