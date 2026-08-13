@@ -4,6 +4,7 @@ import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import type { RolePermissions } from "../auth";
+import ReauthLink from "./shared/ReauthLink.vue";
 
 const props = defineProps<{ kind: "mod" | "vip" }>();
 
@@ -133,7 +134,7 @@ const DEFAULT_MOD_PERMS: Omit<RolePermissions, "modsEnabled"> = {
   automations_delete: false,
   moderation_view: true,
   moderation_manage: false,
-  obs_view: true,
+  obs_view: false,
   obs_edit: false,
   obs_force_preview: false,
 };
@@ -150,8 +151,12 @@ const DEFAULT_PERMS = computed(() =>
   isVip.value ? DEFAULT_VIP_PERMS : DEFAULT_MOD_PERMS,
 );
 
-// >>> Global permission defaults for this role tier
-const enabled = ref(true);
+// >>> Global permission defaults for this role tier - VIPs start disabled,
+// >>> mirroring channel_roles.vipsEnabled's DB default of 0 (mods default
+// >>> enabled). Matters before load() resolves too, not just after: without
+// >>> this the VIP tab would flash "on" on every visit to a never-configured
+// >>> channel, then flip off once the real value comes back.
+const enabled = ref(!isVip.value);
 const globalPerms = ref<Omit<RolePermissions, "modsEnabled">>({
   ...DEFAULT_PERMS.value,
 });
@@ -201,9 +206,10 @@ async function load() {
       vipsEnabled?: boolean;
       permissions: Omit<RolePermissions, "modsEnabled">;
     };
-    enabled.value = (isVip.value ? data.vipsEnabled : data.modsEnabled) ?? true;
+    enabled.value =
+      (isVip.value ? data.vipsEnabled : data.modsEnabled) ?? !isVip.value;
     Object.assign(globalPerms.value, DEFAULT_PERMS.value, data.permissions);
-  } catch {}
+  } catch { }
 }
 
 async function loadItems() {
@@ -232,7 +238,7 @@ async function loadScopeStatus() {
     if (!res.ok) return;
     const data = (await res.json()) as { hasScope: boolean };
     hasScope.value = data.hasScope;
-  } catch {}
+  } catch { }
 }
 
 // >>> Save global
@@ -251,7 +257,7 @@ async function save() {
       body: JSON.stringify(body),
     });
     showSaved();
-  } catch {}
+  } catch { }
   saving.value = false;
 }
 
@@ -264,7 +270,7 @@ async function syncNow() {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     await Promise.all([loadItems(), loadScopeStatus()]);
-  } catch {}
+  } catch { }
   syncing.value = false;
 }
 
@@ -291,7 +297,7 @@ async function saveItemOverride(item: RoleEntry) {
         }),
       },
     );
-  } catch {}
+  } catch { }
   itemSaving.value = null;
 }
 
@@ -395,8 +401,8 @@ watch(() => props.kind, reload);
 
     <!-- VIP scope re-auth warning -->
     <div v-if="isVip && !hasScope" class="scope-warning">
-      {{ t("roles.scope_warning_pre") }}<a :href="`${API}/auth/add`" class="scope-warning-link">{{
-        t("roles.scope_warning_link") }}</a>{{ t("roles.scope_warning_post") }}
+      {{ t("roles.scope_warning_pre") }}<ReauthLink>{{ t("roles.scope_warning_link") }}</ReauthLink>{{
+        t("roles.scope_warning_post") }}
     </div>
 
     <!-- Individual overrides -->
@@ -442,7 +448,7 @@ watch(() => props.kind, reload);
             <span class="mod-name">{{ item.username }}</span>
             <span class="mod-badge" v-if="item.blocked">{{ t("roles.badge.blocked") }}</span>
             <span class="mod-badge override" v-else-if="item.permissions !== null">{{ t("roles.badge.custom")
-            }}</span>
+              }}</span>
             <span class="mod-badge default" v-else>{{ t("roles.badge.default") }}</span>
             <div class="mod-header-actions" @click.stop>
               <button class="mod-block-btn" :class="{ 'mod-block-btn-allow': item.blocked }" @click="blockItem(item)"
@@ -458,7 +464,7 @@ watch(() => props.kind, reload);
             <div class="mod-perms-header">
               <span class="mod-perms-sub">{{
                 item.permissions !== null ? t("roles.custom_perms") : t("roles.using_default")
-              }}</span>
+                }}</span>
               <button v-if="item.permissions !== null" class="reset-btn" @click="clearItemOverride(item)"
                 :disabled="itemSaving === item.username">
                 {{ t("roles.reset") }}
@@ -689,12 +695,6 @@ watch(() => props.kind, reload);
   background: rgba(229, 192, 123, 0.08);
   border-left: 2px solid #e5c07b;
   padding: 8px 10px;
-}
-
-.scope-warning-link {
-  color: #e5c07b;
-  font-weight: 700;
-  text-decoration: underline;
 }
 
 .sync-btn {

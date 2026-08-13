@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
+import ReauthLink from "./shared/ReauthLink.vue";
 
 
 export interface ObsRule {
@@ -428,7 +429,8 @@ const missingFields = computed(() => {
         <div v-if="needsCategoryScope" class="ep-panel-body" style="padding-top: 0">
           <div class="obs-scope-warning">
             Your stored Twitch token doesn't have permission to change the category yet, so this
-            rule won't actually fire until you <a :href="`${API}/auth/add`" class="obs-rule-link">re-authorize</a>.
+            rule won't actually fire until <ReauthLink fallback="the broadcaster re-authorizes">you
+              re-authorize</ReauthLink>.
           </div>
         </div>
 
@@ -513,10 +515,6 @@ const missingFields = computed(() => {
   padding: 6px 8px;
   margin-top: 6px;
   line-height: 1.5;
-}
-
-.obs-rule-link {
-  color: #9d6cff;
 }
 
 code.ep-mono {
