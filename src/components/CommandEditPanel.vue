@@ -5,6 +5,7 @@ import { useAuth } from '../auth'
 import { highlightScript } from '../composables/scriptHighlight'
 import { mockEval, resetMockState, seedMockState, DEFAULT_MOCK, type MockContext } from '../composables/scriptMockEval'
 import { useOverlayClose } from '../composables/useOverlayClose'
+import { COMMAND_FLAGS } from '../composables/commandFlags'
 import EditableNameHeader from './shared/EditableNameHeader.vue'
 import RefPanel from './shared/RefPanel.vue'
 import { useI18n } from '../i18n'
@@ -47,6 +48,67 @@ const userParams = ref<ParamEntry[]>([
 ])
 const PARAMS = computed(() => userParams.value.map(p => `{${p.key}}`))
 
+// vvv Built-in aliases + flags reference vvv
+const builtinChannelAliases = ref<string[]>([])
+const builtinGlobalAliases = ref<string[]>([])
+const newAliasName = ref('')
+const aliasSaving = ref(false)
+const aliasError = ref('')
+const builtinFlags = computed(() => props.isBuiltIn ? (COMMAND_FLAGS[props.cmdName] ?? []) : [])
+
+async function loadAliases() {
+  if (!session.value || !props.cmdName) return
+  try {
+    const res = await fetch(`${API}/command-aliases/${props.channel}/${props.cmdName}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    if (res.ok) {
+      const data = await res.json() as { channelAliases: string[]; globalAliases: string[] }
+      builtinChannelAliases.value = data.channelAliases
+      builtinGlobalAliases.value = data.globalAliases
+    }
+  } catch { }
+}
+
+async function addAlias() {
+  if (!session.value || !props.cmdName) return
+  const alias = newAliasName.value.trim().toLowerCase()
+  if (!alias) return
+  aliasSaving.value = true
+  aliasError.value = ''
+  try {
+    const res = await fetch(`${API}/command-aliases/${props.channel}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ alias, command: props.cmdName })
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({})) as { error?: string }
+      aliasError.value = data.error ?? t('edit.alias_error')
+    } else {
+      newAliasName.value = ''
+      await loadAliases()
+    }
+  } catch {
+    aliasError.value = t('edit.alias_error')
+  }
+  aliasSaving.value = false
+}
+
+async function removeAlias(alias: string) {
+  if (!session.value) return
+  aliasSaving.value = true
+  try {
+    await fetch(`${API}/command-aliases/${props.channel}/${alias}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    await loadAliases()
+  } catch { }
+  aliasSaving.value = false
+}
+// ^^^ Built-in aliases + flags reference ^^^
+
 function addParam(type: 'text' | 'regex') {
   const prefix = type === 'regex' ? 'regex' : 'text'
   const existing = userParams.value.filter(p => p.type === type).map(p => p.key)
@@ -63,6 +125,10 @@ watch(userParams, params => {
 
 async function load() {
   if (!session.value) return
+  builtinChannelAliases.value = []
+  builtinGlobalAliases.value = []
+  newAliasName.value = ''
+  aliasError.value = ''
   if (!props.cmdName) {
     form.value = {
       name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
@@ -84,6 +150,7 @@ async function load() {
         const cmd = data.commands.find(c => c.name === props.cmdName)
         form.value = { ...form.value, name: props.cmdName, description: cmd?.description ?? '' }
       }
+      await loadAliases()
     } else {
       const res = await fetch(`${API}/custom-commands/${props.channel}`, {
         headers: { Authorization: `Bearer ${session.value.token}` }
@@ -881,6 +948,46 @@ function removeArgVariant(i: number) {
             </div>
           </details>
 
+          <!-- aliases + flags reference, built-ins only -->
+          <details v-if="isBuiltIn" class="ep-field-group desc-details" open>
+            <summary class="ep-field-label desc-summary">
+              {{ t('edit.aliases') }} <span class="ep-field-hint">{{ t('edit.aliases_hint') }}</span>
+            </summary>
+            <div class="desc-body">
+              <div class="arg-descs-title">{{ t('edit.aliases') }}</div>
+              <div v-if="!builtinChannelAliases.length && !builtinGlobalAliases.length" class="arg-descs-empty">
+                {{ t('edit.aliases_empty') }}
+              </div>
+              <div v-else class="alias-chip-list">
+                <span v-for="a in builtinGlobalAliases" :key="'g:' + a" class="alias-chip locked"
+                  :title="t('edit.alias_global_hint')">
+                  {{ prefix || '+' }}{{ a }}
+                </span>
+                <span v-for="a in builtinChannelAliases" :key="'c:' + a" class="alias-chip">
+                  {{ prefix || '+' }}{{ a }}
+                  <button class="alias-chip-remove" type="button" :disabled="aliasSaving" @click="removeAlias(a)">✕</button>
+                </span>
+              </div>
+              <div class="alias-add-row">
+                <input v-model="newAliasName" class="ep-field-input alias-add-input" :placeholder="t('edit.aliases_placeholder')"
+                  @keydown.enter="addAlias" />
+                <button class="arg-add-btn" type="button" :disabled="aliasSaving || !newAliasName.trim()" @click="addAlias">
+                  {{ t('edit.aliases_add') }}
+                </button>
+              </div>
+              <div v-if="aliasError" class="alias-error">{{ aliasError }}</div>
+
+              <div class="arg-descs-title flags-title">{{ t('edit.flags') }}</div>
+              <div v-if="!builtinFlags.length" class="arg-descs-empty">{{ t('edit.flags_empty') }}</div>
+              <div v-else class="flags-list">
+                <div v-for="f in builtinFlags" :key="f.flag" class="flags-row">
+                  <span class="flags-flag">{{ f.flag }}</span>
+                  <span class="flags-desc">{{ f.desc }}</span>
+                </div>
+              </div>
+            </div>
+          </details>
+
           <!-- preview + mock values, closed by default -->
           <details class="ep-field-group preview-details">
             <summary class="ep-field-label preview-summary">
@@ -923,7 +1030,7 @@ function removeArgVariant(i: number) {
                   }}</span></label>
               <input v-model="form.required_game" class="ep-field-input" placeholder="Fortnite" />
             </div>
-            <div class="ep-field-group ep-sm">
+            <div v-if="!isBuiltIn" class="ep-field-group ep-sm">
               <label class="ep-field-label">{{ t('edit.alias') }} <span class="ep-field-hint">{{ t('edit.optional')
               }}</span></label>
               <input v-model="form.alias" class="ep-field-input" placeholder="shortname" />
@@ -1110,6 +1217,93 @@ function removeArgVariant(i: number) {
 
 .arg-remove-btn:hover {
   background: #f1494911;
+}
+
+/* Built-in aliases + flags */
+.alias-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.alias-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'Consolas', 'Fira Mono', monospace;
+  font-size: 12px;
+  color: #9d6cff;
+  background: #6f2bff11;
+  border: 1px solid #6f2bff33;
+  padding: 4px 8px;
+}
+
+.alias-chip.locked {
+  color: #888;
+  background: #1a1a1e;
+  border-color: #2a2a30;
+  cursor: default;
+}
+
+.alias-chip-remove {
+  border: none;
+  background: none;
+  color: #f14949;
+  cursor: pointer;
+  font-size: 10px;
+  padding: 0;
+  line-height: 1;
+}
+
+.alias-chip-remove:disabled {
+  opacity: .5;
+  cursor: default;
+}
+
+.alias-add-row {
+  display: flex;
+  gap: 6px;
+}
+
+.alias-add-input {
+  flex: 1;
+  min-width: 0;
+  max-width: 200px;
+}
+
+.alias-error {
+  font-size: 11px;
+  color: #f14949;
+  margin-top: 6px;
+}
+
+.flags-title {
+  margin-top: 12px;
+}
+
+.flags-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flags-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.flags-flag {
+  font-family: 'Consolas', 'Fira Mono', monospace;
+  color: #e5c07b;
+  flex-shrink: 0;
+  width: 120px;
+}
+
+.flags-desc {
+  color: #888;
 }
 
 /* built-in prefix lock */
