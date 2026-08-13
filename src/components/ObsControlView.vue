@@ -1128,7 +1128,7 @@ watch(
           </svg>
           <span v-if="!loading && !agentStatus?.paired" class="obs-gear-badge" title="OBS agent not set up yet">!</span>
         </button>
-        <div class="obs-live-stats">
+        <div v-if="agentConnected && obsConnected" class="obs-live-stats">
           <div class="obs-live-stat" :class="{ bad: bitrateBad }">
             <span class="obs-live-stat-label">bitrate</span>
             <span class="obs-live-stat-value">{{
