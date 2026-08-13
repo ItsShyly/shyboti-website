@@ -1331,7 +1331,7 @@ watch(
           </div>
         </template>
 
-        <div v-if="agentStatus?.paired" class="ep-field-group obs-box obs-box-cat">
+        <div v-if="agentConnected && obsConnected" class="ep-field-group obs-box obs-box-cat">
           <label class="ep-field-label">Switch categories</label>
           <div class="obs-category-strip">
             <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
@@ -1354,7 +1354,7 @@ watch(
           <div v-if="categorySwitchError" class="obs-category-error">{{ categorySwitchError }}</div>
         </div>
 
-        <div class="ep-field-group obs-box obs-box-links">
+        <div v-if="agentConnected && obsConnected" class="ep-field-group obs-box obs-box-links">
           <label class="ep-field-label">quick links</label>
           <button class="ep-btn-cancel obs-link-btn" @click="router.push('/commands')">
             OBS commands
