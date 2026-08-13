@@ -475,6 +475,7 @@ async function load() {
     }
   } catch { }
   if (agentConnected.value && obsConnected.value) refreshScenes();
+  loadCategoryHistory();
 }
 
 async function poll() {
@@ -539,6 +540,51 @@ async function disconnectAgent() {
     await load();
   } catch { }
   disconnectingAgent.value = false;
+}
+
+// vvv recent categories vvv
+interface CategoryHistoryEntry {
+  category_id: string;
+  category_name: string;
+  box_art_url: string;
+  changed_at: number;
+}
+const categoryHistory = ref<CategoryHistoryEntry[]>([]);
+const switchingCategory = ref<string | null>(null);
+const categorySwitchError = ref("");
+
+async function loadCategoryHistory() {
+  if (!session.value) return;
+  try {
+    const res = await fetch(`${API}/obs/${session.value.channel}/category-history`, {
+      headers: authHeaders.value,
+    });
+    if (res.ok) {
+      const d = (await res.json()) as { history: CategoryHistoryEntry[] };
+      categoryHistory.value = d.history ?? [];
+    }
+  } catch { }
+}
+
+async function switchCategory(categoryId: string) {
+  if (!session.value || !canFilterScenes.value || switchingCategory.value) return;
+  switchingCategory.value = categoryId;
+  categorySwitchError.value = "";
+  try {
+    const res = await fetch(`${API}/obs/${session.value.channel}/category`, {
+      method: "POST",
+      headers: { ...authHeaders.value, "Content-Type": "application/json" },
+      body: JSON.stringify({ category_id: categoryId }),
+    });
+    if (res.ok) await loadCategoryHistory();
+    else {
+      const d = (await res.json().catch(() => ({}))) as { error?: string };
+      categorySwitchError.value = d.error ?? "Could not switch category";
+    }
+  } catch {
+    categorySwitchError.value = "Could not switch category";
+  }
+  switchingCategory.value = null;
 }
 
 async function copyToken() {
@@ -933,6 +979,7 @@ async function forceAllPreviews() {
 }
 
 // vvv lifecycle vvv
+let categoryPollTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
   load();
   pollTimer = setInterval(async () => {
@@ -942,10 +989,13 @@ onMounted(() => {
     if (agentConnected.value && obsConnected.value && scenes.value.length === 0)
       refreshScenes();
   }, 5000);
+  // >>> Twitch's own category could change without us clicking anything here
+  categoryPollTimer = setInterval(loadCategoryHistory, 30000);
 });
 onUnmounted(() => {
   if (pollTimer) clearInterval(pollTimer);
   if (shotTimer) clearInterval(shotTimer);
+  if (categoryPollTimer) clearInterval(categoryPollTimer);
 });
 watch(
   () => session.value?.channel,
@@ -1190,7 +1240,18 @@ watch(
         </template>
 
         <div v-if="agentStatus?.paired" class="ep-field-group obs-box obs-box-builder">
-          <!-- @TODO: Maybe Command builder / Rule builder buttons to link to it? -->
+          <label class="ep-field-label">recent categories</label>
+          <div class="obs-category-strip">
+            <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
+              :class="{ disabled: !canFilterScenes }" :disabled="switchingCategory === c.category_id"
+              :title="c.category_name" @click="switchCategory(c.category_id)">
+              <img v-if="c.box_art_url" :src="c.box_art_url" :alt="c.category_name" />
+              <div v-else class="obs-category-empty">{{ c.category_name.slice(0, 2) }}</div>
+              <span class="obs-category-name">{{ c.category_name }}</span>
+            </button>
+            <div v-if="!categoryHistory.length" class="ep-empty">no category history yet</div>
+          </div>
+          <div v-if="categorySwitchError" class="obs-category-error">{{ categorySwitchError }}</div>
         </div>
       </div>
     </div>
@@ -2146,6 +2207,76 @@ watch(
   flex: 0 0 700px;
   max-width: 700px;
   width: 700px;
+}
+
+.obs-category-strip {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.obs-category-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 100px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.obs-category-card img,
+.obs-category-empty {
+  width: 100px;
+  height: 133px;
+  border: 1px solid #2a2a30;
+  background: #111217;
+  object-fit: cover;
+  transition: border-color 0.15s;
+}
+
+.obs-category-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #555;
+  font-size: 20px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.obs-category-card:hover img,
+.obs-category-card:hover .obs-category-empty {
+  border-color: #9d6cff;
+}
+
+.obs-category-card:disabled {
+  cursor: default;
+}
+
+.obs-category-card.disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.obs-category-name {
+  font-size: 11px;
+  color: #ccc;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100px;
+}
+
+.obs-category-error {
+  margin-top: 8px;
+  font-size: 11px;
+  color: #f14949;
 }
 
 /* Access-level cycle button - matches CommandsView.vue's access-btn */
