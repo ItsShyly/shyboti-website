@@ -482,6 +482,27 @@ async function generateToken() {
   generatingToken.value = false;
 }
 
+const disconnectingAgent = ref(false);
+const disconnectConfirm = ref(false);
+async function disconnectAgent() {
+  if (!session.value || !isBroadcaster.value) return;
+  if (!disconnectConfirm.value) {
+    disconnectConfirm.value = true;
+    setTimeout(() => (disconnectConfirm.value = false), 3000);
+    return;
+  }
+  disconnectConfirm.value = false;
+  disconnectingAgent.value = true;
+  try {
+    await fetch(`${API}/obs/${session.value.channel}/disconnect`, {
+      method: "POST",
+      headers: authHeaders.value,
+    });
+    await load();
+  } catch { }
+  disconnectingAgent.value = false;
+}
+
 async function copyToken() {
   if (!token.value) return;
   await navigator.clipboard.writeText(token.value).catch(() => { });
@@ -1228,7 +1249,10 @@ watch(
           <div class="ep-field-group">
             <label class="ep-field-label">Connection enabled</label>
             <div class="obs-toggle-row">
-              <button class="obs-toggle" :class="{ on: enabledLocal }" @click="enabledLocal = !enabledLocal">
+              <button class="obs-toggle" :class="{ on: enabledLocal }" @click="
+                enabledLocal = !enabledLocal;
+              saveSettings();
+              ">
                 <span class="obs-toggle-knob"></span>
               </button>
               <span class="obs-toggle-label">{{
@@ -1239,11 +1263,31 @@ watch(
             </div>
           </div>
 
+          <div v-if="agentConnected" class="ep-field-group">
+            <label class="ep-field-label">Disconnect agent</label>
+            <button class="ep-btn-delete" :class="{ confirm: disconnectConfirm }" :disabled="disconnectingAgent"
+              @click="disconnectAgent">
+              {{
+                disconnectingAgent
+                  ? "disconnecting..."
+                  : disconnectConfirm
+                    ? "click again to confirm"
+                    : "disconnect agent"
+              }}
+            </button>
+            <div class="ep-field-hint">
+              Shuts down the agent process on your PC. Run the launcher again
+              to reconnect.
+            </div>
+          </div>
+
           <div class="ep-field-group">
             <label class="ep-field-label">Scene previews</label>
             <div class="obs-toggle-row">
-              <button class="obs-toggle" :class="{ on: screenshotsLocal }"
-                @click="screenshotsLocal = !screenshotsLocal">
+              <button class="obs-toggle" :class="{ on: screenshotsLocal }" @click="
+                screenshotsLocal = !screenshotsLocal;
+              saveSettings();
+              ">
                 <span class="obs-toggle-knob"></span>
               </button>
               <span class="obs-toggle-label">{{
@@ -1255,7 +1299,7 @@ watch(
             <div v-if="screenshotsLocal" class="obs-interval-row">
               <span class="ep-field-hint">refresh every</span>
               <input v-model.number="screenshotIntervalLocal" type="number" min="1" max="60"
-                class="ep-field-input obs-interval-input" />
+                class="ep-field-input obs-interval-input" @change="saveSettings" />
               <span class="ep-field-hint">seconds (min 1, to keep this light on OBS)</span>
             </div>
             <div class="ep-field-hint">
@@ -1263,21 +1307,9 @@ watch(
               previews if they're on, but can't turn them on or off.
             </div>
           </div>
-        </div>
 
-        <div class="ep-panel-footer">
-          <div></div>
-          <div class="ep-footer-right">
-            <button class="ep-btn-save" :class="{ saved: settingsSaved }" :disabled="settingsSaving"
-              @click="saveSettings">
-              {{
-                settingsSaved
-                  ? "saved"
-                  : settingsSaving
-                    ? "saving"
-                    : "save settings"
-              }}
-            </button>
+          <div v-if="settingsSaving || settingsSaved" class="obsconn-autosave">
+            {{ settingsSaving ? "saving…" : "saved" }}
           </div>
         </div>
       </div>
