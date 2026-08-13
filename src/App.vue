@@ -951,8 +951,10 @@ provide("searchOpenTrigger", searchOpenTrigger);
           {{ t("nav.automations") }}
           <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <button v-if="!session || channelRole?.role === 'broadcaster'" class="sidebar-btn"
-          :class="{ active: activeRoute === 'roles', locked: !session }" @click="nav('roles')">
+        <button
+          v-if="!session || channelRole?.role === 'broadcaster' || (session.isAdmin && adminMode)"
+          class="sidebar-btn" :class="{ active: activeRoute === 'roles', locked: !session }"
+          @click="nav('roles')">
           {{ t("nav.roles") }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'tools', locked: !session }"
