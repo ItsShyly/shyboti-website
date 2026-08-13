@@ -38,6 +38,11 @@ const translations: Record<Locale, Record<string, string>> = {
     "banner.welcome":
       'Welcome! Add ShyBoti to your channel to get started. (don\'t forget to add shyboti as a mod "/mod shyboti"!)',
     "banner.add": "Add ShyBoti",
+    "banner.reauth_own":
+      "Your authorization is out of date - some features won't work until you re-authorize.",
+    "banner.reauth_other":
+      "This channel's authorization is out of date - some features won't work until the broadcaster re-authorizes.",
+    "banner.reauth_btn": "Re-authorize",
     "footer.copy": "© 2026 shyboti.de",
     "footer.privacy": "Privacy",
 
@@ -847,6 +852,11 @@ const translations: Record<Locale, Record<string, string>> = {
     "banner.welcome":
       'Willkommen! Füge ShyBoti zu deinem Channel hinzu um loszulegen. (Nicht vergessen ShyBoti mit "/mod shyboti" als Moderator hinzuzufügen!)',
     "banner.add": "ShyBoti hinzufügen",
+    "banner.reauth_own":
+      "Deine Autorisierung ist veraltet - manche Funktionen funktionieren erst nach erneuter Autorisierung.",
+    "banner.reauth_other":
+      "Die Autorisierung dieses Channels ist veraltet - manche Funktionen funktionieren erst, wenn der Broadcaster sich erneut autorisiert.",
+    "banner.reauth_btn": "Erneut autorisieren",
 
     "footer.copy": "© 2026 shyboti.de",
     "footer.privacy": "Datenschutz",

@@ -63,8 +63,8 @@ const visibleChannels = computed(() =>
   adminMode.value
     ? availableChannels.value
     : availableChannels.value.filter(
-        (c) => !adminOnlyChannels.value.includes(c),
-      ),
+      (c) => !adminOnlyChannels.value.includes(c),
+    ),
 );
 
 function selectChannel(ch: string) {
@@ -619,6 +619,38 @@ const flatResults = computed(() => searchResults.value);
 const showAddBanner = ref(false);
 const reAuthUrl = ref<string | null>(null);
 const toast = ref("");
+
+// vvv scope re-auth banner vvv
+// >>> whoever clicks the re-auth link authorizes as THEIR OWN account, not the broadcaster's
+const missingScopes = ref<string[]>([]);
+const isOwnChannel = computed(
+  () => !!session.value && session.value.login === session.value.channel,
+);
+async function loadScopeStatus() {
+  if (!session.value) {
+    missingScopes.value = [];
+    return;
+  }
+  try {
+    const res = await fetch(
+      `${API}/auth/scope-status/${session.value.channel}`,
+      { headers: { Authorization: `Bearer ${session.value.token}` } },
+    );
+    if (!res.ok) {
+      missingScopes.value = [];
+      return;
+    }
+    const d = (await res.json()) as { missingScopes: string[] };
+    missingScopes.value = d.missingScopes ?? [];
+  } catch {
+    missingScopes.value = [];
+  }
+}
+watch(
+  () => session.value?.channel,
+  () => loadScopeStatus(),
+);
+// ^^^ scope re-auth banner ^^^
 function showToast(msg: string) {
   toast.value = msg;
   setTimeout(() => (toast.value = ""), 5000);
@@ -706,7 +738,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <span v-if="showLogsChip && logsQuery" class="search-match-nav">
           <span class="search-match-count">{{
             logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0 matches"
-          }}</span>
+            }}</span>
           <button v-if="logsMatchCount" class="search-match-step" title="Previous match (Shift+Enter)"
             @mousedown.prevent="logsRequestJump(-1)">
             ▲
@@ -822,6 +854,15 @@ provide("searchOpenTrigger", searchOpenTrigger);
       </div>
     </div>
 
+    <div v-if="session && missingScopes.length > 0" class="add-banner reauth-banner">
+      <span>⚠ {{ isOwnChannel ? t("banner.reauth_own") : t("banner.reauth_other") }}</span>
+      <div class="banner-actions">
+        <a v-if="isOwnChannel" :href="`${API}/auth/add`" class="banner-btn reauth">
+          {{ t("banner.reauth_btn") }}
+        </a>
+      </div>
+    </div>
+
     <div class="body">
       <div v-if="sidebarOpen" class="sidebar-overlay" @click="sidebarOpen = false"></div>
 
@@ -862,7 +903,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span v-if="showLogsChip && logsQuery" class="search-match-nav">
             <span class="search-match-count">{{
               logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0"
-            }}</span>
+              }}</span>
             <button v-if="logsMatchCount" class="search-match-step" title="Previous match"
               @mousedown.prevent="logsRequestJump(-1)">
               ▲
@@ -944,10 +985,8 @@ provide("searchOpenTrigger", searchOpenTrigger);
           {{ t("nav.automations") }}
           <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <button
-          v-if="!session || channelRole?.role === 'broadcaster' || (session.isAdmin && adminMode)"
-          class="sidebar-btn" :class="{ active: activeRoute === 'roles', locked: !session }"
-          @click="nav('roles')">
+        <button v-if="!session || channelRole?.role === 'broadcaster' || (session.isAdmin && adminMode)"
+          class="sidebar-btn" :class="{ active: activeRoute === 'roles', locked: !session }" @click="nav('roles')">
           {{ t("nav.roles") }} <span v-if="!session" class="lock-icon">🔒</span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'tools', locked: !session }"
@@ -960,8 +999,8 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <button class="sidebar-btn" :class="{ active: activeRoute === 'logs' }" @click="nav('logs')">
           {{ t("nav.logs") }}
         </button>
-        <button v-if="!viewingOtherChannel" class="sidebar-btn"
-          :class="{ active: activeRoute === 'uploads' }" @click="nav('uploads')">
+        <button v-if="!viewingOtherChannel" class="sidebar-btn" :class="{ active: activeRoute === 'uploads' }"
+          @click="nav('uploads')">
           Uploads
         </button>
 
@@ -971,8 +1010,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           @click="toggleAdminMode()">
           {{ t("nav.admin") }}
         </button>
-        <button
-          v-if="!session || channelRole?.role === 'broadcaster' || (session.isAdmin && adminMode)"
+        <button v-if="!session || channelRole?.role === 'broadcaster' || (session.isAdmin && adminMode)"
           class="sidebar-btn" :class="{ active: activeRoute === 'settings', locked: !session }"
           @click="nav('settings')">
           {{ t("nav.settings") }}
@@ -998,7 +1036,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span class="footer-sep">|</span>
           <router-link to="/privacy" class="footer-link">{{
             t("footer.privacy")
-          }}</router-link>
+            }}</router-link>
         </footer>
       </main>
     </div>
@@ -1693,6 +1731,31 @@ body.snippet-dragging * {
 
 .banner-dismiss:hover {
   color: #aaa;
+}
+
+.reauth-banner {
+  background: #241b0a;
+  border-bottom: 1px solid #e5c07b44;
+  color: #e5c07b;
+}
+
+.banner-btn.reauth {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  background: #e5c07b;
+  border: none;
+  color: #1a1408;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.banner-btn.reauth:hover {
+  background: #f0cd8a;
 }
 
 /* body layout */
