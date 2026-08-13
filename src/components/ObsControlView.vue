@@ -272,18 +272,18 @@ async function saveSettings() {
   settingsSaving.value = false;
 }
 
-// >>> scene filter panel (broadcaster only) - which scenes show in "others" + get screenshotted
+// >>> scene filter panel - obs_edit, not broadcaster-only - which scenes show in "others" + get screenshotted
 const showFilter = ref(false);
 const filterOverlay = useOverlayClose();
 const filterSaving = ref(false);
 
 function openFilter() {
-  if (!isBroadcaster.value) return;
+  if (!canFilterScenes.value) return;
   showFilter.value = true;
 }
 
 async function toggleSceneHidden(sceneName: string) {
-  if (!session.value || !isBroadcaster.value) return;
+  if (!session.value || !canFilterScenes.value) return;
   const current = agentStatus.value?.hidden_scenes ?? [];
   const next = current.includes(sceneName)
     ? current.filter((n) => n !== sceneName)
@@ -291,7 +291,7 @@ async function toggleSceneHidden(sceneName: string) {
   if (agentStatus.value) agentStatus.value = { ...agentStatus.value, hidden_scenes: next };
   filterSaving.value = true;
   try {
-    await fetch(`${API}/obs/${session.value.channel}/settings`, {
+    await fetch(`${API}/obs/${session.value.channel}/hidden-scenes`, {
       method: "PUT",
       headers: { ...authHeaders.value, "Content-Type": "application/json" },
       body: JSON.stringify({ hidden_scenes: next }),
@@ -390,6 +390,10 @@ const canForcePreview = computed(
     !!agentStatus.value?.screenshots &&
     (isBroadcaster.value ||
       channelRole.value?.permissions?.obs_force_preview === true),
+);
+const canFilterScenes = computed(
+  () =>
+    isBroadcaster.value || channelRole.value?.permissions?.obs_edit === true,
 );
 const videoMixProjectorOpen = computed(
   () => !!agentStatus.value?.video_mix_projector_open,
@@ -964,7 +968,8 @@ watch(
           <span class="obs-status-text">{{ connStatusLabel }}</span>
           <span v-if="agentStatus?.version" class="obs-status-version">v{{ agentStatus.version }}</span>
         </div>
-        <button v-if="isBroadcaster" class="obsconn-gear-btn" title="Filter scenes" @click="openFilter">
+        <button v-if="obsConnected && canFilterScenes" class="obsconn-gear-btn" title="Filter scenes"
+          @click="openFilter">
           <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z" stroke="currentColor" stroke-width="1.5"
               stroke-linejoin="round" />
@@ -1348,15 +1353,14 @@ watch(
     </div>
   </Teleport>
 
-  <!-- >>> broadcaster only -->
+  <!-- >>> obs_edit permission, not broadcaster-only -->
   <Teleport to="body">
-    <div v-if="showFilter && isBroadcaster" class="ep-overlay"
+    <div v-if="showFilter && canFilterScenes" class="ep-overlay"
       v-bind="filterOverlay.handlers(() => (showFilter = false))">
       <div class="ep-panel obsconn-settings-panel">
         <div class="ep-panel-header">
           <div>
             <div class="ep-panel-title">Filter scenes</div>
-            <div class="ep-panel-sub">broadcaster only</div>
           </div>
           <button class="ep-panel-close" @click="showFilter = false">
             x
@@ -1365,7 +1369,12 @@ watch(
 
         <div class="ep-panel-body">
           <div class="ep-field-group">
-            <label class="ep-field-label">Which scenes to show?</label>
+            <div class="ep-field-label obs-section-label">
+              Scenes
+              <button class="obs-refresh-btn" @click="refreshScenes" title="Refresh scene list">
+                ↻
+              </button>
+            </div>
             <div class="ep-field-hint">
               Unchecked scenes stay out of the scenes unless live - saves resources aswell
             </div>
@@ -1985,9 +1994,14 @@ watch(
   display: flex;
   flex-direction: column;
   margin-top: 8px;
-  max-height: 320px;
+  max-height: 520px;
   overflow-y: auto;
   border: 1px solid #1e1e1e;
+  scrollbar-width: none;
+}
+
+.obs-filter-list::-webkit-scrollbar {
+  display: none;
 }
 
 .obs-filter-list .ep-list-row {
