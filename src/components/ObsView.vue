@@ -178,6 +178,13 @@ async function previewContent() {
           ((await r2.json()) as { value: string }).value || "(empty)";
     }
   } catch { }
+  // >>> The PUT above persists a real "___preview" widget row purely to reuse the save endpoint for evaluation 
+  try {
+    await fetch(`${API}/obs-widgets/${session.value.channel}/___preview`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+  } catch { }
   previewing.value = false;
 }
 
@@ -383,7 +390,7 @@ watch(() => session.value?.channel, load);
               <label class="ep-field-label">{{ t("obs.panel.name") }}
                 <span class="ep-field-hint">{{
                   t("obs.panel.name.hint")
-                  }}</span></label>
+                }}</span></label>
               <input v-model="form.name" class="ep-field-input" placeholder="kills-counter" />
             </div>
 
@@ -392,7 +399,7 @@ watch(() => session.value?.channel, load);
               <label class="ep-field-label">{{ t("obs.panel.content") }}
                 <span class="ep-field-hint">{{
                   t("obs.panel.content.hint")
-                  }}</span></label>
+                }}</span></label>
               <input ref="contentInputEl" v-model="form.content" class="ep-field-input ep-mono"
                 placeholder="$counter.kills.get" />
             </div>
@@ -440,13 +447,13 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.size")
-                    }}</label>
+                  }}</label>
                   <input v-model.number="form.style.fontSize" type="number" min="8" max="200" class="ep-field-input" />
                 </div>
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.color")
-                    }}</label>
+                  }}</label>
                   <div class="color-row">
                     <input type="color" v-model="form.style.color" class="color-pick" />
                     <input v-model="form.style.color" class="ep-field-input" placeholder="#ffffff" />
@@ -455,7 +462,7 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.font")
-                    }}</label>
+                  }}</label>
                   <select v-model="form.style.fontFamily" class="ep-field-select">
                     <option v-for="f in FONT_FAMILIES" :key="f.value" :value="f.value">
                       {{ f.label }}
@@ -465,7 +472,7 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.weight")
-                    }}</label>
+                  }}</label>
                   <select v-model="form.style.fontWeight" class="ep-field-select">
                     <option value="normal">
                       {{ t("obs.panel.weight.normal") }}
@@ -481,7 +488,7 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.align")
-                    }}</label>
+                  }}</label>
                   <select v-model="form.style.textAlign" class="ep-field-select">
                     <option value="left">
                       {{ t("obs.panel.align.left") }}
@@ -497,7 +504,7 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.padding")
-                    }}</label>
+                  }}</label>
                   <input v-model.number="form.style.padding" type="number" min="0" class="ep-field-input" />
                 </div>
               </div>
@@ -514,7 +521,7 @@ watch(() => session.value?.channel, load);
                 <label class="ep-field-label">{{ t("obs.panel.bg") }}
                   <span class="ep-field-hint">{{
                     t("obs.panel.bg.hint")
-                    }}</span></label>
+                  }}</span></label>
                 <div class="color-row">
                   <input type="color" v-model="form.style.background" class="color-pick" />
                   <input v-model="form.style.background" class="ep-field-input" placeholder="transparent" />

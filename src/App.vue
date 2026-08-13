@@ -267,6 +267,13 @@ function buildStaticIndex(): SearchResult[] {
       sub: "Live browser sources for OBS",
     },
     {
+      label: "OBS Control",
+      category: "Tools",
+      icon: "📺",
+      action: () => router.push("/obs-control"),
+      sub: "Switch scenes and control sources live",
+    },
+    {
       label: "Variables & Counters",
       category: "Tools",
       icon: "⚙",
@@ -320,12 +327,17 @@ function buildStaticIndex(): SearchResult[] {
 
   // >>> Uploads/Images/Notes hold the broadcaster's own personal content, so
   // >>> hide them from search the same way the sidebar link/route are hidden
+  let result = items;
   if (viewingOtherChannel.value) {
-    return items.filter(
+    result = result.filter(
       (i) => !["Uploads", "Images", "Notes"].includes(i.label),
     );
   }
-  return items;
+  // >>> OBS Control is admin-mode-blocked on other channels - keep search in sync
+  if (adminMode.value && viewingOtherChannel.value) {
+    result = result.filter((i) => i.label !== "OBS Control");
+  }
+  return result;
 }
 
 // >>> nextActiveTab tells CommandsView which tab to open after nav
