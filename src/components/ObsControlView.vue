@@ -31,6 +31,7 @@ interface AgentStatus {
   congested: boolean;
   streaming: boolean;
   screenshots: boolean;
+  hidden_scenes: string[];
   // >>> broadcaster-only - backend omits these for non-broadcasters
   enabled?: boolean;
   screenshot_interval_sec?: number;
@@ -271,6 +272,34 @@ async function saveSettings() {
   settingsSaving.value = false;
 }
 
+// >>> scene filter panel (broadcaster only) - which scenes show in "others" + get screenshotted
+const showFilter = ref(false);
+const filterOverlay = useOverlayClose();
+const filterSaving = ref(false);
+
+function openFilter() {
+  if (!isBroadcaster.value) return;
+  showFilter.value = true;
+}
+
+async function toggleSceneHidden(sceneName: string) {
+  if (!session.value || !isBroadcaster.value) return;
+  const current = agentStatus.value?.hidden_scenes ?? [];
+  const next = current.includes(sceneName)
+    ? current.filter((n) => n !== sceneName)
+    : [...current, sceneName];
+  if (agentStatus.value) agentStatus.value = { ...agentStatus.value, hidden_scenes: next };
+  filterSaving.value = true;
+  try {
+    await fetch(`${API}/obs/${session.value.channel}/settings`, {
+      method: "PUT",
+      headers: { ...authHeaders.value, "Content-Type": "application/json" },
+      body: JSON.stringify({ hidden_scenes: next }),
+    });
+  } catch { }
+  filterSaving.value = false;
+}
+
 const sceneShots = ref<Record<string, string>>({});
 let shotTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -321,9 +350,11 @@ async function refreshAllShots() {
     !agentStatus.value?.screenshots
   )
     return;
-  // >>> sequential, live scene first
+  // >>> sequential, live scene first - hidden scenes skip unless they're the live one
   const live = scenes.value.find((s) => s.sceneName === currentScene.value);
-  const rest = scenes.value.filter((s) => s.sceneName !== currentScene.value);
+  const rest = scenes.value.filter(
+    (s) => s.sceneName !== currentScene.value && !hiddenScenes.value.has(s.sceneName),
+  );
   const ordered = live ? [live, ...rest] : rest;
   for (const s of ordered) {
     await refreshScreenshot(s.sceneName, s.sceneName === currentScene.value);
@@ -384,8 +415,14 @@ const currentScene = computed(() => agentStatus.value?.current_scene ?? "");
 const liveScene = computed(
   () => scenes.value.find((s) => s.sceneName === currentScene.value) ?? null,
 );
+const hiddenScenes = computed(() => new Set(agentStatus.value?.hidden_scenes ?? []));
+// >>> filtered-out scenes stay hidden here even while live - the live row above
+// >>> renders liveScene separately regardless of the filter, so they still show
+// >>> up while live and drop out again once they're not
 const nonLiveScenes = computed(() =>
-  scenes.value.filter((s) => s.sceneName !== currentScene.value),
+  scenes.value.filter(
+    (s) => s.sceneName !== currentScene.value && !hiddenScenes.value.has(s.sceneName),
+  ),
 );
 
 // >>> keep selectedScene glued to what's actually live
@@ -927,6 +964,12 @@ watch(
           <span class="obs-status-text">{{ connStatusLabel }}</span>
           <span v-if="agentStatus?.version" class="obs-status-version">v{{ agentStatus.version }}</span>
         </div>
+        <button v-if="isBroadcaster" class="obsconn-gear-btn" title="Filter scenes" @click="openFilter">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z" stroke="currentColor" stroke-width="1.5"
+              stroke-linejoin="round" />
+          </svg>
+        </button>
         <button v-if="isBroadcaster" class="obsconn-gear-btn" title="OBS settings" @click="openSettings">
           <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5" />
@@ -1300,6 +1343,45 @@ watch(
           <div v-if="settingsSaving || settingsSaved" class="obsconn-autosave">
             {{ settingsSaving ? "saving…" : "saved" }}
           </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- >>> broadcaster only -->
+  <Teleport to="body">
+    <div v-if="showFilter && isBroadcaster" class="ep-overlay"
+      v-bind="filterOverlay.handlers(() => (showFilter = false))">
+      <div class="ep-panel obsconn-settings-panel">
+        <div class="ep-panel-header">
+          <div>
+            <div class="ep-panel-title">Filter scenes</div>
+            <div class="ep-panel-sub">broadcaster only</div>
+          </div>
+          <button class="ep-panel-close" @click="showFilter = false">
+            x
+          </button>
+        </div>
+
+        <div class="ep-panel-body">
+          <div class="ep-field-group">
+            <label class="ep-field-label">Scenes shown in "others"</label>
+            <div class="ep-field-hint">
+              Unchecked scenes stay out of the others row and don't get
+              screenshotted - unless they go live, then they show up like
+              normal until they're not live anymore.
+            </div>
+            <div class="obs-filter-list">
+              <label v-for="s in scenes" :key="s.sceneName" class="obs-filter-row">
+                <input type="checkbox" :checked="!hiddenScenes.has(s.sceneName)"
+                  @change="toggleSceneHidden(s.sceneName)" />
+                <span>{{ s.sceneName }}</span>
+              </label>
+              <div v-if="!scenes.length" class="ep-field-hint">no scenes loaded yet</div>
+            </div>
+          </div>
+
+          <div v-if="filterSaving" class="obsconn-autosave">saving…</div>
         </div>
       </div>
     </div>
@@ -1898,6 +1980,34 @@ watch(
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+.obs-filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.obs-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  font-size: 13px;
+  color: #ccc;
+  cursor: pointer;
+}
+
+.obs-filter-row:hover {
+  background: #1a1a1e;
+}
+
+.obs-filter-row input[type="checkbox"] {
+  accent-color: #9d6cff;
+  cursor: pointer;
 }
 
 .obs-toggle {
