@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // >>> local mode filters items client-side; remote mode debounces fetchItems()
-import { ref, computed, watch } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 
 export interface TypeaheadItem {
   id?: string;
@@ -18,8 +18,9 @@ const props = withDefaults(
     minChars?: number;
     disabled?: boolean;
     mono?: boolean;
+    autofocus?: boolean;
   }>(),
-  { items: () => [], minChars: 0, disabled: false, mono: false },
+  { items: () => [], minChars: 0, disabled: false, mono: false, autofocus: false },
 );
 
 const emit = defineEmits<{
@@ -110,6 +111,11 @@ function selectItem(item: TypeaheadItem) {
   open.value = false;
 }
 
+const inputRef = ref<HTMLInputElement | null>(null);
+onMounted(() => {
+  if (props.autofocus) inputRef.value?.focus();
+});
+
 function onKeydown(e: KeyboardEvent) {
   if (!open.value || !results.value.length) {
     if (e.key === "Escape") {
@@ -138,6 +144,7 @@ function onKeydown(e: KeyboardEvent) {
 <template>
   <div class="ep-typeahead">
     <input
+      ref="inputRef"
       v-model="query"
       class="ep-field-input"
       :class="{ 'ep-mono': mono }"

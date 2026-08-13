@@ -2,6 +2,7 @@
 // >>> agent-relay model (token-based, no port/password) - settings panel is a teleport overlay
 
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { useRouter } from "vue-router";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useOverlayClose } from "../composables/useOverlayClose";
@@ -10,6 +11,7 @@ import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 
 const { session, channelRole } = useAuth();
+const router = useRouter();
 const settingsOverlay = useOverlayClose();
 
 type AccessLevel = "everyone" | "mod" | "broadcaster";
@@ -1276,7 +1278,7 @@ watch(
         </template>
 
         <div v-if="agentStatus?.paired" class="ep-field-group obs-box obs-box-builder">
-          <label class="ep-field-label">recent categories</label>
+          <label class="ep-field-label">Switch categories</label>
           <div class="obs-category-strip">
             <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
               :class="{ disabled: !canFilterScenes, active: c.category_id === currentCategoryId }"
@@ -1295,6 +1297,16 @@ watch(
             </template>
           </div>
           <div v-if="categorySwitchError" class="obs-category-error">{{ categorySwitchError }}</div>
+        </div>
+
+        <div class="ep-field-group obs-box obs-box-links">
+          <label class="ep-field-label">quick links</label>
+          <button class="ep-btn-cancel obs-link-btn" @click="router.push('/commands')">
+            OBS commands
+          </button>
+          <button class="ep-btn-cancel obs-link-btn" @click="router.push('/automations?tab=obs')">
+            OBS automations
+          </button>
         </div>
       </div>
     </div>
@@ -1505,7 +1517,7 @@ watch(
       <div class="ep-panel obs-add-category-panel">
         <div class="ep-panel-header">
           <div>
-            <div class="ep-panel-title">Switch category</div>
+            <div class="ep-panel-title">Add category</div>
           </div>
           <button class="ep-panel-close" @click="showAddCategory = false">
             x
@@ -1514,7 +1526,7 @@ watch(
         <div class="ep-panel-body">
           <div class="ep-field-group">
             <label class="ep-field-label">Category</label>
-            <TypeaheadInput v-model="addCategoryQuery" :fetch-items="fetchCategories" :min-chars="1"
+            <TypeaheadInput v-model="addCategoryQuery" :fetch-items="fetchCategories" :min-chars="1" autofocus
               placeholder="Search a Twitch category..." @select="onAddCategorySelect" />
           </div>
         </div>
@@ -2274,9 +2286,21 @@ watch(
 }
 
 .obs-box-builder {
-  flex: 0 0 700px;
-  max-width: 700px;
-  width: 700px;
+  flex: 0 0 590px;
+  max-width: 590px;
+  width: 590px;
+}
+
+.obs-box-links {
+  flex: 0 0 180px;
+  max-width: 180px;
+  width: 180px;
+  gap: 8px;
+}
+
+.obs-link-btn {
+  width: 100%;
+  text-align: center;
 }
 
 .obs-category-strip {
@@ -2326,6 +2350,7 @@ watch(
 
 .obs-category-card.active img,
 .obs-category-card.active .obs-category-empty {
+  border-width: 2px;
   border-color: rgb(111, 43, 255);
 }
 
@@ -2792,7 +2817,8 @@ watch(
   }
 
   .obs-box,
-  .obs-box-builder {
+  .obs-box-builder,
+  .obs-box-links {
     max-width: 100%;
     width: 100%;
   }
