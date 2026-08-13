@@ -1131,6 +1131,35 @@ watch(
       </div>
     </div>
 
+    <div class="obs-live-stats">
+      <div class="obs-live-stat" :class="{ bad: bitrateBad }">
+        <span class="obs-live-stat-label">bitrate</span>
+        <span class="obs-live-stat-value">{{
+          bitrateLabel ?? "not streaming"
+          }}</span>
+      </div>
+      <div class="obs-live-stat">
+        <span class="obs-live-stat-label">preview size</span>
+        <span class="obs-live-stat-value">{{
+          liveShotStats.kb != null
+            ? liveShotStats.kb + " kb"
+            : agentStatus?.screenshots
+              ? "--"
+              : "off"
+          }}</span>
+      </div>
+      <div class="obs-live-stat">
+        <span class="obs-live-stat-label">preview cpu</span>
+        <span class="obs-live-stat-value">{{
+          liveShotStats.cpuMs != null
+            ? liveShotStats.cpuMs + " ms"
+            : agentStatus?.screenshots
+              ? "--"
+              : "off"
+          }}</span>
+      </div>
+    </div>
+
     <div class="obsconn-body">
       <template v-if="loading">
         <div class="obs-loading">
@@ -1189,34 +1218,6 @@ watch(
                   <div class="obs-scene-name">{{ liveScene.sceneName }}</div>
                   <div class="obs-scene-live">live</div>
                 </div>
-                <div class="obs-live-stats">
-                  <div class="obs-live-stat" :class="{ bad: bitrateBad }">
-                    <span class="obs-live-stat-label">bitrate</span>
-                    <span class="obs-live-stat-value">{{
-                      bitrateLabel ?? "not streaming"
-                      }}</span>
-                  </div>
-                  <div class="obs-live-stat">
-                    <span class="obs-live-stat-label">preview size</span>
-                    <span class="obs-live-stat-value">{{
-                      liveShotStats.kb != null
-                        ? liveShotStats.kb + " kb"
-                        : agentStatus?.screenshots
-                          ? "--"
-                          : "off"
-                    }}</span>
-                  </div>
-                  <div class="obs-live-stat">
-                    <span class="obs-live-stat-label">preview cpu</span>
-                    <span class="obs-live-stat-value">{{
-                      liveShotStats.cpuMs != null
-                        ? liveShotStats.cpuMs + " ms"
-                        : agentStatus?.screenshots
-                          ? "--"
-                          : "off"
-                    }}</span>
-                  </div>
-                </div>
               </div>
             </div>
             <div class="obs-scenes-others">
@@ -1258,7 +1259,7 @@ watch(
             <label class="ep-field-label">sources
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-                }}</span></label>
+              }}</span></label>
             <div class="obs-source-list">
               <div v-for="src in sources as any[]" :key="src.sceneItemId" class="obs-source-row">
                 <span class="obs-source-name">{{ src.sourceName }}</span>
@@ -1287,7 +1288,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-                }}</span></label>
+              }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row">
                 <div class="obs-mixer-top">
@@ -2940,15 +2941,7 @@ watch(
   }
 
   .obs-live-stats {
-    position: static;
-    transform: none;
-    margin-left: 0;
-    margin-top: 14px;
-    flex-direction: row;
-    flex-wrap: wrap;
     justify-content: center;
-    width: 100%;
-    min-width: 0;
   }
 
   .obs-live-stat {
@@ -3014,21 +3007,13 @@ watch(
   }
 }
 
-/* Bitrate/preview stats panel next to the live scene */
+/* Bitrate/preview stats row, under the header */
 .obs-live-stats {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
-  min-width: 130px;
-  flex-shrink: 0;
-  /* >>> taken out of flow, anchored to .obs-live-scene-wrap - so it can't
-     pull the live scene card off-center, regardless of the card's own width */
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: 14px;
+  margin: 10px 0;
 }
 
 .obs-live-stat {
