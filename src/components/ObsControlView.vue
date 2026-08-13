@@ -1951,11 +1951,12 @@ watch(
 }
 
 .obs-refresh-btn {
-  height: 20px;
+  height: 30px;
+  width: 30px;
   padding: 0 7px;
   border: 1px solid #2a2a30;
-  background: transparent;
-  color: #555;
+  background: #111217;
+  color: #666666;
   font-size: 12px;
   cursor: pointer;
   transition: color 0.15s;
