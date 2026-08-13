@@ -35,6 +35,7 @@ export interface RolePermissions {
 export interface ChannelRole {
   role: "broadcaster" | "mod" | "vip" | "user";
   permissions: RolePermissions;
+  botPresent: boolean;
 }
 
 const session = ref<Session | null>(null);
@@ -42,6 +43,8 @@ const availableChannels = ref<string[]>([]);
 // >>> subset of availableChannels the user only sees via admin mode, not a
 // >>> real broadcaster/mod/vip/user relationship - drives the red vs purple badge
 const adminOnlyChannels = ref<string[]>([]);
+// >>> whether the bot is in the LOGGED-IN user's own channel specifically
+const ownChannelHasBot = ref(true);
 const channelRole = ref<ChannelRole | null>(null);
 
 // >>> Client-side toggle for whether an admin is currently "in" admin mode
@@ -62,9 +65,11 @@ async function fetchChannels() {
     const data = (await res.json()) as {
       channels: string[];
       adminOnly?: string[];
+      ownChannelHasBot?: boolean;
     };
     availableChannels.value = data.channels;
     adminOnlyChannels.value = data.adminOnly ?? [];
+    ownChannelHasBot.value = data.ownChannelHasBot ?? true;
   } catch {}
 }
 
@@ -197,6 +202,7 @@ export function useAuth() {
     session: readonly(session),
     availableChannels: readonly(availableChannels),
     adminOnlyChannels: readonly(adminOnlyChannels),
+    ownChannelHasBot: readonly(ownChannelHasBot),
     channelRole: readonly(channelRole),
     adminMode: readonly(adminMode),
     toggleAdminMode,

@@ -91,6 +91,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.search": "Search commands…",
     "cmd.loading": "Loading commands…",
     "cmd.none": "No commands found for",
+    "cmd.no_bot": "ShyBoti hasn't been added to this channel yet.",
     "cmd.header.onoff": "On/Off",
     "cmd.header.name": "Name",
     "cmd.header.desc": "Description",
@@ -350,6 +351,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "mod.empty.blocked": "No blocked terms yet.",
     "mod.empty.spam": "No spam filters yet.",
     "mod.empty.nukes": "No nukes configured.",
+    "mod.no_bot": "ShyBoti hasn't been added to this channel yet.",
     "mod.nuke.hint":
       "A nuke watches for a trigger word in recent chat. Fire it to timeout everyone who said it.",
     "mod.nuke.hint2":
@@ -888,6 +890,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.search": "Commands durchsuchen…",
     "cmd.loading": "Commands werden geladen…",
     "cmd.none": "Keine Commands gefunden für",
+    "cmd.no_bot": "ShyBoti wurde diesem Channel noch nicht hinzugefügt.",
     "cmd.header.onoff": "An/Aus",
     "cmd.header.name": "Name",
     "cmd.header.desc": "Beschreibung",
@@ -1151,6 +1154,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "mod.empty.blocked": "Noch keine gesperrten Begriffe.",
     "mod.empty.spam": "Noch keine Spam-Filter.",
     "mod.empty.nukes": "Keine Nukes konfiguriert.",
+    "mod.no_bot": "ShyBoti wurde diesem Channel noch nicht hinzugefügt.",
     "mod.nuke.hint":
       "Ein Nuke überwacht ein Triggerwort im Chat. Zünde ihn um alle zu timeouten die es gesagt haben.",
     "mod.nuke.hint2":

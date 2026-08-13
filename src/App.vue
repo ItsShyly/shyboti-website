@@ -21,6 +21,7 @@ const {
   session,
   availableChannels,
   adminOnlyChannels,
+  ownChannelHasBot,
   channelRole,
   adminMode,
   toggleAdminMode,
@@ -632,7 +633,7 @@ onMounted(async () => {
 
   if (status === "loggedin" && channel) {
     showToast(`Logged in as ${channel}`);
-    showAddBanner.value = !availableChannels.value.includes(channel);
+    showAddBanner.value = !ownChannelHasBot.value;
     router.push("/dashboard");
   } else if (status === "added" && channel) {
     showToast(`✓ ShyBoti added to #${channel}`);
@@ -970,7 +971,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           {{ t("nav.settings") }}
           <span v-if="!session" class="lock-icon">🔒</span>
         </button>
-        <div v-if="session && !availableChannels.includes(session.login)" class="sidebar-bottom">
+        <div v-if="session && !ownChannelHasBot" class="sidebar-bottom">
           <button class="bot-btn add" @click="addBot">
             + {{ t("nav.add_channel") }}
           </button>

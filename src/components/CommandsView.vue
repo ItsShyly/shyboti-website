@@ -22,14 +22,22 @@ const { t } = useI18n();
 const canView = computed(
   () => channelRole.value?.permissions.commands_view ?? false,
 );
+// >>> default true so real users don't see a false "needs bot" flash before channelRole loads
+const botPresent = computed(() => channelRole.value?.botPresent ?? true);
 const canToggle = computed(
-  () => channelRole.value?.permissions.commands_toggle ?? false,
+  () =>
+    (channelRole.value?.permissions.commands_toggle ?? false) &&
+    botPresent.value,
 );
 const canEdit = computed(
-  () => channelRole.value?.permissions.commands_edit ?? false,
+  () =>
+    (channelRole.value?.permissions.commands_edit ?? false) &&
+    botPresent.value,
 );
 const canDelete = computed(
-  () => channelRole.value?.permissions.commands_delete ?? false,
+  () =>
+    (channelRole.value?.permissions.commands_delete ?? false) &&
+    botPresent.value,
 );
 const canViewObs = computed(
   () => channelRole.value?.permissions?.obs_view ?? false,
@@ -921,7 +929,7 @@ onUnmounted(() => {
       </div>
       <div class="ep-view-header-right">
         <!-- sync (Custom tab only) -->
-        <div class="ep-sync-wrap">
+        <div v-if="botPresent" class="ep-sync-wrap">
           <button v-if="activeTab === 'Custom' && syncConf?.is_active" class="ep-sync-indicator"
             @click="syncOpen = !syncOpen" :title="`${t('cmd.sync.active')} #${syncConf.sync_from}`">
             <span class="ep-sync-dot"></span>{{ t('cmd.sync.active') }} #{{ syncConf.sync_from }}<span
@@ -990,6 +998,7 @@ onUnmounted(() => {
       <!-- Default tab -->
       <template v-if="activeTab === 'Default'">
         <div v-if="loading" class="state-msg">{{ t("cmd.loading") }}</div>
+        <div v-else-if="!botPresent" class="state-msg">{{ t("cmd.no_bot") }}</div>
         <div v-else-if="commands.length === 0" class="state-msg">
           {{ t("cmd.none") }} #{{ session?.channel }}
         </div>
@@ -1392,6 +1401,7 @@ onUnmounted(() => {
       <!-- Extras tab -->
       <template v-if="activeTab === 'Extras'">
         <div v-if="extrasLoading" class="state-msg">Loading…</div>
+        <div v-else-if="!botPresent" class="state-msg">{{ t("cmd.no_bot") }}</div>
         <template v-else>
           <div class="extras-section">
             <div class="extras-section-title">{{ t("cmd.extras.section") }}</div>

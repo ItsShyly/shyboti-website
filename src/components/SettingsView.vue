@@ -5,16 +5,23 @@ import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 
-const { session, adminMode, logout, switchChannel } = useAuth();
+const { session, channelRole, adminMode, logout, switchChannel } = useAuth();
 const { t } = useI18n();
 const router = useRouter();
 
 const isBroadcaster = ref(false);
+// >>> default true so real users don't see Remove Bot flash away before channelRole loads
+const botPresent = computed(() => channelRole.value?.botPresent ?? true);
 
 // >>> Danger zone (Remove Bot, Delete All Data) is additionally reachable while
 // >>> admin mode is on, so an admin can act on any channel, not just their own
 const dangerZoneUnlocked = computed(
   () => isBroadcaster.value || (!!session.value?.isAdmin && adminMode.value),
+);
+
+// >>> Remove Bot only makes sense if there's a bot to remove
+const canRemoveBotCard = computed(
+  () => dangerZoneUnlocked.value && botPresent.value,
 );
 
 // >>> Prefix
@@ -270,7 +277,7 @@ function clickRemoveBot() {
 }
 
 async function doRemoveBot() {
-  if (!session.value || !dangerZoneUnlocked.value) return;
+  if (!session.value || !canRemoveBotCard.value) return;
   removeConfirm.value = false;
   removeRemoving.value = true;
   removeError.value = "";
@@ -553,7 +560,7 @@ async function doDeleteAllData() {
       </div>
 
       <!-- Remove Bot - broadcaster, or an admin with admin mode on, warning (less severe than delete) -->
-      <div class="card card-warning" v-if="dangerZoneUnlocked">
+      <div class="card card-warning" v-if="canRemoveBotCard">
         <div class="card-header">
           <div class="card-icon card-icon-warning">&#9888;</div>
           <div class="card-title">{{ t("settings.remove.title") }}</div>

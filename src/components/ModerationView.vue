@@ -9,7 +9,11 @@ const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
 
 const canView = computed(() => channelRole.value?.permissions.moderation_view ?? false);
-const canManage = computed(() => channelRole.value?.permissions.moderation_manage ?? false);
+// >>> default true so real users don't see a false "needs bot" flash before channelRole loads
+const botPresent = computed(() => channelRole.value?.botPresent ?? true);
+const canManage = computed(
+  () => (channelRole.value?.permissions.moderation_manage ?? false) && botPresent.value,
+);
 
 interface BlockedTerm { id: number; term: string; action: string; duration: number; is_regex: number; is_active: number; group_id: number | null; reason: string }
 interface SpamFilter { id: number; type: string; threshold: number; min_letters: number; options: string; action: string; duration: number; is_active: number; group_id: number | null; reason: string }
@@ -688,7 +692,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         </div>
       </div>
       <div class="ep-view-header-right">
-        <div class="ep-sync-wrap">
+        <div v-if="botPresent" class="ep-sync-wrap">
           <button v-if="curSync.conf?.is_active" class="ep-sync-indicator" @click="curSync.open = !curSync.open"
             :title="`${t('mod.sync.active')} #${curSync.conf.sync_from}`">
             <span class="ep-sync-dot"></span>{{ t("mod.sync.active") }} #{{ curSync.conf.sync_from }}
@@ -755,7 +759,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 
     <!-- Blocked Terms list -->
     <template v-else-if="activeTab === 'blocked'">
-      <div v-if="!blockedTerms.length && !modGroups.blocked.length" class="ep-empty">{{ t("mod.empty.blocked") }}</div>
+      <div v-if="!blockedTerms.length && !modGroups.blocked.length" class="ep-empty">{{ botPresent ? t("mod.empty.blocked") : t("mod.no_bot") }}</div>
       <template v-else>
         <template v-for="section in blockedSections" :key="section.group?.id ?? 'ungrouped'">
           <div class="mod-section" @dragover.prevent
@@ -810,7 +814,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 
     <!-- Spam Filters list -->
     <template v-else-if="activeTab === 'spam'">
-      <div v-if="!spamFilters.length && !modGroups.spam.length" class="ep-empty">{{ t("mod.empty.spam") }}</div>
+      <div v-if="!spamFilters.length && !modGroups.spam.length" class="ep-empty">{{ botPresent ? t("mod.empty.spam") : t("mod.no_bot") }}</div>
       <template v-else>
         <template v-for="section in spamSections" :key="section.group?.id ?? 'ungrouped'">
           <div class="mod-section" @dragover.prevent
@@ -864,7 +868,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 
     <!-- Nukes list -->
     <template v-else-if="activeTab === 'nukes'">
-      <div v-if="!nukes.length && !modGroups.nukes.length" class="ep-empty">{{ t("mod.empty.nukes") }}</div>
+      <div v-if="!nukes.length && !modGroups.nukes.length" class="ep-empty">{{ botPresent ? t("mod.empty.nukes") : t("mod.no_bot") }}</div>
       <template v-else>
         <template v-for="section in nukeSections" :key="section.group?.id ?? 'ungrouped'">
           <div class="mod-section" @dragover.prevent
