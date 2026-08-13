@@ -444,6 +444,11 @@ const MINIMUM_MOD = new Set([
   "say",
   "to",
   "cmd",
+  "command",
+  "spam",
+  "ban",
+  "timeout",
+  "delete",
 ]);
 const MINIMUM_BC = new Set(["pm2", "refresh", "join", "leave"]);
 
@@ -461,7 +466,11 @@ function inferCategory(name: string): string {
     "whitelist",
     "git",
     "cmd",
+    "command",
     "message",
+    "timeout",
+    "ban",
+    "delete",
   ];
   const chat = [
     "ask",
