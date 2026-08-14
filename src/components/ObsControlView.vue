@@ -2,7 +2,7 @@
 // >>> agent-relay model (token-based, no port/password) - settings panel is a teleport overlay
 
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRouter, onBeforeRouteLeave } from "vue-router";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useOverlayClose } from "../composables/useOverlayClose";
@@ -379,6 +379,197 @@ function restartShotLoop() {
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 
+// vvv navigation safety switch vvv
+const requestGen = ref(0);
+// >>> true the instant we're leaving (channel switch or route nav) 
+const locked = ref(false);
+
+function lockForNavigation() {
+  requestGen.value++;
+  locked.value = true;
+  editMode.value = true; // <<< never carry an armed live-mode into a new channel/page
+  pendingSceneName.value = null;
+  pendingSourceEdits.value = {};
+  pendingCategory.value = null;
+}
+// ^^^ navigation safety switch ^^^
+
+// vvv live/edit mode + staged (unsaved) changes vvv
+const editMode = ref(true); // <<< default: edit mode, nothing applies until Save
+const pendingSceneName = ref<string | null>(null);
+const pendingSourceEdits = ref<
+  Record<number, { visible?: boolean; muted?: boolean; volumePercent?: number }>
+>({});
+const pendingCategory = ref<{ id: string; name: string; boxArt: string } | null>(
+  null,
+);
+
+const pendingChanges = computed(() => {
+  const list: string[] = [];
+  if (pendingSceneName.value && pendingSceneName.value !== currentScene.value)
+    list.push(`Scene → ${pendingSceneName.value}`);
+  for (const [idStr, edit] of Object.entries(pendingSourceEdits.value)) {
+    const id = Number(idStr);
+    const src = (sources.value as any[]).find((s) => s.sceneItemId === id);
+    if (!src) continue;
+    if (edit.visible !== undefined && edit.visible !== src.visible)
+      list.push(`${src.sourceName} ${edit.visible ? "shown" : "hidden"}`);
+    if (edit.muted !== undefined && edit.muted !== (src.muted ?? false))
+      list.push(`${src.sourceName} ${edit.muted ? "muted" : "unmuted"}`);
+    if (
+      edit.volumePercent !== undefined &&
+      edit.volumePercent !== (src.volumePercent ?? 100)
+    )
+      list.push(`${src.sourceName} volume → ${edit.volumePercent}%`);
+  }
+  if (pendingCategory.value && pendingCategory.value.id !== currentCategoryId.value)
+    list.push(`Category → ${pendingCategory.value.name}`);
+  return list;
+});
+const hasPending = computed(() => pendingChanges.value.length > 0);
+
+function effectiveVisible(src: any): boolean {
+  return pendingSourceEdits.value[src.sceneItemId]?.visible ?? src.visible;
+}
+function effectiveMuted(src: any): boolean {
+  return pendingSourceEdits.value[src.sceneItemId]?.muted ?? !!src.muted;
+}
+function isScenePending(name: string): boolean {
+  return (
+    editMode.value &&
+    pendingSceneName.value === name &&
+    name !== currentScene.value
+  );
+}
+function isSourcePending(src: any): boolean {
+  const e = pendingSourceEdits.value[src.sceneItemId];
+  if (!e) return false;
+  return (
+    (e.visible !== undefined && e.visible !== src.visible) ||
+    (e.muted !== undefined && e.muted !== (src.muted ?? false)) ||
+    (e.volumePercent !== undefined && e.volumePercent !== (src.volumePercent ?? 100))
+  );
+}
+function isCategoryPending(categoryId: string): boolean {
+  return (
+    editMode.value &&
+    pendingCategory.value?.id === categoryId &&
+    categoryId !== currentCategoryId.value
+  );
+}
+
+function onSceneClick(name: string) {
+  if (locked.value) return;
+  if (!editMode.value) {
+    switchScene(name);
+    return;
+  }
+  pendingSceneName.value = name;
+}
+
+function onToggleVisible(src: any) {
+  if (locked.value) return;
+  if (!editMode.value) {
+    toggleSourceVisible(src);
+    return;
+  }
+  const cur = effectiveVisible(src);
+  pendingSourceEdits.value = {
+    ...pendingSourceEdits.value,
+    [src.sceneItemId]: { ...pendingSourceEdits.value[src.sceneItemId], visible: !cur },
+  };
+}
+
+function onToggleMute(src: any) {
+  if (locked.value) return;
+  if (!editMode.value) {
+    toggleSourceMute(src);
+    return;
+  }
+  const cur = effectiveMuted(src);
+  pendingSourceEdits.value = {
+    ...pendingSourceEdits.value,
+    [src.sceneItemId]: { ...pendingSourceEdits.value[src.sceneItemId], muted: !cur },
+  };
+}
+
+function onVolumeCommit(src: any, percent: number) {
+  if (locked.value) return;
+  if (!editMode.value) {
+    onVolumeChange(src, percent);
+    return;
+  }
+  pendingSourceEdits.value = {
+    ...pendingSourceEdits.value,
+    [src.sceneItemId]: { ...pendingSourceEdits.value[src.sceneItemId], volumePercent: percent },
+  };
+  const next = { ...sliderOverride.value };
+  delete next[src.sceneItemId];
+  sliderOverride.value = next;
+}
+
+function onCategoryClick(c: CategoryHistoryEntry) {
+  if (locked.value) return;
+  if (!editMode.value) {
+    switchCategory(c.category_id, c.category_name, c.box_art_url);
+    return;
+  }
+  pendingCategory.value = {
+    id: c.category_id,
+    name: c.category_name,
+    boxArt: c.box_art_url,
+  };
+}
+
+function setMode(next: boolean) {
+  if (locked.value || next === editMode.value) return;
+  if (next === false && hasPending.value) discardChanges(); // <<< live mode has no staging concept
+  editMode.value = next;
+}
+
+async function saveChanges() {
+  if (locked.value || !hasPending.value) return;
+  const gen = requestGen.value;
+  const tasks: Promise<any>[] = [];
+  if (pendingSceneName.value && pendingSceneName.value !== currentScene.value)
+    tasks.push(switchScene(pendingSceneName.value));
+  for (const [idStr, edit] of Object.entries(pendingSourceEdits.value)) {
+    const id = Number(idStr);
+    const src = (sources.value as any[]).find((s) => s.sceneItemId === id);
+    if (!src) continue;
+    if (edit.visible !== undefined && edit.visible !== src.visible)
+      tasks.push(setSourceVisibility(src, edit.visible));
+    if (edit.muted !== undefined && edit.muted !== (src.muted ?? false))
+      tasks.push(setSourceMute(src, edit.muted));
+    if (
+      edit.volumePercent !== undefined &&
+      edit.volumePercent !== (src.volumePercent ?? 100)
+    )
+      tasks.push(setSourceVolume(src, edit.volumePercent));
+  }
+  if (pendingCategory.value && pendingCategory.value.id !== currentCategoryId.value)
+    tasks.push(
+      switchCategory(
+        pendingCategory.value.id,
+        pendingCategory.value.name,
+        pendingCategory.value.boxArt,
+      ),
+    );
+  await Promise.all(tasks);
+  if (gen === requestGen.value) {
+    pendingSceneName.value = null;
+    pendingSourceEdits.value = {};
+    pendingCategory.value = null;
+  }
+}
+
+function discardChanges() {
+  pendingSceneName.value = null;
+  pendingSourceEdits.value = {};
+  pendingCategory.value = null;
+}
+// ^^^ live/edit mode + staged changes ^^^
+
 const authHeaders = computed(() =>
   session.value
     ? { Authorization: `Bearer ${session.value.token}` }
@@ -455,12 +646,15 @@ const connStatusClass = computed(() => {
 // vvv load vvv
 async function load() {
   if (!session.value) return;
+  const gen = requestGen.value;
   try {
     const res = await fetch(`${API}/obs/${session.value.channel}`, {
       headers: authHeaders.value,
     });
+    if (gen !== requestGen.value) return; // <<< superseded mid-flight, discard
     if (res.ok) {
       const d = (await res.json()) as AgentStatus;
+      if (gen !== requestGen.value) return;
       agentStatus.value = d;
       sceneBindings.value = d.scene_bindings ?? [];
       sourceBindings.value = d.source_bindings ?? [];
@@ -478,18 +672,24 @@ async function load() {
       argCommands.value = normalizedArg;
     }
   } catch { }
-  if (agentConnected.value && obsConnected.value) refreshScenes();
-  loadCategoryHistory();
+  if (gen !== requestGen.value) return;
+  if (agentConnected.value && obsConnected.value) await refreshScenes();
+  if (gen !== requestGen.value) return;
+  await loadCategoryHistory();
+  if (gen === requestGen.value) locked.value = false; // <<< fresh state landed, safe to edit again
 }
 
 async function poll() {
   if (!session.value) return;
+  const gen = requestGen.value;
   try {
     const res = await fetch(`${API}/obs/${session.value.channel}`, {
       headers: authHeaders.value,
     });
+    if (gen !== requestGen.value) return;
     if (res.ok) {
       const d = (await res.json()) as AgentStatus;
+      if (gen !== requestGen.value) return;
       const wasConnected = obsConnected.value;
       agentStatus.value = d;
       // >>> OBS offline → clear cached scene/source so stale warnings disappear
@@ -564,15 +764,18 @@ const emptyCategorySlots = computed(() =>
 
 async function loadCategoryHistory() {
   if (!session.value) return;
+  const gen = requestGen.value;
   try {
     const res = await fetch(`${API}/obs/${session.value.channel}/category-history`, {
       headers: authHeaders.value,
     });
+    if (gen !== requestGen.value) return;
     if (res.ok) {
       const d = (await res.json()) as {
         history: CategoryHistoryEntry[];
         current_category_id: string | null;
       };
+      if (gen !== requestGen.value) return;
       categoryHistory.value = d.history ?? [];
       currentCategoryId.value = d.current_category_id ?? null;
     }
@@ -691,15 +894,18 @@ async function copyToken() {
 // vvv scenes vvv
 async function refreshScenes() {
   if (!session.value) return;
+  const gen = requestGen.value;
   try {
     const res = await fetch(`${API}/obs/${session.value.channel}/scenes`, {
       headers: authHeaders.value,
     });
+    if (gen !== requestGen.value) return;
     if (res.ok) {
       const d = (await res.json()) as {
         scenes: SceneInfo[];
         currentScene: string;
       };
+      if (gen !== requestGen.value) return;
       scenes.value = d.scenes;
       // >>> sync live scene from response, not cached status, so page shows correct scene on load
       if (d.currentScene && agentStatus.value)
@@ -707,7 +913,7 @@ async function refreshScenes() {
       if (!selectedScene.value)
         selectedScene.value =
           d.currentScene || scenes.value[0]?.sceneName || "";
-      if (selectedScene.value) loadSources(selectedScene.value);
+      if (selectedScene.value) await loadSources(selectedScene.value);
       restartShotLoop();
       // >>> preload all source names so isTargetMissing works across scenes
       for (const s of scenes.value) prefetchSourceNames(s.sceneName);
@@ -717,13 +923,16 @@ async function refreshScenes() {
 
 async function prefetchSourceNames(sceneName: string) {
   if (!session.value) return;
+  const gen = requestGen.value;
   try {
     const res = await fetch(
       `${API}/obs/${session.value.channel}/sources?scene=${encodeURIComponent(sceneName)}`,
       { headers: authHeaders.value },
     );
+    if (gen !== requestGen.value) return;
     if (res.ok) {
       const data = ((await res.json()) as any).sources ?? [];
+      if (gen !== requestGen.value) return;
       for (const s of data) {
         if (s.sourceName && !knownSources.value.includes(s.sourceName))
           knownSources.value = [...knownSources.value, s.sourceName];
@@ -748,6 +957,7 @@ async function switchScene(name: string) {
 // vvv sources vvv
 async function loadSources(sceneName: string) {
   if (!session.value) return;
+  const gen = requestGen.value;
   selectedScene.value = sceneName;
   sourcesLoading.value = true;
   try {
@@ -755,18 +965,23 @@ async function loadSources(sceneName: string) {
       `${API}/obs/${session.value.channel}/sources?scene=${encodeURIComponent(sceneName)}`,
       { headers: authHeaders.value },
     );
+    if (gen !== requestGen.value) return;
     if (res.ok) {
       const rawSources = ((await res.json()) as any).sources ?? [];
+      if (gen !== requestGen.value) return;
       sources.value = rawSources.map((s: any) => ({
         ...s,
         visible: s.sceneItemEnabled,
       }));
     }
   } catch { }
-  sourcesLoading.value = false;
+  if (gen === requestGen.value) sourcesLoading.value = false;
 }
 
-async function toggleSourceVisible(src: SourceInfo) {
+// >>> target-setting - both the live-mode instant toggle AND the edit-mode Save flow
+// >>> call this with an explicit value, so a staged-then-reverted edit never flips
+// >>> the source to the wrong side (a plain toggle would, since it flips off *current*)
+async function setSourceVisibility(src: SourceInfo, target: boolean) {
   if (!session.value || pendingSources.value.has(src.sceneItemId)) return;
   pendingSources.value = new Set(pendingSources.value).add(src.sceneItemId);
   try {
@@ -776,7 +991,7 @@ async function toggleSourceVisible(src: SourceInfo) {
       body: JSON.stringify({
         scene: selectedScene.value,
         sceneItemId: src.sceneItemId,
-        enabled: !src.visible,
+        enabled: target,
       }),
     });
   } catch { }
@@ -785,8 +1000,11 @@ async function toggleSourceVisible(src: SourceInfo) {
   next_.delete(src.sceneItemId);
   pendingSources.value = next_;
 }
+function toggleSourceVisible(src: SourceInfo) {
+  return setSourceVisibility(src, !src.visible);
+}
 
-async function toggleSourceMute(src: SourceInfo & { muted?: boolean }) {
+async function setSourceMute(src: SourceInfo & { muted?: boolean }, target: boolean) {
   if (!session.value || pendingSources.value.has(src.sceneItemId)) return;
   pendingSources.value = new Set(pendingSources.value).add(src.sceneItemId);
   try {
@@ -795,7 +1013,7 @@ async function toggleSourceMute(src: SourceInfo & { muted?: boolean }) {
       headers: { ...authHeaders.value, "Content-Type": "application/json" },
       body: JSON.stringify({
         source: src.sourceName,
-        muted: !(src.muted ?? false),
+        muted: target,
       }),
     });
   } catch { }
@@ -803,6 +1021,9 @@ async function toggleSourceMute(src: SourceInfo & { muted?: boolean }) {
   const next_ = new Set(pendingSources.value);
   next_.delete(src.sceneItemId);
   pendingSources.value = next_;
+}
+function toggleSourceMute(src: SourceInfo & { muted?: boolean }) {
+  return setSourceMute(src, !(src.muted ?? false));
 }
 
 // vvv bindings vvv
@@ -1085,13 +1306,36 @@ onMounted(() => {
   categoryPollTimer = setInterval(loadCategoryHistory, 30000);
 });
 onUnmounted(() => {
+  requestGen.value++; // <<< defensive - covers any unmount path besides router nav
   if (pollTimer) clearInterval(pollTimer);
   if (shotTimer) clearInterval(shotTimer);
   if (categoryPollTimer) clearInterval(categoryPollTimer);
 });
+// >>> leaving the page entirely (sidebar, browser back, etc.) - lock instantly,
+// >>> before the route even finishes changing
+onBeforeRouteLeave(() => {
+  lockForNavigation();
+});
+
+// >>> switching channel is NOT a route change, so it needs its own instant lock +
+// >>> a hard reset of anything visible so the old channel's scenes/sources/category
+// >>> can't linger on screen while the new channel's data is still in flight
 watch(
   () => session.value?.channel,
   () => {
+    lockForNavigation();
+    agentStatus.value = null;
+    scenes.value = [];
+    selectedScene.value = "";
+    sources.value = [];
+    sceneShots.value = {};
+    knownSources.value = [];
+    categoryHistory.value = [];
+    currentCategoryId.value = null;
+    if (shotTimer) {
+      clearInterval(shotTimer);
+      shotTimer = null;
+    }
     load();
   },
 );
@@ -1133,7 +1377,7 @@ watch(
             <span class="obs-live-stat-label">bitrate</span>
             <span class="obs-live-stat-value">{{
               bitrateLabel ?? "not streaming"
-              }}</span>
+            }}</span>
           </div>
           <div class="obs-live-stat">
             <span class="obs-live-stat-label">preview size</span>
@@ -1143,7 +1387,7 @@ watch(
                 : agentStatus?.screenshots
                   ? "--"
                   : "off"
-              }}</span>
+            }}</span>
           </div>
           <div class="obs-live-stat">
             <span class="obs-live-stat-label">preview cpu</span>
@@ -1153,13 +1397,13 @@ watch(
                 : agentStatus?.screenshots
                   ? "--"
                   : "off"
-              }}</span>
+            }}</span>
           </div>
         </div>
       </div>
     </div>
 
-    <div class="obsconn-body">
+    <div class="obsconn-body" :class="{ 'obs-locked': locked }">
       <template v-if="loading">
         <div class="obs-loading">
           <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="loading"
@@ -1200,13 +1444,29 @@ watch(
 
       <template v-if="agentConnected && obsConnected">
         <div class="ep-field-group">
+          <div class="mode-bar">
+            <div class="mode-bar-left">
+              <span class="ep-field-label" style="margin: 0">mode</span>
+              <div class="switch" :class="editMode ? 'edit' : 'live'" @click="setMode(!editMode)">
+                <div class="knob"></div>
+              </div>
+              <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? "Edit" : "Live" }}</span>
+            </div>
+            <span v-if="locked" class="mode-hint locked-hint">🔒 leaving — loading fresh state…</span>
+            <span v-else class="mode-hint">{{
+              editMode
+                ? "Changes stage here until you press Save."
+                : "Changes apply to your stream instantly."
+            }}</span>
+          </div>
+
           <div class="ep-field-label obs-section-label">
           </div>
           <div class="obs-scenes">
             <div class="obs-scenes-live-row" v-if="liveScene">
               <div class="obs-live-scene-wrap">
                 <div class="obs-scene-card obs-scene-card-live active"
-                  :class="{ picked: liveScene.sceneName === selectedScene }" @click="switchScene(liveScene.sceneName)">
+                  :class="{ picked: liveScene.sceneName === selectedScene }" @click="onSceneClick(liveScene.sceneName)">
                   <div class="obs-scene-thumb">
                     <img v-if="sceneShots[liveScene.sceneName]" :src="sceneShots[liveScene.sceneName]"
                       :alt="liveScene.sceneName" />
@@ -1221,12 +1481,14 @@ watch(
             </div>
             <div class="obs-scenes-others">
               <div v-for="s in nonLiveScenes" :key="s.sceneName" class="obs-scene-card"
-                :class="{ picked: s.sceneName === selectedScene }" @click="switchScene(s.sceneName)">
+                :class="{ picked: s.sceneName === selectedScene, pending: isScenePending(s.sceneName) }"
+                @click="onSceneClick(s.sceneName)">
                 <div class="obs-scene-thumb">
                   <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
                   <div v-else class="obs-scene-thumb-empty">
                     {{ agentStatus?.screenshots ? "…" : "previews off" }}
                   </div>
+                  <span v-if="isScenePending(s.sceneName)" class="obs-scene-pending-tag">pending</span>
                 </div>
                 <div class="obs-scene-name">{{ s.sceneName }}</div>
               </div>
@@ -1258,18 +1520,20 @@ watch(
             <label class="ep-field-label">sources
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obs-source-list">
-              <div v-for="src in sources as any[]" :key="src.sceneItemId" class="obs-source-row">
+              <div v-for="src in sources as any[]" :key="src.sceneItemId" class="obs-source-row"
+                :class="{ pending: isSourcePending(src) }">
                 <span class="obs-source-name">{{ src.sourceName }}</span>
-                <button class="obs-vis-btn" :class="{ on: src.visible }" :disabled="pendingSources.has(src.sceneItemId)"
-                  @click="toggleSourceVisible(src)">
-                  {{ src.visible ? "visible" : "hidden" }}
+                <span v-if="isSourcePending(src)" class="pending-tag">pending</span>
+                <button class="obs-vis-btn" :class="{ on: effectiveVisible(src) }"
+                  :disabled="pendingSources.has(src.sceneItemId)" @click="onToggleVisible(src)">
+                  {{ effectiveVisible(src) ? "visible" : "hidden" }}
                 </button>
                 <template v-if="src.isAudioSource">
-                  <button class="obs-mute-btn" :class="{ muted: src.muted }"
-                    :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceMute(src)">
-                    {{ src.muted ? "muted" : "unmuted" }}
+                  <button class="obs-mute-btn" :class="{ muted: effectiveMuted(src) }"
+                    :disabled="pendingSources.has(src.sceneItemId)" @click="onToggleMute(src)">
+                    {{ effectiveMuted(src) ? "muted" : "unmuted" }}
                   </button>
                 </template>
               </div>
@@ -1287,18 +1551,21 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obs-mixer-list">
-              <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row">
+              <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
+                :class="{ pending: isSourcePending(src) }">
                 <div class="obs-mixer-top">
                   <span class="obs-source-name">{{ src.sourceName }}</span>
-                  <button class="obs-mute-btn" :class="{ muted: src.muted }"
-                    :disabled="pendingSources.has(src.sceneItemId)" @click="toggleSourceMute(src)">
-                    {{ src.muted ? "muted" : "unmuted" }}
+                  <span v-if="isSourcePending(src)" class="pending-tag">pending</span>
+                  <button class="obs-mute-btn" :class="{ muted: effectiveMuted(src) }"
+                    :disabled="pendingSources.has(src.sceneItemId)" @click="onToggleMute(src)">
+                    {{ effectiveMuted(src) ? "muted" : "unmuted" }}
                   </button>
                 </div>
                 <div class="obs-mixer-slider-row">
                   <input type="range" min="0" max="100" :value="sliderOverride[src.sceneItemId] ??
+                    pendingSourceEdits[src.sceneItemId]?.volumePercent ??
                     src.volumePercent ??
                     100
                     " class="obs-mixer-slider" @input="
@@ -1307,14 +1574,16 @@ watch(
                         +($event.target as HTMLInputElement).value,
                       )
                       " @change="
-                        onVolumeChange(
+                        onVolumeCommit(
                           src,
                           +($event.target as HTMLInputElement).value,
                         )
                         " />
                   <span class="obs-mixer-db">{{
                     volumeToDb(
-                      sliderOverride[src.sceneItemId] ?? src.volumePercent,
+                      sliderOverride[src.sceneItemId] ??
+                      pendingSourceEdits[src.sceneItemId]?.volumePercent ??
+                      src.volumePercent,
                     )
                   }}
                     dB</span>
@@ -1335,9 +1604,8 @@ watch(
           <label class="ep-field-label">Switch categories</label>
           <div class="obs-category-strip">
             <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
-              :class="{ disabled: !canFilterScenes, active: c.category_id === currentCategoryId, switching: switchingCategory === c.category_id }"
-              :disabled="switchingCategory === c.category_id" :title="c.category_name"
-              @click="switchCategory(c.category_id, c.category_name, c.box_art_url)">
+              :class="{ disabled: !canFilterScenes, active: c.category_id === currentCategoryId, pending: isCategoryPending(c.category_id), switching: switchingCategory === c.category_id }"
+              :disabled="switchingCategory === c.category_id" :title="c.category_name" @click="onCategoryClick(c)">
               <span v-if="canFilterScenes" class="obs-category-remove" title="Remove"
                 @click.stop="removeCategory(c.category_id)">×</span>
               <img v-if="c.box_art_url" :src="c.box_art_url" :alt="c.category_name" />
@@ -1585,6 +1853,26 @@ watch(
               placeholder="Search a Twitch category..." @select="onAddCategorySelect" />
           </div>
         </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- >>> site-wide, sits right under the navbar regardless of which sidebar tab is open -->
+  <Teleport to="body">
+    <div v-if="!editMode" class="obs-live-mode-banner">
+      <span class="dot"></span>Live mode is on — scene, source and category changes apply to your stream instantly
+    </div>
+  </Teleport>
+
+  <Teleport to="body">
+    <div v-if="editMode && hasPending && !locked" class="obs-save-bar">
+      <span class="obs-save-lead">Unsaved changes</span>
+      <div class="obs-diff-chips">
+        <span v-for="(d, i) in pendingChanges" :key="i" class="obs-diff-chip">{{ d }}</span>
+      </div>
+      <div class="obs-save-btns">
+        <button class="obs-btn-discard" @click="discardChanges">Discard</button>
+        <button class="obs-btn-save" @click="saveChanges">Save changes</button>
       </div>
     </div>
   </Teleport>
@@ -3097,5 +3385,266 @@ watch(
 
 .obs-toggle-sm.on .obs-toggle-knob {
   transform: translateX(11px);
+}
+
+/* ==================== live/edit mode + staged changes ==================== */
+.mode-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border: 1px solid #1e1e22;
+  background: #0d0d10;
+  margin-bottom: 14px;
+  width: 100%;
+}
+
+.mode-bar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mode-bar .switch {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border: 1px solid #2a2a30;
+  background: #111217;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mode-bar .switch .knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #555;
+  transition: left 0.15s, background 0.15s;
+}
+
+.mode-bar .switch.live {
+  border-color: #f1494966;
+  background: #f1494914;
+}
+
+.mode-bar .switch.live .knob {
+  left: 20px;
+  background: #f14949;
+}
+
+.mode-bar .switch.edit {
+  border-color: #e5c07b55;
+  background: #e5c07b0e;
+}
+
+.mode-bar .switch.edit .knob {
+  background: #e5c07b;
+}
+
+.mode-state {
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 32px;
+}
+
+.mode-state.edit {
+  color: #e5c07b;
+}
+
+.mode-state.live {
+  color: #f14949;
+}
+
+.mode-hint {
+  font-size: 11px;
+  color: #555;
+}
+
+.mode-hint.locked-hint {
+  color: #f14949;
+  font-weight: 600;
+}
+
+/* >>> instant safety-switch lock  */
+.obs-locked {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.obs-scene-card.pending {
+  border-color: #e5c07b;
+  color: #f0d9a0;
+}
+
+.obs-scene-pending-tag {
+  position: absolute;
+  top: 5px;
+  left: 6px;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #20180a;
+  background: #e5c07b;
+  padding: 2px 5px;
+  z-index: 1;
+}
+
+.obs-source-row.pending,
+.obs-mixer-row.pending {
+  border-left: 2px solid #e5c07b;
+  background: #e5c07b0d;
+}
+
+.pending-tag {
+  font-size: 8px;
+  font-weight: 700;
+  color: #20180a;
+  background: #e5c07b;
+  padding: 2px 5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.obs-category-card.pending img,
+.obs-category-card.pending .obs-category-empty {
+  border-width: 2px;
+  border-color: #e5c07b;
+}
+
+/* site-wide live-mode banner, Teleported under the navbar */
+.obs-live-mode-banner {
+  position: fixed;
+  top: 52px;
+  left: 0;
+  right: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 7px 16px;
+  background: #f1494914;
+  border-bottom: 1px solid #f1494944;
+  color: #f14949;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.obs-live-mode-banner .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f14949;
+  animation: obs-live-blip 1.1s ease-in-out infinite;
+}
+
+@keyframes obs-live-blip {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .obs-live-mode-banner .dot {
+    animation: none;
+  }
+}
+
+/* floating save bar for staged edit-mode changes */
+.obs-save-bar {
+  position: fixed;
+  left: 200px;
+  right: 0;
+  bottom: 0;
+  background: #17130a;
+  border-top: 1px solid #e5c07b73;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  z-index: 140;
+}
+
+.obs-save-lead {
+  font-size: 11px;
+  font-weight: 700;
+  color: #e5c07b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.obs-diff-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.obs-diff-chip {
+  font-size: 11px;
+  background: #e5c07b16;
+  border: 1px solid #e5c07b66;
+  color: #f0d9a0;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+
+.obs-save-btns {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.obs-btn-save,
+.obs-btn-discard {
+  border: none;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.obs-btn-save {
+  background: #23d18b;
+  color: #04170f;
+}
+
+.obs-btn-save:hover {
+  background: #33e0a0;
+}
+
+.obs-btn-discard {
+  background: transparent;
+  border: 1px solid #333;
+  color: #888;
+}
+
+.obs-btn-discard:hover {
+  color: #e0e0e0;
+  border-color: #555;
+}
+
+@media (max-width: 680px) {
+  .obs-save-bar {
+    left: 0;
+  }
 }
 </style>
