@@ -399,20 +399,16 @@ function lockForNavigation() {
 // vvv live/edit mode + staged (unsaved) changes vvv
 const editMode = ref(true); // <<< default: edit mode, nothing applies until Save
 const pendingSceneName = ref<string | null>(null);
-// >>> keyed by "scene sceneItemId" (not just sceneItemId, which OBS only scopes
-// >>> per-scene and can collide across scenes) and self-contained with a baseline
-// >>> snapshot, so edits made while browsing scene A survive browsing to scene B and
-// >>> still get diffed/applied correctly on Save without needing scene A's sources
-// >>> still loaded in `sources.value`
 interface PendingSourceEdit {
   scene: string;
   sceneItemId: number;
   sourceName: string;
   isAudioSource: boolean;
-  baseline: { visible: boolean; muted: boolean; volumePercent: number };
+  baseline: { visible: boolean; muted: boolean; volumePercent: number; sceneItemIndex: number };
   visible?: boolean;
   muted?: boolean;
   volumePercent?: number;
+  sceneItemIndex?: number;
 }
 const pendingSourceEdits = ref<Record<string, PendingSourceEdit>>({});
 function sourceEditKey(scene: string, sceneItemId: number): string {
@@ -424,7 +420,7 @@ function getPendingEdit(src: any): PendingSourceEdit | undefined {
 // >>> creates the entry (with a baseline snapshot) on first edit, reuses it after
 function stageSourceEdit(
   src: any,
-  patch: Partial<Pick<PendingSourceEdit, "visible" | "muted" | "volumePercent">>,
+  patch: Partial<Pick<PendingSourceEdit, "visible" | "muted" | "volumePercent" | "sceneItemIndex">>,
 ) {
   const key = sourceEditKey(selectedScene.value, src.sceneItemId);
   const existing = pendingSourceEdits.value[key];
@@ -437,6 +433,7 @@ function stageSourceEdit(
       visible: src.visible,
       muted: !!src.muted,
       volumePercent: src.volumePercent ?? 100,
+      sceneItemIndex: src.sceneItemIndex,
     },
   };
   pendingSourceEdits.value = {
@@ -448,7 +445,8 @@ function pendingEditIsNoop(e: PendingSourceEdit): boolean {
   return (
     (e.visible === undefined || e.visible === e.baseline.visible) &&
     (e.muted === undefined || e.muted === e.baseline.muted) &&
-    (e.volumePercent === undefined || e.volumePercent === e.baseline.volumePercent)
+    (e.volumePercent === undefined || e.volumePercent === e.baseline.volumePercent) &&
+    (e.sceneItemIndex === undefined || e.sceneItemIndex === e.baseline.sceneItemIndex)
   );
 }
 const pendingCategory = ref<{ id: string; name: string; boxArt: string } | null>(
@@ -468,6 +466,8 @@ const pendingChanges = computed(() => {
       list.push(`${label} ${e.muted ? "muted" : "unmuted"}`);
     if (e.volumePercent !== undefined && e.volumePercent !== e.baseline.volumePercent)
       list.push(`${label} volume → ${e.volumePercent}%`);
+    if (e.sceneItemIndex !== undefined && e.sceneItemIndex !== e.baseline.sceneItemIndex)
+      list.push(`${label} reordered`);
   }
   if (pendingCategory.value && pendingCategory.value.id !== currentCategoryId.value)
     list.push(`Category → ${pendingCategory.value.name}`);
@@ -596,6 +596,8 @@ async function saveChanges() {
       tasks.push(setSourceMute(ref_, e.muted));
     if (e.volumePercent !== undefined && e.volumePercent !== e.baseline.volumePercent)
       tasks.push(setSourceVolume(ref_, e.volumePercent));
+    if (e.sceneItemIndex !== undefined && e.sceneItemIndex !== e.baseline.sceneItemIndex)
+      tasks.push(setSourceIndex(ref_, e.sceneItemIndex, e.scene));
   }
   if (pendingCategory.value && pendingCategory.value.id !== currentCategoryId.value)
     tasks.push(
@@ -1020,10 +1022,8 @@ async function loadSources(sceneName: string, opts: { silent?: boolean } = {}) {
     if (res.ok) {
       const rawSources = ((await res.json()) as any).sources ?? [];
       if (gen !== requestGen.value) return;
-      // >>> OBS's own Sources panel shows front-most (highest sceneItemIndex) at the top
-      sources.value = rawSources
-        .map((s: any) => ({ ...s, visible: s.sceneItemEnabled }))
-        .sort((a: any, b: any) => (b.sceneItemIndex ?? 0) - (a.sceneItemIndex ?? 0));
+
+      sources.value = rawSources.map((s: any) => ({ ...s, visible: s.sceneItemEnabled }));
     }
   } catch { }
   if (gen === requestGen.value) sourcesLoading.value = false;
@@ -1040,21 +1040,33 @@ async function onSourceDrop(targetIndex: number) {
   if (fromIndex === null || fromIndex === targetIndex || !session.value || !selectedScene.value)
     return;
   const list = [...(sources.value as any[])];
+  // >>> use the REAL sceneItemIndex that already sits at the drop slot 
+  const targetRealIndex = list[targetIndex]!.sceneItemIndex;
   const [moved] = list.splice(fromIndex, 1);
   list.splice(targetIndex, 0, moved);
-  sources.value = list; // <<< optimistic - resynced from OBS's own state below
+  sources.value = list; // <<< optimistic reorder for immediate feedback
+
+  if (editMode.value) {
+    stageSourceEdit(moved, { sceneItemIndex: targetRealIndex });
+    return;
+  }
+  await setSourceIndex(moved, targetRealIndex);
+}
+
+async function setSourceIndex(
+  src: { sceneItemId: number },
+  sceneItemIndex: number,
+  scene: string = selectedScene.value,
+) {
+  if (!session.value) return;
   try {
     await fetch(`${API}/obs/${session.value.channel}/source/reorder`, {
       method: "POST",
       headers: { ...authHeaders.value, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        scene: selectedScene.value,
-        sceneItemId: moved.sceneItemId,
-        sceneItemIndex: list.length - 1 - targetIndex,
-      }),
+      body: JSON.stringify({ scene, sceneItemId: src.sceneItemId, sceneItemIndex }),
     });
   } catch { }
-  await loadSources(selectedScene.value, { silent: true });
+  if (scene === selectedScene.value) await loadSources(scene, { silent: true });
 }
 
 // >>> target-setting
@@ -1562,7 +1574,7 @@ watch(
             <span class="obs-live-stat-label">bitrate</span>
             <span class="obs-live-stat-value">{{
               bitrateLabel ?? "not streaming"
-              }}</span>
+            }}</span>
           </div>
           <div class="obs-live-stat">
             <span class="obs-live-stat-label">preview size</span>
@@ -1697,6 +1709,9 @@ watch(
         </div>
       </template>
 
+      <ObsSceneCanvas v-if="canvasSceneName && session" :channel="session.channel" :scene-name="canvasSceneName"
+        :auth-headers="authHeaders" @close="canvasSceneName = null" />
+
       <!-- >>> builder still works even if obs itself isn't connected -->
       <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"
         :class="{ 'obs-boxes-single': !(agentConnected && obsConnected) }">
@@ -1706,7 +1721,7 @@ watch(
               <label class="ep-field-label">sources
                 <span v-if="selectedScene" class="ep-field-hint">{{
                   selectedScene
-                }}</span></label>
+                  }}</span></label>
               <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
                 @click="openAddSource" v-html="iconSvgFor('plus')"></button>
             </div>
@@ -1751,7 +1766,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
                 :class="{ pending: isSourcePending(src) }">
@@ -2140,9 +2155,6 @@ watch(
       </div>
     </div>
   </Teleport>
-
-  <ObsSceneCanvas v-if="canvasSceneName && session" :channel="session.channel" :scene-name="canvasSceneName"
-    :auth-headers="authHeaders" @close="canvasSceneName = null" />
 </template>
 
 <style scoped>
@@ -2153,13 +2165,34 @@ watch(
   gap: 16px;
 }
 
+/* >>> grid (not flex space-between) so the mode-bar is centered on the whole header's
+   width, not just "whatever's left" between two unequally-sized siblings */
 .obsconn-header {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 12px;
-  flex-wrap: wrap;
+}
+
+.obsconn-header>.mode-bar {
+  justify-self: center;
+}
+
+.obsconn-header-right {
+  justify-self: end;
+}
+
+@media (max-width: 900px) {
+  .obsconn-header {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+
+  .obsconn-header>.mode-bar,
+  .obsconn-header-right {
+    justify-self: stretch;
+  }
 }
 
 .obsconn-title {
@@ -3745,7 +3778,7 @@ watch(
   padding: 6px 12px;
   border: 1px solid #1e1e22;
   background: #0d0d10;
-  flex: 1 1 320px;
+  width: max-content;
   max-width: 480px;
 }
 

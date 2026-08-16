@@ -277,73 +277,88 @@ const spotlightRects = computed(() => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="canvas-overlay">
-      <div class="canvas-topbar">
-        <div class="canvas-topbar-title">{{ sceneName }}</div>
-        <div class="canvas-topbar-actions">
-          <button class="canvas-dim-btn" :class="{ active: dimMode }" :disabled="!selectedItem"
-            title="Dim everything except the selected source" @click="dimMode = !dimMode">
-            <span v-html="iconSvgFor('sun')"></span> spotlight
-          </button>
-          <button class="canvas-close-btn" title="Close (Esc)" @click="emit('close')" v-html="iconSvgFor('x')"></button>
-        </div>
-      </div>
-
-      <div class="canvas-body">
-        <div v-if="loading" class="canvas-loading">loading…</div>
-        <div v-else ref="stageRef" class="canvas-stage" :style="{ aspectRatio: `${baseWidth} / ${baseHeight}` }"
-          @mousedown="onStageClick">
-          <img v-if="screenshot" :src="screenshot" alt="" class="canvas-backdrop" />
-
-          <div v-for="it in items" :key="it.sceneItemId" class="canvas-item"
-            :class="{ selected: it.sceneItemId === selectedId, hidden_: !it.sceneItemEnabled }" :style="itemStyle(it)"
-            @mousedown="onItemMouseDown(it, $event)">
-            <span class="canvas-item-label">{{ it.sourceName }}</span>
-            <template v-if="it.sceneItemId === selectedId">
-              <span class="canvas-handle tl" @mousedown="onHandleMouseDown(it, 'tl', $event)"></span>
-              <span class="canvas-handle tr" @mousedown="onHandleMouseDown(it, 'tr', $event)"></span>
-              <span class="canvas-handle bl" @mousedown="onHandleMouseDown(it, 'bl', $event)"></span>
-              <span class="canvas-handle br" @mousedown="onHandleMouseDown(it, 'br', $event)"></span>
-            </template>
-          </div>
-
-          <template v-if="spotlightRects">
-            <div class="canvas-spotlight" :style="{ left: 0, top: 0, right: 0, height: spotlightRects.top + 'px' }">
-            </div>
-            <div class="canvas-spotlight" :style="{
-              left: 0,
-              top: spotlightRects.top + spotlightRects.h + 'px',
-              right: 0,
-              bottom: 0,
-            }"></div>
-            <div class="canvas-spotlight" :style="{
-              left: 0,
-              top: spotlightRects.top + 'px',
-              width: spotlightRects.left + 'px',
-              height: spotlightRects.h + 'px',
-            }"></div>
-            <div class="canvas-spotlight" :style="{
-              left: spotlightRects.left + spotlightRects.w + 'px',
-              top: spotlightRects.top + 'px',
-              right: 0,
-              height: spotlightRects.h + 'px',
-            }"></div>
-          </template>
-        </div>
+  <div class="canvas-panel">
+    <div class="canvas-topbar">
+      <div class="canvas-topbar-title">{{ sceneName }}</div>
+      <div class="canvas-topbar-actions">
+        <button class="canvas-dim-btn" :class="{ active: dimMode }" :disabled="!selectedItem"
+          :title="selectedItem ? 'Dim everything except the selected source' : 'Select a source first'"
+          @click="dimMode = !dimMode">
+          <span v-html="iconSvgFor('sun')"></span> spotlight
+        </button>
+        <button class="canvas-close-btn" title="Close" @click="emit('close')" v-html="iconSvgFor('x')"></button>
       </div>
     </div>
-  </Teleport>
+
+    <div class="canvas-body">
+      <div v-if="loading" class="canvas-loading">loading…</div>
+      <div v-else-if="!items.length" class="canvas-loading">
+        No sources with layout data in this scene yet.<br />
+        <span class="canvas-loading-hint">
+          If sources are showing up in the list below, your OBS agent may need updating
+          (re-download it and restart it) to support the layout editor.
+        </span>
+      </div>
+      <div v-else ref="stageRef" class="canvas-stage" :style="{ aspectRatio: `${baseWidth} / ${baseHeight}` }"
+        @mousedown="onStageClick">
+        <img v-if="screenshot" :src="screenshot" alt="" class="canvas-backdrop" />
+
+        <div v-for="it in items" :key="it.sceneItemId" class="canvas-item"
+          :class="{ selected: it.sceneItemId === selectedId, hidden_: !it.sceneItemEnabled }" :style="itemStyle(it)"
+          @mousedown="onItemMouseDown(it, $event)">
+          <span class="canvas-item-label">{{ it.sourceName }}</span>
+          <template v-if="it.sceneItemId === selectedId">
+            <span class="canvas-handle tl" @mousedown="onHandleMouseDown(it, 'tl', $event)"></span>
+            <span class="canvas-handle tr" @mousedown="onHandleMouseDown(it, 'tr', $event)"></span>
+            <span class="canvas-handle bl" @mousedown="onHandleMouseDown(it, 'bl', $event)"></span>
+            <span class="canvas-handle br" @mousedown="onHandleMouseDown(it, 'br', $event)"></span>
+          </template>
+        </div>
+
+        <template v-if="spotlightRects">
+          <div class="canvas-spotlight" :style="{ left: 0, top: 0, right: 0, height: spotlightRects.top + 'px' }">
+          </div>
+          <div class="canvas-spotlight" :style="{
+            left: 0,
+            top: spotlightRects.top + spotlightRects.h + 'px',
+            right: 0,
+            bottom: 0,
+          }"></div>
+          <div class="canvas-spotlight" :style="{
+            left: 0,
+            top: spotlightRects.top + 'px',
+            width: spotlightRects.left + 'px',
+            height: spotlightRects.h + 'px',
+          }"></div>
+          <div class="canvas-spotlight" :style="{
+            left: spotlightRects.left + spotlightRects.w + 'px',
+            top: spotlightRects.top + 'px',
+            right: 0,
+            height: spotlightRects.h + 'px',
+          }"></div>
+        </template>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-.canvas-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  background: rgba(0, 0, 0, 0.85);
+/* >>> inline panel, not a fullscreen popup - stays in the page's normal flow so the
+   sources/mixer lists below it stay reachable and scrollable while this is open */
+.canvas-panel {
+  width: 75%;
+  max-width: 1100px;
+  margin: 0 auto 16px;
+  background: #0a0a0d;
+  border: 1px solid #2a2a30;
   display: flex;
   flex-direction: column;
+}
+
+@media (max-width: 900px) {
+  .canvas-panel {
+    width: 100%;
+  }
 }
 
 .canvas-topbar {
@@ -425,13 +440,20 @@ const spotlightRects = computed(() => {
 .canvas-loading {
   color: #555;
   font-size: 13px;
+  text-align: center;
+  padding: 20px;
+}
+.canvas-loading-hint {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #444;
+  max-width: 420px;
 }
 
 .canvas-stage {
   position: relative;
-  max-width: 100%;
-  max-height: 100%;
-  width: min(100%, calc((100vh - 90px) * 16 / 9));
+  width: 100%;
   background: #000;
   overflow: hidden;
   border: 1px solid #2a2a30;
