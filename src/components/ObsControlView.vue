@@ -132,6 +132,12 @@ const scenes = ref<SceneInfo[]>([]);
 const selectedScene = ref("");
 const sources = ref<SourceInfo[]>([]);
 const sourcesLoading = ref(false);
+// >>> shared with the fullscreen canvas (v-model) - clicking a row here, a box in the
+// >>> canvas, or a row in the canvas's own sidebar all update the same selection
+const selectedListSourceId = ref<number | null>(null);
+function toggleListSelect(id: number) {
+  selectedListSourceId.value = selectedListSourceId.value === id ? null : id;
+}
 
 const sceneBindings = ref<SceneBind[]>([]);
 const sourceBindings = ref<SourceBind[]>([]);
@@ -353,7 +359,8 @@ async function refreshAllShots() {
   if (
     !agentConnected.value ||
     !obsConnected.value ||
-    !agentStatus.value?.screenshots
+    !agentStatus.value?.screenshots ||
+    canvasSceneName.value // <<< fullscreen canvas takes over the screenshot budget for its one scene
   )
     return;
   // >>> sequential, live scene first - hidden scenes skip unless they're the live one
@@ -399,41 +406,63 @@ function lockForNavigation() {
 // vvv live/edit mode + staged (unsaved) changes vvv
 const editMode = ref(true); // <<< default: edit mode, nothing applies until Save
 const pendingSceneName = ref<string | null>(null);
+interface SourceTransform {
+  positionX: number;
+  positionY: number;
+  scaleX: number;
+  scaleY: number;
+  rotation: number;
+}
 interface PendingSourceEdit {
   scene: string;
   sceneItemId: number;
   sourceName: string;
   isAudioSource: boolean;
-  baseline: { visible: boolean; muted: boolean; volumePercent: number; sceneItemIndex: number };
+  baseline: {
+    visible: boolean;
+    muted: boolean;
+    volumePercent: number;
+    sceneItemIndex: number;
+    transform: SourceTransform;
+  };
   visible?: boolean;
   muted?: boolean;
   volumePercent?: number;
   sceneItemIndex?: number;
+  transform?: SourceTransform;
 }
 const pendingSourceEdits = ref<Record<string, PendingSourceEdit>>({});
 function sourceEditKey(scene: string, sceneItemId: number): string {
   return `${scene} ${sceneItemId}`;
 }
-function getPendingEdit(src: any): PendingSourceEdit | undefined {
-  return pendingSourceEdits.value[sourceEditKey(selectedScene.value, src.sceneItemId)];
+function getPendingEdit(src: any, scene: string = selectedScene.value): PendingSourceEdit | undefined {
+  return pendingSourceEdits.value[sourceEditKey(scene, src.sceneItemId)];
 }
-// >>> creates the entry (with a baseline snapshot) on first edit, reuses it after
+// >>> creates the entry (with a baseline snapshot) on first edit, reuses it after 
 function stageSourceEdit(
   src: any,
-  patch: Partial<Pick<PendingSourceEdit, "visible" | "muted" | "volumePercent" | "sceneItemIndex">>,
+  patch: Partial<Pick<PendingSourceEdit, "visible" | "muted" | "volumePercent" | "sceneItemIndex" | "transform">>,
+  scene: string = selectedScene.value,
 ) {
-  const key = sourceEditKey(selectedScene.value, src.sceneItemId);
+  const key = sourceEditKey(scene, src.sceneItemId);
   const existing = pendingSourceEdits.value[key];
   const entry: PendingSourceEdit = existing ?? {
-    scene: selectedScene.value,
+    scene,
     sceneItemId: src.sceneItemId,
     sourceName: src.sourceName,
     isAudioSource: !!src.isAudioSource,
     baseline: {
-      visible: src.visible,
+      visible: src.visible ?? src.sceneItemEnabled,
       muted: !!src.muted,
       volumePercent: src.volumePercent ?? 100,
       sceneItemIndex: src.sceneItemIndex,
+      transform: {
+        positionX: src.positionX ?? 0,
+        positionY: src.positionY ?? 0,
+        scaleX: src.scaleX ?? 1,
+        scaleY: src.scaleY ?? 1,
+        rotation: src.rotation ?? 0,
+      },
     },
   };
   pendingSourceEdits.value = {
@@ -441,17 +470,38 @@ function stageSourceEdit(
     [key]: { ...entry, ...patch },
   };
 }
+function transformEq(a: SourceTransform, b: SourceTransform): boolean {
+  return (
+    a.positionX === b.positionX &&
+    a.positionY === b.positionY &&
+    a.scaleX === b.scaleX &&
+    a.scaleY === b.scaleY &&
+    a.rotation === b.rotation
+  );
+}
 function pendingEditIsNoop(e: PendingSourceEdit): boolean {
   return (
     (e.visible === undefined || e.visible === e.baseline.visible) &&
     (e.muted === undefined || e.muted === e.baseline.muted) &&
     (e.volumePercent === undefined || e.volumePercent === e.baseline.volumePercent) &&
-    (e.sceneItemIndex === undefined || e.sceneItemIndex === e.baseline.sceneItemIndex)
+    (e.sceneItemIndex === undefined || e.sceneItemIndex === e.baseline.sceneItemIndex) &&
+    (e.transform === undefined || transformEq(e.transform, e.baseline.transform))
   );
 }
 const pendingCategory = ref<{ id: string; name: string; boxArt: string } | null>(
   null,
 );
+
+// >>> not-yet-created browser sources staged in edit mode - no real sceneItemId until Save
+interface PendingCreate {
+  id: string; // <<< client-side only, for :key / removal
+  scene: string;
+  name: string;
+  url: string;
+  width: number;
+  height: number;
+}
+const pendingCreates = ref<PendingCreate[]>([]);
 
 const pendingChanges = computed(() => {
   const list: string[] = [];
@@ -468,7 +518,10 @@ const pendingChanges = computed(() => {
       list.push(`${label} volume → ${e.volumePercent}%`);
     if (e.sceneItemIndex !== undefined && e.sceneItemIndex !== e.baseline.sceneItemIndex)
       list.push(`${label} reordered`);
+    if (e.transform !== undefined && !transformEq(e.transform, e.baseline.transform))
+      list.push(`${label} repositioned`);
   }
+  for (const c of pendingCreates.value) list.push(`+ ${c.name}`);
   if (pendingCategory.value && pendingCategory.value.id !== currentCategoryId.value)
     list.push(`Category → ${pendingCategory.value.name}`);
   return list;
@@ -598,7 +651,11 @@ async function saveChanges() {
       tasks.push(setSourceVolume(ref_, e.volumePercent));
     if (e.sceneItemIndex !== undefined && e.sceneItemIndex !== e.baseline.sceneItemIndex)
       tasks.push(setSourceIndex(ref_, e.sceneItemIndex, e.scene));
+    if (e.transform !== undefined && !transformEq(e.transform, e.baseline.transform))
+      tasks.push(setSourceTransform(ref_, e.transform, e.scene));
   }
+  for (const c of pendingCreates.value)
+    tasks.push(createSourceNow(c.scene, c.name, c.url, c.width, c.height));
   if (pendingCategory.value && pendingCategory.value.id !== currentCategoryId.value)
     tasks.push(
       switchCategory(
@@ -611,6 +668,7 @@ async function saveChanges() {
   if (gen === requestGen.value) {
     pendingSceneName.value = null;
     pendingSourceEdits.value = {};
+    pendingCreates.value = [];
     pendingCategory.value = null;
   }
 }
@@ -618,6 +676,7 @@ async function saveChanges() {
 function discardChanges() {
   pendingSceneName.value = null;
   pendingSourceEdits.value = {};
+  pendingCreates.value = [];
   pendingCategory.value = null;
 }
 // ^^^ live/edit mode + staged changes ^^^
@@ -1023,7 +1082,11 @@ async function loadSources(sceneName: string, opts: { silent?: boolean } = {}) {
       const rawSources = ((await res.json()) as any).sources ?? [];
       if (gen !== requestGen.value) return;
 
-      sources.value = rawSources.map((s: any) => ({ ...s, visible: s.sceneItemEnabled }));
+      // >>> OBS-websocket's own array order came out backwards vs what OBS's Sources
+      // >>> panel shows - reverse it instead of re-deriving from sceneItemIndex directly
+      sources.value = rawSources
+        .map((s: any) => ({ ...s, visible: s.sceneItemEnabled }))
+        .reverse();
     }
   } catch { }
   if (gen === requestGen.value) sourcesLoading.value = false;
@@ -1064,6 +1127,22 @@ async function setSourceIndex(
       method: "POST",
       headers: { ...authHeaders.value, "Content-Type": "application/json" },
       body: JSON.stringify({ scene, sceneItemId: src.sceneItemId, sceneItemIndex }),
+    });
+  } catch { }
+  if (scene === selectedScene.value) await loadSources(scene, { silent: true });
+}
+
+async function setSourceTransform(
+  src: { sceneItemId: number },
+  transform: SourceTransform,
+  scene: string = selectedScene.value,
+) {
+  if (!session.value) return;
+  try {
+    await fetch(`${API}/obs/${session.value.channel}/source/transform`, {
+      method: "POST",
+      headers: { ...authHeaders.value, "Content-Type": "application/json" },
+      body: JSON.stringify({ scene, sceneItemId: src.sceneItemId, transform }),
     });
   } catch { }
   if (scene === selectedScene.value) await loadSources(scene, { silent: true });
@@ -1374,6 +1453,27 @@ function pickAddSourceWidget(id: string) {
   if (w && !addSourceName.value.trim()) addSourceName.value = w.name;
 }
 
+async function createSourceNow(
+  scene: string,
+  name: string,
+  url: string,
+  width: number,
+  height: number,
+) {
+  if (!session.value) return;
+  try {
+    const res = await fetch(`${API}/obs/${session.value.channel}/source`, {
+      method: "POST",
+      headers: { ...authHeaders.value, "Content-Type": "application/json" },
+      body: JSON.stringify({ scene, name, url, width, height }),
+    });
+    if (scene === selectedScene.value) await loadSources(scene, { silent: true });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function submitAddSource() {
   if (!session.value || !selectedScene.value) return;
   const name = addSourceName.value.trim();
@@ -1387,31 +1487,42 @@ async function submitAddSource() {
     addSourceError.value = "Name and URL are required";
     return;
   }
-  addSourceSaving.value = true;
-  addSourceError.value = "";
-  try {
-    const res = await fetch(`${API}/obs/${session.value.channel}/source`, {
-      method: "POST",
-      headers: { ...authHeaders.value, "Content-Type": "application/json" },
-      body: JSON.stringify({
+
+  // >>> edit mode: stage it - no real sceneItemId until Save actually creates it
+  if (editMode.value) {
+    pendingCreates.value = [
+      ...pendingCreates.value,
+      {
+        id: crypto.randomUUID(),
         scene: selectedScene.value,
         name,
         url,
         width: addSourceWidth.value,
         height: addSourceHeight.value,
-      }),
-    });
-    if (res.ok) {
-      showAddSource.value = false;
-      await loadSources(selectedScene.value);
-    } else {
-      const d = await res.json().catch(() => ({}) as any);
-      addSourceError.value = d.error ?? "Failed to add source";
-    }
-  } catch {
+      },
+    ];
+    showAddSource.value = false;
+    return;
+  }
+
+  addSourceSaving.value = true;
+  addSourceError.value = "";
+  const ok = await createSourceNow(
+    selectedScene.value,
+    name,
+    url,
+    addSourceWidth.value,
+    addSourceHeight.value,
+  );
+  if (ok) {
+    showAddSource.value = false;
+  } else {
     addSourceError.value = "Failed to add source";
   }
   addSourceSaving.value = false;
+}
+function removePendingCreate(id: string) {
+  pendingCreates.value = pendingCreates.value.filter((c) => c.id !== id);
 }
 // ^^^ add browser source ^^^
 
@@ -1574,7 +1685,7 @@ watch(
             <span class="obs-live-stat-label">bitrate</span>
             <span class="obs-live-stat-value">{{
               bitrateLabel ?? "not streaming"
-            }}</span>
+              }}</span>
           </div>
           <div class="obs-live-stat">
             <span class="obs-live-stat-label">preview size</span>
@@ -1710,7 +1821,9 @@ watch(
       </template>
 
       <ObsSceneCanvas v-if="canvasSceneName && session" :channel="session.channel" :scene-name="canvasSceneName"
-        :auth-headers="authHeaders" @close="canvasSceneName = null" />
+        :auth-headers="authHeaders" :edit-mode="editMode" :pending-edits="pendingSourceEdits"
+        :selected-id="selectedListSourceId" @update:selected-id="selectedListSourceId = $event"
+        @stage="(src, patch) => stageSourceEdit(src, patch, canvasSceneName!)" @close="canvasSceneName = null" />
 
       <!-- >>> builder still works even if obs itself isn't connected -->
       <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"
@@ -1721,7 +1834,7 @@ watch(
               <label class="ep-field-label">sources
                 <span v-if="selectedScene" class="ep-field-hint">{{
                   selectedScene
-                  }}</span></label>
+                }}</span></label>
               <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
                 @click="openAddSource" v-html="iconSvgFor('plus')"></button>
             </div>
@@ -1736,23 +1849,33 @@ watch(
                 </div>
               </template>
               <div v-for="(src, i) in sources as any[]" :key="src.sceneItemId" class="obs-source-row"
-                :class="{ pending: isSourcePending(src), dragging: dragSourceIndex === i }" draggable="true"
-                @dragstart="onSourceDragStart(i)" @dragover.prevent @drop="onSourceDrop(i)">
+                :class="{ pending: isSourcePending(src), dragging: dragSourceIndex === i, selected: selectedListSourceId === src.sceneItemId }"
+                draggable="true" @dragstart="onSourceDragStart(i)" @dragover.prevent @drop="onSourceDrop(i)"
+                @click="toggleListSelect(src.sceneItemId)">
                 <span class="obs-drag-handle" title="Drag to reorder" v-html="iconSvgFor('grip')"></span>
                 <span class="obs-source-name">{{ src.sourceName }}</span>
                 <span v-if="isSourcePending(src)" class="pending-tag">pending</span>
                 <button class="obs-vis-btn" :class="{ on: effectiveVisible(src) }"
-                  :disabled="pendingSources.has(src.sceneItemId)" @click="onToggleVisible(src)">
+                  :disabled="pendingSources.has(src.sceneItemId)" @click.stop="onToggleVisible(src)">
                   {{ effectiveVisible(src) ? "visible" : "hidden" }}
                 </button>
                 <template v-if="src.isAudioSource">
                   <button class="obs-mute-btn" :class="{ muted: effectiveMuted(src) }"
-                    :disabled="pendingSources.has(src.sceneItemId)" @click="onToggleMute(src)">
+                    :disabled="pendingSources.has(src.sceneItemId)" @click.stop="onToggleMute(src)">
                     {{ effectiveMuted(src) ? "muted" : "unmuted" }}
                   </button>
                 </template>
               </div>
-              <div v-if="!sources.length && !sourcesLoading" class="ep-empty">
+              <div v-for="c in pendingCreates.filter((c) => c.scene === selectedScene)" :key="c.id"
+                class="obs-source-row pending">
+                <span class="obs-source-name">{{ c.name }}</span>
+                <span class="pending-tag">pending (new)</span>
+                <button class="ep-btn-action del" title="Cancel" @click="removePendingCreate(c.id)">
+                  <span v-html="iconSvgFor('x')"></span>
+                </button>
+              </div>
+              <div v-if="!sources.length && !sourcesLoading && !pendingCreates.some((c) => c.scene === selectedScene)"
+                class="ep-empty">
                 {{
                   selectedScene
                     ? "no sources in this scene"
@@ -1766,7 +1889,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-                }}</span></label>
+              }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
                 :class="{ pending: isSourcePending(src) }">
@@ -2129,7 +2252,7 @@ watch(
           <div v-if="addSourceError" class="ep-toast error">{{ addSourceError }}</div>
 
           <button class="ep-btn-save" :disabled="addSourceSaving" @click="submitAddSource">
-            {{ addSourceSaving ? "adding..." : "add source" }}
+            {{ addSourceSaving ? "adding..." : editMode ? "stage source (added on Save)" : "add source" }}
           </button>
         </div>
       </div>
@@ -3879,6 +4002,15 @@ watch(
 .obs-mixer-row.pending {
   border-left: 2px solid #e5c07b;
   background: #e5c07b0d;
+}
+
+.obs-source-row {
+  cursor: pointer;
+}
+
+.obs-source-row.selected {
+  border-color: #f14949;
+  background: #f1494911;
 }
 
 /* >>> "switch to this scene on Save" - separate from clicking the card (which just browses) */
