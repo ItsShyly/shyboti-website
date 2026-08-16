@@ -447,7 +447,7 @@ function onStageClick(e: MouseEvent) {
           <div class="canvas-sidebar">
             <div class="canvas-sidebar-title">sources</div>
             <div class="canvas-sidebar-list">
-              <div v-for="it in items" :key="it.sceneItemId" class="canvas-sidebar-row"
+              <div v-for="it in placeableItems" :key="it.sceneItemId" class="canvas-sidebar-row"
                 :class="{ selected: it.sceneItemId === selectedId }" @click="select(it.sceneItemId)">
                 <span class="canvas-sidebar-name">{{ it.sourceName }}</span>
                 <button class="canvas-sidebar-vis" :class="{ on: effective(it).sceneItemEnabled }"
@@ -455,7 +455,7 @@ function onStageClick(e: MouseEvent) {
                   {{ effective(it).sceneItemEnabled ? "visible" : "hidden" }}
                 </button>
               </div>
-              <div v-if="!items.length && !loading" class="canvas-sidebar-empty">no sources</div>
+              <div v-if="!placeableItems.length && !loading" class="canvas-sidebar-empty">no browser sources</div>
             </div>
           </div>
         </div>
