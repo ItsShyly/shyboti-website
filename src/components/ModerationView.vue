@@ -18,7 +18,7 @@ const canManage = computed(
   () => (channelRole.value?.permissions.moderation_manage ?? false) && botPresent.value,
 );
 
-interface BlockedTerm { id: number; term: string; action: string; duration: number; is_regex: number; is_active: number; group_id: number | null; reason: string }
+interface BlockedTerm { id: number; term: string; action: string; duration: number; is_regex: number; is_active: number; group_id: number | null; reason: string; twitch_term_id: string | null }
 interface SpamFilter { id: number; type: string; threshold: number; min_letters: number; options: string; action: string; duration: number; is_active: number; group_id: number | null; reason: string }
 interface SpamOptions { emote_target?: "emoji" | "7tv" | "twitch" | "all"; ignore_7tv?: boolean }
 interface NukeConfig { id: number; trigger: string; duration: number; label: string; lookback: number; stay_active: number; match_exact: number; is_regex: number; expires_at: number | null; group_id: number | null; action: string; reason: string }
@@ -80,13 +80,16 @@ function fmtDur(s: number) {
   return `${Math.floor(s / 3600)}h`;
 }
 
-const ACTION_COLORS: Record<string, string> = { delete: "#e5c07b", timeout: "#c792ea", ban: "#f14949" };
+const ACTION_COLORS: Record<string, string> = { delete: "#e5c07b", timeout: "#c792ea", ban: "#f14949", automod: "#9d6cff" };
 function actionPillStyle(action: string) {
   const c = ACTION_COLORS[action] ?? "#888";
   return { color: c, borderColor: c + "44", background: c + "11" };
 }
 function actionLabel(action: string) {
-  return action === "delete" ? t("mod.action.delete") : action === "timeout" ? t("mod.action.timeout") : t("mod.action.ban");
+  return action === "delete" ? t("mod.action.delete")
+    : action === "timeout" ? t("mod.action.timeout")
+      : action === "automod" ? t("mod.action.automod")
+        : t("mod.action.ban");
 }
 
 // >>> groups are just a shared reason - action/duration always come from the item itself
@@ -267,7 +270,7 @@ const fGroupName = computed(() =>
 
 // >>>  blocked term form
 const fTerm = ref("");
-const fTermAction = ref<"delete" | "timeout" | "ban">("delete");
+const fTermAction = ref<"delete" | "timeout" | "ban" | "automod">("delete");
 const fTermDur = ref(300);
 // >>> no manual toggle anymore - "/pattern/flags" syntax in the term itself is the signal
 const fTermIsRegex = computed(() => looksLikeRegex(fTerm.value));
@@ -848,12 +851,18 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 <div class="mod-item-main">
                   <div class="mod-item-title">
                     <span v-if="term.is_regex" class="item-badge regex-badge">{{ t("mod.badge.regex") }}</span>
+                    <span v-if="term.action === 'automod'" class="item-badge"
+                      :class="term.twitch_term_id ? 'automod-synced-badge' : 'automod-pending-badge'"
+                      :title="term.twitch_term_id ? t('mod.badge.automod_synced_hint') : t('mod.badge.automod_pending_hint')">
+                      {{ term.twitch_term_id ? t("mod.badge.automod_synced") : t("mod.badge.automod_pending") }}
+                    </span>
                     <span class="item-term">{{ term.term }}</span>
                   </div>
                   <div class="mod-item-meta">
                     <span class="item-action ep-meta-pill" :style="actionPillStyle(term.action)">{{
                       actionLabel(term.action) }}</span>
-                    <span v-if="term.action !== 'delete'" class="item-dur">{{ fmtDur(term.duration) }}</span>
+                    <span v-if="term.action !== 'delete' && term.action !== 'automod'" class="item-dur">{{
+                      fmtDur(term.duration) }}</span>
                   </div>
                 </div>
                 <div class="ep-row-actions">
@@ -1053,9 +1062,16 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 <option value="delete">{{ t("mod.action.delete") }}</option>
                 <option value="timeout">{{ t("mod.action.timeout") }}</option>
                 <option value="ban">{{ t("mod.action.ban") }}</option>
+                <option value="automod">{{ t("mod.action.automod") }}</option>
               </select>
             </div>
-            <div v-if="fTermAction !== 'delete'" class="ep-field-group">
+            <div v-if="fTermAction === 'automod'" class="ep-field-hint">
+              {{ t("mod.action.automod_hint") }}
+            </div>
+            <div v-if="fTermAction === 'automod' && fTermIsRegex" class="ep-warning">
+              {{ t("mod.action.automod_regex_warning") }}
+            </div>
+            <div v-if="fTermAction !== 'delete' && fTermAction !== 'automod'" class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.field.duration") }} <span class="ep-field-hint">s</span></label>
               <input v-model.number="fTermDur" type="number" min="1" class="ep-field-input" />
             </div>
@@ -1499,6 +1515,18 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   border: 1px solid rgba(199, 146, 234, 0.3)
 }
 
+.automod-synced-badge {
+  color: #23d18b;
+  background: rgba(35, 209, 139, 0.12);
+  border: 1px solid rgba(35, 209, 139, 0.3)
+}
+
+.automod-pending-badge {
+  color: #e5c07b;
+  background: rgba(229, 192, 123, 0.12);
+  border: 1px solid rgba(229, 192, 123, 0.3)
+}
+
 .exact-badge {
   color: #e5c07b;
   background: rgba(229, 192, 123, 0.12);
@@ -1620,6 +1648,14 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   display: flex;
   flex-direction: column;
   gap: 10px
+}
+
+.ep-warning {
+  font-size: 11px;
+  color: #e5c07b;
+  background: rgba(229, 192, 123, 0.08);
+  border-left: 2px solid #e5c07b;
+  padding: 8px 10px;
 }
 
 .ep-toggle-label {

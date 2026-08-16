@@ -326,7 +326,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "countdown.cancel": "Cancel",
     "countdown.share": "Copy to another channel",
     "countdown.share.title": "Share countdown",
-    "countdown.share.sub": "Copy this countdown to another channel you have access to.",
+    "countdown.share.sub":
+      "Copy this countdown to another channel you have access to.",
     "countdown.share.select": "Select target channel…",
     "countdown.share.btn": "Copy countdown",
     "countdown.share.copying": "Copying…",
@@ -414,6 +415,16 @@ const translations: Record<Locale, Record<string, string>> = {
     "mod.action.delete": "Auto-Delete",
     "mod.action.timeout": "Timeout",
     "mod.action.ban": "Ban",
+    "mod.action.automod": "Automod",
+    "mod.action.automod_hint":
+      "Pushes this term to Twitch's Blocked Terms list",
+    "mod.action.automod_regex_warning":
+      "Twitch's Blocked Terms list only triggers plain text, not regex",
+    "mod.badge.automod_synced": "synced",
+    "mod.badge.automod_synced_hint": "Pushed to Twitch's Blocked Terms list.",
+    "mod.badge.automod_pending": "pending",
+    "mod.badge.automod_pending_hint":
+      "Not yet pushed to Twitch (missing scope, or the push failed) - re-auth via the dashboard if this persists.",
     "mod.sync.active": "synced from",
     "mod.sync.config": "Import",
     "mod.sync.select": "Select channel…",
@@ -488,7 +499,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "mod.field.action": "Action",
     "mod.field.duration": "Duration",
     "mod.field.reason": "Reason",
-    "mod.field.reason_hint": "optional - shown as the timeout/ban reason instead of the default",
+    "mod.field.reason_hint":
+      "optional - shown as the timeout/ban reason instead of the default",
     "mod.field.reason_from_group": "Inherited from group",
     "mod.field.type": "Options",
     "mod.field.spam_type": "Filter type",
@@ -730,7 +742,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.cmd": "Create or manage custom commands.",
     "cmddesc.command": "Create or manage custom commands.",
     "cmddesc.nuke": "Mass-action everyone who said a trigger phrase recently.",
-    "cmddesc.birthday": "Store birthdays and get a daily chat shoutout on the day.",
+    "cmddesc.birthday":
+      "Store birthdays and get a daily chat shoutout on the day.",
     "cmddesc.timer": "Manage auto-posting chat timers.",
     "cmddesc.note": "Create or retrieve shareable notes.",
     "cmddesc.bottle": "Play spin the bottle.",
@@ -1019,7 +1032,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "edit.aliases_placeholder": "kurzname",
     "edit.aliases_add": "+ Hinzufügen",
     "edit.aliases_empty": "Noch keine Aliase",
-    "edit.alias_global_hint": "eingebauter Alias, kann hier nicht entfernt werden",
+    "edit.alias_global_hint":
+      "eingebauter Alias, kann hier nicht entfernt werden",
     "edit.alias_error": "Alias konnte nicht erstellt werden",
     "edit.flags": "Flags",
     "edit.flags_empty": "Keine Flags für diesen Command",
@@ -1154,7 +1168,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "countdown.cancel": "Abbrechen",
     "countdown.share": "In anderen Channel kopieren",
     "countdown.share.title": "Countdown teilen",
-    "countdown.share.sub": "Diesen Countdown in einen anderen Channel kopieren, auf den du Zugriff hast.",
+    "countdown.share.sub":
+      "Diesen Countdown in einen anderen Channel kopieren, auf den du Zugriff hast.",
     "countdown.share.select": "Ziel-Channel auswählen…",
     "countdown.share.btn": "Countdown kopieren",
     "countdown.share.copying": "Wird kopiert…",
@@ -1245,6 +1260,17 @@ const translations: Record<Locale, Record<string, string>> = {
     "mod.action.delete": "Automatisch löschen",
     "mod.action.timeout": "Timeout",
     "mod.action.ban": "Bannen",
+    "mod.action.automod": "Automod",
+    "mod.action.automod_hint":
+      "Sendet diesen Begriff an Twitchs eigene Blocked-Terms-Liste",
+    "mod.action.automod_regex_warning":
+      "Twitchs Blocked-Terms-Liste erkennt nur reinen Text, keine Regex!",
+    "mod.badge.automod_synced": "synchronisiert",
+    "mod.badge.automod_synced_hint":
+      "An Twitchs Blocked-Terms-Liste übertragen.",
+    "mod.badge.automod_pending": "ausstehend",
+    "mod.badge.automod_pending_hint":
+      "Noch nicht an Twitch übertragen (fehlende Berechtigung oder Übertragung fehlgeschlagen)",
     "mod.sync.active": "synchronisiert von",
     "mod.sync.config": "Importieren",
     "mod.sync.select": "Channel auswählen…",
@@ -1256,7 +1282,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "mod.sync.last": "Letzter Abruf:",
     "mod.share": "In anderen Channel kopieren",
     "mod.share.title": "Teilen",
-    "mod.share.sub": "In einen anderen Channel kopieren, auf den du Zugriff hast.",
+    "mod.share.sub":
+      "In einen anderen Channel kopieren, auf den du Zugriff hast.",
     "mod.share.select": "Ziel-Channel auswählen…",
     "mod.share.btn": "Kopieren",
     "mod.share.copying": "Wird kopiert…",
@@ -1382,8 +1409,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.commands_delete": "Löschen",
     "perm.commands_delete.desc": "Eigene Commands dauerhaft löschen.",
     "perm.commands_mod": "Moderator-Status",
-    "perm.commands_mod.desc":
-      "Zählt als Moderator für nur-Mod Chat-Commands.",
+    "perm.commands_mod.desc": "Zählt als Moderator für nur-Mod Chat-Commands.",
     "perm.automations_view": "Anzeigen",
     "perm.automations_view.desc": "Timer und Trigger sehen.",
     "perm.automations_toggle": "Umschalten",
@@ -1549,14 +1575,17 @@ const translations: Record<Locale, Record<string, string>> = {
       "Unterhalte dich mit Shyboti. Berechtigte Mods aus dem Dashbaord können auch Commands, timer sowie trigger erstellen lassen - einfach beschreiben was du brauchst.",
     "cmddesc.7tv": "7TV-Emotes nachschlagen oder verwalten.",
     "cmddesc.say": "Lässt den Bot eine Nachricht senden.",
-    "cmddesc.to": "Alias für +timeout - sperrt einen Nutzer für eine bestimmte Zeit.",
+    "cmddesc.to":
+      "Alias für +timeout - sperrt einen Nutzer für eine bestimmte Zeit.",
     "cmddesc.user": "Zeigt Infos über einen Twitch-Nutzer.",
     "cmddesc.talk": "Schaltet automatische Chat-Antworten um.",
     "cmddesc.verify": "Verifiziert einen Nutzer im Channel.",
     "cmddesc.cmd": "Erstelle oder verwalte eigene Commands.",
     "cmddesc.command": "Erstelle oder verwalte eigene Commands.",
-    "cmddesc.nuke": "Timeoutet/bannt alle, die kürzlich eine Trigger-Phrase gesagt haben.",
-    "cmddesc.birthday": "Speichert Geburtstage und postet am Tag selbst einen Chat-Gruß.",
+    "cmddesc.nuke":
+      "Timeoutet/bannt alle, die kürzlich eine Trigger-Phrase gesagt haben.",
+    "cmddesc.birthday":
+      "Speichert Geburtstage und postet am Tag selbst einen Chat-Gruß.",
     "cmddesc.timer": "Verwalte automatische Chat-Timer.",
     "cmddesc.note": "Erstelle oder rufe teilbare Notizen ab.",
     "cmddesc.bottle": "Spielt Flaschendrehen.",
@@ -1569,13 +1598,15 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.leave": "Lässt den Bot einen Channel verlassen.",
     "cmddesc.create": "Erstelle schnell Commands, Timer, Trigger oder Filter.",
     "cmddesc.delete": "Löscht die Nachricht, auf die du geantwortet hast.",
-    "cmddesc.timeout": "Sperrt einen Nutzer für eine bestimmte Zeit. Alias: +to.",
+    "cmddesc.timeout":
+      "Sperrt einen Nutzer für eine bestimmte Zeit. Alias: +to.",
     "cmddesc.ban": "Bannt einen Nutzer aus dem Channel.",
     "cmddesc.git": "Nur Owner: zeigt letzte Commits oder wechselt den Branch.",
     "cmddesc.refresh": "Aktualisiert den 7TV-Emote-Cache für diesen Channel.",
     "cmddesc.pm2": "Nur Owner: startet den Bot-Prozess neu.",
     "cmddesc.blumis": "Verschickt einen Strauß Blumen-Emojis.",
-    "cmddesc.kiss": "Schickt einen Kuss an einen Nutzer oder zufälligen Chatter.",
+    "cmddesc.kiss":
+      "Schickt einen Kuss an einen Nutzer oder zufälligen Chatter.",
     "cmddesc.kok": "Zeigt deine gemessene Größe.",
     "cmddesc.rz": "Zufallszahlengenerator.",
     "cmddesc.spam": "Spammt eine Nachricht mehrfach.",
@@ -1583,7 +1614,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.eg": "Emote-Ratespiel - errate das von der KI beschriebene Emote.",
     "cmddesc.g": "Universeller Rate-Befehl für das aktive Spiel.",
     "cmddesc.hle": "Höher oder Niedriger mit Emotes.",
-    "cmddesc.wstm": "Wer hat das geschrieben - errate, wer eine zufällige Nachricht verfasst hat.",
+    "cmddesc.wstm":
+      "Wer hat das geschrieben - errate, wer eine zufällige Nachricht verfasst hat.",
     "cmddesc.bans": "Zeigt aktive Bans eines Nutzers über verfolgte Channels.",
 
     // vvv OBS Widgets page vvv
