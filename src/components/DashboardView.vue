@@ -28,7 +28,15 @@ interface ActivityEntry {
   | "trigger_changed"
   | "trigger_removed"
   | "trigger_enabled"
-  | "trigger_disabled";
+  | "trigger_disabled"
+  | "countdown_added"
+  | "countdown_changed"
+  | "countdown_removed"
+  | "countdown_started"
+  | "countdown_stopped"
+  | "automod_held"
+  | "mod_add"
+  | "mod_remove";
   actor: string;
   target: string;
   detail: string;
@@ -80,7 +88,14 @@ const TYPE_GROUPS = computed(() => [
   },
   {
     label: t("dash.filter.moderation"),
-    types: ["ban", "unban", "timeout"] as const,
+    types: [
+      "ban",
+      "unban",
+      "timeout",
+      "automod_held",
+      "mod_add",
+      "mod_remove",
+    ] as const,
   },
   {
     label: t("dash.filter.automations"),
@@ -95,6 +110,11 @@ const TYPE_GROUPS = computed(() => [
       "trigger_removed",
       "trigger_enabled",
       "trigger_disabled",
+      "countdown_added",
+      "countdown_changed",
+      "countdown_removed",
+      "countdown_started",
+      "countdown_stopped",
     ] as const,
   },
 ]);
@@ -269,75 +289,138 @@ function groupedActivity() {
 }
 
 // vvv TYPE META vvv
+// >>> icon = key into ICONS below (Feather-style stroke paths), not a text glyph
 const TYPE_META = computed(
   () =>
     ({
-      cmd_added: { icon: "+", color: "#23d18b", label: t("type.cmd_added") },
+      cmd_added: { icon: "plus", color: "#23d18b", label: t("type.cmd_added") },
       cmd_changed: {
-        icon: "✎",
+        icon: "edit",
         color: "#e5c07b",
         label: t("type.cmd_changed"),
       },
       cmd_removed: {
-        icon: "-",
+        icon: "minus",
         color: "#f14949",
         label: t("type.cmd_removed"),
       },
-      ban: { icon: "⊘", color: "#f14949", label: t("type.ban") },
-      unban: { icon: "✓", color: "#4ec9b0", label: t("type.unban") },
-      timeout: { icon: "⏱", color: "#c792ea", label: t("type.timeout") },
+      ban: { icon: "ban", color: "#f14949", label: t("type.ban") },
+      unban: { icon: "check", color: "#4ec9b0", label: t("type.unban") },
+      timeout: { icon: "clock", color: "#c792ea", label: t("type.timeout") },
       timer_added: {
-        icon: "+",
+        icon: "plus",
         color: "#23d18b",
         label: t("type.timer_added"),
       },
       timer_changed: {
-        icon: "✎",
+        icon: "edit",
         color: "#e5c07b",
         label: t("type.timer_changed"),
       },
       timer_removed: {
-        icon: "-",
+        icon: "minus",
         color: "#f14949",
         label: t("type.timer_removed"),
       },
       timer_enabled: {
-        icon: "▶",
+        icon: "play",
         color: "#23d18b",
         label: t("type.timer_enabled"),
       },
       timer_disabled: {
-        icon: "⏸",
+        icon: "pause",
         color: "#555555",
         label: t("type.timer_disabled"),
       },
       trigger_added: {
-        icon: "+",
+        icon: "plus",
         color: "#4ec9b0",
         label: t("type.trigger_added"),
       },
       trigger_changed: {
-        icon: "✎",
+        icon: "edit",
         color: "#e5c07b",
         label: t("type.trigger_changed"),
       },
       trigger_removed: {
-        icon: "-",
+        icon: "minus",
         color: "#f14949",
         label: t("type.trigger_removed"),
       },
       trigger_enabled: {
-        icon: "▶",
+        icon: "play",
         color: "#4ec9b0",
         label: t("type.trigger_enabled"),
       },
       trigger_disabled: {
-        icon: "⏸",
+        icon: "pause",
         color: "#555555",
         label: t("type.trigger_disabled"),
       },
+      countdown_added: {
+        icon: "plus",
+        color: "#4ec9b0",
+        label: t("type.countdown_added"),
+      },
+      countdown_changed: {
+        icon: "edit",
+        color: "#e5c07b",
+        label: t("type.countdown_changed"),
+      },
+      countdown_removed: {
+        icon: "minus",
+        color: "#f14949",
+        label: t("type.countdown_removed"),
+      },
+      countdown_started: {
+        icon: "play",
+        color: "#23d18b",
+        label: t("type.countdown_started"),
+      },
+      countdown_stopped: {
+        icon: "pause",
+        color: "#555555",
+        label: t("type.countdown_stopped"),
+      },
+      automod_held: {
+        icon: "alert-triangle",
+        color: "#e5c07b",
+        label: t("type.automod_held"),
+      },
+      mod_add: {
+        icon: "user-plus",
+        color: "#9d6cff",
+        label: t("type.mod_add"),
+      },
+      mod_remove: {
+        icon: "user-minus",
+        color: "#9d6cff",
+        label: t("type.mod_remove"),
+      },
     }) as Record<string, { icon: string; color: string; label: string }>,
 );
+
+// >>> Feather-style (MIT) stroke icon paths, keyed by TYPE_META.icon - viewBox 0 0 24 24, stroke=currentColor
+const ICONS: Record<string, string> = {
+  plus: `<line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>`,
+  minus: `<line x1="5" y1="12" x2="19" y2="12"></line>`,
+  edit: `<path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>`,
+  ban: `<circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>`,
+  check: `<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>`,
+  clock: `<circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>`,
+  play: `<polygon points="5 3 19 12 5 21 5 3"></polygon>`,
+  pause: `<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>`,
+  "alert-triangle": `<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>`,
+  "user-plus": `<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line>`,
+  "user-minus": `<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="23" y1="11" x2="17" y2="11"></line>`,
+  dot: `<circle cx="12" cy="12" r="3"></circle>`,
+};
+
+function iconSvg(type: string): string {
+  const name = TYPE_META.value[type]?.icon ?? "dot";
+  const inner = ICONS[name] ?? ICONS.dot;
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+}
 
 // vvv actions vvv
 function goToCommand(e: ActivityEntry) {
@@ -352,8 +435,39 @@ function goToLogs(e: ActivityEntry) {
 }
 
 function goToAutomations(e: ActivityEntry) {
-  const tab = e.type.startsWith("timer") ? "timers" : "triggers";
+  const tab = e.type.startsWith("timer")
+    ? "timers"
+    : e.type.startsWith("trigger")
+      ? "triggers"
+      : "countdowns";
   router.push({ path: "/automations", query: { tab } });
+}
+
+// >>> only ban/timeout/unban/automod/mod-list entries carry a real Twitch username as target -
+// >>> cmd/timer/trigger/countdown entries carry a resource name, which isn't a user
+const USER_TARGET_TYPES = new Set([
+  "ban",
+  "unban",
+  "timeout",
+  "automod_held",
+  "mod_add",
+  "mod_remove",
+]);
+
+function onTargetClick(e: ActivityEntry, evt: MouseEvent) {
+  evt.stopPropagation();
+  if (!e.target) return;
+  if (USER_TARGET_TYPES.has(e.type)) {
+    openUserPopup(e.target, e.channel, evt);
+  } else if (e.type.startsWith("cmd_")) {
+    goToCommand(e);
+  } else if (
+    e.type.startsWith("timer") ||
+    e.type.startsWith("trigger") ||
+    e.type.startsWith("countdown")
+  ) {
+    goToAutomations(e);
+  }
 }
 
 // >>> Open user popup - works for any entry with a target username
@@ -546,15 +660,13 @@ function fmtActor(actor: string) {
             <div class="feed-icon" :style="{
               color: TYPE_META[e.type]?.color,
               borderColor: TYPE_META[e.type]?.color + '44',
-            }">
-              {{ TYPE_META[e.type]?.icon ?? "•" }}
-            </div>
+            }" v-html="iconSvg(e.type)"></div>
 
             <div class="feed-body">
               <span class="feed-type" :style="{ color: TYPE_META[e.type]?.color }">{{ TYPE_META[e.type]?.label }}</span>
 
               <span class="feed-target" :class="{ 'mod-target': !!e.target }" @click.stop="
-                e.target && openUserPopup(e.target, e.channel, $event)
+                e.target && onTargetClick(e, $event)
                 ">{{ e.target }}</span>
 
               <span class="feed-by" v-if="e.actor">by {{ fmtActor(e.actor) }}</span>
@@ -566,7 +678,7 @@ function fmtActor(actor: string) {
 
             <div class="feed-right">
               <div class="feed-actions">
-                <button v-if="['ban', 'timeout', 'unban'].includes(e.type)" class="act-btn" title="View user logs"
+                <button v-if="USER_TARGET_TYPES.has(e.type)" class="act-btn" title="View user logs"
                   @click.stop="goToLogs(e)">
                   logs
                 </button>
@@ -576,7 +688,7 @@ function fmtActor(actor: string) {
                   edit
                 </button>
                 <button v-if="
-                  e.type.startsWith('timer') || e.type.startsWith('trigger')
+                  e.type.startsWith('timer') || e.type.startsWith('trigger') || e.type.startsWith('countdown')
                 " class="act-btn" title="View in Automations" @click.stop="goToAutomations(e)">
                   ↻ auto
                 </button>
@@ -835,6 +947,11 @@ function fmtActor(actor: string) {
   gap: 1px;
   overflow-y: auto;
   flex: 1;
+  scrollbar-width: none;
+}
+
+.feed::-webkit-scrollbar {
+  display: none;
 }
 
 /* Day header */
@@ -909,9 +1026,12 @@ function fmtActor(actor: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
   border: 1px solid;
-  font-weight: 700;
+}
+
+.feed-icon svg {
+  width: 14px;
+  height: 14px;
 }
 
 .feed-body {

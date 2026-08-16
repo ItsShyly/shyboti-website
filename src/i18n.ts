@@ -87,6 +87,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "type.countdown_removed": "Countdown removed",
     "type.countdown_started": "Countdown started",
     "type.countdown_stopped": "Countdown stopped",
+    "type.automod_held": "AutoMod held message",
+    "type.mod_add": "Moderator added",
+    "type.mod_remove": "Moderator removed",
 
     // vvv Commands vvv
     "cmd.title": "Commands",
@@ -903,6 +906,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "type.countdown_removed": "Countdown entfernt",
     "type.countdown_started": "Countdown gestartet",
     "type.countdown_stopped": "Countdown gestoppt",
+    "type.automod_held": "AutoMod hat Nachricht zurückgehalten",
+    "type.mod_add": "Moderator hinzugefügt",
+    "type.mod_remove": "Moderator entfernt",
 
     // vvv Commands vvv
     "cmd.title": "Befehle",
