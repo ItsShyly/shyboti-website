@@ -112,13 +112,16 @@ async function load() {
     }
     if (srcRes.ok) {
       const d = (await srcRes.json()) as { sources: CanvasItem[] };
-      items.value = d.sources ?? [];
+      // >>> same reversed-order fix as the main sources list 
+      items.value = (d.sources ?? []).slice().reverse();
     }
   } catch { }
   loading.value = false;
 }
-// >>> items placeable on the canvas need layout data - some item types (groups) don't have it
-const placeableItems = computed(() => items.value.filter((it) => it.width != null && it.height != null));
+// >>> items placeable on the canvas need actual visual footprint 
+const placeableItems = computed(() =>
+  items.value.filter((it) => (it.width ?? 0) > 0 && (it.height ?? 0) > 0),
+);
 
 async function loadScreenshot() {
   try {
@@ -258,7 +261,13 @@ function onDragEnd() {
   if (!d || !preview) return;
   const it = items.value.find((i) => i.sceneItemId === d.id);
   if (!it) return;
-  commitTransform(it, { ...currentTransform(it), positionX: preview.x, positionY: preview.y });
+
+  const original = { ...it };
+  const transform = { ...currentTransform(original), positionX: preview.x, positionY: preview.y };
+
+  it.positionX = preview.x;
+  it.positionY = preview.y;
+  commitTransform(original, transform);
 }
 // ^^^ drag-to-move ^^^
 
@@ -338,18 +347,29 @@ function onResizeEnd() {
   if (!r || !preview) return;
   const it = items.value.find((i) => i.sceneItemId === r.id);
   if (!it || !it.sourceWidth || !it.sourceHeight) return;
-  commitTransform(it, {
-    ...currentTransform(it),
+  const scaleX = preview.w / it.sourceWidth;
+  const scaleY = preview.h / it.sourceHeight;
+  // >>> snapshot BEFORE mutating, same reason as onDragEnd
+  const original = { ...it };
+  const transform = {
+    ...currentTransform(original),
     positionX: preview.x,
     positionY: preview.y,
-    scaleX: preview.w / it.sourceWidth,
-    scaleY: preview.h / it.sourceHeight,
-  });
+    scaleX,
+    scaleY,
+  };
+
+  it.positionX = preview.x;
+  it.positionY = preview.y;
+  it.width = preview.w;
+  it.height = preview.h;
+  it.scaleX = scaleX;
+  it.scaleY = scaleY;
+  commitTransform(original, transform);
 }
 // ^^^ corner resize ^^^
 
-// >>> drag/resize preview overrides effective() while actively dragging, so the box
-// >>> tracks the mouse smoothly instead of waiting on a round trip
+// >>> drag/resize preview overrides effective() while actively dragging
 function displayStyle(it: CanvasItem) {
   const s = scale();
   if (dragPreview.value?.id === it.sceneItemId) {

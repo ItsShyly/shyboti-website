@@ -132,12 +132,8 @@ const scenes = ref<SceneInfo[]>([]);
 const selectedScene = ref("");
 const sources = ref<SourceInfo[]>([]);
 const sourcesLoading = ref(false);
-// >>> shared with the fullscreen canvas (v-model) - clicking a row here, a box in the
-// >>> canvas, or a row in the canvas's own sidebar all update the same selection
+// >>> selection lives only in the fullscreen canvas (box click or its sidebar)
 const selectedListSourceId = ref<number | null>(null);
-function toggleListSelect(id: number) {
-  selectedListSourceId.value = selectedListSourceId.value === id ? null : id;
-}
 
 const sceneBindings = ref<SceneBind[]>([]);
 const sourceBindings = ref<SourceBind[]>([]);
@@ -1459,8 +1455,8 @@ async function createSourceNow(
   url: string,
   width: number,
   height: number,
-) {
-  if (!session.value) return;
+): Promise<{ ok: boolean; error?: string }> {
+  if (!session.value) return { ok: false, error: "not logged in" };
   try {
     const res = await fetch(`${API}/obs/${session.value.channel}/source`, {
       method: "POST",
@@ -1468,9 +1464,12 @@ async function createSourceNow(
       body: JSON.stringify({ scene, name, url, width, height }),
     });
     if (scene === selectedScene.value) await loadSources(scene, { silent: true });
-    return res.ok;
+    if (res.ok) return { ok: true };
+
+    const d = await res.json().catch(() => ({}) as any);
+    return { ok: false, error: d.error };
   } catch {
-    return false;
+    return { ok: false };
   }
 }
 
@@ -1507,17 +1506,17 @@ async function submitAddSource() {
 
   addSourceSaving.value = true;
   addSourceError.value = "";
-  const ok = await createSourceNow(
+  const result = await createSourceNow(
     selectedScene.value,
     name,
     url,
     addSourceWidth.value,
     addSourceHeight.value,
   );
-  if (ok) {
+  if (result.ok) {
     showAddSource.value = false;
   } else {
-    addSourceError.value = "Failed to add source";
+    addSourceError.value = result.error ?? "Failed to add source";
   }
   addSourceSaving.value = false;
 }
@@ -1685,7 +1684,7 @@ watch(
             <span class="obs-live-stat-label">bitrate</span>
             <span class="obs-live-stat-value">{{
               bitrateLabel ?? "not streaming"
-              }}</span>
+            }}</span>
           </div>
           <div class="obs-live-stat">
             <span class="obs-live-stat-label">preview size</span>
@@ -1834,7 +1833,7 @@ watch(
               <label class="ep-field-label">sources
                 <span v-if="selectedScene" class="ep-field-hint">{{
                   selectedScene
-                }}</span></label>
+                  }}</span></label>
               <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
                 @click="openAddSource" v-html="iconSvgFor('plus')"></button>
             </div>
@@ -1849,9 +1848,8 @@ watch(
                 </div>
               </template>
               <div v-for="(src, i) in sources as any[]" :key="src.sceneItemId" class="obs-source-row"
-                :class="{ pending: isSourcePending(src), dragging: dragSourceIndex === i, selected: selectedListSourceId === src.sceneItemId }"
-                draggable="true" @dragstart="onSourceDragStart(i)" @dragover.prevent @drop="onSourceDrop(i)"
-                @click="toggleListSelect(src.sceneItemId)">
+                :class="{ pending: isSourcePending(src), dragging: dragSourceIndex === i }" draggable="true"
+                @dragstart="onSourceDragStart(i)" @dragover.prevent @drop="onSourceDrop(i)">
                 <span class="obs-drag-handle" title="Drag to reorder" v-html="iconSvgFor('grip')"></span>
                 <span class="obs-source-name">{{ src.sourceName }}</span>
                 <span v-if="isSourcePending(src)" class="pending-tag">pending</span>
@@ -1889,7 +1887,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
                 :class="{ pending: isSourcePending(src) }">
@@ -4002,15 +4000,6 @@ watch(
 .obs-mixer-row.pending {
   border-left: 2px solid #e5c07b;
   background: #e5c07b0d;
-}
-
-.obs-source-row {
-  cursor: pointer;
-}
-
-.obs-source-row.selected {
-  border-color: #f14949;
-  background: #f1494911;
 }
 
 /* >>> "switch to this scene on Save" - separate from clicking the card (which just browses) */
