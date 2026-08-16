@@ -16,6 +16,7 @@ import { useI18n, useLocale, type Locale } from "./i18n";
 import SnippetOverlay from "./components/SnippetOverlay.vue";
 // import DebugGitInfo from "./components/DebugGitInfo.vue";
 import { useLogsSearch } from "./composables/useLogsSearch";
+import { iconSvg, ICONS } from "./composables/icons";
 
 const {
   session,
@@ -166,111 +167,111 @@ function buildStaticIndex(): SearchResult[] {
     {
       label: "Dashboard",
       category: "Page",
-      icon: "◈",
+      icon: "dot",
       action: () => router.push("/dashboard"),
     },
     {
       label: "Commands",
       category: "Page",
-      icon: "◈",
+      icon: "dot",
       action: () => router.push("/commands"),
     },
     {
       label: "Moderation",
       category: "Page",
-      icon: "◈",
+      icon: "dot",
       action: () => router.push("/moderation"),
     },
     {
       label: "Automations",
       category: "Page",
-      icon: "◈",
+      icon: "dot",
       action: () => router.push("/automations"),
     },
     {
       label: "Timers",
       category: "Page",
-      icon: "◈",
+      icon: "dot",
       action: () => router.push("/automations?tab=timers"),
       sub: "Automations → Timers",
     },
     {
       label: "Triggers",
       category: "Page",
-      icon: "◈",
+      icon: "dot",
       action: () => router.push("/automations?tab=triggers"),
       sub: "Automations → Triggers",
     },
     {
       label: "Countdowns",
       category: "Page",
-      icon: "◈",
+      icon: "dot",
       action: () => router.push("/automations?tab=countdowns"),
       sub: "Automations → Countdowns",
     },
     {
       label: "Roles",
       category: "Page",
-      icon: "◈",
+      icon: "dot",
       action: () => router.push("/roles"),
     },
     {
       label: "Logs",
       category: "Page",
-      icon: "◈",
+      icon: "dot",
       action: () => router.push("/logs"),
     },
     {
       label: "Uploads",
       category: "Page",
-      icon: "◈",
+      icon: "dot",
       action: () => router.push("/uploads"),
     },
     {
       label: "Tools",
       category: "Page",
-      icon: "◈",
+      icon: "dot",
       action: () => router.push("/tools"),
     },
     {
       label: "Settings",
       category: "Page",
-      icon: "◈",
+      icon: "dot",
       action: () => router.push("/settings"),
     },
     // >>> Sub-pages
     {
       label: "Images",
       category: "Uploads",
-      icon: "🖼",
+      icon: "image",
       action: () => router.push("/images"),
       sub: "Upload and host images",
     },
     {
       label: "Notes",
       category: "Uploads",
-      icon: "📄",
+      icon: "file-text",
       action: () => router.push("/notes"),
       sub: "Create and share text snippets",
     },
     {
       label: "OBS Widgets",
       category: "Tools",
-      icon: "📺",
+      icon: "monitor",
       action: () => router.push("/obs-widgets"),
       sub: "Live browser sources for OBS",
     },
     {
       label: "OBS Control",
       category: "Tools",
-      icon: "📺",
+      icon: "monitor",
       action: () => router.push("/obs-control"),
       sub: "Switch scenes and control sources live",
     },
     {
       label: "Variables & Counters",
       category: "Tools",
-      icon: "⚙",
+      icon: "settings",
       action: () => router.push("/tools"),
       sub: "View and edit $counter and $var values",
     },
@@ -278,21 +279,21 @@ function buildStaticIndex(): SearchResult[] {
     {
       label: "Command Prefix",
       category: "Settings",
-      icon: "⚙",
+      icon: "settings",
       action: () => router.push("/settings"),
       sub: "Change the bot command prefix",
     },
     {
       label: "Logs Opt-Out",
       category: "Settings",
-      icon: "⚙",
+      icon: "settings",
       action: () => router.push("/settings"),
       sub: "Control chat log visibility",
     },
     {
       label: "Remove Bot",
       category: "Settings",
-      icon: "⚙",
+      icon: "settings",
       action: () => router.push("/settings"),
       sub: "Remove ShyBoti from your channel",
     },
@@ -385,7 +386,7 @@ async function loadDynamic(): Promise<SearchResult[]> {
         results.push({
           label: name,
           category: "Timer",
-          icon: "⏱",
+          icon: "clock",
           sub: ti.response.slice(0, 50) || undefined,
           action: () => {
             router.push("/automations?tab=timers");
@@ -405,7 +406,7 @@ async function loadDynamic(): Promise<SearchResult[]> {
         results.push({
           label: name,
           category: "Trigger",
-          icon: "⚡",
+          icon: "zap",
           sub: tr.match_pattern || undefined,
           action: () => {
             router.push("/automations?tab=triggers");
@@ -673,13 +674,13 @@ onMounted(async () => {
     showAddBanner.value = !ownChannelHasBot.value;
     router.push("/dashboard");
   } else if (status === "added" && channel) {
-    showToast(`✓ ShyBoti added to #${channel}`);
+    showToast(`ShyBoti added to #${channel}`);
     router.push("/dashboard");
   } else if (status === "reauthed" && channel) {
-    showToast(`✓ Re-authorized #${channel}`);
+    showToast(`Re-authorized #${channel}`);
     router.push("/dashboard");
   } else if (status === "removed" && channel) {
-    showToast(`✓ ShyBoti left #${channel}`);
+    showToast(`ShyBoti left #${channel}`);
   }
 
   if (route.path === "/" || route.path === "") {
@@ -732,7 +733,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <span v-if="showLogsChip" class="search-scope-chip">
           in logs
           <button class="chip-x" @mousedown.prevent="dismissLogsChip" title="Search everywhere instead">
-            ✕
+            <span v-html="iconSvg('x')"></span>
           </button>
         </span>
         <input ref="searchInputDesktop" v-model="searchQuery" class="search-input" :placeholder="showLogsChip ? 'Find in loaded messages…' : 'Search… (Ctrl+F)'
@@ -744,11 +745,11 @@ provide("searchOpenTrigger", searchOpenTrigger);
           }}</span>
           <button v-if="logsMatchCount" class="search-match-step" title="Previous match (Shift+Enter)"
             @mousedown.prevent="logsRequestJump(-1)">
-            ▲
+            <span v-html="iconSvg('chevron-up')"></span>
           </button>
           <button v-if="logsMatchCount" class="search-match-step" title="Next match (Enter)"
             @mousedown.prevent="logsRequestJump(1)">
-            ▼
+            <span v-html="iconSvg('chevron-down')"></span>
           </button>
         </span>
         <kbd v-if="!searchQuery && !showLogsChip" class="search-kbd">Ctrl+F</kbd>
@@ -758,7 +759,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         searchResults = [];
         searchOpen = false;
         ">
-          ✕
+          <span v-html="iconSvg('x')"></span>
         </button>
 
         <!-- >>> results dropdown -->
@@ -783,7 +784,8 @@ provide("searchOpenTrigger", searchOpenTrigger);
             <div class="result-group-label">{{ category }}</div>
             <button v-for="(r, idx) in items" :key="r.label + idx" class="result-item"
               :class="{ active: flatResults.indexOf(r) === searchIndex }" @mousedown.prevent="selectResult(r)">
-              <span class="result-icon">{{ r.icon }}</span>
+              <span v-if="r.icon && r.icon in ICONS" class="result-icon" v-html="iconSvg(r.icon)"></span>
+              <span v-else class="result-icon">{{ r.icon }}</span>
               <span class="result-label">{{ r.label }}</span>
               <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
             </button>
@@ -816,7 +818,8 @@ provide("searchOpenTrigger", searchOpenTrigger);
               <button class="channel-btn"
                 :class="{ 'other-channel': viewingOtherChannel, 'admin-channel': viewingAsAdmin }"
                 @click="showChannelMenu = !showChannelMenu">
-                #{{ session.channel }} ▾
+                #{{ session.channel }}
+                <span class="channel-btn-caret" v-html="iconSvg('chevron-down')"></span>
               </button>
             </div>
             <div v-if="showChannelMenu" class="channel-menu">
@@ -848,17 +851,19 @@ provide("searchOpenTrigger", searchOpenTrigger);
     </div>
 
     <div v-if="session && showAddBanner" class="add-banner">
-      <span>👋 {{ t("banner.welcome") }}</span>
+      <span class="banner-icon" v-html="iconSvg('smile')"></span>
+      <span>{{ t("banner.welcome") }}</span>
       <div class="banner-actions">
         <button class="banner-btn add" @click="addBot">
           + {{ t("banner.add") }}
         </button>
-        <button class="banner-dismiss" @click="showAddBanner = false">✕</button>
+        <button class="banner-dismiss" @click="showAddBanner = false"><span v-html="iconSvg('x')"></span></button>
       </div>
     </div>
 
     <div v-if="session && missingScopes.length > 0" class="add-banner reauth-banner">
-      <span>⚠ {{ isOwnChannel ? t("banner.reauth_own") : t("banner.reauth_other") }}</span>
+      <span class="banner-icon" v-html="iconSvg('alert-triangle')"></span>
+      <span>{{ isOwnChannel ? t("banner.reauth_own") : t("banner.reauth_other") }}</span>
       <div class="banner-actions">
         <a v-if="isOwnChannel" :href="`${API}/auth/add`" class="banner-btn reauth">
           {{ t("banner.reauth_btn") }}
@@ -896,7 +901,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span v-if="showLogsChip" class="search-scope-chip">
             in logs
             <button class="chip-x" @mousedown.prevent="dismissLogsChip" title="Search everywhere instead">
-              ✕
+              <span v-html="iconSvg('x')"></span>
             </button>
           </span>
           <input ref="searchInputMobile" v-model="searchQuery" class="search-input"
@@ -909,11 +914,11 @@ provide("searchOpenTrigger", searchOpenTrigger);
             }}</span>
             <button v-if="logsMatchCount" class="search-match-step" title="Previous match"
               @mousedown.prevent="logsRequestJump(-1)">
-              ▲
+              <span v-html="iconSvg('chevron-up')"></span>
             </button>
             <button v-if="logsMatchCount" class="search-match-step" title="Next match"
               @mousedown.prevent="logsRequestJump(1)">
-              ▼
+              <span v-html="iconSvg('chevron-down')"></span>
             </button>
           </span>
           <button v-if="searchQuery" class="search-clear" @mousedown.prevent="
@@ -922,7 +927,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           searchResults = [];
           searchOpen = false;
           ">
-            ✕
+            <span v-html="iconSvg('x')"></span>
           </button>
           <!-- >>> results dropdown -->
           <div v-if="showLogsChip && searchOpen && logsSearchResults.length > 0" class="search-results">
@@ -952,7 +957,8 @@ provide("searchOpenTrigger", searchOpenTrigger);
                   selectResult(r);
                 sidebarOpen = false;
                 ">
-                <span class="result-icon">{{ r.icon }}</span>
+                <span v-if="r.icon && r.icon in ICONS" class="result-icon" v-html="iconSvg(r.icon)"></span>
+              <span v-else class="result-icon">{{ r.icon }}</span>
                 <span class="result-label">{{ r.label }}</span>
                 <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
               </button>
@@ -971,30 +977,30 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <button class="sidebar-btn" :class="{ active: activeRoute === 'dashboard', locked: !session }"
           @click="nav('dashboard')">
           {{ t("nav.dashboard") }}
-          <span v-if="!session" class="lock-icon">🔒</span>
+          <span v-if="!session" class="lock-icon" v-html="iconSvg('lock')"></span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'commands', locked: !session }"
           @click="nav('commands')">
           {{ t("nav.commands") }}
-          <span v-if="!session" class="lock-icon">🔒</span>
+          <span v-if="!session" class="lock-icon" v-html="iconSvg('lock')"></span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'moderation', locked: !session }"
           @click="nav('moderation')">
           {{ t("nav.moderation") }}
-          <span v-if="!session" class="lock-icon">🔒</span>
+          <span v-if="!session" class="lock-icon" v-html="iconSvg('lock')"></span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'automations', locked: !session }"
           @click="nav('automations')">
           {{ t("nav.automations") }}
-          <span v-if="!session" class="lock-icon">🔒</span>
+          <span v-if="!session" class="lock-icon" v-html="iconSvg('lock')"></span>
         </button>
         <button v-if="!session || channelRole?.role === 'broadcaster' || (session.isAdmin && adminMode)"
           class="sidebar-btn" :class="{ active: activeRoute === 'roles', locked: !session }" @click="nav('roles')">
-          {{ t("nav.roles") }} <span v-if="!session" class="lock-icon">🔒</span>
+          {{ t("nav.roles") }} <span v-if="!session" class="lock-icon" v-html="iconSvg('lock')"></span>
         </button>
         <button class="sidebar-btn" :class="{ active: activeRoute === 'tools', locked: !session }"
           @click="nav('tools')">
-          Tools <span v-if="!session" class="lock-icon">🔒</span>
+          Tools <span v-if="!session" class="lock-icon" v-html="iconSvg('lock')"></span>
         </button>
 
         <div class="sidebar-divider"></div>
@@ -1017,7 +1023,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           class="sidebar-btn" :class="{ active: activeRoute === 'settings', locked: !session }"
           @click="nav('settings')">
           {{ t("nav.settings") }}
-          <span v-if="!session" class="lock-icon">🔒</span>
+          <span v-if="!session" class="lock-icon" v-html="iconSvg('lock')"></span>
         </button>
         <div v-if="session && !ownChannelHasBot" class="sidebar-bottom">
           <button class="bot-btn add" @click="addBot">
@@ -1043,7 +1049,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         </footer>
       </main>
     </div>
-    <span v-if="toast" class="toast toast-float">{{ toast }}</span>
+    <span v-if="toast" class="toast toast-float"><span class="toast-icon" v-html="iconSvg('check')"></span>{{ toast }}</span>
   </div>
 </template>
 
@@ -1266,11 +1272,17 @@ body.snippet-dragging * {
   background: transparent;
   border: none;
   color: #555;
-  font-size: 11px;
   cursor: pointer;
   padding: 0 8px;
   height: 100%;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.search-clear svg {
+  width: 11px;
+  height: 11px;
 }
 
 .search-clear:hover {
@@ -1305,9 +1317,15 @@ body.snippet-dragging * {
   border: none;
   color: #c9aaff;
   cursor: pointer;
-  font-size: 10px;
   padding: 0 2px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+
+.chip-x svg {
+  width: 10px;
+  height: 10px;
 }
 
 .chip-x:hover {
@@ -1326,6 +1344,11 @@ body.snippet-dragging * {
   font-size: 10px;
   color: #666;
   white-space: nowrap;
+}
+
+.search-match-step svg {
+  width: 9px;
+  height: 9px;
 }
 
 .search-match-step {
@@ -1413,6 +1436,14 @@ body.snippet-dragging * {
   text-align: center;
   font-size: 11px;
   color: #9d6cff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.result-icon svg {
+  width: 13px;
+  height: 13px;
 }
 
 .result-label {
@@ -1444,6 +1475,18 @@ body.snippet-dragging * {
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.channel-btn-caret {
+  display: inline-flex;
+}
+
+.channel-btn-caret svg {
+  width: 10px;
+  height: 10px;
 }
 
 .channel-btn:hover {
@@ -1524,6 +1567,9 @@ body.snippet-dragging * {
 }
 
 .toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 11px;
   color: #23d18b;
   background: #0e2a1e;
@@ -1533,6 +1579,18 @@ body.snippet-dragging * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.toast-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+}
+
+.toast-icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 .toast-float {
@@ -1727,9 +1785,25 @@ body.snippet-dragging * {
   background: transparent;
   border: none;
   color: #666;
-  font-size: 14px;
   cursor: pointer;
   padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.banner-dismiss svg {
+  width: 13px;
+  height: 13px;
+}
+
+.banner-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.banner-icon svg {
+  width: 15px;
+  height: 15px;
 }
 
 .banner-dismiss:hover {
@@ -1849,8 +1923,13 @@ body.snippet-dragging * {
 }
 
 .lock-icon {
-  font-size: 10px;
+  display: inline-flex;
   opacity: 0.6;
+}
+
+.lock-icon svg {
+  width: 10px;
+  height: 10px;
 }
 
 .sidebar-divider {

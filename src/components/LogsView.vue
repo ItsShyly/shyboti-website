@@ -19,6 +19,7 @@ import {
 } from "../composables/useLogsSearch";
 import { VueDatePicker } from "@vuepic/vue-datepicker";
 import "@vuepic/vue-datepicker/dist/main.css";
+import { iconSvg } from "../composables/icons";
 // >>> vue-virtual-scroller removed, rolled our own below
 const _rowDomCache = new Map<string, Element>();
 const _ROW_CACHE_MAX = 600;
@@ -2469,20 +2470,20 @@ function buildBadgeChips(m: LogMsg): BadgeChip[] {
 function getEventMeta(m: LogMsg): EventMeta | null {
   const tags = m.tags ?? {};
   if (tags["first-msg"] === "1") {
-    return { label: "First Message", icon: "✦", tone: "first" };
+    return { label: "First Message", icon: "star", tone: "first" };
   }
   const msgId = String(tags["msg-id"] ?? "").toLowerCase();
   if (msgId === "sub" || msgId === "resub") {
-    return { label: "Subscribed", icon: "★", tone: "sub" };
+    return { label: "Subscribed", icon: "star", tone: "sub" };
   }
   if (msgId === "subgift") {
-    return { label: "Gift Subscription", icon: "★", tone: "sub" };
+    return { label: "Gift Subscription", icon: "star", tone: "sub" };
   }
   if (msgId === "submysterygift") {
-    return { label: "Community Gift", icon: "★", tone: "sub" };
+    return { label: "Community Gift", icon: "star", tone: "sub" };
   }
   if (msgId === "announcement") {
-    return { label: "Announcement", icon: "📣", tone: "announce" };
+    return { label: "Announcement", icon: "megaphone", tone: "announce" };
   }
   return null;
 }
@@ -3285,7 +3286,7 @@ function paintNameStyle(paint: {
             dateUntil && dateUntil !== dateFrom ? " → " + dateUntil : ""
           }}</span>
       </span>
-      <span class="summary-chevron">{{ searchExpanded ? "▲" : "▼" }}</span>
+      <span class="summary-chevron" v-html="iconSvg(searchExpanded ? 'chevron-up' : 'chevron-down')"></span>
     </div>
 
     <div class="search-bar-wrapper">
@@ -3319,7 +3320,7 @@ function paintNameStyle(paint: {
             <label class="field-lbl hide-mobile">Options</label>
             <button class="visuals-toggle hide-mobile" :class="{ open: visualsOpen }"
               @click.stop="visualsOpen = !visualsOpen">
-              Options {{ visualsOpen ? "▲" : "▼" }}
+              Options <span v-html="iconSvg(visualsOpen ? 'chevron-up' : 'chevron-down')"></span>
             </button>
             <div class="visuals-panel" :class="{ 'visuals-panel-open': visualsOpen }" @click.stop>
               <div class="options-group">
@@ -3356,7 +3357,8 @@ function paintNameStyle(paint: {
 
     <div v-if="searched && isBroadcaster && automodMsgs.length > 0" class="automod-bar">
       <button class="automod-toggle" :class="{ active: showAutomod }" @click="showAutomod = !showAutomod">
-        ⚠ AutoMod ({{ automodMsgs.length }})
+        <span class="automod-toggle-icon" v-html="iconSvg('alert-triangle')"></span>
+        AutoMod ({{ automodMsgs.length }})
         {{ showAutomod ? "- click to hide" : "- click to show" }}
       </button>
     </div>
@@ -3364,7 +3366,7 @@ function paintNameStyle(paint: {
     <div v-if="error" class="logs-error">{{ error }}</div>
 
     <transition name="toast-fade">
-      <div v-if="copyToast" class="copy-toast">{{ t("logs.copied") }}</div>
+      <div v-if="copyToast" class="copy-toast"><span v-html="iconSvg('check')"></span> {{ t("logs.copied") }}</div>
     </transition>
 
     <div v-if="!searched && !loading" class="logs-empty">
@@ -3389,7 +3391,7 @@ function paintNameStyle(paint: {
             </div>
             <div v-if="!isMobileView" class="day-jump-bar">
               <button class="day-jump-btn" @click="jumpOneDayUp">
-                ↑ jump to {{ jumpTargetDayLabel || "..." }}
+                <span v-html="iconSvg('arrow-up')"></span> jump to {{ jumpTargetDayLabel || "..." }}
               </button>
             </div>
             <div class="logs-tbody-wrap">
@@ -3399,10 +3401,10 @@ function paintNameStyle(paint: {
               </div>
               <div class="logs-tbody" ref="scrollerRef">
                 <div v-if="loadingMore" class="top-loader">
-                  <span class="spinner">⟳</span> {{ t("logs.load_older") }}
+                  <span class="spinner" v-html="iconSvg('refresh-cw')"></span> {{ t("logs.load_older") }}
                 </div>
                 <div v-if="noMore && !userFilter && !termFilter && !dateFilter" class="top-loader no-more">
-                  {{ t("logs.no_older") }}
+                  <span v-html="iconSvg('arrow-up')"></span> {{ t("logs.no_older") }}
                 </div>
 
                 <!-- >>> spacer for items above rendered slice -->
@@ -3418,7 +3420,7 @@ function paintNameStyle(paint: {
                     <div class="log-row">
                       <div class="log-time-col">
                         <div class="log-event-label" :class="`tone-automod-${item.msg._status}`">
-                          <span class="log-event-icon">⚠</span>
+                          <span class="log-event-icon" v-html="iconSvg('alert-triangle')"></span>
                           <span>{{ automodTagLabel(item.msg._status) }}</span>
                         </div>
                         <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
@@ -3474,9 +3476,7 @@ function paintNameStyle(paint: {
                       <div class="log-time-col">
                         <div v-if="getRowData(item.msg).eventMeta" class="log-event-label"
                           :class="`tone-${getRowData(item.msg).eventMeta!.tone}`">
-                          <span class="log-event-icon">{{
-                            getRowData(item.msg).eventMeta!.icon
-                          }}</span>
+                          <span class="log-event-icon" v-html="iconSvg(getRowData(item.msg).eventMeta!.icon)"></span>
                           <span>{{
                             getRowData(item.msg).eventMeta!.label
                           }}</span>
@@ -3539,7 +3539,7 @@ function paintNameStyle(paint: {
                           ? 'Jump to replied message'
                           : undefined
                           " @click.stop="jumpToReplyParent(item.msg)">
-                          <span class="reply-icon">⮣</span>
+                          <span class="reply-icon" v-html="iconSvg('corner-down-right')"></span>
                           <span class="reply-parent-user">@{{
                             item.msg.tags["reply-parent-display-name"] ||
                             item.msg.tags["reply-parent-user-login"] ||
@@ -3567,7 +3567,7 @@ function paintNameStyle(paint: {
                 <div :style="{ height: vSpacerBottom + 'px', flexShrink: 0 }" aria-hidden="true"></div>
 
                 <div class="top-loader" v-show="loadingNewer">
-                  <span class="spinner">⟳</span> {{ t("logs.load_newer") }}
+                  <span class="spinner" v-html="iconSvg('refresh-cw')"></span> {{ t("logs.load_newer") }}
                 </div>
               </div>
               <!-- >>> custom scrollbar overlay, desktop only -->
@@ -3582,7 +3582,7 @@ function paintNameStyle(paint: {
           <!-- >>> jump-to-newest pill, appears when scrolled up -->
           <transition name="jump-fade">
             <button v-if="searched && !isNearBottom" class="jump-to-newest-btn" @click="jumpToNewest">
-              {{ t("logs.jump_to_newest") }}
+              <span v-html="iconSvg('arrow-down')"></span> {{ t("logs.jump_to_newest") }}
             </button>
           </transition>
 
@@ -3614,7 +3614,7 @@ function paintNameStyle(paint: {
           <div class="popup-sub">in #{{ popup.channel }}</div>
         </div>
         <button class="popup-close" @mousedown.stop @click="closePopup">
-          ✕
+          <span v-html="iconSvg('x')"></span>
         </button>
       </div>
       <div class="popup-body">
@@ -3638,7 +3638,7 @@ function paintNameStyle(paint: {
             </div>
             <template v-else>
               <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">
-                <span class="rel-icon">♥</span>
+                <span class="rel-icon" v-html="iconSvg('heart')"></span>
                 <span class="rel-label">
                   <template v-if="popupUser.followedAt">Following for
                     {{ fmtDuration(popupUser.followedAt) }}</template>
@@ -3646,7 +3646,7 @@ function paintNameStyle(paint: {
                 </span>
               </div>
               <div class="popup-rel" :class="popupUser.subbedSince ? 'rel-yes' : 'rel-no'">
-                <span class="rel-icon">★</span>
+                <span class="rel-icon" v-html="iconSvg('star')"></span>
                 <span class="rel-label">
                   <template v-if="popupUser.subbedSince">{{ subTierLabel(popupUser.subTier ?? "1000") }} ·
                     {{ fmtDuration(popupUser.subbedSince) }}</template>
@@ -3678,7 +3678,7 @@ function paintNameStyle(paint: {
           Logs
         </button>
         <button class="popup-btn" @click="openUsercardPopout(popup.username, popup.channel)">
-          ↗ Twitch
+          <span v-html="iconSvg('external-link')"></span> Twitch
         </button>
       </div>
     </div>
@@ -3957,6 +3957,10 @@ function paintNameStyle(paint: {
 }
 
 .day-jump-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   width: 100%;
   height: 100%;
   padding: 10px 0;
@@ -3970,6 +3974,11 @@ function paintNameStyle(paint: {
     color 0.15s,
     border-color 0.15s,
     background 0.15s;
+}
+
+.day-jump-btn svg {
+  width: 10px;
+  height: 10px;
 }
 
 .day-jump-btn:hover {
@@ -4261,6 +4270,12 @@ function paintNameStyle(paint: {
 :deep(.log-event-icon) {
   font-size: 10px;
   line-height: 1;
+  display: inline-flex;
+}
+
+:deep(.log-event-icon svg) {
+  width: 9px;
+  height: 9px;
 }
 
 :deep(.log-event-label.tone-first) {
@@ -4390,8 +4405,13 @@ function paintNameStyle(paint: {
 
 :deep(.reply-icon) {
   color: #444;
-  font-size: 11px;
   flex-shrink: 0;
+  display: inline-flex;
+}
+
+:deep(.reply-icon svg) {
+  width: 10px;
+  height: 10px;
 }
 
 :deep(.reply-parent-user) {
@@ -4551,11 +4571,17 @@ function paintNameStyle(paint: {
   background: none;
   border: none;
   color: #444;
-  font-size: 13px;
   cursor: pointer;
   padding: 0 2px;
   line-height: 1;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+}
+
+.popup-close svg {
+  width: 12px;
+  height: 12px;
 }
 
 .popup-close:hover {
@@ -4633,8 +4659,13 @@ function paintNameStyle(paint: {
 }
 
 .rel-icon {
-  font-size: 11px;
   flex-shrink: 0;
+  display: inline-flex;
+}
+
+.rel-icon svg {
+  width: 11px;
+  height: 11px;
 }
 
 .rel-label {
@@ -4709,6 +4740,10 @@ function paintNameStyle(paint: {
 }
 
 .popup-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   flex: 1;
   height: 32px;
   border: none;
@@ -4721,6 +4756,11 @@ function paintNameStyle(paint: {
   transition:
     background 0.15s,
     color 0.15s;
+}
+
+.popup-btn svg {
+  width: 11px;
+  height: 11px;
 }
 
 .popup-btn:last-child {
@@ -4832,6 +4872,9 @@ function paintNameStyle(paint: {
 }
 
 .visuals-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   height: 34px;
   padding: 0 14px;
   border: 1px solid #9d6cff44;
@@ -4843,6 +4886,11 @@ function paintNameStyle(paint: {
   cursor: pointer;
   transition: background 0.15s;
   white-space: nowrap;
+}
+
+.visuals-toggle svg {
+  width: 9px;
+  height: 9px;
 }
 
 .visuals-toggle:hover {
@@ -4962,6 +5010,9 @@ function paintNameStyle(paint: {
 }
 
 .automod-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   height: 28px;
   padding: 0 14px;
   border: 1px solid #e5c07b44;
@@ -4972,6 +5023,16 @@ function paintNameStyle(paint: {
   font-weight: 600;
   cursor: pointer;
   transition: background 0.15s;
+}
+
+.automod-toggle-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.automod-toggle-icon svg {
+  width: 11px;
+  height: 11px;
 }
 
 .automod-toggle:hover {
@@ -5075,9 +5136,14 @@ function paintNameStyle(paint: {
   }
 
   .summary-chevron {
-    font-size: 9px;
     color: #555;
     flex-shrink: 0;
+    display: inline-flex;
+  }
+
+  .summary-chevron svg {
+    width: 9px;
+    height: 9px;
   }
 
   .search-bar-wrapper {

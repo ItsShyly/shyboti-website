@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 export type ObsAccessLevel = "everyone" | "mod" | "broadcaster";
 
@@ -311,7 +312,7 @@ const missingFields = computed(() => {
             </div>
             <div class="ep-panel-sub">#{{ channel }}</div>
           </div>
-          <button class="ep-panel-close" @click="emit('close')">✕</button>
+          <button class="ep-panel-close" @click="emit('close')" v-html="iconSvgFor('x')"></button>
         </div>
 
         <div class="ep-panel-body">
@@ -415,7 +416,8 @@ const missingFields = computed(() => {
           <div class="ep-footer-right">
             <button class="ep-btn-cancel" @click="emit('close')">Cancel</button>
             <button class="ep-btn-save" :disabled="saving" @click="save">
-              {{ saved ? "saved ✓" : saving ? "…" : "Save" }}
+              <template v-if="saved"><span v-html="iconSvgFor('check')"></span> saved</template>
+              <template v-else>{{ saving ? "…" : "Save" }}</template>
             </button>
           </div>
         </div>

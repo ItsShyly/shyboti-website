@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useI18n } from "../i18n";
 import { useAuth } from "../auth";
 import { API } from "../api";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -120,28 +121,31 @@ async function openChatterino() {
       <div class="modal">
         <div class="modal-header">
           <span class="modal-title">{{ t("uploads.chatterino.header") }}</span>
-          <button class="modal-close" @click="showChatterino = false">✕</button>
+          <button class="modal-close" @click="showChatterino = false" v-html="iconSvgFor('x')"></button>
         </div>
         <div class="modal-body">
           <div class="mc-row">
             <span class="mc-label">Request URL</span>
             <code class="mc-val">https://shyboti.de/api/images/upload</code>
             <button class="mc-copy" @click="copyText('https://shyboti.de/api/images/upload', 'url')">
-              {{ copied === "url" ? "✓" : "copy" }}
+              <span v-if="copied === 'url'" v-html="iconSvgFor('check')"></span>
+              <template v-else>copy</template>
             </button>
           </div>
           <div class="mc-row">
             <span class="mc-label">Form field</span>
             <code class="mc-val">file</code>
             <button class="mc-copy" @click="copyText('file', 'field')">
-              {{ copied === "field" ? "✓" : "copy" }}
+              <span v-if="copied === 'field'" v-html="iconSvgFor('check')"></span>
+              <template v-else>copy</template>
             </button>
           </div>
           <div class="mc-row">
             <span class="mc-label">Image link</span>
             <code class="mc-val">https://i.shyboti.de/{id}</code>
             <button class="mc-copy" @click="copyText('https://i.shyboti.de/{id}', 'link')">
-              {{ copied === "link" ? "✓" : "copy" }}
+              <span v-if="copied === 'link'" v-html="iconSvgFor('check')"></span>
+              <template v-else>copy</template>
             </button>
           </div>
           <div class="mc-row">
@@ -170,7 +174,8 @@ async function openChatterino() {
             </button>
             <button v-if="session && !tokenLoading" class="mc-copy"
               @click="copyText('Upload-ID: ' + uploadToken, 'token')">
-              {{ copied === "token" ? "✓" : "copy" }}
+              <span v-if="copied === 'token'" v-html="iconSvgFor('check')"></span>
+              <template v-else>copy</template>
             </button>
           </div>
         </div>

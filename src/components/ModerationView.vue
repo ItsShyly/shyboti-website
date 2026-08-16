@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import { REGEX_REF_GROUPS, looksLikeRegex } from "../composables/regexReference";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 import RefPanel from "./shared/RefPanel.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
@@ -788,8 +789,10 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
           </div>
         </div>
-        <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
-        }}</button>
+        <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">
+          <template v-if="reloading">…</template>
+          <span v-else v-html="iconSvgFor('refresh-cw')"></span>
+        </button>
         <button v-if="canManage" class="ep-btn-cancel" @click="openNewGroup(activeTab)">
           + {{ t("mod.group.new") }}
         </button>
@@ -830,8 +833,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <span class="mod-group-count">{{ section.items.length }}</span>
               <div v-if="canManage" class="ep-row-actions">
                 <button class="ep-btn-action share" :title="t('mod.share')"
-                  @click.stop="openShareGroup('blocked', section.group.id, section.group.name)">↪</button>
-                <button class="ep-btn-action del" @click.stop="deleteGroup('blocked', section.group.id)">✕</button>
+                  @click.stop="openShareGroup('blocked', section.group.id, section.group.name)" v-html="iconSvgFor('corner-up-right')"></button>
+                <button class="ep-btn-action del" @click.stop="deleteGroup('blocked', section.group.id)" v-html="iconSvgFor('trash')"></button>
               </div>
             </div>
             <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
@@ -855,13 +858,13 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 </div>
                 <div class="ep-row-actions">
                   <button v-if="canManage && term.group_id" class="ep-btn-action" title="Remove from group"
-                    @click.stop="removeFromGroup('blocked', term.id)">⤺</button>
+                    @click.stop="removeFromGroup('blocked', term.id)" v-html="iconSvgFor('corner-up-left')"></button>
                   <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
                   }}</button>
                   <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
-                    @click.stop="openShare('blocked', term.id, term.term)">↪</button>
+                    @click.stop="openShare('blocked', term.id, term.term)" v-html="iconSvgFor('corner-up-right')"></button>
                   <button v-if="canManage" class="ep-btn-action del"
-                    @click.stop="deleteRow('blocked', term.id)">✕</button>
+                    @click.stop="deleteRow('blocked', term.id)" v-html="iconSvgFor('trash')"></button>
                 </div>
               </div>
             </div>
@@ -886,8 +889,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <span class="mod-group-count">{{ section.items.length }}</span>
               <div v-if="canManage" class="ep-row-actions">
                 <button class="ep-btn-action share" :title="t('mod.share')"
-                  @click.stop="openShareGroup('spam', section.group.id, section.group.name)">↪</button>
-                <button class="ep-btn-action del" @click.stop="deleteGroup('spam', section.group.id)">✕</button>
+                  @click.stop="openShareGroup('spam', section.group.id, section.group.name)" v-html="iconSvgFor('corner-up-right')"></button>
+                <button class="ep-btn-action del" @click.stop="deleteGroup('spam', section.group.id)" v-html="iconSvgFor('trash')"></button>
               </div>
             </div>
             <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
@@ -911,12 +914,12 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 </div>
                 <div class="ep-row-actions">
                   <button v-if="canManage && f.group_id" class="ep-btn-action" title="Remove from group"
-                    @click.stop="removeFromGroup('spam', f.id)">⤺</button>
+                    @click.stop="removeFromGroup('spam', f.id)" v-html="iconSvgFor('corner-up-left')"></button>
                   <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit")
                   }}</button>
                   <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
-                    @click.stop="openShare('spam', f.id, spamLabel(f).name)">↪</button>
-                  <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)">✕</button>
+                    @click.stop="openShare('spam', f.id, spamLabel(f).name)" v-html="iconSvgFor('corner-up-right')"></button>
+                  <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)" v-html="iconSvgFor('trash')"></button>
                 </div>
               </div>
             </div>
@@ -941,8 +944,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <span class="mod-group-count">{{ section.items.length }}</span>
               <div v-if="canManage" class="ep-row-actions">
                 <button class="ep-btn-action share" :title="t('mod.share')"
-                  @click.stop="openShareGroup('nukes', section.group.id, section.group.name)">↪</button>
-                <button class="ep-btn-action del" @click.stop="deleteGroup('nukes', section.group.id)">✕</button>
+                  @click.stop="openShareGroup('nukes', section.group.id, section.group.name)" v-html="iconSvgFor('corner-up-right')"></button>
+                <button class="ep-btn-action del" @click.stop="deleteGroup('nukes', section.group.id)" v-html="iconSvgFor('trash')"></button>
               </div>
             </div>
             <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
@@ -963,7 +966,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 }}</span>
                 <span v-if="n.action !== 'delete'" class="item-dur">{{ fmtDur(n.duration) }}</span>
                 <div class="lookback-wrap">
-                  <span class="lookback-lbl">↩</span>
+                  <span class="lookback-lbl" v-html="iconSvgFor('corner-down-left')"></span>
                   <input type="number" min="1" max="1440" :value="nukeLookbackOverride[n.id] ?? n.lookback ?? 30"
                     @input="nukeLookbackOverride[n.id] = parseInt(($event.target as HTMLInputElement).value)"
                     class="ep-field-input lookback-input" :title="t('mod.nuke.lookback')" />
@@ -974,7 +977,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     :class="{ expired: nukeExpiresIn(n) === t('mod.nuke.expired') }">
                     {{ nukeExpiresIn(n) === t("mod.nuke.expired") ? t("mod.nuke.expired") : `${t("mod.nuke.expires")}
                     ${nukeExpiresIn(n)}` }}
-                    <button v-if="canManage" class="expiry-clear" @click="setNukeExpiry(n, null)">✕</button>
+                    <button v-if="canManage" class="expiry-clear" @click="setNukeExpiry(n, null)" v-html="iconSvgFor('x')"></button>
                   </span>
                   <select v-else-if="canManage" class="ep-field-select-sm expiry-select"
                     @change="setNukeExpiry(n, parseInt(($event.target as HTMLSelectElement).value))"
@@ -990,16 +993,17 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 </div>
                 <div class="ep-row-actions">
                   <button v-if="canManage && n.group_id" class="ep-btn-action" title="Remove from group"
-                    @click.stop="removeFromGroup('nukes', n.id)">⤺</button>
+                    @click.stop="removeFromGroup('nukes', n.id)" v-html="iconSvgFor('corner-up-left')"></button>
                   <button v-if="canManage" class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }"
                     @click="fireNuke(n.id)">
-                    {{ nukeConfirm === n.id ? t("mod.nuke.sure") : t("mod.nuke.fire") }}
+                    <template v-if="nukeConfirm === n.id"><span v-html="iconSvgFor('alert-triangle')"></span> {{ t("mod.nuke.sure") }}</template>
+                    <template v-else><span v-html="iconSvgFor('zap')"></span> {{ t("mod.nuke.fire") }}</template>
                   </button>
                   <button v-if="canManage" class="ep-btn-action edit" @click="openEditNuke(n)">{{ t("mod.edit")
                   }}</button>
                   <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
-                    @click.stop="openShare('nukes', n.id, n.label)">↪</button>
-                  <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('nukes', n.id)">✕</button>
+                    @click.stop="openShare('nukes', n.id, n.label)" v-html="iconSvgFor('corner-up-right')"></button>
+                  <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('nukes', n.id)" v-html="iconSvgFor('trash')"></button>
                 </div>
               </div>
             </div>
@@ -1026,7 +1030,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
             <div class="ep-panel-sub">#{{ session?.channel }}</div>
           </div>
-          <button class="ep-panel-close" @click="editOpen = false">✕</button>
+          <button class="ep-panel-close" @click="editOpen = false" v-html="iconSvgFor('x')"></button>
         </div>
 
         <div class="ep-panel-body">
@@ -1208,7 +1212,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     <span class="ep-toggle-knob"></span>
                   </div>
                   <span class="toggle-text">{{ t("mod.nuke.stay") }}</span>
-                  <span class="info-icon" :title="t('mod.nuke.stay_hint')">ⓘ</span>
+                  <span class="info-icon" :title="t('mod.nuke.stay_hint')" v-html="iconSvgFor('info')"></span>
                 </label>
                 <label class="ep-toggle-label" :class="{ dimmed: fNukeIsRegex }">
                   <div class="ep-toggle-btn" :class="{ on: fNukeMatchExact && !fNukeIsRegex }"
@@ -1216,7 +1220,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     <span class="ep-toggle-knob"></span>
                   </div>
                   <span class="toggle-text">{{ t("mod.nuke.exact") }}</span>
-                  <span class="info-icon" :title="t('mod.nuke.exact_hint')">ⓘ</span>
+                  <span class="info-icon" :title="t('mod.nuke.exact_hint')" v-html="iconSvgFor('info')"></span>
                 </label>
                 <label class="ep-toggle-label" :class="{ dimmed: !fNukeStay }">
                   <div class="ep-toggle-btn" :class="{ on: fNukeExpiry && fNukeStay }"
@@ -1224,7 +1228,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     <span class="ep-toggle-knob"></span>
                   </div>
                   <span class="toggle-text">{{ t("mod.nuke.expiry") }}</span>
-                  <span class="info-icon" :title="t('mod.nuke.expiry_hint')">ⓘ</span>
+                  <span class="info-icon" :title="t('mod.nuke.expiry_hint')" v-html="iconSvgFor('info')"></span>
                 </label>
               </div>
             </div>
@@ -1270,7 +1274,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
             <div class="ep-panel-sub">#{{ session?.channel }}</div>
           </div>
-          <button class="ep-panel-close" @click="groupPanelOpen = false">✕</button>
+          <button class="ep-panel-close" @click="groupPanelOpen = false" v-html="iconSvgFor('x')"></button>
         </div>
         <div class="ep-panel-body">
           <div class="ep-field-group">

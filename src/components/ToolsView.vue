@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { API } from "../api";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const router = useRouter();
 const { session, adminMode } = useAuth();
@@ -214,7 +215,7 @@ async function addEntry() {
       <div class="vars-modal">
         <div class="vars-header">
           <span class="vars-title">{{ t("feat.vars.modal.title") }}</span>
-          <button class="vars-close" @click="showVars = false">✕</button>
+          <button class="vars-close" @click="showVars = false" v-html="iconSvgFor('x')"></button>
         </div>
         <div class="vars-tabs">
           <button class="vars-tab" :class="{ active: varsTab === 'counters' }" @click="varsTab = 'counters'">
@@ -278,7 +279,7 @@ async function addEntry() {
                     {{ t("feat.vars.edit") }}
                   </button>
                   <button class="vars-btn-sm del" @click="deleteEntry('counter', c.name)">
-                    {{ t("feat.vars.delete") }}
+                    <span v-html="iconSvgFor('trash')"></span>
                   </button>
                 </td>
               </tr>
@@ -322,7 +323,7 @@ async function addEntry() {
                     {{ t("feat.vars.edit") }}
                   </button>
                   <button class="vars-btn-sm del" @click="deleteEntry('var', v.name)">
-                    {{ t("feat.vars.delete") }}
+                    <span v-html="iconSvgFor('trash')"></span>
                   </button>
                 </td>
               </tr>
@@ -370,7 +371,7 @@ async function addEntry() {
                     {{ t("feat.vars.edit") }}
                   </button>
                   <button class="vars-btn-sm del" @click="deleteEntry('ucounter', c.name, c.username)">
-                    {{ t("feat.vars.delete") }}
+                    <span v-html="iconSvgFor('trash')"></span>
                   </button>
                 </td>
               </tr>
@@ -417,7 +418,7 @@ async function addEntry() {
                     {{ t("feat.vars.edit") }}
                   </button>
                   <button class="vars-btn-sm del" @click="deleteEntry('uvar', v.name, v.username)">
-                    {{ t("feat.vars.delete") }}
+                    <span v-html="iconSvgFor('trash')"></span>
                   </button>
                 </td>
               </tr>

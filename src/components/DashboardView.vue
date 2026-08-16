@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session, availableChannels } = useAuth();
 const router = useRouter();
@@ -468,27 +469,9 @@ const TYPE_META = computed(
     }) as Record<string, { icon: string; color: string; label: string }>,
 );
 
-// >>> Feather-style (MIT) stroke icon paths, keyed by TYPE_META.icon - viewBox 0 0 24 24, stroke=currentColor
-const ICONS: Record<string, string> = {
-  plus: `<line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>`,
-  minus: `<line x1="5" y1="12" x2="19" y2="12"></line>`,
-  edit: `<path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>`,
-  ban: `<circle cx="12" cy="12" r="10"></circle><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>`,
-  check: `<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>`,
-  clock: `<circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline>`,
-  play: `<polygon points="5 3 19 12 5 21 5 3"></polygon>`,
-  pause: `<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>`,
-  "alert-triangle": `<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>`,
-  "user-plus": `<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line>`,
-  "user-minus": `<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="23" y1="11" x2="17" y2="11"></line>`,
-  trash: `<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line>`,
-  dot: `<circle cx="12" cy="12" r="3"></circle>`,
-};
-
 function iconSvg(type: string): string {
   const name = TYPE_META.value[type]?.icon ?? "dot";
-  const inner = ICONS[name] ?? ICONS.dot;
-  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+  return iconSvgFor(name);
 }
 
 // vvv actions vvv
@@ -719,7 +702,7 @@ function fmtActor(actor: string) {
             ? 'Connecting…'
             : 'Offline'
           "></span>
-        <button class="ep-btn-reload" @click="fetchActivity" title="Reload">↺</button>
+        <button class="ep-btn-reload" @click="fetchActivity" title="Reload" v-html="iconSvgFor('refresh-cw')"></button>
 
       </div>
     </div>
@@ -730,7 +713,7 @@ function fmtActor(actor: string) {
         {{ group.label }}
       </button>
       <button v-if="activeTypes.size > 0" class="clear-chip" @click="activeTypes = new Set()">
-        {{ t("dash.filter.clear") }}
+        <span v-html="iconSvgFor('x')"></span> {{ t("dash.filter.clear") }}
       </button>
     </div>
 
@@ -745,9 +728,7 @@ function fmtActor(actor: string) {
     <div v-else class="feed">
       <template v-for="group in groupedActivity()" :key="group.date">
         <div class="feed-day-header" @click.stop="toggleDay(group.date)">
-          <span class="day-chevron">{{
-            collapsedDays.has(group.date) ? "▶" : "▼"
-            }}</span>
+          <span class="day-chevron" v-html="iconSvgFor(collapsedDays.has(group.date) ? 'chevron-right' : 'chevron-down')"></span>
           <span class="day-label">{{ group.date }}</span>
           <span class="day-count">{{ group.entries.length }}</span>
         </div>
@@ -786,7 +767,7 @@ function fmtActor(actor: string) {
                 <button v-if="
                   e.type.startsWith('timer') || e.type.startsWith('trigger') || e.type.startsWith('countdown')
                 " class="act-btn" title="View in Automations" @click.stop="goToAutomations(e)">
-                  ↻ auto
+                  <span v-html="iconSvgFor('refresh-cw')"></span> auto
                 </button>
               </div>
               <span class="feed-time">{{ fmtTime(e.timestamp) }}</span>
@@ -810,7 +791,7 @@ function fmtActor(actor: string) {
           </div>
           <div class="popup-sub">in #{{ popup.entry.channel }}</div>
         </div>
-        <button class="popup-close" @click="closePopup">✕</button>
+        <button class="popup-close" @click="closePopup" v-html="iconSvgFor('x')"></button>
       </div>
 
       <div class="popup-body">
@@ -830,9 +811,7 @@ function fmtActor(actor: string) {
           </div>
           <div class="popup-relations">
             <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">
-              <span class="rel-icon">{{
-                popupUser.followedAt ? "♥" : "♥"
-                }}</span>
+              <span class="rel-icon" v-html="iconSvgFor('heart')"></span>
               <span class="rel-label">
                 <template v-if="popupUser.followedAt">Following for
                   {{ fmtDuration(popupUser.followedAt) }}</template>
@@ -840,9 +819,7 @@ function fmtActor(actor: string) {
               </span>
             </div>
             <div class="popup-rel" :class="popupUser.subbedSince ? 'rel-yes' : 'rel-no'">
-              <span class="rel-icon">{{
-                popupUser.subbedSince ? "★" : "★"
-                }}</span>
+              <span class="rel-icon" v-html="iconSvgFor('star')"></span>
               <span class="rel-label">
                 <template v-if="popupUser.subbedSince">
                   {{ subTierLabel(popupUser.subTier ?? "1000") }} ·
@@ -881,7 +858,7 @@ function fmtActor(actor: string) {
           Logs
         </button>
         <button class="popup-btn" @click="openUsercardPopout(popup.entry.target, popup.entry.channel)">
-          ↗ Twitch
+          <span v-html="iconSvgFor('external-link')"></span> Twitch
         </button>
       </div>
     </div>

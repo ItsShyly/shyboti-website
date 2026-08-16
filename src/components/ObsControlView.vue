@@ -9,6 +9,7 @@ import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session, channelRole } = useAuth();
 const router = useRouter();
@@ -1354,7 +1355,7 @@ watch(
           <span v-if="agentStatus?.version" class="obs-status-version">v{{ agentStatus.version }}</span>
         </div>
         <button v-if="obsConnected && canFilterScenes" class="obs-refresh-btn" @click="refreshScenes"
-          title="Refresh scene list"> ↻
+          title="Refresh scene list" v-html="iconSvgFor('refresh-cw')">
         </button>
         <button v-if="obsConnected && canFilterScenes" class="obsconn-gear-btn" title="Filter scenes"
           @click="openFilter">
@@ -1452,7 +1453,7 @@ watch(
               </div>
               <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? "Edit" : "Live" }}</span>
             </div>
-            <span v-if="locked" class="mode-hint locked-hint">🔒 leaving — loading fresh state…</span>
+            <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> leaving — loading fresh state…</span>
             <span v-else class="mode-hint">{{
               editMode
                 ? "Changes stage here until you press Save."
@@ -1810,8 +1811,8 @@ watch(
           <div class="ep-field-group">
             <div class="ep-field-label obs-section-label">
               Scenes
-              <button class="obs-refresh-btn" @click="refreshScenes" title="Refresh scene list">
-                ↻
+              <button class="obs-refresh-btn" @click="refreshScenes" title="Refresh scene list"
+                v-html="iconSvgFor('refresh-cw')">
               </button>
             </div>
             <div class="ep-field-hint">

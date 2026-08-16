@@ -9,6 +9,7 @@ import { COMMAND_FLAGS } from '../composables/commandFlags'
 import EditableNameHeader from './shared/EditableNameHeader.vue'
 import RefPanel from './shared/RefPanel.vue'
 import { useI18n } from '../i18n'
+import { iconSvg as iconSvgFor } from '../composables/icons'
 
 export interface CustomCommand {
   name: string; response: string; rule: string; alias: string
@@ -864,7 +865,7 @@ function removeArgVariant(i: number) {
             </div>
             <div class="ep-panel-sub">Rule builder for #{{ channel }}</div>
           </div>
-          <button class="ep-panel-close" @click="emit('close')">✕</button>
+          <button class="ep-panel-close" @click="emit('close')" v-html="iconSvgFor('x')"></button>
         </div>
 
         <div v-if="loading" class="ep-panel-loading">{{ t('edit.saving').replace('…', '…') || 'Loading…' }}</div>
@@ -879,7 +880,7 @@ function removeArgVariant(i: number) {
 
             <!-- >>> locked prefix for built-in commands -->
             <div v-if="isBuiltIn" class="builtin-prefix-row">
-              <span class="builtin-prefix-token">$command.output</span>
+              <span class="builtin-prefix-token">$command.output <span class="builtin-prefix-lock" v-html="iconSvgFor('lock')"></span></span>
               <span class="builtin-prefix-hint">{{ t('edit.builtin_locked') }}</span>
             </div>
 
@@ -936,7 +937,7 @@ function removeArgVariant(i: number) {
                       placeholder="What this variant does…"
                       @change="(e) => { if (form.arg_descs[i]) form.arg_descs[i].desc = (e.target as HTMLInputElement).value }" />
                     <button class="arg-remove-btn" @click="removeArgVariant(i)" type="button"
-                      title="Remove this variant from the response">✕</button>
+                      title="Remove this variant from the response" v-html="iconSvgFor('x')"></button>
                   </div>
                 </div>
               </template>
@@ -960,7 +961,7 @@ function removeArgVariant(i: number) {
                 </span>
                 <span v-for="a in builtinChannelAliases" :key="'c:' + a" class="alias-chip">
                   {{ prefix || '+' }}{{ a }}
-                  <button class="alias-chip-remove" type="button" :disabled="aliasSaving" @click="removeAlias(a)">✕</button>
+                  <button class="alias-chip-remove" type="button" :disabled="aliasSaving" @click="removeAlias(a)" v-html="iconSvgFor('x')"></button>
                 </span>
               </div>
               <div class="alias-add-row">
@@ -1057,9 +1058,11 @@ function removeArgVariant(i: number) {
           <div v-else></div>
           <div class="ep-footer-right">
             <button class="ep-btn-cancel" @click="emit('close')">{{ t('edit.cancel') }}</button>
-            <button class="ep-btn-save" :disabled="saving" @click="save">{{ saved ? t('edit.saved') : saving ?
-              t('edit.saving')
-              : t('edit.save') }}</button>
+            <button class="ep-btn-save" :disabled="saving" @click="save">
+              <template v-if="saved"><span v-html="iconSvgFor('check')"></span> {{ t('edit.saved') }}</template>
+              <template v-else-if="saving">{{ t('edit.saving') }}</template>
+              <template v-else>{{ t('edit.save') }}</template>
+            </button>
           </div>
         </div>
 
@@ -1320,8 +1323,7 @@ function removeArgVariant(i: number) {
   position: relative;
 }
 
-.builtin-prefix-token::after {
-  content: '🔒';
+.builtin-prefix-lock {
   font-size: 9px;
   margin-left: 5px;
   opacity: .5;

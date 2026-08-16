@@ -4,6 +4,7 @@ import { useRoute } from "vue-router";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session } = useAuth();
 const { t } = useI18n();
@@ -297,7 +298,8 @@ function switchView(v: "write" | "list") {
               :class="{ confirm: deleteId === note.id }"
               @click="deleteNote(note.id)"
             >
-              {{ deleteId === note.id ? "?" : "✕" }}
+              <template v-if="deleteId === note.id">?</template>
+              <span v-else v-html="iconSvgFor('trash')"></span>
             </button>
           </div>
 
@@ -338,7 +340,8 @@ function switchView(v: "write" | "list") {
           <div class="result-link-row">
             <code class="result-code">{{ lastLink }}</code>
             <button class="copy-btn" @click="copyLink(lastLink)">
-              {{ lastCopied ? t("notes.copied") : t("notes.copy") }}
+              <span v-if="lastCopied" v-html="iconSvgFor('check')"></span>
+              <template v-else>{{ t("notes.copy") }}</template>
             </button>
           </div>
           <button class="new-note-btn" @click="newNote">+ New note</button>

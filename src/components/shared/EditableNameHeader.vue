@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // >>> blank name on blur/enter/esc reverts to origName
 import { ref, nextTick, onMounted } from "vue";
+import { iconSvg as iconSvgFor } from "../../composables/icons";
 
 const props = withDefaults(
   defineProps<{
@@ -41,7 +42,7 @@ defineExpose({ start });
   <span v-if="disabled" class="ep-name-static">{{ prefix }}{{ modelValue || origName }}</span>
   <span v-else-if="!editing" class="ep-name-editable" title="Click to rename" @click="start">{{ prefix }}{{ modelValue
     || origName
-  }}<span class="ep-name-edit-icon">✎</span></span>
+  }}<span class="ep-name-edit-icon" v-html="iconSvgFor('edit')"></span></span>
   <span v-else class="ep-name-rename-wrap">
     <span v-if="prefix" class="ep-name-prefix">{{ prefix }}</span>
     <input ref="inputEl" :value="modelValue" class="ep-name-rename-input" :placeholder="placeholder" @input="

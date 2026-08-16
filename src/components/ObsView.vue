@@ -6,6 +6,7 @@ import { useI18n } from "../i18n";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session, channelRole } = useAuth();
 const { t } = useI18n();
@@ -315,7 +316,7 @@ watch(() => session.value?.channel, load);
         <div class="ep-view-sub">{{ widgets.length }} widget{{ widgets.length === 1 ? '' : 's' }}</div>
       </div>
       <div class="ep-view-header-right">
-        <button class="ep-btn-reload" @click="load" title="Reload">↺</button>
+        <button class="ep-btn-reload" @click="load" title="Reload" v-html="iconSvgFor('refresh-cw')"></button>
         <button class="ep-btn-new" @click="openNew" :disabled="!canEdit">
           + {{ t("obs.new") }}
         </button>
@@ -343,14 +344,15 @@ watch(() => session.value?.channel, load);
           <code class="widget-content">{{ w.content.slice(0, 60)
           }}{{ w.content.length > 60 ? "…" : "" }}</code>
           <div class="widget-meta">
-            ↻ every {{ w.refresh_ms / 1000 }}s · {{ fmtDate(w.created_at) }}
+            <span v-html="iconSvgFor('refresh-cw')"></span> every {{ w.refresh_ms / 1000 }}s · {{ fmtDate(w.created_at) }}
           </div>
         </div>
         <div class="widget-actions">
           <div class="url-row">
             <code class="widget-url">obs.shyboti.de/{{ w.id }}</code>
             <button class="copy-btn" @click="copyUrl(w.id, w.id)">
-              {{ copied === w.id ? t("obs.copied") : t("obs.copy") }}
+              <span v-if="copied === w.id" v-html="iconSvgFor('check')"></span>
+              <template v-else>{{ t("obs.copy") }}</template>
             </button>
           </div>
           <div class="row-btns">
@@ -359,7 +361,8 @@ watch(() => session.value?.channel, load);
             </button>
             <button class="ep-btn-action del" :class="{ confirm: deleteId === w.id }"
               @click="deleteWidget(w.id, w.name)">
-              {{ deleteId === w.id ? t("obs.delete.confirm") : "✕" }}
+              <template v-if="deleteId === w.id">{{ t("obs.delete.confirm") }}</template>
+              <span v-else v-html="iconSvgFor('x')"></span>
             </button>
           </div>
         </div>
@@ -381,7 +384,7 @@ watch(() => session.value?.channel, load);
               </div>
               <div class="ep-panel-sub">#{{ session?.channel }}</div>
             </div>
-            <button class="ep-panel-close" @click="editOpen = false">✕</button>
+            <button class="ep-panel-close" @click="editOpen = false" v-html="iconSvgFor('x')"></button>
           </div>
 
           <div class="ep-panel-body">

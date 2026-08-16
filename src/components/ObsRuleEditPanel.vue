@@ -6,6 +6,7 @@ import { useOverlayClose } from "../composables/useOverlayClose";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 import ReauthLink from "./shared/ReauthLink.vue";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 
 export interface ObsRule {
@@ -321,7 +322,7 @@ const missingFields = computed(() => {
             <div class="ep-panel-title">{{ isEdit ? "Edit Rule" : "New Rule" }}</div>
             <div class="ep-panel-sub">#{{ channel }}</div>
           </div>
-          <button class="ep-panel-close" @click="emit('close')">✕</button>
+          <button class="ep-panel-close" @click="emit('close')" v-html="iconSvgFor('x')"></button>
         </div>
 
         <div class="ep-panel-body">
@@ -444,7 +445,8 @@ const missingFields = computed(() => {
           <div class="ep-footer-right">
             <button class="ep-btn-cancel" @click="emit('close')">Cancel</button>
             <button class="ep-btn-save" :disabled="saving" @click="save">
-              {{ saved ? "saved ✓" : saving ? "…" : "Save" }}
+              <template v-if="saved"><span v-html="iconSvgFor('check')"></span> saved</template>
+              <template v-else>{{ saving ? "…" : "Save" }}</template>
             </button>
           </div>
         </div>

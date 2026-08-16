@@ -17,6 +17,7 @@ import {
   setEditorContent,
 } from "../composables/useContentEditableScript";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
 
@@ -521,10 +522,10 @@ defineExpose({
             <span v-if="trigger.match_pattern" class="ep-meta-pill pattern">{{ matchLabel(trigger.match_type) }}: "{{
               trigger.match_pattern.slice(0, 20)
             }}{{ trigger.match_pattern.length > 20 ? "…" : "" }}"</span>
-            <span class="ep-meta-pill action">→ {{ actionLabel(trigger.action_type) }}</span>
+            <span class="ep-meta-pill action"><span v-html="iconSvgFor('arrow-right')"></span> {{ actionLabel(trigger.action_type) }}</span>
             <span v-if="trigger.enabled_when !== 'always'" class="ep-meta-pill when">{{ trigger.enabled_when }}</span>
-            <span v-if="trigger.required_game" class="ep-meta-pill game">🎮 {{ trigger.required_game }}</span>
-            <span v-if="trigger.cooldown_sec" class="ep-meta-pill cd">⏱ {{ trigger.cooldown_sec }}s cd</span>
+            <span v-if="trigger.required_game" class="ep-meta-pill game">{{ trigger.required_game }}</span>
+            <span v-if="trigger.cooldown_sec" class="ep-meta-pill cd"><span v-html="iconSvgFor('clock')"></span> {{ trigger.cooldown_sec }}s cd</span>
           </div>
           <div class="trigger-response">
             {{ trigger.response.slice(0, 80)
@@ -536,11 +537,11 @@ defineExpose({
             {{ canEdit ? t("trigger.edit") : t("trigger.view") }}
           </button>
           <button class="ep-btn-action share" @click.stop="openShare(trigger.name)" title="Copy to another channel">
-            ↪
+            <span v-html="iconSvgFor('corner-up-right')"></span>
           </button>
           <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteTrigger(trigger.name)"
             :disabled="saving === trigger.name">
-            ✕
+            <span v-html="iconSvgFor('trash')"></span>
           </button>
         </div>
       </div>
@@ -557,7 +558,7 @@ defineExpose({
               </div>
               <div class="ep-panel-sub">#{{ session?.channel }}</div>
             </div>
-            <button class="ep-panel-close" @click="editOpen = false">✕</button>
+            <button class="ep-panel-close" @click="editOpen = false" v-html="iconSvgFor('x')"></button>
           </div>
 
           <div class="ep-panel-body">

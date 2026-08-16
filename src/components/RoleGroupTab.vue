@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 import type { RolePermissions } from "../auth";
 import ReauthLink from "./shared/ReauthLink.vue";
 
@@ -348,7 +349,7 @@ watch(() => session.value?.channel, reload);
 
 <template>
   <div class="roles-group">
-    <span v-if="saved" class="autosave-indicator">{{ t("roles.saved") }}</span>
+    <span v-if="saved" class="autosave-indicator"><span v-html="iconSvgFor('check')"></span> {{ t("roles.saved") }}</span>
 
     <!-- Master enable/disable -->
     <div class="section">
@@ -450,7 +451,7 @@ watch(() => session.value?.channel, reload);
                 {{ item.blocked ? t("roles.unblock") : t("roles.block") }}
               </button>
             </div>
-            <span class="mod-chevron">{{ expandedItem === item.username ? "▲" : "▼" }}</span>
+            <span class="mod-chevron" v-html="iconSvgFor(expandedItem === item.username ? 'chevron-up' : 'chevron-down')"></span>
           </div>
 
           <!-- Expanded permission overrides -->
@@ -461,7 +462,7 @@ watch(() => session.value?.channel, reload);
                 }}</span>
               <button v-if="item.permissions !== null" class="reset-btn" @click="clearItemOverride(item)"
                 :disabled="itemSaving === item.username">
-                {{ t("roles.reset") }}
+                <span v-html="iconSvgFor('refresh-cw')"></span> {{ t("roles.reset") }}
               </button>
             </div>
 

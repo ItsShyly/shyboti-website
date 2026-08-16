@@ -4,6 +4,7 @@ import { useRouter, useRoute } from "vue-router";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session } = useAuth();
 const { t } = useI18n();
@@ -446,7 +447,8 @@ function switchView(v: "upload" | "gallery") {
             </div>
           </div>
           <button class="delete-btn" :class="{ confirm: deleteId === img.id }" @click="deleteImage(img.id)">
-            {{ deleteId === img.id ? "?" : "✕" }}
+            <template v-if="deleteId === img.id">?</template>
+            <span v-else v-html="iconSvgFor('x')"></span>
           </button>
         </div>
       </div>
@@ -454,7 +456,7 @@ function switchView(v: "upload" | "gallery") {
 
     <div v-else class="upload-view">
       <div v-if="isGuest" class="guest-banner">
-        <span class="guest-icon">ⓘ</span>
+        <span class="guest-icon" v-html="iconSvgFor('info')"></span>
         {{ t("images.guest_note") }}
       </div>
 
@@ -475,9 +477,10 @@ function switchView(v: "upload" | "gallery") {
           <div class="link-bar">
             <span class="link-label">{{ t("images.link") }}</span>
             <code class="link-code">{{ lastLink }}</code>
-            <button class="crop-btn" @click.stop="openCrop()">✂ Crop</button>
+            <button class="crop-btn" @click.stop="openCrop()"><span v-html="iconSvgFor('scissors')"></span> Crop</button>
             <button class="copy-btn" @click.stop="copyLink(lastLink)">
-              {{ lastCopied ? t("images.copied") : t("images.copy") }}
+              <span v-if="lastCopied" v-html="iconSvgFor('check')"></span>
+              <template v-else>{{ t("images.copy") }}</template>
             </button>
           </div>
           <div class="drop-uploads-hint" @click.stop="
@@ -514,7 +517,8 @@ function switchView(v: "upload" | "gallery") {
         <input v-model="urlInput" class="url-input" placeholder="Paste any image URL to upload it…"
           @keydown.enter="uploadFromUrl" :disabled="urlUploading" />
         <button class="url-go-btn" @click="uploadFromUrl" :disabled="urlUploading">
-          {{ urlUploading ? "…" : "↑" }}
+          <template v-if="urlUploading">…</template>
+          <span v-else v-html="iconSvgFor('arrow-up')"></span>
         </button>
       </div>
       <div v-if="urlError" class="url-error">{{ urlError }}</div>
@@ -538,8 +542,8 @@ function switchView(v: "upload" | "gallery") {
     <div v-if="cropOpen" class="crop-backdrop" @click.self="cropOpen = false">
       <div class="crop-modal">
         <div class="crop-header">
-          <span class="crop-title">✂ Crop Image</span>
-          <button class="crop-close" @click="cropOpen = false">✕</button>
+          <span class="crop-title"><span v-html="iconSvgFor('scissors')"></span> Crop Image</span>
+          <button class="crop-close" @click="cropOpen = false" v-html="iconSvgFor('x')"></button>
         </div>
         <div class="crop-hint">Click and drag to select crop area</div>
         <canvas ref="cropCanvas" class="crop-canvas" @mousedown="cropMouseDown" @mousemove="cropMouseMove"

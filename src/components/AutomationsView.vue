@@ -3,6 +3,7 @@ import { ref, computed, watch, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "../i18n";
 import { useAuth } from "../auth";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 import TimersView from "./TimersView.vue";
 import TriggersView from "./TriggersView.vue";
 import CountdownView from "./CountdownView.vue";
@@ -74,7 +75,7 @@ async function switchTab(tab: Tab) {
         <!-- >>> teleport targets for the sync panel, one per tab -->
         <div id="auto-sync-slot-timers"></div>
         <div id="auto-sync-slot-triggers"></div>
-        <button class="ep-btn-reload" @click="activeChild?.reload?.()" title="Reload">↺</button>
+        <button class="ep-btn-reload" @click="activeChild?.reload?.()" title="Reload" v-html="iconSvgFor('refresh-cw')"></button>
         <button class="ep-btn-new" :disabled="!activeChild?.header?.canCreate" @click="activeChild?.create?.()">
           + {{ activeChild?.header?.createLabel ?? 'New' }}
         </button>

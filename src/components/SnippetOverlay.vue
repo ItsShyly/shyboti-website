@@ -10,6 +10,7 @@ import {
 } from "vue";
 import { useRoute } from "vue-router";
 import { useSnippet } from "../composables/useSnippet";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const {
   screenshotDrag,
@@ -139,7 +140,7 @@ function fixedRect() {
           </div>
         </template>
         <template v-else>
-          <div class="snippet-toast-label copied">Copied to clipboard ✓</div>
+          <div class="snippet-toast-label copied">Copied to clipboard <span v-html="iconSvgFor('check')"></span></div>
           <a
             :href="screenshotToast.url!"
             target="_blank"

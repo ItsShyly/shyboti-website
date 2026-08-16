@@ -12,6 +12,7 @@ import {
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 import CommandEditPanel from "./CommandEditPanel.vue";
 import ObsCommandEditPanel from "./ObsCommandEditPanel.vue";
 import type { ObsSceneBind, ObsSourceBind, ObsArgEntry } from "./ObsCommandEditPanel.vue";
@@ -977,8 +978,10 @@ onUnmounted(() => {
                 syncMsg }}</div>
           </div>
         </div>
-        <button class="ep-btn-reload" @click="reloadAll" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
-          }}</button>
+        <button class="ep-btn-reload" @click="reloadAll" :disabled="reloading" title="Reload">
+          <template v-if="reloading">…</template>
+          <span v-else v-html="iconSvgFor('refresh-cw')"></span>
+        </button>
         <button v-if="activeTab === 'Custom'" class="ep-btn-new" :disabled="!canEdit"
           @click="canEdit && startCreate()">+ {{
             t('cmd.new') }}</button>
@@ -1015,12 +1018,14 @@ onUnmounted(() => {
           <div class="table-header">
             <div></div>
             <div>{{ t("cmd.header.onoff") }}</div>
-            <div class="sort-col" @click="setSort('name')">{{ t("cmd.header.name") }}<span class="sort-arrow">{{
-              sortField === 'name' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span></div>
+            <div class="sort-col" @click="setSort('name')">{{ t("cmd.header.name") }}<span class="sort-arrow"
+              v-html="sortField === 'name' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
+            </div>
             <div>{{ t("cmd.header.desc") }}</div>
             <div>{{ t("cmd.header.access") }}</div>
-            <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.header.gcd") }}<span class="sort-arrow">{{
-              sortField === 'cooldown' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span></div>
+            <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.header.gcd") }}<span class="sort-arrow"
+              v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
+            </div>
             <div>{{ t("cmd.header.ucd") }}</div>
             <div>{{ t("cmd.sort.actions") }}</div>
           </div>
@@ -1033,8 +1038,7 @@ onUnmounted(() => {
                 <div class="row-chevron-cell">
                   <button v-if="cmd.argVariants?.length" class="row-chevron"
                     :class="{ open: expandedDefault.has(cmd.name) }" @click.stop="toggleExpandDefault(cmd.name)"
-                    title="Show argument variants">
-                    ▾
+                    title="Show argument variants" v-html="iconSvgFor('chevron-down')">
                   </button>
                 </div>
                 <div>
@@ -1120,21 +1124,21 @@ onUnmounted(() => {
         <div v-if="!customLoading && filteredCustom().length > 0" class="table-header custom-table-header">
           <div></div>
           <div>{{ t("cmd.header.onoff") }}</div>
-          <div class="sort-col" @click="setSort('name')">{{ t("cmd.sort.name") }}<span class="sort-arrow">{{ sortField
-            ===
-            'name' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span></div>
+          <div class="sort-col" @click="setSort('name')">{{ t("cmd.sort.name") }}<span class="sort-arrow"
+            v-html="sortField === 'name' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
+          </div>
           <div>{{ t("cmd.header.desc") }}</div>
           <div>{{ t("cmd.sort.access") }}</div>
-          <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.sort.gcd") }}<span class="sort-arrow">{{
-            sortField
-              === 'cooldown' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span></div>
+          <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.sort.gcd") }}<span class="sort-arrow"
+            v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
+          </div>
           <div>{{ t("cmd.header.ucd") }}</div>
           <div>{{ t("cmd.sort.actions") }}</div>
         </div>
 
         <div v-if="customLoading" class="state-msg">{{ t("cmd.loading") }}</div>
         <div v-else-if="filteredCustom().length === 0" class="custom-empty">
-          <div class="empty-icon">✦</div>
+          <div class="empty-icon" v-html="iconSvgFor('star')"></div>
           <div class="empty-title">{{ t("cmd.empty.title") }}</div>
           <div class="empty-sub">{{ t("cmd.empty.sub") }}</div>
         </div>
@@ -1145,8 +1149,7 @@ onUnmounted(() => {
               <div class="table-row custom-row" :class="{ expanded: expandedCustom.has(cmd.name) }">
                 <div class="row-chevron-cell">
                   <button v-if="customHasArgs(cmd)" class="row-chevron" :class="{ open: expandedCustom.has(cmd.name) }"
-                    @click.stop="toggleExpandCustom(cmd.name)" title="Show argument variants">
-                    ▾
+                    @click.stop="toggleExpandCustom(cmd.name)" title="Show argument variants" v-html="iconSvgFor('chevron-down')">
                   </button>
                 </div>
                 <div>
@@ -1201,8 +1204,8 @@ onUnmounted(() => {
                   <button class="edit-btn" :class="{ blocked: !canEdit }" @click="canEdit && openEdit(cmd.name, false)">
                     {{ canEdit ? t("cmd.edit") : t("cmd.view") }}
                   </button>
-                  <button class="share-btn" @click="openShare(cmd.name)" title="Copy to another channel">
-                    ↪
+                  <button class="share-btn" @click="openShare(cmd.name)" title="Copy to another channel"
+                    v-html="iconSvgFor('corner-up-right')">
                   </button>
                   <button v-if="canDelete" class="del-btn" :class="{
                     confirm: deleteConfirmName === cmd.name,
@@ -1211,13 +1214,9 @@ onUnmounted(() => {
                     ? 'Click again to confirm'
                     : 'Delete'
                     ">
-                    {{
-                      deletingName === cmd.name
-                        ? "…"
-                        : deleteConfirmName === cmd.name
-                          ? t("cmd.delete_sure")
-                          : t("cmd.delete")
-                    }}
+                    <template v-if="deletingName === cmd.name">…</template>
+                    <template v-else-if="deleteConfirmName === cmd.name">{{ t("cmd.delete_sure") }}</template>
+                    <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
                 </div>
               </div>
@@ -1242,7 +1241,7 @@ onUnmounted(() => {
 
         <template v-else-if="!obsPaired">
           <div class="custom-empty">
-            <div class="empty-icon">✦</div>
+            <div class="empty-icon" v-html="iconSvgFor('star')"></div>
             <div class="empty-title">OBS isn't set up yet</div>
             <div class="empty-sub">
               Set up the agent on the
@@ -1256,7 +1255,7 @@ onUnmounted(() => {
           <!-- >>> count and new button live in ep-view-header -->
 
           <div v-if="obsCommandCount === 0" class="custom-empty">
-            <div class="empty-icon">✦</div>
+            <div class="empty-icon" v-html="iconSvgFor('star')"></div>
             <div class="empty-title">No OBS commands yet</div>
             <div class="empty-sub">
               Click <strong>+ New</strong> to create your first scene or source
@@ -1311,7 +1310,8 @@ onUnmounted(() => {
                   <button class="edit-btn" @click="openObsEdit({ kind: 'scene', command: b.command })">edit</button>
                   <button class="del-btn" :class="{ confirm: obsDeleteConfirm === 'scene:' + b.command }"
                     @click="deleteObsBinding('scene', b.command)">
-                    {{ obsDeleteConfirm === 'scene:' + b.command ? t('cmd.delete_sure') : t('cmd.delete') }}
+                    <template v-if="obsDeleteConfirm === 'scene:' + b.command">{{ t('cmd.delete_sure') }}</template>
+                    <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
                 </div>
               </div>
@@ -1352,7 +1352,8 @@ onUnmounted(() => {
                   <button class="edit-btn" @click="openObsEdit({ kind: 'source', command: b.command })">edit</button>
                   <button class="del-btn" :class="{ confirm: obsDeleteConfirm === 'source:' + b.command }"
                     @click="deleteObsBinding('source', b.command)">
-                    {{ obsDeleteConfirm === 'source:' + b.command ? t('cmd.delete_sure') : t('cmd.delete') }}
+                    <template v-if="obsDeleteConfirm === 'source:' + b.command">{{ t('cmd.delete_sure') }}</template>
+                    <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
                 </div>
               </div>
@@ -1395,7 +1396,8 @@ onUnmounted(() => {
                     @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">edit</button>
                   <button class="del-btn" :class="{ confirm: obsDeleteConfirm === 'arg:' + action }"
                     @click="deleteObsBinding('arg', action)">
-                    {{ obsDeleteConfirm === 'arg:' + action ? t('cmd.delete_sure') : t('cmd.delete') }}
+                    <template v-if="obsDeleteConfirm === 'arg:' + action">{{ t('cmd.delete_sure') }}</template>
+                    <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
                 </div>
               </div>

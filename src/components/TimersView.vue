@@ -18,6 +18,7 @@ import {
   setEditorContent,
 } from "../composables/useContentEditableScript";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
 
@@ -468,10 +469,10 @@ defineExpose({
         <div class="timer-info" @click="openEdit(timer)">
           <div class="timer-name">{{ timer.name }}</div>
           <div class="timer-meta">
-            <span class="ep-meta-pill interval">⏱ {{ fmtInterval(timer.interval_sec) }}</span>
-            <span v-if="timer.min_messages" class="ep-meta-pill msgs">💬 {{ timer.min_messages }}+ msgs</span>
+            <span class="ep-meta-pill interval"><span v-html="iconSvgFor('clock')"></span> {{ fmtInterval(timer.interval_sec) }}</span>
+            <span v-if="timer.min_messages" class="ep-meta-pill msgs"><span v-html="iconSvgFor('message-circle')"></span> {{ timer.min_messages }}+ msgs</span>
             <span v-if="timer.enabled_when !== 'always'" class="ep-meta-pill when">{{ timer.enabled_when }}</span>
-            <span v-if="timer.required_game" class="ep-meta-pill game">🎮 {{ timer.required_game }}</span>
+            <span v-if="timer.required_game" class="ep-meta-pill game">{{ timer.required_game }}</span>
             <span v-if="timer.condition" class="ep-meta-pill cond">if …</span>
           </div>
           <div class="timer-response">
@@ -487,11 +488,11 @@ defineExpose({
             {{ canEdit ? t("timer.edit") : t("timer.view") }}
           </button>
           <button class="ep-btn-action share" @click.stop="openShare(timer.name)" :title="t('timer.share')">
-            ↪
+            <span v-html="iconSvgFor('corner-up-right')"></span>
           </button>
           <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteTimer(timer.name)"
             :disabled="saving === timer.name">
-            ✕
+            <span v-html="iconSvgFor('trash')"></span>
           </button>
         </div>
       </div>
@@ -509,7 +510,7 @@ defineExpose({
               </div>
               <div class="ep-panel-sub">#{{ session?.channel }}</div>
             </div>
-            <button class="ep-panel-close" @click="editOpen = false">✕</button>
+            <button class="ep-panel-close" @click="editOpen = false" v-html="iconSvgFor('x')"></button>
           </div>
 
           <div class="ep-panel-body">

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 import type { RolePermissions } from "../auth";
 
 const { session } = useAuth();
@@ -277,7 +278,7 @@ watch(
                 {{ deleteConfirm === entry.username ? t("roles.delete_user_sure") : t("roles.delete") }}
               </button>
             </div>
-            <span class="mod-chevron">{{ expandedUser === entry.username ? "▲" : "▼" }}</span>
+            <span class="mod-chevron" v-html="iconSvgFor(expandedUser === entry.username ? 'chevron-up' : 'chevron-down')"></span>
           </div>
 
           <div v-if="expandedUser === entry.username" class="mod-perms">

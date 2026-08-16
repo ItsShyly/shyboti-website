@@ -9,6 +9,7 @@ import {
   setEditorContent,
 } from "../composables/useContentEditableScript";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
 
@@ -387,8 +388,8 @@ defineExpose({
         <div class="cd-info" @click="openEdit(cd)">
           <div class="cd-name">{{ cd.name }}</div>
           <div class="cd-meta">
-            <span class="ep-meta-pill dur">⏱ {{ fmtDuration(cd.duration_sec) }}</span>
-            <span v-if="cd.tick_every_sec" class="ep-meta-pill tick">↻ {{ t("countdown.field.tick_every") }}
+            <span class="ep-meta-pill dur"><span v-html="iconSvgFor('clock')"></span> {{ fmtDuration(cd.duration_sec) }}</span>
+            <span v-if="cd.tick_every_sec" class="ep-meta-pill tick"><span v-html="iconSvgFor('refresh-cw')"></span> {{ t("countdown.field.tick_every") }}
               {{ cd.tick_every_sec }}s</span>
             <span v-if="cd.enabled_when !== 'always'" class="ep-meta-pill when">{{ cd.enabled_when }}</span>
             <span v-if="cd.condition" class="ep-meta-pill cond">if …</span>
@@ -422,7 +423,7 @@ defineExpose({
           </button>
           <button v-if="canToggle" class="ctrl-btn reset" @click.stop="controlCountdown(cd.name, 'reset')"
             :title="t('countdown.action.reset')">
-            {{ t("countdown.action.reset") }}
+            <span v-html="iconSvgFor('refresh-cw')"></span> {{ t("countdown.action.reset") }}
           </button>
         </div>
 
@@ -432,11 +433,11 @@ defineExpose({
           </button>
           <button v-if="canEdit" class="ep-btn-action share" @click.stop="openShare(cd.name)"
             :title="t('countdown.share')">
-            ↪
+            <span v-html="iconSvgFor('corner-up-right')"></span>
           </button>
           <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteCountdown(cd.name)"
             :disabled="saving === cd.name">
-            ✕
+            <span v-html="iconSvgFor('trash')"></span>
           </button>
         </div>
       </div>
@@ -454,7 +455,7 @@ defineExpose({
               </div>
               <div class="ep-panel-sub">#{{ session?.channel }}</div>
             </div>
-            <button class="ep-panel-close" @click="editOpen = false">✕</button>
+            <button class="ep-panel-close" @click="editOpen = false" v-html="iconSvgFor('x')"></button>
           </div>
 
           <div class="ep-panel-body">

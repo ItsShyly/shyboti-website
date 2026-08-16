@@ -4,6 +4,7 @@ import { API } from "../api";
 import { useAuth } from "../auth";
 import ObsRuleEditPanel from "./ObsRuleEditPanel.vue";
 import type { ObsRule } from "./ObsRuleEditPanel.vue";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session, channelRole } = useAuth();
 
@@ -210,8 +211,7 @@ defineExpose({
               {{ canEdit ? "edit" : "view" }}
             </button>
             <button v-if="canEdit" class="ep-btn-action del" @click.stop="deleteRule(rule.id)"
-              :disabled="saving === rule.id">
-              ✕
+              :disabled="saving === rule.id" v-html="iconSvgFor('x')">
             </button>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session, channelRole, adminMode, logout, switchChannel } = useAuth();
 const { t } = useI18n();
@@ -361,17 +362,13 @@ async function doDeleteAllData() {
             <span class="prefix-preview"><span class="pre">{{ prefix || "+" }}</span>ping</span>
           </div>
           <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
-          <div class="section-note">{{ t("settings.prefix.note") }}</div>
+          <div class="section-note"><span v-html="iconSvgFor('alert-triangle')"></span> {{ t("settings.prefix.note") }}</div>
         </div>
         <div class="card-footer">
           <button class="save-btn" @click="savePrefix" :disabled="prefixSaving || !prefix">
-            {{
-              prefixSaved
-                ? t("settings.saved")
-                : prefixSaving
-                  ? t("settings.saving")
-                  : t("settings.prefix.save")
-            }}
+            <template v-if="prefixSaved"><span v-html="iconSvgFor('check')"></span> {{ t("settings.saved") }}</template>
+            <template v-else-if="prefixSaving">{{ t("settings.saving") }}</template>
+            <template v-else>{{ t("settings.prefix.save") }}</template>
           </button>
         </div>
       </div>
