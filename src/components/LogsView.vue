@@ -1350,8 +1350,8 @@ function detachScrollListeners() {
   scrollListenerAttached = false;
 }
 
-// >>> Fetch automod messages for current day (broadcaster-only)
-async function fetchAutomod(ch: string, date?: string) {
+// >>> Fetch automod messages for the searched day/range (broadcaster-only)
+async function fetchAutomod(ch: string, date?: string, until?: string) {
   automodMsgs.value = [];
   isBroadcaster.value = session.value?.login === ch;
   if (!isBroadcaster.value || !session.value) return;
@@ -1360,8 +1360,9 @@ async function fetchAutomod(ch: string, date?: string) {
     const y = d.getFullYear();
     const mo = String(d.getMonth() + 1).padStart(2, "0");
     const dy = String(d.getDate()).padStart(2, "0");
+    const untilQs = until ? `&until=${until}` : "";
     const res = await fetch(
-      `${API}/logs/automod/${ch}?year=${y}&month=${mo}&day=${dy}`,
+      `${API}/logs/automod/${ch}?year=${y}&month=${mo}&day=${dy}${untilQs}`,
       {
         headers: { Authorization: `Bearer ${session.value.token}` },
       },
@@ -1449,7 +1450,11 @@ async function search() {
   preloadChannelAssets(ch);
   fetchEmotes(ch);
   fetchTwitchBadges(ch);
-  fetchAutomod(ch, dateFrom.value || undefined);
+  fetchAutomod(
+    ch,
+    dateFrom.value || undefined,
+    dateUntil.value || dateFrom.value || undefined,
+  );
   const today = new Date();
   const isUser = !!userFilter.value.trim();
 
