@@ -652,6 +652,30 @@ watch(
   () => loadScopeStatus(),
 );
 // ^^^ scope re-auth banner ^^^
+
+// vvv bot's own re-auth banner (admin-only - not actionable by a regular broadcaster) vvv
+async function loadBotReauthStatus() {
+  if (!session.value?.isAdmin) {
+    reAuthUrl.value = null;
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/auth/reauth-status`);
+    if (!res.ok) {
+      reAuthUrl.value = null;
+      return;
+    }
+    const d = (await res.json()) as { reAuthUrl: string | null };
+    reAuthUrl.value = d.reAuthUrl;
+  } catch {
+    reAuthUrl.value = null;
+  }
+}
+watch(
+  () => session.value?.isAdmin,
+  () => loadBotReauthStatus(),
+);
+// ^^^ bot's own re-auth banner ^^^
 function showToast(msg: string) {
   toast.value = msg;
   setTimeout(() => (toast.value = ""), 5000);
@@ -866,6 +890,16 @@ provide("searchOpenTrigger", searchOpenTrigger);
       <span>{{ isOwnChannel ? t("banner.reauth_own") : t("banner.reauth_other") }}</span>
       <div class="banner-actions">
         <a v-if="isOwnChannel" :href="`${API}/auth/add`" class="banner-btn reauth">
+          {{ t("banner.reauth_btn") }}
+        </a>
+      </div>
+    </div>
+
+    <div v-if="session?.isAdmin && reAuthUrl" class="add-banner reauth-banner">
+      <span class="banner-icon" v-html="iconSvg('alert-triangle')"></span>
+      <span>{{ t("banner.bot_reauth") }}</span>
+      <div class="banner-actions">
+        <a :href="reAuthUrl" class="banner-btn reauth">
           {{ t("banner.reauth_btn") }}
         </a>
       </div>

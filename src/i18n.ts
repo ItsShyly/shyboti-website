@@ -42,6 +42,8 @@ const translations: Record<Locale, Record<string, string>> = {
       "Your authorization is out of date - some features won't work until you re-authorize.",
     "banner.reauth_other":
       "This channel's authorization is out of date - some features won't work until the broadcaster re-authorizes.",
+    "banner.bot_reauth":
+      "The bot's own authorization is missing a required scope - some features won't work until it's re-authorized.",
     "banner.reauth_btn": "Re-authorize",
     "footer.copy": "© 2026 shyboti.de",
     "footer.privacy": "Privacy",
@@ -877,6 +879,8 @@ const translations: Record<Locale, Record<string, string>> = {
       "Deine Autorisierung ist veraltet - manche Funktionen funktionieren erst nach erneuter Autorisierung.",
     "banner.reauth_other":
       "Die Autorisierung dieses Channels ist veraltet - manche Funktionen funktionieren erst, wenn der Broadcaster sich erneut autorisiert.",
+    "banner.bot_reauth":
+      "Der Bot selbst hat keine ausreichende Autorisierung - manche Funktionen funktionieren erst nach erneuter Autorisierung des Bots.",
     "banner.reauth_btn": "Erneut autorisieren",
 
     "footer.copy": "© 2026 shyboti.de",
