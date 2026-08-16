@@ -61,6 +61,13 @@ const baseHeight = ref(1080);
 const loading = ref(true);
 const stageRef = ref<HTMLElement | null>(null);
 
+// >>> visual-only brightnes slider
+const stageBrightness = ref(100);
+const stageBackground = computed(() => {
+  const v = Math.round((stageBrightness.value / 100) * 255);
+  return `rgb(${v}, ${v}, ${v})`;
+});
+
 function pendingKey(sceneItemId: number): string {
   return `${props.sceneName} ${sceneItemId}`;
 }
@@ -410,6 +417,12 @@ function onStageClick(e: MouseEvent) {
         <div class="canvas-topbar">
           <div class="canvas-topbar-title">{{ sceneName }}</div>
           <div class="canvas-topbar-actions">
+            <div class="canvas-brightness">
+              <span v-html="iconSvgFor('moon')"></span>
+              <input type="range" min="0" max="100" v-model.number="stageBrightness"
+                title="Canvas brightness (visual only)" />
+              <span v-html="iconSvgFor('sun')"></span>
+            </div>
             <button class="canvas-close-btn" title="Close (Esc)" @click="emit('close')"
               v-html="iconSvgFor('x')"></button>
           </div>
@@ -427,7 +440,8 @@ function onStageClick(e: MouseEvent) {
                 (re-download it and restart it) to support the layout editor.
               </span>
             </div>
-            <div v-else ref="stageRef" class="canvas-stage" :style="{ aspectRatio: `${baseWidth} / ${baseHeight}` }"
+            <div v-else ref="stageRef" class="canvas-stage"
+              :style="{ aspectRatio: `${baseWidth} / ${baseHeight}`, background: stageBackground }"
               @mousedown="onStageClick">
               <div v-for="it in placeableItems" :key="it.sceneItemId" class="canvas-item" :class="{
                 selected: it.sceneItemId === selectedId,
@@ -508,6 +522,29 @@ function onStageClick(e: MouseEvent) {
   gap: 8px;
 }
 
+.canvas-brightness {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid #2a2a30;
+  background: #111217;
+  color: #666;
+}
+
+.canvas-brightness svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.canvas-brightness input[type="range"] {
+  width: 90px;
+  accent-color: #6f2bff;
+  cursor: pointer;
+}
+
 .canvas-close-btn {
   width: 30px;
   height: 30px;
@@ -562,7 +599,7 @@ function onStageClick(e: MouseEvent) {
   width: 100%;
   max-height: 100%;
   max-width: 100%;
-  background: #fff;
+  /* >>> background set inline via stageBackground (brightness slider) */
   overflow: hidden;
   border: 1px solid #2a2a30;
   user-select: none;
