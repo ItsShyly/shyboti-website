@@ -273,6 +273,7 @@ interface AutomodMsg {
   displayName: string;
   channel: string;
   timestamp: string;
+  // >>> synthesized server-side from current mod/vip/broadcaster status
   _automod: true;
   _category: string;
   _status: string;
@@ -3432,9 +3433,8 @@ function paintNameStyle(paint: {
                           <span v-else class="badge-fallback" :title="b.title || b.label">{{ b.label }}</span>
                         </template>
                       </div>
-                      <div class="log-user log-user-clickable"
-                        :data-snippet-paint="getRowData(item.msg).paintPreview" :style="getRowData(item.msg).nameStyle"
-                        @click.stop="
+                      <div class="log-user log-user-clickable" :data-snippet-paint="getRowData(item.msg).paintPreview"
+                        :style="getRowData(item.msg).nameStyle" @click.stop="
                           openUserPopup(
                             item.msg.username,
                             channel || item.msg.channel?.replace('#', ''),
@@ -3468,8 +3468,8 @@ function paintNameStyle(paint: {
                     'search-match': searchMatchSet.has(item.msg.id),
                     'search-current': searchCurrentId === item.msg.id,
                   }" @vnodeMounted="(vn: VNode) => rowMounted(vn.el as Element)" @vnodeBeforeUpdate="
-                      (vn: VNode) => rowBeforeUpdate(vn.el as Element)
-                    " @vnodeUpdated="(vn: VNode) => rowUpdated(vn.el as Element)">
+                    (vn: VNode) => rowBeforeUpdate(vn.el as Element)
+                  " @vnodeUpdated="(vn: VNode) => rowUpdated(vn.el as Element)">
                     <div class="log-row">
                       <div class="log-time-col">
                         <div v-if="getRowData(item.msg).eventMeta" class="log-event-label"
@@ -3536,9 +3536,9 @@ function paintNameStyle(paint: {
                           'reply-context-link':
                             !!item.msg.tags?.['reply-parent-msg-id'],
                         }" :title="item.msg.tags?.['reply-parent-msg-id']
-                              ? 'Jump to replied message'
-                              : undefined
-                            " @click.stop="jumpToReplyParent(item.msg)">
+                          ? 'Jump to replied message'
+                          : undefined
+                          " @click.stop="jumpToReplyParent(item.msg)">
                           <span class="reply-icon">⮣</span>
                           <span class="reply-parent-user">@{{
                             item.msg.tags["reply-parent-display-name"] ||
