@@ -637,17 +637,39 @@ function paintNameStyle(paint: {
   return styles;
 }
 
-// >>> Format detail nicely
-function fmtDetail(e: ActivityEntry): string {
-  if (e.type === "timeout" && e.detail) {
-    const s = parseInt(e.detail);
+// >>> Detail strings from the backend look like "[Category] Detected: X — reason"
+interface ParsedDetail {
+  category: string | null;
+  reason: string | null;
+  text: string;
+}
+function parseDetail(e: ActivityEntry): ParsedDetail {
+  let raw = e.detail || "";
+  // >>> plain numeric-seconds detail (native Twitch/IRC timeouts) has no category tag
+  if (e.type === "timeout" && raw && !raw.startsWith("[")) {
+    const s = parseInt(raw);
     if (!isNaN(s)) {
-      if (s >= 3600) return `${Math.round(s / 3600)}h timeout`;
-      if (s >= 60) return `${Math.round(s / 60)}m timeout`;
-      return `${s}s timeout`;
+      const text =
+        s >= 3600
+          ? `${Math.round(s / 3600)}h timeout`
+          : s >= 60
+            ? `${Math.round(s / 60)}m timeout`
+            : `${s}s timeout`;
+      return { category: null, reason: null, text };
     }
   }
-  return e.detail || "";
+  const catMatch = raw.match(/^\[([^\]]+)\]\s*/);
+  const category = catMatch ? catMatch[1]! : null;
+  if (catMatch) raw = raw.slice(catMatch[0].length);
+  const dashIdx = raw.indexOf(" — ");
+  if (dashIdx >= 0) {
+    return {
+      category,
+      reason: raw.slice(dashIdx + 3),
+      text: raw.slice(0, dashIdx),
+    };
+  }
+  return { category, reason: null, text: raw };
 }
 
 // >>> Actor display - 'mod' is generic (Twitch chat event, actor unknown), otherwise show name
@@ -701,7 +723,7 @@ function fmtActor(actor: string) {
         <div class="feed-day-header" @click.stop="toggleDay(group.date)">
           <span class="day-chevron">{{
             collapsedDays.has(group.date) ? "▶" : "▼"
-          }}</span>
+            }}</span>
           <span class="day-label">{{ group.date }}</span>
           <span class="day-count">{{ group.entries.length }}</span>
         </div>
@@ -719,7 +741,9 @@ function fmtActor(actor: string) {
 
               <span class="feed-by" v-if="e.actor">by {{ fmtActor(e.actor) }}</span>
 
-              <span v-if="fmtDetail(e)" class="feed-detail">· {{ fmtDetail(e) }}</span>
+              <span v-if="parseDetail(e).category" class="ep-meta-pill cond">{{ parseDetail(e).category }}</span>
+              <span v-if="parseDetail(e).reason" class="ep-meta-pill when">{{ parseDetail(e).reason }}</span>
+              <span v-if="parseDetail(e).text" class="feed-detail">· {{ parseDetail(e).text }}</span>
 
               <span v-if="viewChannel === ALL_CHANNELS" class="feed-ch">#{{ e.channel }}</span>
             </div>
@@ -776,7 +800,7 @@ function fmtActor(actor: string) {
             <div v-if="popupUser.ownFollowers !== null" class="popup-stat">
               <span class="stat-val">{{
                 fmtFollowers(popupUser.ownFollowers)
-              }}</span>
+                }}</span>
               <span class="stat-lbl">followers</span>
             </div>
           </div>
@@ -784,7 +808,7 @@ function fmtActor(actor: string) {
             <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">
               <span class="rel-icon">{{
                 popupUser.followedAt ? "♥" : "♥"
-              }}</span>
+                }}</span>
               <span class="rel-label">
                 <template v-if="popupUser.followedAt">Following for
                   {{ fmtDuration(popupUser.followedAt) }}</template>
@@ -794,7 +818,7 @@ function fmtActor(actor: string) {
             <div class="popup-rel" :class="popupUser.subbedSince ? 'rel-yes' : 'rel-no'">
               <span class="rel-icon">{{
                 popupUser.subbedSince ? "★" : "★"
-              }}</span>
+                }}</span>
               <span class="rel-label">
                 <template v-if="popupUser.subbedSince">
                   {{ subTierLabel(popupUser.subTier ?? "1000") }} ·
