@@ -675,6 +675,9 @@ onMounted(async () => {
   } else if (status === "added" && channel) {
     showToast(`✓ ShyBoti added to #${channel}`);
     router.push("/dashboard");
+  } else if (status === "reauthed" && channel) {
+    showToast(`✓ Re-authorized #${channel}`);
+    router.push("/dashboard");
   } else if (status === "removed" && channel) {
     showToast(`✓ ShyBoti left #${channel}`);
   }
