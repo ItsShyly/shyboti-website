@@ -398,9 +398,58 @@ function lockForNavigation() {
 // vvv live/edit mode + staged (unsaved) changes vvv
 const editMode = ref(true); // <<< default: edit mode, nothing applies until Save
 const pendingSceneName = ref<string | null>(null);
-const pendingSourceEdits = ref<
-  Record<number, { visible?: boolean; muted?: boolean; volumePercent?: number }>
->({});
+// >>> keyed by "scene sceneItemId" (not just sceneItemId, which OBS only scopes
+// >>> per-scene and can collide across scenes) and self-contained with a baseline
+// >>> snapshot, so edits made while browsing scene A survive browsing to scene B and
+// >>> still get diffed/applied correctly on Save without needing scene A's sources
+// >>> still loaded in `sources.value`
+interface PendingSourceEdit {
+  scene: string;
+  sceneItemId: number;
+  sourceName: string;
+  isAudioSource: boolean;
+  baseline: { visible: boolean; muted: boolean; volumePercent: number };
+  visible?: boolean;
+  muted?: boolean;
+  volumePercent?: number;
+}
+const pendingSourceEdits = ref<Record<string, PendingSourceEdit>>({});
+function sourceEditKey(scene: string, sceneItemId: number): string {
+  return `${scene} ${sceneItemId}`;
+}
+function getPendingEdit(src: any): PendingSourceEdit | undefined {
+  return pendingSourceEdits.value[sourceEditKey(selectedScene.value, src.sceneItemId)];
+}
+// >>> creates the entry (with a baseline snapshot) on first edit, reuses it after
+function stageSourceEdit(
+  src: any,
+  patch: Partial<Pick<PendingSourceEdit, "visible" | "muted" | "volumePercent">>,
+) {
+  const key = sourceEditKey(selectedScene.value, src.sceneItemId);
+  const existing = pendingSourceEdits.value[key];
+  const entry: PendingSourceEdit = existing ?? {
+    scene: selectedScene.value,
+    sceneItemId: src.sceneItemId,
+    sourceName: src.sourceName,
+    isAudioSource: !!src.isAudioSource,
+    baseline: {
+      visible: src.visible,
+      muted: !!src.muted,
+      volumePercent: src.volumePercent ?? 100,
+    },
+  };
+  pendingSourceEdits.value = {
+    ...pendingSourceEdits.value,
+    [key]: { ...entry, ...patch },
+  };
+}
+function pendingEditIsNoop(e: PendingSourceEdit): boolean {
+  return (
+    (e.visible === undefined || e.visible === e.baseline.visible) &&
+    (e.muted === undefined || e.muted === e.baseline.muted) &&
+    (e.volumePercent === undefined || e.volumePercent === e.baseline.volumePercent)
+  );
+}
 const pendingCategory = ref<{ id: string; name: string; boxArt: string } | null>(
   null,
 );
@@ -409,19 +458,15 @@ const pendingChanges = computed(() => {
   const list: string[] = [];
   if (pendingSceneName.value && pendingSceneName.value !== currentScene.value)
     list.push(`Scene → ${pendingSceneName.value}`);
-  for (const [idStr, edit] of Object.entries(pendingSourceEdits.value)) {
-    const id = Number(idStr);
-    const src = (sources.value as any[]).find((s) => s.sceneItemId === id);
-    if (!src) continue;
-    if (edit.visible !== undefined && edit.visible !== src.visible)
-      list.push(`${src.sourceName} ${edit.visible ? "shown" : "hidden"}`);
-    if (edit.muted !== undefined && edit.muted !== (src.muted ?? false))
-      list.push(`${src.sourceName} ${edit.muted ? "muted" : "unmuted"}`);
-    if (
-      edit.volumePercent !== undefined &&
-      edit.volumePercent !== (src.volumePercent ?? 100)
-    )
-      list.push(`${src.sourceName} volume → ${edit.volumePercent}%`);
+  for (const e of Object.values(pendingSourceEdits.value)) {
+    if (pendingEditIsNoop(e)) continue;
+    const label = e.scene === selectedScene.value ? e.sourceName : `${e.sourceName} (${e.scene})`;
+    if (e.visible !== undefined && e.visible !== e.baseline.visible)
+      list.push(`${label} ${e.visible ? "shown" : "hidden"}`);
+    if (e.muted !== undefined && e.muted !== e.baseline.muted)
+      list.push(`${label} ${e.muted ? "muted" : "unmuted"}`);
+    if (e.volumePercent !== undefined && e.volumePercent !== e.baseline.volumePercent)
+      list.push(`${label} volume → ${e.volumePercent}%`);
   }
   if (pendingCategory.value && pendingCategory.value.id !== currentCategoryId.value)
     list.push(`Category → ${pendingCategory.value.name}`);
@@ -430,10 +475,10 @@ const pendingChanges = computed(() => {
 const hasPending = computed(() => pendingChanges.value.length > 0);
 
 function effectiveVisible(src: any): boolean {
-  return pendingSourceEdits.value[src.sceneItemId]?.visible ?? src.visible;
+  return getPendingEdit(src)?.visible ?? src.visible;
 }
 function effectiveMuted(src: any): boolean {
-  return pendingSourceEdits.value[src.sceneItemId]?.muted ?? !!src.muted;
+  return getPendingEdit(src)?.muted ?? !!src.muted;
 }
 function isScenePending(name: string): boolean {
   return (
@@ -443,13 +488,10 @@ function isScenePending(name: string): boolean {
   );
 }
 function isSourcePending(src: any): boolean {
-  const e = pendingSourceEdits.value[src.sceneItemId];
+  if (!editMode.value) return false;
+  const e = getPendingEdit(src);
   if (!e) return false;
-  return (
-    (e.visible !== undefined && e.visible !== src.visible) ||
-    (e.muted !== undefined && e.muted !== (src.muted ?? false)) ||
-    (e.volumePercent !== undefined && e.volumePercent !== (src.volumePercent ?? 100))
-  );
+  return !pendingEditIsNoop(e);
 }
 function isCategoryPending(categoryId: string): boolean {
   return (
@@ -465,7 +507,17 @@ function onSceneClick(name: string) {
     switchScene(name);
     return;
   }
-  pendingSceneName.value = name;
+  // >>> edit mode: clicking a card just browses its sources/mixer for editing -
+  // >>> it does NOT stage a live scene switch, so you can hide sources on any
+  // >>> scene without also queuing up a switch to it on Save
+  selectedScene.value = name;
+  loadSources(name);
+}
+
+// >>> explicit "switch to this scene on Save" action, separate from browsing
+function stageSceneSwitch(name: string) {
+  if (locked.value || !editMode.value) return;
+  pendingSceneName.value = pendingSceneName.value === name ? null : name;
 }
 
 function onToggleVisible(src: any) {
@@ -474,11 +526,7 @@ function onToggleVisible(src: any) {
     toggleSourceVisible(src);
     return;
   }
-  const cur = effectiveVisible(src);
-  pendingSourceEdits.value = {
-    ...pendingSourceEdits.value,
-    [src.sceneItemId]: { ...pendingSourceEdits.value[src.sceneItemId], visible: !cur },
-  };
+  stageSourceEdit(src, { visible: !effectiveVisible(src) });
 }
 
 function onToggleMute(src: any) {
@@ -487,11 +535,7 @@ function onToggleMute(src: any) {
     toggleSourceMute(src);
     return;
   }
-  const cur = effectiveMuted(src);
-  pendingSourceEdits.value = {
-    ...pendingSourceEdits.value,
-    [src.sceneItemId]: { ...pendingSourceEdits.value[src.sceneItemId], muted: !cur },
-  };
+  stageSourceEdit(src, { muted: !effectiveMuted(src) });
 }
 
 function onVolumeCommit(src: any, percent: number) {
@@ -500,10 +544,7 @@ function onVolumeCommit(src: any, percent: number) {
     onVolumeChange(src, percent);
     return;
   }
-  pendingSourceEdits.value = {
-    ...pendingSourceEdits.value,
-    [src.sceneItemId]: { ...pendingSourceEdits.value[src.sceneItemId], volumePercent: percent },
-  };
+  stageSourceEdit(src, { volumePercent: percent });
   const next = { ...sliderOverride.value };
   delete next[src.sceneItemId];
   sliderOverride.value = next;
@@ -526,6 +567,11 @@ function setMode(next: boolean) {
   if (locked.value || next === editMode.value) return;
   if (next === false && hasPending.value) discardChanges(); // <<< live mode has no staging concept
   editMode.value = next;
+  // >>> live mode always tracks the actual live scene - snap back in case edit mode was left browsing a different (non-live) scene
+  if (next === false && currentScene.value && currentScene.value !== selectedScene.value) {
+    selectedScene.value = currentScene.value;
+    loadSources(currentScene.value);
+  }
 }
 
 async function saveChanges() {
@@ -534,19 +580,15 @@ async function saveChanges() {
   const tasks: Promise<any>[] = [];
   if (pendingSceneName.value && pendingSceneName.value !== currentScene.value)
     tasks.push(switchScene(pendingSceneName.value));
-  for (const [idStr, edit] of Object.entries(pendingSourceEdits.value)) {
-    const id = Number(idStr);
-    const src = (sources.value as any[]).find((s) => s.sceneItemId === id);
-    if (!src) continue;
-    if (edit.visible !== undefined && edit.visible !== src.visible)
-      tasks.push(setSourceVisibility(src, edit.visible));
-    if (edit.muted !== undefined && edit.muted !== (src.muted ?? false))
-      tasks.push(setSourceMute(src, edit.muted));
-    if (
-      edit.volumePercent !== undefined &&
-      edit.volumePercent !== (src.volumePercent ?? 100)
-    )
-      tasks.push(setSourceVolume(src, edit.volumePercent));
+  for (const e of Object.values(pendingSourceEdits.value)) {
+    if (pendingEditIsNoop(e)) continue;
+    const ref_ = { sceneItemId: e.sceneItemId, sourceName: e.sourceName };
+    if (e.visible !== undefined && e.visible !== e.baseline.visible)
+      tasks.push(setSourceVisibility(ref_, e.visible, e.scene));
+    if (e.muted !== undefined && e.muted !== e.baseline.muted)
+      tasks.push(setSourceMute(ref_, e.muted));
+    if (e.volumePercent !== undefined && e.volumePercent !== e.baseline.volumePercent)
+      tasks.push(setSourceVolume(ref_, e.volumePercent));
   }
   if (pendingCategory.value && pendingCategory.value.id !== currentCategoryId.value)
     tasks.push(
@@ -612,9 +654,6 @@ const bitrateBad = computed(
 const agentConnected = computed(() => agentStatus.value?.connected ?? false);
 const obsConnected = computed(() => agentStatus.value?.obs_connected ?? false);
 const currentScene = computed(() => agentStatus.value?.current_scene ?? "");
-const liveScene = computed(
-  () => scenes.value.find((s) => s.sceneName === currentScene.value) ?? null,
-);
 const hiddenScenes = computed(() => new Set(agentStatus.value?.hidden_scenes ?? []));
 // >>> filtered-out scenes stay hidden here even while live - the live row above
 // >>> renders liveScene separately regardless of the filter, so they still show
@@ -625,9 +664,10 @@ const nonLiveScenes = computed(() =>
   ),
 );
 
-// >>> keep selectedScene glued to what's actually live
+// >>> keep selectedScene glued to what's actually live - but only in live mode,
+// >>> since edit mode lets you browse/edit a different scene's sources on purpose
 watch(currentScene, (name) => {
-  if (!name) return;
+  if (!name || editMode.value) return;
   selectedScene.value = name;
   loadSources(name);
 });
@@ -956,11 +996,14 @@ async function switchScene(name: string) {
 }
 
 // vvv sources vvv
-async function loadSources(sceneName: string) {
+// >>> silent=true skips the loading flag entirely - used for background refreshes
+// >>> (poll loop, post-action re-syncs) so the list doesn't flash/re-skeleton every
+// >>> few seconds when nothing the user did actually changed
+async function loadSources(sceneName: string, opts: { silent?: boolean } = {}) {
   if (!session.value) return;
   const gen = requestGen.value;
   selectedScene.value = sceneName;
-  sourcesLoading.value = true;
+  if (!opts.silent) sourcesLoading.value = true;
   try {
     const res = await fetch(
       `${API}/obs/${session.value.channel}/sources?scene=${encodeURIComponent(sceneName)}`,
@@ -979,10 +1022,12 @@ async function loadSources(sceneName: string) {
   if (gen === requestGen.value) sourcesLoading.value = false;
 }
 
-// >>> target-setting - both the live-mode instant toggle AND the edit-mode Save flow
-// >>> call this with an explicit value, so a staged-then-reverted edit never flips
-// >>> the source to the wrong side (a plain toggle would, since it flips off *current*)
-async function setSourceVisibility(src: SourceInfo, target: boolean) {
+// >>> target-setting
+async function setSourceVisibility(
+  src: { sceneItemId: number },
+  target: boolean,
+  scene: string = selectedScene.value,
+) {
   if (!session.value || pendingSources.value.has(src.sceneItemId)) return;
   pendingSources.value = new Set(pendingSources.value).add(src.sceneItemId);
   try {
@@ -990,13 +1035,13 @@ async function setSourceVisibility(src: SourceInfo, target: boolean) {
       method: "POST",
       headers: { ...authHeaders.value, "Content-Type": "application/json" },
       body: JSON.stringify({
-        scene: selectedScene.value,
+        scene,
         sceneItemId: src.sceneItemId,
         enabled: target,
       }),
     });
   } catch { }
-  if (selectedScene.value) await loadSources(selectedScene.value);
+  if (scene === selectedScene.value) await loadSources(scene, { silent: true });
   const next_ = new Set(pendingSources.value);
   next_.delete(src.sceneItemId);
   pendingSources.value = next_;
@@ -1005,7 +1050,7 @@ function toggleSourceVisible(src: SourceInfo) {
   return setSourceVisibility(src, !src.visible);
 }
 
-async function setSourceMute(src: SourceInfo & { muted?: boolean }, target: boolean) {
+async function setSourceMute(src: { sceneItemId: number; sourceName: string }, target: boolean) {
   if (!session.value || pendingSources.value.has(src.sceneItemId)) return;
   pendingSources.value = new Set(pendingSources.value).add(src.sceneItemId);
   try {
@@ -1018,7 +1063,7 @@ async function setSourceMute(src: SourceInfo & { muted?: boolean }, target: bool
       }),
     });
   } catch { }
-  if (selectedScene.value) await loadSources(selectedScene.value);
+  if (selectedScene.value) await loadSources(selectedScene.value, { silent: true });
   const next_ = new Set(pendingSources.value);
   next_.delete(src.sceneItemId);
   pendingSources.value = next_;
@@ -1265,7 +1310,7 @@ async function onVolumeChange(src: any, percent: number) {
   sliderOverride.value = next;
 }
 
-async function setSourceVolume(src: any, percent: number) {
+async function setSourceVolume(src: { sourceName: string }, percent: number) {
   if (!session.value) return;
   try {
     await fetch(`${API}/obs/${session.value.channel}/source/volume`, {
@@ -1274,7 +1319,7 @@ async function setSourceVolume(src: any, percent: number) {
       body: JSON.stringify({ source: src.sourceName, percent }),
     });
   } catch { }
-  if (selectedScene.value) await loadSources(selectedScene.value);
+  if (selectedScene.value) await loadSources(selectedScene.value, { silent: true });
 }
 
 // vvv force all previews button vvv
@@ -1299,7 +1344,7 @@ onMounted(() => {
   pollTimer = setInterval(async () => {
     await poll();
     if (agentConnected.value && obsConnected.value && selectedScene.value)
-      loadSources(selectedScene.value);
+      loadSources(selectedScene.value, { silent: true });
     if (agentConnected.value && obsConnected.value && scenes.value.length === 0)
       refreshScenes();
   }, 5000);
@@ -1378,7 +1423,7 @@ watch(
             <span class="obs-live-stat-label">bitrate</span>
             <span class="obs-live-stat-value">{{
               bitrateLabel ?? "not streaming"
-            }}</span>
+              }}</span>
           </div>
           <div class="obs-live-stat">
             <span class="obs-live-stat-label">preview size</span>
@@ -1453,7 +1498,8 @@ watch(
               </div>
               <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? "Edit" : "Live" }}</span>
             </div>
-            <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> leaving — loading fresh state…</span>
+            <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> leaving —
+              loading fresh state…</span>
             <span v-else class="mode-hint">{{
               editMode
                 ? "Changes stage here until you press Save."
@@ -1464,18 +1510,21 @@ watch(
           <div class="ep-field-label obs-section-label">
           </div>
           <div class="obs-scenes">
-            <div class="obs-scenes-live-row" v-if="liveScene">
+            <!-- >>> keyed off currentScene (a plain string, known as soon as agentStatus loads)
+            not liveScene (which needed the separate /scenes fetch to also finish and contain
+            a matching entry) - that extra async hop was why this row would vanish then pop
+            back in, jumping the whole layout -->
+            <div class="obs-scenes-live-row" v-if="currentScene">
               <div class="obs-live-scene-wrap">
                 <div class="obs-scene-card obs-scene-card-live active"
-                  :class="{ picked: liveScene.sceneName === selectedScene }" @click="onSceneClick(liveScene.sceneName)">
+                  :class="{ picked: currentScene === selectedScene }" @click="onSceneClick(currentScene)">
                   <div class="obs-scene-thumb">
-                    <img v-if="sceneShots[liveScene.sceneName]" :src="sceneShots[liveScene.sceneName]"
-                      :alt="liveScene.sceneName" />
+                    <img v-if="sceneShots[currentScene]" :src="sceneShots[currentScene]" :alt="currentScene" />
                     <div v-else class="obs-scene-thumb-empty">
                       {{ agentStatus?.screenshots ? "…" : "previews off" }}
                     </div>
                   </div>
-                  <div class="obs-scene-name">{{ liveScene.sceneName }}</div>
+                  <div class="obs-scene-name">{{ currentScene }}</div>
                   <div class="obs-scene-live">live</div>
                 </div>
               </div>
@@ -1490,6 +1539,10 @@ watch(
                     {{ agentStatus?.screenshots ? "…" : "previews off" }}
                   </div>
                   <span v-if="isScenePending(s.sceneName)" class="obs-scene-pending-tag">pending</span>
+                  <button v-if="editMode" class="obs-scene-stage-btn" :class="{ active: isScenePending(s.sceneName) }"
+                    :title="isScenePending(s.sceneName) ? 'Unstage - keep current scene live' : 'Switch to this scene on Save'"
+                    @click.stop="stageSceneSwitch(s.sceneName)" v-html="iconSvgFor('play')">
+                  </button>
                 </div>
                 <div class="obs-scene-name">{{ s.sceneName }}</div>
               </div>
@@ -1521,9 +1574,12 @@ watch(
             <label class="ep-field-label">sources
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-                }}</span></label>
+              }}</span></label>
             <div class="obs-source-list">
-              <template v-if="sourcesLoading">
+              <!-- >>> only shown while there's genuinely nothing to display yet - background
+              (poll/post-action) refreshes are silent and never touch sourcesLoading, so this
+              can't flash over rows that are already on screen -->
+              <template v-if="sourcesLoading && !sources.length">
                 <div class="obs-source-row" v-for="i in 4" :key="i">
                   <div class="ep-skeleton-block" style="height:10px;width:40%;"></div>
                   <div class="ep-skeleton-block ep-skeleton-btn"></div>
@@ -1558,7 +1614,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-                }}</span></label>
+              }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
                 :class="{ pending: isSourcePending(src) }">
@@ -1572,7 +1628,7 @@ watch(
                 </div>
                 <div class="obs-mixer-slider-row">
                   <input type="range" min="0" max="100" :value="sliderOverride[src.sceneItemId] ??
-                    pendingSourceEdits[src.sceneItemId]?.volumePercent ??
+                    getPendingEdit(src)?.volumePercent ??
                     src.volumePercent ??
                     100
                     " class="obs-mixer-slider" @input="
@@ -1589,7 +1645,7 @@ watch(
                   <span class="obs-mixer-db">{{
                     volumeToDb(
                       sliderOverride[src.sceneItemId] ??
-                      pendingSourceEdits[src.sceneItemId]?.volumePercent ??
+                      getPendingEdit(src)?.volumePercent ??
                       src.volumePercent,
                     )
                   }}
@@ -1918,6 +1974,8 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .obsconn-gear-btn {
@@ -3307,16 +3365,15 @@ watch(
   }
 }
 
-/* Bitrate/preview stats, floats under the header without taking layout space */
+/* Bitrate/preview stats - in-flow (not absolute) so it reserves its own space instead
+   of floating over whatever renders below the header (was landing on top of .mode-bar) */
 .obs-live-stats {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 8px;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 6px;
-  z-index: 5;
+  flex-basis: 100%;
+  margin-top: 8px;
 }
 
 .obs-live-stat {
@@ -3505,6 +3562,40 @@ watch(
 .obs-mixer-row.pending {
   border-left: 2px solid #e5c07b;
   background: #e5c07b0d;
+}
+
+/* >>> "switch to this scene on Save" - separate from clicking the card (which just browses) */
+.obs-scene-stage-btn {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid #2a2a30;
+  background: #0d0d10cc;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.obs-scene-stage-btn svg {
+  width: 10px;
+  height: 10px;
+}
+
+.obs-scene-stage-btn:hover {
+  color: #9d6cff;
+  border-color: #6f2bff66;
+}
+
+.obs-scene-stage-btn.active {
+  color: #20180a;
+  background: #e5c07b;
+  border-color: #e5c07b;
 }
 
 .pending-tag {
