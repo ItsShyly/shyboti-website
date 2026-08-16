@@ -422,7 +422,7 @@ const translations: Record<Locale, Record<string, string>> = {
       "Twitch's Blocked Terms list only triggers plain text, not regex",
     "mod.badge.automod_pending": "pending",
     "mod.badge.automod_pending_hint":
-      "Not yet pushed to Twitch (missing scope, or the push failed) - re-auth via the dashboard if this persists.",
+      "Sync Failed - the bot may not be a moderator",
     "mod.sync.active": "synced from",
     "mod.sync.config": "Import",
     "mod.sync.select": "Select channel…",
@@ -1265,7 +1265,7 @@ const translations: Record<Locale, Record<string, string>> = {
       "Twitchs Blocked-Terms-Liste erkennt nur reinen Text, keine Regex!",
     "mod.badge.automod_pending": "ausstehend",
     "mod.badge.automod_pending_hint":
-      "Noch nicht an Twitch übertragen (fehlende Berechtigung oder Übertragung fehlgeschlagen)",
+      "Sync Fehlgeschlagen - der Bot ist evtl. kein Moderator",
     "mod.sync.active": "synchronisiert von",
     "mod.sync.config": "Importieren",
     "mod.sync.select": "Channel auswählen…",
