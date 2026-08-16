@@ -1,7 +1,7 @@
 <script setup lang="ts">
 
 
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { API } from "../api";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 
@@ -68,17 +68,34 @@ function pendingKey(sceneItemId: number): string {
 function pendingFor(sceneItemId: number): PendingEdit | undefined {
   return props.pendingEdits[pendingKey(sceneItemId)];
 }
-// >>> merges any staged-but-not-yet-applied edit onto the server-truth item, so a
-// >>> move/toggle made here (or from the main sources list) survives a poll refresh
-// >>> instead of snapping back to whatever OBS still actually has
+
+
+const localTransform = ref<Record<number, SourceTransform>>({});
+watch(
+  () => props.pendingEdits,
+  (edits) => {
+    for (const idStr of Object.keys(localTransform.value)) {
+      const id = Number(idStr);
+      if (!edits[pendingKey(id)]?.transform) {
+        const next = { ...localTransform.value };
+        delete next[id];
+        localTransform.value = next;
+      }
+    }
+  },
+  { deep: true },
+);
+
+
 function effective(it: CanvasItem): CanvasItem {
+  const local = localTransform.value[it.sceneItemId];
   const p = pendingFor(it.sceneItemId);
-  if (!p) return it;
-  const t = p.transform;
+  const t = local ?? p?.transform;
+  if (!t && p === undefined) return it;
   return {
     ...it,
-    sceneItemEnabled: p.visible ?? it.sceneItemEnabled,
-    muted: p.muted ?? it.muted,
+    sceneItemEnabled: p?.visible ?? it.sceneItemEnabled,
+    muted: p?.muted ?? it.muted,
     positionX: t?.positionX ?? it.positionX,
     positionY: t?.positionY ?? it.positionY,
     scaleX: t?.scaleX ?? it.scaleX,
@@ -186,8 +203,9 @@ function currentTransform(it: CanvasItem): SourceTransform {
   };
 }
 
-// >>> live mode applies immediately; edit mode stages through the parent instead
+
 async function commitTransform(it: CanvasItem, transform: SourceTransform) {
+  localTransform.value = { ...localTransform.value, [it.sceneItemId]: transform };
   if (props.editMode) {
     emit("stage", it, { transform });
     return;
@@ -224,9 +242,11 @@ const dragState = ref<{
 
 function onItemMouseDown(it: CanvasItem, e: MouseEvent) {
   if ((e.target as HTMLElement).closest(".canvas-handle")) return; // <<< handles own their own drag
+  // >>> selection only happens via the sidebar now - clicking a box on the canvas
+  // >>> does nothing unless it's already the selected one, in which case it drags
+  if (it.sceneItemId !== props.selectedId) return;
   e.preventDefault();
   e.stopPropagation();
-  select(it.sceneItemId);
   const eff = effective(it);
   dragState.value = {
     id: it.sceneItemId,
@@ -625,6 +645,7 @@ const spotlightClipPath = computed(() => {
   object-fit: cover;
   pointer-events: none;
   opacity: 0.9;
+  z-index: 0;
 }
 
 .canvas-item {
@@ -632,6 +653,7 @@ const spotlightClipPath = computed(() => {
   border: 1px dashed rgba(157, 108, 255, 0.6);
   cursor: move;
   transform-origin: 0 0;
+  z-index: 3;
 }
 
 .canvas-item.hidden_ {
@@ -693,6 +715,7 @@ const spotlightClipPath = computed(() => {
   inset: 0;
   background: rgba(255, 255, 255, 0.8);
   pointer-events: none;
+  z-index: 1;
 }
 
 .canvas-sidebar {
