@@ -72,7 +72,7 @@ async function loadScreenshot() {
     );
     if (res.ok) {
       const d = (await res.json()) as { imageData: string | null };
-      if (d.imageData) screenshot.value = `data:image/jpeg;base64,${d.imageData}`;
+      if (d.imageData) screenshot.value = d.imageData;
     }
   } catch { }
 }
@@ -297,8 +297,8 @@ const spotlightRects = computed(() => {
           <img v-if="screenshot" :src="screenshot" alt="" class="canvas-backdrop" />
 
           <div v-for="it in items" :key="it.sceneItemId" class="canvas-item"
-            :class="{ selected: it.sceneItemId === selectedId, hidden_: !it.sceneItemEnabled }"
-            :style="itemStyle(it)" @mousedown="onItemMouseDown(it, $event)">
+            :class="{ selected: it.sceneItemId === selectedId, hidden_: !it.sceneItemEnabled }" :style="itemStyle(it)"
+            @mousedown="onItemMouseDown(it, $event)">
             <span class="canvas-item-label">{{ it.sourceName }}</span>
             <template v-if="it.sceneItemId === selectedId">
               <span class="canvas-handle tl" @mousedown="onHandleMouseDown(it, 'tl', $event)"></span>
@@ -379,15 +379,18 @@ const spotlightRects = computed(() => {
   font-size: 11px;
   cursor: pointer;
 }
+
 .canvas-dim-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
 }
+
 .canvas-dim-btn.active {
   border-color: #e5c07b;
   color: #e5c07b;
   background: #e5c07b15;
 }
+
 .canvas-dim-btn svg {
   width: 12px;
   height: 12px;
@@ -404,6 +407,7 @@ const spotlightRects = computed(() => {
   justify-content: center;
   cursor: pointer;
 }
+
 .canvas-close-btn:hover {
   color: #f14949;
   border-color: #f1494966;
@@ -450,13 +454,16 @@ const spotlightRects = computed(() => {
   cursor: move;
   transform-origin: 0 0;
 }
+
 .canvas-item.hidden_ {
   border-style: dotted;
   opacity: 0.5;
 }
+
 .canvas-item.selected {
   border: 2px solid #f14949;
 }
+
 .canvas-item-label {
   position: absolute;
   top: -18px;
@@ -477,21 +484,25 @@ const spotlightRects = computed(() => {
   border: 1px solid #fff;
   z-index: 2;
 }
+
 .canvas-handle.tl {
   top: -5px;
   left: -5px;
   cursor: nwse-resize;
 }
+
 .canvas-handle.tr {
   top: -5px;
   right: -5px;
   cursor: nesw-resize;
 }
+
 .canvas-handle.bl {
   bottom: -5px;
   left: -5px;
   cursor: nesw-resize;
 }
+
 .canvas-handle.br {
   bottom: -5px;
   right: -5px;

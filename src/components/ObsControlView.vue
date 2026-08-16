@@ -3735,17 +3735,18 @@ watch(
 }
 
 /* ==================== live/edit mode + staged changes ==================== */
+/* >>> lives in the header row now (alongside the title and the gear/stats cluster),
+   not a full-width block anymore - sizes to its own content instead of stretching */
 .mode-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 14px;
   flex-wrap: wrap;
-  padding: 10px 14px;
+  padding: 6px 12px;
   border: 1px solid #1e1e22;
   background: #0d0d10;
-  margin-bottom: 14px;
-  width: 100%;
+  flex: 1 1 320px;
+  max-width: 480px;
 }
 
 .mode-bar-left {
