@@ -142,10 +142,9 @@ async function load() {
   loading.value = false;
 }
 
+
 const placeableItems = computed(() =>
-  items.value.filter(
-    (it) => it.inputKind === "browser_source" && (it.width ?? 0) > 0 && (it.height ?? 0) > 0,
-  ),
+  items.value.filter((it) => it.inputKind === "browser_source"),
 );
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
@@ -174,11 +173,16 @@ function scale(): number {
 function itemStyle(it: CanvasItem) {
   const e = effective(it);
   const s = scale();
+  // >>> fall back through sourceWidth/height (the browser source's own configured
+  // >>> size) and finally a flat placeholder, so a missing/failed transform fetch
+  // >>> still shows a draggable box instead of collapsing it to nothing
+  const w = e.width || e.sourceWidth || 320;
+  const h = e.height || e.sourceHeight || 240;
   return {
     left: `${(e.positionX ?? 0) * s}px`,
     top: `${(e.positionY ?? 0) * s}px`,
-    width: `${(e.width ?? 0) * s}px`,
-    height: `${(e.height ?? 0) * s}px`,
+    width: `${w * s}px`,
+    height: `${h * s}px`,
     transform: e.rotation ? `rotate(${e.rotation}deg)` : undefined,
   };
 }
@@ -434,9 +438,7 @@ function onStageClick(e: MouseEvent) {
             <div v-else-if="!placeableItems.length" class="canvas-loading">
               No browser sources in this scene yet.<br />
               <span class="canvas-loading-hint">
-                Only browser sources can be laid out here - other source types (webcam,
-                capture, etc.) can still be shown/hidden from the sidebar. If browser
-                sources you added aren't showing up, your OBS agent may need updating
+                Only browser sources can be laid out here - your OBS agent may need updating
                 (re-download it and restart it) to support the layout editor.
               </span>
             </div>
