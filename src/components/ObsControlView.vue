@@ -9,6 +9,7 @@ import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
+import ObsSceneCanvas from "./ObsSceneCanvas.vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session, channelRole } = useAuth();
@@ -518,6 +519,12 @@ function onSceneClick(name: string) {
 function stageSceneSwitch(name: string) {
   if (locked.value || !editMode.value) return;
   pendingSceneName.value = pendingSceneName.value === name ? null : name;
+}
+
+// >>> fullscreen scene layout editor (drag-move / corner-resize sources)
+const canvasSceneName = ref<string | null>(null);
+function openCanvas(name: string) {
+  canvasSceneName.value = name;
 }
 
 function onToggleVisible(src: any) {
@@ -1639,7 +1646,11 @@ watch(
                       {{ agentStatus?.screenshots ? "…" : "previews off" }}
                     </div>
                   </div>
-                  <div class="obs-scene-name">{{ currentScene }}</div>
+                  <div class="obs-scene-name-row">
+                    <div class="obs-scene-name">{{ currentScene }}</div>
+                    <button class="obs-scene-fs-btn" title="Edit scene layout"
+                      @click.stop="openCanvas(currentScene)" v-html="iconSvgFor('maximize')"></button>
+                  </div>
                   <div class="obs-scene-live">live</div>
                 </div>
               </div>
@@ -1659,7 +1670,11 @@ watch(
                     @click.stop="stageSceneSwitch(s.sceneName)" v-html="iconSvgFor('play')">
                   </button>
                 </div>
-                <div class="obs-scene-name">{{ s.sceneName }}</div>
+                <div class="obs-scene-name-row">
+                  <div class="obs-scene-name">{{ s.sceneName }}</div>
+                  <button class="obs-scene-fs-btn" title="Edit scene layout"
+                    @click.stop="openCanvas(s.sceneName)" v-html="iconSvgFor('maximize')"></button>
+                </div>
               </div>
             </div>
             <div v-if="!scenes.length" class="ep-empty">
@@ -2124,6 +2139,9 @@ watch(
       </div>
     </div>
   </Teleport>
+
+  <ObsSceneCanvas v-if="canvasSceneName && session" :channel="session.channel" :scene-name="canvasSceneName"
+    :auth-headers="authHeaders" @close="canvasSceneName = null" />
 </template>
 
 <style scoped>
@@ -2583,8 +2601,36 @@ watch(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 7px 10px 0;
   text-align: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.obs-scene-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 6px 0 10px;
+}
+
+.obs-scene-fs-btn {
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: transparent;
+  color: #555;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.obs-scene-fs-btn svg {
+  width: 11px;
+  height: 11px;
+}
+.obs-scene-fs-btn:hover {
+  color: #9d6cff;
 }
 
 .obs-scene-thumb {
