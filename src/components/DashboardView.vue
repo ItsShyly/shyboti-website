@@ -37,7 +37,9 @@ interface ActivityEntry {
   | "countdown_stopped"
   | "automod_held"
   | "mod_add"
-  | "mod_remove";
+  | "mod_remove"
+  | "vip_add"
+  | "vip_remove";
   actor: string;
   target: string;
   detail: string;
@@ -50,7 +52,21 @@ const error = ref("");
 const liveStatus = ref<"connecting" | "live" | "off">("off");
 const ALL_CHANNELS = "__all__";
 const viewChannel = ref(session.value?.channel ?? "");
+// >>> holds activityKey() results, not raw e.type
 const activeTypes = ref<Set<string>>(new Set());
+
+// >>> WHO/WHAT did it
+function activityKey(e: ActivityEntry): string {
+  if (["ban", "timeout", "unban", "message_deleted"].includes(e.type)) {
+    if (e.actor === "trigger") return `${e.type}#trigger`;
+    if (e.actor === "mod") return `${e.type}#twitch`;
+    return `${e.type}#shyboti`;
+  }
+  if (e.type === "automod_held") return "automod_held#twitch";
+  if (["mod_add", "mod_remove", "vip_add", "vip_remove"].includes(e.type))
+    return `${e.type}#twitch`;
+  return e.type;
+}
 
 // >>> Collapsed day groups - only today open by default
 const collapsedDays = ref<Set<string>>(new Set());
@@ -82,21 +98,33 @@ let sseSource: EventSource | null = null;
 // >>> fetchActivity()/startSSE() cross an await
 let disposed = false;
 
+// >>> group "types" hold activityKey() results (type#actorBucket), not raw types -
+// >>> that's how ban/timeout/etc split across the two moderation chips below
 const TYPE_GROUPS = computed(() => [
   {
     label: t("dash.filter.commands"),
     types: ["cmd_added", "cmd_changed", "cmd_removed"] as const,
   },
   {
-    label: t("dash.filter.moderation"),
+    label: t("dash.filter.shyboti_moderation"),
     types: [
-      "ban",
-      "unban",
-      "timeout",
-      "message_deleted",
-      "automod_held",
-      "mod_add",
-      "mod_remove",
+      "ban#shyboti",
+      "unban#shyboti",
+      "timeout#shyboti",
+      "message_deleted#shyboti",
+    ] as const,
+  },
+  {
+    label: t("dash.filter.twitch_moderation"),
+    types: [
+      "ban#twitch",
+      "unban#twitch",
+      "timeout#twitch",
+      "automod_held#twitch",
+      "mod_add#twitch",
+      "mod_remove#twitch",
+      "vip_add#twitch",
+      "vip_remove#twitch",
     ] as const,
   },
   {
@@ -117,6 +145,8 @@ const TYPE_GROUPS = computed(() => [
       "countdown_removed",
       "countdown_started",
       "countdown_stopped",
+      "ban#trigger",
+      "timeout#trigger",
     ] as const,
   },
 ]);
@@ -138,7 +168,7 @@ function toggleGroup(types: readonly string[]) {
 const filteredActivity = computed(() =>
   activeTypes.value.size === 0
     ? activity.value
-    : activity.value.filter((e) => activeTypes.value.has(e.type)),
+    : activity.value.filter((e) => activeTypes.value.has(activityKey(e))),
 );
 
 watch(
@@ -404,6 +434,16 @@ const TYPE_META = computed(
         color: "#9d6cff",
         label: t("type.mod_remove"),
       },
+      vip_add: {
+        icon: "user-plus",
+        color: "#e0b34d",
+        label: t("type.vip_add"),
+      },
+      vip_remove: {
+        icon: "user-minus",
+        color: "#e0b34d",
+        label: t("type.vip_remove"),
+      },
     }) as Record<string, { icon: string; color: string; label: string }>,
 );
 
@@ -461,6 +501,8 @@ const USER_TARGET_TYPES = new Set([
   "automod_held",
   "mod_add",
   "mod_remove",
+  "vip_add",
+  "vip_remove",
 ]);
 
 function onTargetClick(e: ActivityEntry, evt: MouseEvent) {

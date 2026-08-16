@@ -58,7 +58,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "dash.no_activity": "No activity yet.",
     "dash.no_match": "No matching activity.",
     "dash.filter.commands": "Commands",
-    "dash.filter.moderation": "Moderation",
+    "dash.filter.shyboti_moderation": "Shyboti Moderation",
+    "dash.filter.twitch_moderation": "Twitch Moderation",
     "dash.filter.automations": "Automations",
     "dash.filter.clear": "✕ Clear",
     "dash.action.logs": "logs",
@@ -91,6 +92,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "type.automod_held": "AutoMod held message",
     "type.mod_add": "Moderator added",
     "type.mod_remove": "Moderator removed",
+    "type.vip_add": "VIP added",
+    "type.vip_remove": "VIP removed",
 
     // vvv Commands vvv
     "cmd.title": "Commands",
@@ -878,7 +881,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "dash.no_activity": "Noch keine Aktivität.",
     "dash.no_match": "Keine passende Aktivität.",
     "dash.filter.commands": "Commands",
-    "dash.filter.moderation": "Moderation",
+    "dash.filter.shyboti_moderation": "Shyboti Moderation",
+    "dash.filter.twitch_moderation": "Twitch Moderation",
     "dash.filter.automations": "Automationen",
     "dash.filter.clear": "✕ Leeren",
     "dash.action.logs": "Logs",
@@ -911,6 +915,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "type.automod_held": "AutoMod hat Nachricht zurückgehalten",
     "type.mod_add": "Moderator hinzugefügt",
     "type.mod_remove": "Moderator entfernt",
+    "type.vip_add": "VIP hinzugefügt",
+    "type.vip_remove": "VIP entfernt",
 
     // vvv Commands vvv
     "cmd.title": "Befehle",
