@@ -1013,13 +1013,41 @@ async function loadSources(sceneName: string, opts: { silent?: boolean } = {}) {
     if (res.ok) {
       const rawSources = ((await res.json()) as any).sources ?? [];
       if (gen !== requestGen.value) return;
-      sources.value = rawSources.map((s: any) => ({
-        ...s,
-        visible: s.sceneItemEnabled,
-      }));
+      // >>> OBS's own Sources panel shows front-most (highest sceneItemIndex) at the top
+      sources.value = rawSources
+        .map((s: any) => ({ ...s, visible: s.sceneItemEnabled }))
+        .sort((a: any, b: any) => (b.sceneItemIndex ?? 0) - (a.sceneItemIndex ?? 0));
     }
   } catch { }
   if (gen === requestGen.value) sourcesLoading.value = false;
+}
+
+// >>> drag-to-reorder
+const dragSourceIndex = ref<number | null>(null);
+function onSourceDragStart(i: number) {
+  dragSourceIndex.value = i;
+}
+async function onSourceDrop(targetIndex: number) {
+  const fromIndex = dragSourceIndex.value;
+  dragSourceIndex.value = null;
+  if (fromIndex === null || fromIndex === targetIndex || !session.value || !selectedScene.value)
+    return;
+  const list = [...(sources.value as any[])];
+  const [moved] = list.splice(fromIndex, 1);
+  list.splice(targetIndex, 0, moved);
+  sources.value = list; // <<< optimistic - resynced from OBS's own state below
+  try {
+    await fetch(`${API}/obs/${session.value.channel}/source/reorder`, {
+      method: "POST",
+      headers: { ...authHeaders.value, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scene: selectedScene.value,
+        sceneItemId: moved.sceneItemId,
+        sceneItemIndex: list.length - 1 - targetIndex,
+      }),
+    });
+  } catch { }
+  await loadSources(selectedScene.value, { silent: true });
 }
 
 // >>> target-setting
@@ -1281,6 +1309,93 @@ function cycleUnifiedAccess(item: UnifiedCommand) {
   saveBindings();
 }
 
+// vvv add browser source vvv
+interface ObsWidget {
+  id: string;
+  name: string;
+}
+const showAddSource = ref(false);
+const addSourceOverlay = useOverlayClose();
+const addSourceMode = ref<"url" | "widget">("url");
+const addSourceName = ref("");
+const addSourceUrl = ref("");
+const addSourceWidgetId = ref("");
+const addSourceWidth = ref(1920);
+const addSourceHeight = ref(1080);
+const addSourceSaving = ref(false);
+const addSourceError = ref("");
+const widgets = ref<ObsWidget[]>([]);
+
+async function loadWidgetsForAddSource() {
+  if (!session.value) return;
+  try {
+    const res = await fetch(`${API}/obs-widgets/${session.value.channel}`, {
+      headers: authHeaders.value,
+    });
+    if (res.ok) widgets.value = ((await res.json()) as { widgets: ObsWidget[] }).widgets ?? [];
+  } catch { }
+}
+
+function openAddSource() {
+  if (!selectedScene.value) return;
+  addSourceMode.value = "url";
+  addSourceName.value = "";
+  addSourceUrl.value = "";
+  addSourceWidgetId.value = "";
+  addSourceWidth.value = 1920;
+  addSourceHeight.value = 1080;
+  addSourceError.value = "";
+  showAddSource.value = true;
+  loadWidgetsForAddSource();
+}
+
+function pickAddSourceWidget(id: string) {
+  addSourceWidgetId.value = id;
+  const w = widgets.value.find((w) => w.id === id);
+  if (w && !addSourceName.value.trim()) addSourceName.value = w.name;
+}
+
+async function submitAddSource() {
+  if (!session.value || !selectedScene.value) return;
+  const name = addSourceName.value.trim();
+  const url =
+    addSourceMode.value === "widget"
+      ? addSourceWidgetId.value
+        ? `https://obs.shyboti.de/${addSourceWidgetId.value}`
+        : ""
+      : addSourceUrl.value.trim();
+  if (!name || !url) {
+    addSourceError.value = "Name and URL are required";
+    return;
+  }
+  addSourceSaving.value = true;
+  addSourceError.value = "";
+  try {
+    const res = await fetch(`${API}/obs/${session.value.channel}/source`, {
+      method: "POST",
+      headers: { ...authHeaders.value, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scene: selectedScene.value,
+        name,
+        url,
+        width: addSourceWidth.value,
+        height: addSourceHeight.value,
+      }),
+    });
+    if (res.ok) {
+      showAddSource.value = false;
+      await loadSources(selectedScene.value);
+    } else {
+      const d = await res.json().catch(() => ({}) as any);
+      addSourceError.value = d.error ?? "Failed to add source";
+    }
+  } catch {
+    addSourceError.value = "Failed to add source";
+  }
+  addSourceSaving.value = false;
+}
+// ^^^ add browser source ^^^
+
 // vvv audio mixer vvv
 const audioSources = computed(() =>
   (sources.value as any[]).filter((s) => s.isAudioSource),
@@ -1423,7 +1538,7 @@ watch(
             <span class="obs-live-stat-label">bitrate</span>
             <span class="obs-live-stat-value">{{
               bitrateLabel ?? "not streaming"
-              }}</span>
+            }}</span>
           </div>
           <div class="obs-live-stat">
             <span class="obs-live-stat-label">preview size</span>
@@ -1571,10 +1686,14 @@ watch(
         :class="{ 'obs-boxes-single': !(agentConnected && obsConnected) }">
         <template v-if="agentConnected && obsConnected">
           <div class="ep-field-group obs-box">
-            <label class="ep-field-label">sources
-              <span v-if="selectedScene" class="ep-field-hint">{{
-                selectedScene
-              }}</span></label>
+            <div class="obs-box-label-row">
+              <label class="ep-field-label">sources
+                <span v-if="selectedScene" class="ep-field-hint">{{
+                  selectedScene
+                  }}</span></label>
+              <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
+                @click="openAddSource" v-html="iconSvgFor('plus')"></button>
+            </div>
             <div class="obs-source-list">
               <!-- >>> only shown while there's genuinely nothing to display yet - background
               (poll/post-action) refreshes are silent and never touch sourcesLoading, so this
@@ -1585,8 +1704,10 @@ watch(
                   <div class="ep-skeleton-block ep-skeleton-btn"></div>
                 </div>
               </template>
-              <div v-for="src in sources as any[]" :key="src.sceneItemId" class="obs-source-row"
-                :class="{ pending: isSourcePending(src) }">
+              <div v-for="(src, i) in sources as any[]" :key="src.sceneItemId" class="obs-source-row"
+                :class="{ pending: isSourcePending(src), dragging: dragSourceIndex === i }" draggable="true"
+                @dragstart="onSourceDragStart(i)" @dragover.prevent @drop="onSourceDrop(i)">
+                <span class="obs-drag-handle" title="Drag to reorder" v-html="iconSvgFor('grip')"></span>
                 <span class="obs-source-name">{{ src.sourceName }}</span>
                 <span v-if="isSourcePending(src)" class="pending-tag">pending</span>
                 <button class="obs-vis-btn" :class="{ on: effectiveVisible(src) }"
@@ -1614,7 +1735,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
                 :class="{ pending: isSourcePending(src) }">
@@ -1915,6 +2036,70 @@ watch(
             <TypeaheadInput v-model="addCategoryQuery" :fetch-items="fetchCategories" :min-chars="1" autofocus
               placeholder="Search a Twitch category..." @select="onAddCategorySelect" />
           </div>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <Teleport to="body">
+    <div v-if="showAddSource" class="ep-overlay" v-bind="addSourceOverlay.handlers(() => (showAddSource = false))">
+      <div class="ep-panel obs-add-category-panel">
+        <div class="ep-panel-header">
+          <div>
+            <div class="ep-panel-title">Add browser source</div>
+            <div class="ep-panel-sub">scene: {{ selectedScene }}</div>
+          </div>
+          <button class="ep-panel-close" @click="showAddSource = false">
+            x
+          </button>
+        </div>
+        <div class="ep-panel-body">
+          <div class="ep-tabs">
+            <button class="ep-tab" :class="{ active: addSourceMode === 'url' }" @click="addSourceMode = 'url'">
+              URL
+            </button>
+            <button class="ep-tab" :class="{ active: addSourceMode === 'widget' }" @click="addSourceMode = 'widget'">
+              ShyBoti widget
+            </button>
+          </div>
+
+          <div class="ep-field-group">
+            <label class="ep-field-label">Name</label>
+            <input v-model="addSourceName" type="text" class="ep-field-input" placeholder="Source name" />
+          </div>
+
+          <div v-if="addSourceMode === 'url'" class="ep-field-group">
+            <label class="ep-field-label">URL</label>
+            <input v-model="addSourceUrl" type="text" class="ep-field-input" placeholder="https://..." />
+          </div>
+          <div v-else class="ep-field-group">
+            <label class="ep-field-label">Widget</label>
+            <select v-model="addSourceWidgetId" class="ep-field-select"
+              @change="pickAddSourceWidget(addSourceWidgetId)">
+              <option value="" disabled>Pick a widget...</option>
+              <option v-for="w in widgets" :key="w.id" :value="w.id">{{ w.name }}</option>
+            </select>
+            <div v-if="!widgets.length" class="ep-field-hint">
+              No OBS widgets yet - create one on the OBS Widgets page first.
+            </div>
+          </div>
+
+          <div class="ep-row-2">
+            <div class="ep-field-group ep-sm">
+              <label class="ep-field-label">Width</label>
+              <input v-model.number="addSourceWidth" type="number" min="1" class="ep-field-input" />
+            </div>
+            <div class="ep-field-group ep-sm">
+              <label class="ep-field-label">Height</label>
+              <input v-model.number="addSourceHeight" type="number" min="1" class="ep-field-input" />
+            </div>
+          </div>
+
+          <div v-if="addSourceError" class="ep-toast error">{{ addSourceError }}</div>
+
+          <button class="ep-btn-save" :disabled="addSourceSaving" @click="submitAddSource">
+            {{ addSourceSaving ? "adding..." : "add source" }}
+          </button>
         </div>
       </div>
     </div>
@@ -2451,6 +2636,52 @@ watch(
   padding: 5px 8px;
   background: #111217;
   border: 1px solid #1e1e24;
+}
+
+.obs-source-row.dragging {
+  opacity: 0.4;
+}
+
+.obs-drag-handle {
+  display: flex;
+  align-items: center;
+  color: #444;
+  cursor: grab;
+  flex-shrink: 0;
+}
+
+.obs-drag-handle:hover {
+  color: #888;
+}
+
+.obs-box-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.obs-add-source-btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid #6f2bff66;
+  background: #6f2bff15;
+  color: #9d6cff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.obs-add-source-btn svg {
+  width: 11px;
+  height: 11px;
+}
+
+.obs-add-source-btn:hover {
+  background: #6f2bff30;
 }
 
 .obs-source-name {
@@ -3369,18 +3600,21 @@ watch(
    of floating over whatever renders below the header (was landing on top of .mode-bar) */
 .obs-live-stats {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
   gap: 6px;
   flex-basis: 100%;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .obs-live-stat {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 10px;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 5px;
+  padding: 3px 8px;
   border: 1px solid #1e1e24;
   background: #0d0d10;
 }
