@@ -112,8 +112,8 @@ async function load() {
     }
     if (srcRes.ok) {
       const d = (await srcRes.json()) as { sources: CanvasItem[] };
-      // >>> same reversed-order fix as the main sources list 
-      items.value = (d.sources ?? []).slice().reverse();
+      // >>> same reversed-order fix as the main sources list
+      items.value = (d.sources ?? []).slice().reverse().map((it) => effective(it));
     }
   } catch { }
   loading.value = false;
