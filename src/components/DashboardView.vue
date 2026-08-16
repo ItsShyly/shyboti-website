@@ -657,10 +657,7 @@ function fmtActor(actor: string) {
 
         <template v-if="!collapsedDays.has(group.date)">
           <div v-for="e in group.entries" :key="e.id" class="feed-row">
-            <div class="feed-icon" :style="{
-              color: TYPE_META[e.type]?.color,
-              borderColor: TYPE_META[e.type]?.color + '44',
-            }" v-html="iconSvg(e.type)"></div>
+            <div class="feed-icon" :style="{ color: TYPE_META[e.type]?.color }" v-html="iconSvg(e.type)"></div>
 
             <div class="feed-body">
               <span class="feed-type" :style="{ color: TYPE_META[e.type]?.color }">{{ TYPE_META[e.type]?.label }}</span>
@@ -1026,7 +1023,6 @@ function fmtActor(actor: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid;
 }
 
 .feed-icon svg {
