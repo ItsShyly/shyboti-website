@@ -36,6 +36,9 @@ interface ActivityEntry {
   | "countdown_started"
   | "countdown_stopped"
   | "automod_held"
+  | "automod_approved"
+  | "automod_denied"
+  | "automod_expired"
   | "mod_add"
   | "mod_remove"
   | "vip_add"
@@ -62,7 +65,7 @@ function activityKey(e: ActivityEntry): string {
     if (e.actor === "mod") return `${e.type}#twitch`;
     return `${e.type}#shyboti`;
   }
-  if (e.type === "automod_held") return "automod_held#twitch";
+  if (e.type.startsWith("automod_")) return `${e.type}#twitch`;
   if (["mod_add", "mod_remove", "vip_add", "vip_remove"].includes(e.type))
     return `${e.type}#twitch`;
   return e.type;
@@ -121,6 +124,9 @@ const TYPE_GROUPS = computed(() => [
       "unban#twitch",
       "timeout#twitch",
       "automod_held#twitch",
+      "automod_approved#twitch",
+      "automod_denied#twitch",
+      "automod_expired#twitch",
       "mod_add#twitch",
       "mod_remove#twitch",
       "vip_add#twitch",
@@ -424,6 +430,21 @@ const TYPE_META = computed(
         color: "#e5c07b",
         label: t("type.automod_held"),
       },
+      automod_approved: {
+        icon: "check",
+        color: "#23d18b",
+        label: t("type.automod_approved"),
+      },
+      automod_denied: {
+        icon: "ban",
+        color: "#f14949",
+        label: t("type.automod_denied"),
+      },
+      automod_expired: {
+        icon: "clock",
+        color: "#555555",
+        label: t("type.automod_expired"),
+      },
       mod_add: {
         icon: "user-plus",
         color: "#9d6cff",
@@ -499,6 +520,9 @@ const USER_TARGET_TYPES = new Set([
   "timeout",
   "message_deleted",
   "automod_held",
+  "automod_approved",
+  "automod_denied",
+  "automod_expired",
   "mod_add",
   "mod_remove",
   "vip_add",

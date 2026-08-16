@@ -3408,19 +3408,24 @@ function paintNameStyle(paint: {
                   </div>
 
                   <div v-else-if="item.kind === 'automod'" :id="`log-${item.msg.id}`" :data-vit-id="item.id"
-                    class="log-row log-row-automod">
-                    <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
-                    <div class="log-time-short">
-                      {{ fmtTimeOnly(item.msg.timestamp) }}
-                    </div>
-                    <div class="log-user log-automod-badge">⚠ AutoMod</div>
-                    <div class="log-msg">
-                      <span class="automod-user">{{ item.msg.username }}</span>:
-                      <span class="automod-text">{{ item.msg.text }}</span>
-                      <span class="automod-category">[{{ item.msg._category }}]</span>
-                      <span class="automod-status" :class="item.msg._status">{{
-                        item.msg._status
-                      }}</span>
+                    class="log-row-outer log-row-automod">
+                    <div class="log-row">
+                      <div class="log-time-col">
+                        <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
+                        <div class="log-time-short">
+                          {{ fmtTimeOnly(item.msg.timestamp) }}
+                        </div>
+                      </div>
+                      <div class="log-user log-automod-badge">⚠ AutoMod</div>
+                      <div class="log-msg-wrap">
+                        <div class="log-msg">
+                          <span class="automod-user">{{ item.msg.username }}</span>:
+                          <span class="automod-text">{{ item.msg.text }}</span>
+                          <span class="automod-status" :class="item.msg._status">{{
+                            item.msg._status
+                          }}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
@@ -4990,12 +4995,6 @@ function paintNameStyle(paint: {
   font-style: italic;
 }
 
-.automod-category {
-  font-size: 10px;
-  color: #555;
-  margin-left: 6px;
-}
-
 .automod-status {
   font-size: 10px;
   font-weight: 700;
@@ -5016,6 +5015,11 @@ function paintNameStyle(paint: {
 .automod-status.denied {
   color: #f14949;
   background: rgba(241, 73, 73, 0.1);
+}
+
+.automod-status.expired {
+  color: #888;
+  background: rgba(136, 136, 136, 0.1);
 }
 
 .search-summary {
