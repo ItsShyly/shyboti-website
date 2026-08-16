@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from "vue";
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
@@ -665,7 +665,7 @@ function startModSSE() {
     }).catch(() => { });
 }
 
-onMounted(() => {
+function loadAll() {
   load();
   startModSSE();
   fetchModSync("blocked");
@@ -674,7 +674,10 @@ onMounted(() => {
   fetchGroups("blocked");
   fetchGroups("spam");
   fetchGroups("nukes");
-});
+}
+
+onMounted(loadAll);
+watch(() => session.value?.channel, loadAll);
 onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 </script>
 

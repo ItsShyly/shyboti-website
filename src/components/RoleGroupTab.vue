@@ -343,6 +343,7 @@ function reload() {
 
 onMounted(reload);
 watch(() => props.kind, reload);
+watch(() => session.value?.channel, reload);
 </script>
 
 <template>

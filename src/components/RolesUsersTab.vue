@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
@@ -214,6 +214,13 @@ onMounted(() => {
   loadDefaults();
   loadUsers();
 });
+watch(
+  () => session.value?.channel,
+  () => {
+    loadDefaults();
+    loadUsers();
+  },
+);
 </script>
 
 <template>
