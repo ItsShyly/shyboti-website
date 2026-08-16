@@ -1,9 +1,11 @@
 ﻿<script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from "vue";
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import { REGEX_REF_GROUPS, looksLikeRegex } from "../composables/regexReference";
+import RefPanel from "./shared/RefPanel.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
@@ -125,17 +127,21 @@ const blockedSections = computed(() => sectionsOf("blocked"));
 const spamSections = computed(() => sectionsOf("spam"));
 const nukeSections = computed(() => sectionsOf("nukes"));
 
-async function removeFromGroup(tab: Tab, id: number) {
+async function putGroupId(tab: Tab, id: number, groupId: number | null) {
   if (!session.value) return;
-  const item = itemsOf(tab).find((i) => i.id === id);
-  if (item) item.group_id = null;
   try {
     await fetch(`${API}/moderation/${session.value.channel}/${GROUP_PATH[tab]}/${id}/group`, {
       method: "PUT",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.value.token}` },
-      body: JSON.stringify({ group_id: null }),
+      body: JSON.stringify({ group_id: groupId }),
     });
   } catch { error.value = t("mod.error.save") }
+}
+
+async function removeFromGroup(tab: Tab, id: number) {
+  const item = itemsOf(tab).find((i) => i.id === id);
+  if (item) item.group_id = null;
+  await putGroupId(tab, id, null);
 }
 
 // >>> Group create panel - create-only, no editing after the fact
@@ -192,13 +198,7 @@ async function assignGroup(tab: Tab, groupId: number | null) {
   item.group_id = groupId;
   // >>> joining a group overwrites the item's own reason with the group's
   if (groupId != null) item.reason = "";
-  try {
-    await fetch(`${API}/moderation/${session.value.channel}/${GROUP_PATH[tab]}/${id}/group`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.value.token}` },
-      body: JSON.stringify({ group_id: groupId }),
-    });
-  } catch { error.value = t("mod.error.save") }
+  await putGroupId(tab, id, groupId);
 }
 
 // >>> Share - copy a blocked term/spam filter/nuke/group to another channel
@@ -256,13 +256,23 @@ const editOpen = ref(false);
 const editTab = ref<Tab>("blocked");
 const isNew = ref(true);
 
+// >>> item's own Reason field is meaningless once it's in a group
+const fGroupId = ref<number | null>(null);
+const fGroupName = computed(() =>
+  fGroupId.value == null
+    ? null
+    : (modGroups[editTab.value].find((g) => g.id === fGroupId.value)?.name ?? null),
+);
+
 // >>>  blocked term form
 const fTerm = ref("");
 const fTermAction = ref<"delete" | "timeout" | "ban">("delete");
 const fTermDur = ref(300);
-const fTermRegex = ref(false);
+// >>> no manual toggle anymore - "/pattern/flags" syntax in the term itself is the signal
+const fTermIsRegex = computed(() => looksLikeRegex(fTerm.value));
 const fTermReason = ref("");
 const fTermId = ref<number | null>(null);
+const fTermInputEl = ref<HTMLInputElement | null>(null);
 
 // >>>  spam filter form
 const fSpamType = ref("caps");
@@ -282,24 +292,58 @@ const fNukeDur = ref(600);
 const fNukeLookback = ref(30);
 const fNukeStay = ref(false);
 const fNukeMatchExact = ref(false);
-const fNukeIsRegex = ref(false);
+// >>> no manual toggle anymore - "/pattern/flags" syntax in the trigger itself is the signal
+const fNukeIsRegex = computed(() => looksLikeRegex(fNukeTrigger.value));
 const fNukeExpiry = ref(false);
 const fNukeExpiryMins = ref(60);
 const fNukeAction = ref<"delete" | "timeout" | "ban">("timeout");
 const fNukeReason = ref("");
 const fNukeId = ref<number | null>(null);
+const fNukeTriggerInputEl = ref<HTMLInputElement | null>(null);
+
+// >>> Regex Reference click-to-insert - works on a plain <input>, not contenteditable
+function insertRegexToken(
+  el: HTMLInputElement | null,
+  valueRef: { value: string },
+  token: string,
+) {
+  if (!el) {
+    valueRef.value += token;
+    return;
+  }
+  const start = el.selectionStart ?? valueRef.value.length;
+  const end = el.selectionEnd ?? valueRef.value.length;
+  valueRef.value = valueRef.value.slice(0, start) + token + valueRef.value.slice(end);
+  nextTick(() => {
+    el.focus();
+    const pos = start + token.length;
+    el.setSelectionRange(pos, pos);
+  });
+}
+function insertIntoTerm(token: string) {
+  insertRegexToken(fTermInputEl.value, fTerm, token);
+}
+function insertIntoNukeTrigger(token: string) {
+  insertRegexToken(fNukeTriggerInputEl.value, fNukeTrigger, token);
+}
+
+// >>> legacy rows (old toggle UI) stored a bare pattern with is_regex=1
+function normalizeTermForEdit(raw: string, isRegexFlag: number): string {
+  if (!isRegexFlag || looksLikeRegex(raw)) return raw;
+  return `/${raw}/i`;
+}
 
 function openNewBlocked() {
   editTab.value = "blocked"; isNew.value = true; fTermId.value = null;
-  fTerm.value = ""; fTermAction.value = "delete"; fTermDur.value = 300; fTermRegex.value = false;
-  fTermReason.value = "";
+  fTerm.value = ""; fTermAction.value = "delete"; fTermDur.value = 300;
+  fTermReason.value = ""; fGroupId.value = null;
   editOpen.value = true;
 }
 function openEditBlocked(term: BlockedTerm) {
   editTab.value = "blocked"; isNew.value = false; fTermId.value = term.id;
-  fTerm.value = term.term; fTermAction.value = term.action as any;
-  fTermDur.value = term.duration; fTermRegex.value = !!term.is_regex;
-  fTermReason.value = term.reason ?? "";
+  fTerm.value = normalizeTermForEdit(term.term, term.is_regex); fTermAction.value = term.action as any;
+  fTermDur.value = term.duration;
+  fTermReason.value = term.reason ?? ""; fGroupId.value = term.group_id;
   editOpen.value = true;
 }
 
@@ -308,6 +352,7 @@ function openNewSpam() {
   fSpamType.value = "caps"; fSpamThreshold.value = 70; fSpamMinLetters.value = 0;
   fSpamEmoteTarget.value = "emoji"; fSpamIgnore7tv.value = false;
   fSpamAction.value = "delete"; fSpamDur.value = 300; fSpamReason.value = "";
+  fGroupId.value = null;
   editOpen.value = true;
 }
 function openEditSpam(f: SpamFilter) {
@@ -315,6 +360,7 @@ function openEditSpam(f: SpamFilter) {
   fSpamType.value = f.type; fSpamThreshold.value = f.threshold;
   fSpamMinLetters.value = f.min_letters ?? 0; fSpamAction.value = f.action as any;
   fSpamDur.value = f.duration; fSpamReason.value = f.reason ?? "";
+  fGroupId.value = f.group_id;
   const opts = parseOpts(f);
   fSpamEmoteTarget.value = opts.emote_target ?? "emoji";
   fSpamIgnore7tv.value = opts.ignore_7tv ?? false;
@@ -325,17 +371,18 @@ function openNewNuke() {
   editTab.value = "nukes"; isNew.value = true; fNukeId.value = null;
   fNukeTrigger.value = ""; fNukeLabel.value = ""; fNukeDur.value = 600;
   fNukeLookback.value = 30; fNukeStay.value = false; fNukeMatchExact.value = false;
-  fNukeIsRegex.value = false; fNukeExpiry.value = false; fNukeExpiryMins.value = 60;
-  fNukeAction.value = "timeout"; fNukeReason.value = "";
+  fNukeExpiry.value = false; fNukeExpiryMins.value = 60;
+  fNukeAction.value = "timeout"; fNukeReason.value = ""; fGroupId.value = null;
   editOpen.value = true;
 }
 function openEditNuke(n: NukeConfig) {
   editTab.value = "nukes"; isNew.value = false; fNukeId.value = n.id;
-  fNukeTrigger.value = n.trigger; fNukeLabel.value = n.label; fNukeDur.value = n.duration;
+  fNukeTrigger.value = normalizeTermForEdit(n.trigger, n.is_regex); fNukeLabel.value = n.label; fNukeDur.value = n.duration;
   fNukeLookback.value = n.lookback ?? 30; fNukeStay.value = !!n.stay_active;
-  fNukeMatchExact.value = !!n.match_exact; fNukeIsRegex.value = !!n.is_regex;
+  fNukeMatchExact.value = !!n.match_exact;
   fNukeExpiry.value = !!n.expires_at; fNukeExpiryMins.value = 60;
   fNukeAction.value = (n.action as any) ?? "timeout"; fNukeReason.value = n.reason ?? "";
+  fGroupId.value = n.group_id;
   editOpen.value = true;
 }
 
@@ -366,11 +413,14 @@ async function savePanel() {
     const h = { Authorization: `Bearer ${session.value.token}`, "Content-Type": "application/json" };
     const ch = session.value.channel;
 
+    // >>> once an item is in a group, its own reason is meaningless (group.name wins) - clear it on save
+    const reasonUnlessGrouped = (r: string) => (fGroupId.value != null ? "" : r.trim());
+
     if (editTab.value === "blocked") {
       if (isNew.value) {
         const res = await fetch(`${API}/moderation/${ch}/blocked-terms`, {
           method: "POST", headers: h,
-          body: JSON.stringify({ term: fTerm.value.trim(), action: fTermAction.value, duration: fTermDur.value, is_regex: fTermRegex.value ? 1 : 0, reason: fTermReason.value.trim() }),
+          body: JSON.stringify({ term: fTerm.value.trim(), action: fTermAction.value, duration: fTermDur.value, is_regex: fTermIsRegex.value ? 1 : 0, reason: reasonUnlessGrouped(fTermReason.value) }),
         });
         if (!res.ok) throw new Error();
         const data = await res.json();
@@ -380,10 +430,12 @@ async function savePanel() {
         await fetch(`${API}/moderation/${ch}/blocked-terms/${fTermId.value}`, { method: "DELETE", headers: h });
         const res = await fetch(`${API}/moderation/${ch}/blocked-terms`, {
           method: "POST", headers: h,
-          body: JSON.stringify({ term: fTerm.value.trim(), action: fTermAction.value, duration: fTermDur.value, is_regex: fTermRegex.value ? 1 : 0, reason: fTermReason.value.trim() }),
+          body: JSON.stringify({ term: fTerm.value.trim(), action: fTermAction.value, duration: fTermDur.value, is_regex: fTermIsRegex.value ? 1 : 0, reason: reasonUnlessGrouped(fTermReason.value) }),
         });
         if (!res.ok) throw new Error();
         const data = await res.json();
+        if (fGroupId.value != null) await putGroupId("blocked", data.item.id, fGroupId.value);
+        data.item.group_id = fGroupId.value;
         blockedTerms.value = blockedTerms.value.filter(t => t.id !== fTermId.value);
         blockedTerms.value.push(data.item);
       }
@@ -401,7 +453,7 @@ async function savePanel() {
         }),
         action: fSpamAction.value,
         duration: fSpamDur.value,
-        reason: fSpamReason.value.trim(),
+        reason: reasonUnlessGrouped(fSpamReason.value),
       };
       if (isNew.value) {
         const res = await fetch(`${API}/moderation/${ch}/spam-filters`, { method: "POST", headers: h, body: JSON.stringify(body) });
@@ -409,10 +461,14 @@ async function savePanel() {
         const data = await res.json();
         spamFilters.value.push(data.item);
       } else {
+        // >>> backend has no PATCH for spam filters, so delete+recreate is the pattern -
+        // >>> that loses group_id, so restore it with a follow-up call when grouped
         await fetch(`${API}/moderation/${ch}/spam-filters/${fSpamId.value}`, { method: "DELETE", headers: h });
         const res = await fetch(`${API}/moderation/${ch}/spam-filters`, { method: "POST", headers: h, body: JSON.stringify(body) });
         if (!res.ok) throw new Error();
         const data = await res.json();
+        if (fGroupId.value != null) await putGroupId("spam", data.item.id, fGroupId.value);
+        data.item.group_id = fGroupId.value;
         spamFilters.value = spamFilters.value.filter(f => f.id !== fSpamId.value);
         spamFilters.value.push(data.item);
       }
@@ -430,7 +486,7 @@ async function savePanel() {
         is_regex: fNukeIsRegex.value ? 1 : 0,
         expires_at: fNukeStay.value && fNukeExpiry.value ? Date.now() + fNukeExpiryMins.value * 60_000 : null,
         action: fNukeAction.value,
-        reason: fNukeReason.value.trim(),
+        reason: reasonUnlessGrouped(fNukeReason.value),
       };
       if (isNew.value) {
         const res = await fetch(`${API}/moderation/${ch}/nukes`, { method: "POST", headers: h, body: JSON.stringify(body) });
@@ -733,7 +789,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
           </div>
         </div>
         <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">{{ reloading ? '…' : '↺'
-          }}</button>
+        }}</button>
         <button v-if="canManage" class="ep-btn-cancel" @click="openNewGroup(activeTab)">
           + {{ t("mod.group.new") }}
         </button>
@@ -760,7 +816,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 
     <!-- vvv blocked terms list vvv -->
     <template v-else-if="activeTab === 'blocked'">
-      <div v-if="!blockedTerms.length && !modGroups.blocked.length" class="ep-empty">{{ botPresent ? t("mod.empty.blocked") : t("mod.no_bot") }}</div>
+      <div v-if="!blockedTerms.length && !modGroups.blocked.length" class="ep-empty">{{ botPresent ?
+        t("mod.empty.blocked") : t("mod.no_bot") }}</div>
       <template v-else>
         <template v-for="section in blockedSections" :key="section.group?.id ?? 'ungrouped'">
           <div class="mod-section" @dragover.prevent
@@ -769,7 +826,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
                 @click="toggleGroupOpen(section.group.id)"></span>
               <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{ t("mod.group.reason_prefix")
-                }}{{ section.group.name }}</span>
+              }}{{ section.group.name }}</span>
               <span class="mod-group-count">{{ section.items.length }}</span>
               <div v-if="canManage" class="ep-row-actions">
                 <button class="ep-btn-action share" :title="t('mod.share')"
@@ -800,7 +857,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   <button v-if="canManage && term.group_id" class="ep-btn-action" title="Remove from group"
                     @click.stop="removeFromGroup('blocked', term.id)">⤺</button>
                   <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
-                    }}</button>
+                  }}</button>
                   <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
                     @click.stop="openShare('blocked', term.id, term.term)">↪</button>
                   <button v-if="canManage" class="ep-btn-action del"
@@ -815,7 +872,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 
     <!-- vvv spam filters list vvv -->
     <template v-else-if="activeTab === 'spam'">
-      <div v-if="!spamFilters.length && !modGroups.spam.length" class="ep-empty">{{ botPresent ? t("mod.empty.spam") : t("mod.no_bot") }}</div>
+      <div v-if="!spamFilters.length && !modGroups.spam.length" class="ep-empty">{{ botPresent ? t("mod.empty.spam") :
+        t("mod.no_bot") }}</div>
       <template v-else>
         <template v-for="section in spamSections" :key="section.group?.id ?? 'ungrouped'">
           <div class="mod-section" @dragover.prevent
@@ -824,7 +882,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
                 @click="toggleGroupOpen(section.group.id)"></span>
               <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{ t("mod.group.reason_prefix")
-                }}{{ section.group.name }}</span>
+              }}{{ section.group.name }}</span>
               <span class="mod-group-count">{{ section.items.length }}</span>
               <div v-if="canManage" class="ep-row-actions">
                 <button class="ep-btn-action share" :title="t('mod.share')"
@@ -847,7 +905,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   </div>
                   <div class="mod-item-meta">
                     <span class="item-action ep-meta-pill" :style="actionPillStyle(f.action)">{{ actionLabel(f.action)
-                      }}</span>
+                    }}</span>
                     <span v-if="f.action !== 'delete'" class="item-dur">{{ fmtDur(f.duration) }}</span>
                   </div>
                 </div>
@@ -855,7 +913,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   <button v-if="canManage && f.group_id" class="ep-btn-action" title="Remove from group"
                     @click.stop="removeFromGroup('spam', f.id)">⤺</button>
                   <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit")
-                    }}</button>
+                  }}</button>
                   <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
                     @click.stop="openShare('spam', f.id, spamLabel(f).name)">↪</button>
                   <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)">✕</button>
@@ -869,7 +927,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 
     <!-- vvv nukes list vvv -->
     <template v-else-if="activeTab === 'nukes'">
-      <div v-if="!nukes.length && !modGroups.nukes.length" class="ep-empty">{{ botPresent ? t("mod.empty.nukes") : t("mod.no_bot") }}</div>
+      <div v-if="!nukes.length && !modGroups.nukes.length" class="ep-empty">{{ botPresent ? t("mod.empty.nukes") :
+        t("mod.no_bot") }}</div>
       <template v-else>
         <template v-for="section in nukeSections" :key="section.group?.id ?? 'ungrouped'">
           <div class="mod-section" @dragover.prevent
@@ -878,7 +937,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
                 @click="toggleGroupOpen(section.group.id)"></span>
               <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{ t("mod.group.reason_prefix")
-                }}{{ section.group.name }}</span>
+              }}{{ section.group.name }}</span>
               <span class="mod-group-count">{{ section.items.length }}</span>
               <div v-if="canManage" class="ep-row-actions">
                 <button class="ep-btn-action share" :title="t('mod.share')"
@@ -937,7 +996,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     {{ nukeConfirm === n.id ? t("mod.nuke.sure") : t("mod.nuke.fire") }}
                   </button>
                   <button v-if="canManage" class="ep-btn-action edit" @click="openEditNuke(n)">{{ t("mod.edit")
-                    }}</button>
+                  }}</button>
                   <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
                     @click.stop="openShare('nukes', n.id, n.label)">↪</button>
                   <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('nukes', n.id)">✕</button>
@@ -975,22 +1034,15 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
           <!-- vvv blocked term form vvv -->
           <template v-if="editTab === 'blocked'">
             <div class="ep-field-group">
-              <label class="ep-field-label">{{ t("mod.field.term") }}</label>
-              <input v-model="fTerm" class="ep-field-input" :class="{ 'ep-mono': fTermRegex }"
-                :placeholder="fTermRegex ? t('mod.field.term_re') : t('mod.field.term')" />
+              <label class="ep-field-label">
+                {{ t("mod.field.term") }}
+                <span v-if="fTermIsRegex" class="item-badge regex-badge">{{ t("mod.badge.regex") }}</span>
+              </label>
+              <input ref="fTermInputEl" v-model="fTerm" class="ep-field-input" :class="{ 'ep-mono': fTermIsRegex }"
+                :placeholder="t('mod.field.term_ph')" />
             </div>
-            <div class="ep-field-group">
-              <label class="ep-field-label">{{ t("mod.field.type") }}</label>
-              <div class="toggle-row-group">
-                <label class="ep-toggle-label">
-                  <div class="ep-toggle-btn" :class="{ on: fTermRegex }" @click="fTermRegex = !fTermRegex">
-                    <span class="ep-toggle-knob"></span>
-                  </div>
-                  <span class="toggle-text">{{ t("mod.nuke.regex") }}</span>
-                  <span class="info-icon" :title="t('mod.nuke.regex_hint')">ⓘ</span>
-                </label>
-              </div>
-            </div>
+            <RefPanel :title="t('mod.regex_ref')" :groups="REGEX_REF_GROUPS" :show-vars="false"
+              @insert="insertIntoTerm" />
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.field.action") }}</label>
               <select v-model="fTermAction" class="ep-field-select">
@@ -1003,7 +1055,11 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <label class="ep-field-label">{{ t("mod.field.duration") }} <span class="ep-field-hint">s</span></label>
               <input v-model.number="fTermDur" type="number" min="1" class="ep-field-input" />
             </div>
-            <div class="ep-field-group">
+            <div v-if="fGroupId" class="ep-field-group">
+              <label class="ep-field-label">{{ t("mod.field.reason") }}</label>
+              <div class="ep-field-hint">{{ t("mod.field.reason_from_group") }} "{{ fGroupName }}"</div>
+            </div>
+            <div v-else class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.field.reason") }} <span class="ep-field-hint">{{
                 t("mod.field.reason_hint") }}</span></label>
               <input v-model="fTermReason" class="ep-field-input" />
@@ -1088,7 +1144,11 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <label class="ep-field-label">{{ t("mod.field.duration") }} <span class="ep-field-hint">s</span></label>
               <input v-model.number="fSpamDur" type="number" min="1" class="ep-field-input" />
             </div>
-            <div class="ep-field-group">
+            <div v-if="fGroupId" class="ep-field-group">
+              <label class="ep-field-label">{{ t("mod.field.reason") }}</label>
+              <div class="ep-field-hint">{{ t("mod.field.reason_from_group") }} "{{ fGroupName }}"</div>
+            </div>
+            <div v-else class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.field.reason") }} <span class="ep-field-hint">{{
                 t("mod.field.reason_hint") }}</span></label>
               <input v-model="fSpamReason" class="ep-field-input" />
@@ -1098,10 +1158,15 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
           <!-- vvv nuke form vvv -->
           <template v-if="editTab === 'nukes'">
             <div class="ep-field-group">
-              <label class="ep-field-label">{{ t("mod.nuke.trigger_ph") }}</label>
-              <input v-model="fNukeTrigger" class="ep-field-input" :class="{ 'ep-mono': fNukeIsRegex }"
-                :placeholder="fNukeIsRegex ? t('mod.nuke.trigger_re_ph') : t('mod.nuke.trigger_ph')" />
+              <label class="ep-field-label">
+                {{ t("mod.nuke.trigger_ph") }}
+                <span v-if="fNukeIsRegex" class="item-badge regex-badge">{{ t("mod.badge.regex") }}</span>
+              </label>
+              <input ref="fNukeTriggerInputEl" v-model="fNukeTrigger" class="ep-field-input"
+                :class="{ 'ep-mono': fNukeIsRegex }" :placeholder="t('mod.nuke.trigger_input_ph')" />
             </div>
+            <RefPanel :title="t('mod.regex_ref')" :groups="REGEX_REF_GROUPS" :show-vars="false"
+              @insert="insertIntoNukeTrigger" />
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.nuke.label") }} <span class="ep-field-hint">optional display
                   name</span></label>
@@ -1126,7 +1191,11 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 <input v-model.number="fNukeLookback" type="number" min="1" max="1440" class="ep-field-input" />
               </div>
             </div>
-            <div class="ep-field-group">
+            <div v-if="fGroupId" class="ep-field-group">
+              <label class="ep-field-label">{{ t("mod.field.reason") }}</label>
+              <div class="ep-field-hint">{{ t("mod.field.reason_from_group") }} "{{ fGroupName }}"</div>
+            </div>
+            <div v-else class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.field.reason") }} <span class="ep-field-hint">{{
                 t("mod.field.reason_hint") }}</span></label>
               <input v-model="fNukeReason" class="ep-field-input" />
@@ -1149,14 +1218,6 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   <span class="toggle-text">{{ t("mod.nuke.exact") }}</span>
                   <span class="info-icon" :title="t('mod.nuke.exact_hint')">ⓘ</span>
                 </label>
-                <label class="ep-toggle-label">
-                  <div class="ep-toggle-btn" :class="{ on: fNukeIsRegex }"
-                    @click="fNukeIsRegex = !fNukeIsRegex; fNukeIsRegex && (fNukeMatchExact = false)">
-                    <span class="ep-toggle-knob"></span>
-                  </div>
-                  <span class="toggle-text">{{ t("mod.nuke.regex") }}</span>
-                  <span class="info-icon" :title="t('mod.nuke.regex_hint')">ⓘ</span>
-                </label>
                 <label class="ep-toggle-label" :class="{ dimmed: !fNukeStay }">
                   <div class="ep-toggle-btn" :class="{ on: fNukeExpiry && fNukeStay }"
                     @click="fNukeStay && (fNukeExpiry = !fNukeExpiry)">
@@ -1169,7 +1230,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
             <div v-if="fNukeExpiry && fNukeStay" class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.nuke.expiry") }} <span class="ep-field-hint">{{ t("mod.nuke.min")
-                  }}</span></label>
+              }}</span></label>
               <input v-model.number="fNukeExpiryMins" type="number" min="1" class="ep-field-input" />
             </div>
           </template>

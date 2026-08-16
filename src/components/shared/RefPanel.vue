@@ -4,25 +4,35 @@ import { onMounted } from "vue";
 import {
   getRefGroups,
   renderRefToken,
+  type RefGroup,
 } from "../../composables/scriptReference";
 import { useVarRefs } from "../../composables/useVarRefs";
 
 const props = withDefaults(
-  defineProps<{ title?: string; context?: "countdown" }>(),
-  { title: "Variable Reference" },
+  defineProps<{
+    title?: string;
+    context?: "countdown";
+    // >>> override the script-variable groups entirely (e.g. Regex Reference)
+    groups?: RefGroup[];
+    // >>> "Your Variables" only makes sense for the scripting language, not e.g. regex
+    showVars?: boolean;
+  }>(),
+  { title: "Variable Reference", showVars: true },
 );
 defineEmits<{ (e: "insert", token: string): void }>();
 
-const refGroups = getRefGroups(props.context);
+const refGroups = props.groups ?? getRefGroups(props.context);
 const { varRefs, load } = useVarRefs();
-onMounted(load);
+onMounted(() => {
+  if (props.showVars) load();
+});
 </script>
 
 <template>
   <details class="ep-ref-panel">
     <summary class="ep-ref-summary">{{ title }}</summary>
     <div class="ep-ref-content">
-      <div v-if="varRefs.length" class="ep-ref-group">
+      <div v-if="showVars && varRefs.length" class="ep-ref-group">
         <div class="ep-ref-group-label">Your Variables</div>
         <div
           v-for="v in varRefs"
