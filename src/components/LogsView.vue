@@ -1963,6 +1963,11 @@ function fmtTimeOnly(ts: string) {
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+function automodTagLabel(status: string): string {
+  const label = status === "held" ? "Hold" : status.charAt(0).toUpperCase() + status.slice(1);
+  return `Automod: ${label}`;
+}
+
 function fmtDayLabel(ts: string) {
   const d = new Date(ts);
   return d.toLocaleDateString("de-DE", {
@@ -3411,20 +3416,18 @@ function paintNameStyle(paint: {
                     class="log-row-outer log-row-automod">
                     <div class="log-row">
                       <div class="log-time-col">
+                        <div class="log-event-label tone-automod">
+                          <span class="log-event-icon">⚠</span>
+                          <span>{{ automodTagLabel(item.msg._status) }}</span>
+                        </div>
                         <div class="log-time">{{ fmtTs(item.msg.timestamp) }}</div>
                         <div class="log-time-short">
                           {{ fmtTimeOnly(item.msg.timestamp) }}
                         </div>
                       </div>
-                      <div class="log-user log-automod-badge">⚠ AutoMod</div>
+                      <div class="log-user">{{ item.msg.username }}</div>
                       <div class="log-msg-wrap">
-                        <div class="log-msg">
-                          <span class="automod-user">{{ item.msg.username }}</span>:
-                          <span class="automod-text">{{ item.msg.text }}</span>
-                          <span class="automod-status" :class="item.msg._status">{{
-                            item.msg._status
-                          }}</span>
-                        </div>
+                        <div class="log-msg">{{ item.msg.text }}</div>
                       </div>
                     </div>
                   </div>
@@ -4963,7 +4966,7 @@ function paintNameStyle(paint: {
   border-color: #e5c07b88;
 }
 
-/* AutoMod log rows */
+/* AutoMod log rows - same log-event-label pattern as first-message/sub, amber tone */
 .log-row-automod {
   background: rgba(229, 192, 123, 0.05);
   border-left: 2px solid #e5c07b44;
@@ -4973,53 +4976,14 @@ function paintNameStyle(paint: {
   background: rgba(229, 192, 123, 0.09);
 }
 
-.log-automod-badge {
-  color: #e5c07b !important;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.log-row-automod :deep(.log-row) {
+  align-items: center;
 }
 
-.log-automod-badge::after {
-  display: none;
-}
-
-.automod-user {
+:deep(.log-event-label.tone-automod) {
+  background: rgba(229, 192, 123, 0.16);
+  border-color: rgba(229, 192, 123, 0.55);
   color: #e5c07b;
-  font-weight: 600;
-}
-
-.automod-text {
-  color: #888;
-  font-style: italic;
-}
-
-.automod-status {
-  font-size: 10px;
-  font-weight: 700;
-  margin-left: 4px;
-  padding: 1px 5px;
-}
-
-.automod-status.held {
-  color: #e5c07b;
-  background: rgba(229, 192, 123, 0.15);
-}
-
-.automod-status.approved {
-  color: #23d18b;
-  background: rgba(35, 209, 139, 0.1);
-}
-
-.automod-status.denied {
-  color: #f14949;
-  background: rgba(241, 73, 73, 0.1);
-}
-
-.automod-status.expired {
-  color: #888;
-  background: rgba(136, 136, 136, 0.1);
 }
 
 .search-summary {
