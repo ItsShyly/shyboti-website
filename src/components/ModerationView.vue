@@ -818,7 +818,19 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       </button>
     </div>
 
-    <div v-if="loading" class="ep-empty">{{ t("mod.loading") }}</div>
+    <div v-if="loading" class="ep-row-list">
+      <div class="ep-skeleton-row" v-for="i in 6" :key="i">
+        <div class="ep-skeleton-block ep-skeleton-square"></div>
+        <div class="ep-skeleton-lines">
+          <div class="ep-skeleton-block ep-skeleton-line title"></div>
+          <div class="ep-skeleton-block ep-skeleton-line meta"></div>
+        </div>
+        <div class="ep-skeleton-actions">
+          <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+          <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+        </div>
+      </div>
+    </div>
 
     <!-- vvv blocked terms list vvv -->
     <template v-else-if="activeTab === 'blocked'">

@@ -421,8 +421,14 @@ function switchView(v: "upload" | "gallery") {
         <div class="gallery-title">{{ t("images.your") }}</div>
         <span class="gallery-count" v-if="images.length">{{ images.length }} / 100</span>
       </div>
-      <div v-if="galleryLoad" class="gallery-empty">
-        {{ t("images.loading") }}
+      <div v-if="galleryLoad" class="gallery-grid">
+        <div class="gallery-item" v-for="i in 8" :key="i">
+          <div class="ep-skeleton-block ep-skeleton-tile"></div>
+          <div class="gallery-item-info">
+            <div class="ep-skeleton-block" style="height:11px;width:70%;margin-bottom:6px;"></div>
+            <div class="ep-skeleton-block" style="height:9px;width:40%;"></div>
+          </div>
+        </div>
       </div>
       <div v-else-if="!images.length" class="gallery-empty">
         {{ t("images.empty") }}

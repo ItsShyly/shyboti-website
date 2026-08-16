@@ -325,7 +325,19 @@ watch(() => session.value?.channel, load);
 
     <div v-if="saveSuccess" class="ep-toast success">{{ saveSuccess }}</div>
 
-    <div v-if="loading" class="ep-empty">{{ t("obs.loading") }}</div>
+    <div v-if="loading" class="ep-row-list">
+      <div class="ep-skeleton-row" v-for="i in 6" :key="i">
+        <div class="ep-skeleton-block ep-skeleton-square"></div>
+        <div class="ep-skeleton-lines">
+          <div class="ep-skeleton-block ep-skeleton-line title"></div>
+          <div class="ep-skeleton-block ep-skeleton-line meta"></div>
+        </div>
+        <div class="ep-skeleton-actions">
+          <div class="ep-skeleton-block ep-skeleton-btn"></div>
+          <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+        </div>
+      </div>
+    </div>
     <div v-else-if="!widgets.length" class="ep-empty">
       {{ t("obs.empty") }}<br />
       <span class="empty-hint">{{ t("obs.empty.hint") }}</span>

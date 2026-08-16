@@ -3377,7 +3377,13 @@ function paintNameStyle(paint: {
     <div v-if="!searched && !loading" class="logs-empty">
       {{ t("logs.empty") }}
     </div>
-    <div v-else-if="loading" class="logs-empty">{{ t("logs.searching") }}</div>
+    <div v-else-if="loading" class="logs-skeleton-table">
+      <div class="logs-skeleton-row" v-for="i in 16" :key="i">
+        <div class="ep-skeleton-block logs-skeleton-time"></div>
+        <div class="ep-skeleton-block logs-skeleton-user"></div>
+        <div class="ep-skeleton-block logs-skeleton-msg"></div>
+      </div>
+    </div>
     <div v-else-if="searched && !msgs.length && !loadingMore" class="logs-empty">
       {{ t("logs.no_results") }}
     </div>
@@ -3951,6 +3957,44 @@ function paintNameStyle(paint: {
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
+}
+
+.logs-skeleton-table {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.logs-skeleton-row {
+  display: grid;
+  grid-template-columns: 120px var(--user-width, 140px) 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-bottom: 1px solid #1a1a1e;
+}
+
+.logs-skeleton-row:nth-child(3n+2) .logs-skeleton-msg {
+  width: 40%;
+}
+.logs-skeleton-row:nth-child(3n+3) .logs-skeleton-msg {
+  width: 75%;
+}
+.logs-skeleton-row:nth-child(4n) .logs-skeleton-user {
+  width: 60px;
+}
+
+.logs-skeleton-time {
+  height: 9px;
+  width: 70px;
+}
+.logs-skeleton-user {
+  height: 10px;
+  width: 90px;
+}
+.logs-skeleton-msg {
+  height: 9px;
+  width: 55%;
 }
 
 .day-jump-bar {

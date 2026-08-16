@@ -181,7 +181,20 @@ defineExpose({
 
 <template>
   <div class="ep-view">
-    <div v-if="loading" class="ep-empty">loading…</div>
+    <div v-if="loading" class="ep-row-list">
+      <div class="ep-skeleton-row" v-for="i in 6" :key="i">
+        <div class="ep-skeleton-block ep-skeleton-square"></div>
+        <div class="ep-skeleton-lines">
+          <div class="ep-skeleton-block ep-skeleton-line title"></div>
+          <div class="ep-skeleton-block ep-skeleton-line meta"></div>
+          <div class="ep-skeleton-block ep-skeleton-line body"></div>
+        </div>
+        <div class="ep-skeleton-actions">
+          <div class="ep-skeleton-block ep-skeleton-btn"></div>
+          <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+        </div>
+      </div>
+    </div>
     <div v-else-if="!paired" class="ep-empty">
       OBS isn't set up yet - set up the agent on the
       <router-link to="/obs-control" class="obs-rule-link">OBS control</router-link> page first.

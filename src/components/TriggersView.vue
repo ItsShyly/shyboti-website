@@ -501,7 +501,20 @@ defineExpose({
     <div v-if="success" class="ep-toast success">{{ success }}</div>
     <div v-if="error" class="ep-toast error">{{ error }}</div>
 
-    <div v-if="loading" class="ep-empty">{{ t("trigger.loading") }}</div>
+    <div v-if="loading" class="ep-row-list">
+      <div class="ep-skeleton-row" v-for="i in 6" :key="i">
+        <div class="ep-skeleton-block ep-skeleton-square"></div>
+        <div class="ep-skeleton-lines">
+          <div class="ep-skeleton-block ep-skeleton-line title"></div>
+          <div class="ep-skeleton-block ep-skeleton-line meta"></div>
+          <div class="ep-skeleton-block ep-skeleton-line body"></div>
+        </div>
+        <div class="ep-skeleton-actions">
+          <div class="ep-skeleton-block ep-skeleton-btn"></div>
+          <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+        </div>
+      </div>
+    </div>
     <div v-else-if="!triggers.length" class="ep-empty">
       {{ t("trigger.empty") }}
     </div>

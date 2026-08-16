@@ -1523,6 +1523,12 @@ watch(
                 selectedScene
                 }}</span></label>
             <div class="obs-source-list">
+              <template v-if="sourcesLoading">
+                <div class="obs-source-row" v-for="i in 4" :key="i">
+                  <div class="ep-skeleton-block" style="height:10px;width:40%;"></div>
+                  <div class="ep-skeleton-block ep-skeleton-btn"></div>
+                </div>
+              </template>
               <div v-for="src in sources as any[]" :key="src.sceneItemId" class="obs-source-row"
                 :class="{ pending: isSourcePending(src) }">
                 <span class="obs-source-name">{{ src.sourceName }}</span>

@@ -265,7 +265,17 @@ watch(
     <div class="section">
       <div class="section-title">{{ t("roles.users_title") }}</div>
 
-      <div v-if="usersLoading" class="mods-empty">{{ t("roles.loading") }}</div>
+      <div v-if="usersLoading" class="mod-list">
+        <div class="ep-skeleton-row" v-for="i in 6" :key="i">
+          <div class="ep-skeleton-block ep-skeleton-square"></div>
+          <div class="ep-skeleton-lines">
+            <div class="ep-skeleton-block ep-skeleton-line title"></div>
+          </div>
+          <div class="ep-skeleton-actions">
+            <div class="ep-skeleton-block ep-skeleton-btn"></div>
+          </div>
+        </div>
+      </div>
       <div v-else-if="users.length === 0" class="mods-empty">{{ t("roles.no_users") }}</div>
 
       <div v-else class="mod-list">

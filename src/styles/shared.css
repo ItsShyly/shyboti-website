@@ -1002,6 +1002,103 @@
   text-decoration: underline wavy #f1494966;
 }
 
+/* Skeleton loaders - no border-radius anywhere, keeps the site's sharp-edge style */
+.ep-skeleton-block {
+  background: linear-gradient(90deg, #26262b 25%, #333339 37%, #26262b 63%);
+  background-size: 400% 100%;
+  animation: ep-skeleton-wave 1.6s ease infinite;
+  flex-shrink: 0;
+}
+@keyframes ep-skeleton-wave {
+  0% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0 50%;
+  }
+}
+/* row variant - mirrors .ep-list-row's shape (icon/toggle + stacked lines + action buttons) */
+.ep-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #222226;
+  border-bottom: 1px solid #1e1e1e;
+}
+.ep-skeleton-square {
+  width: 24px;
+  height: 24px;
+}
+.ep-skeleton-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.ep-skeleton-line {
+  height: 10px;
+  width: 45%;
+}
+.ep-skeleton-line.title {
+  height: 12px;
+  width: 32%;
+}
+.ep-skeleton-line.meta {
+  height: 9px;
+  width: 58%;
+}
+.ep-skeleton-line.body {
+  height: 9px;
+  width: 82%;
+}
+.ep-skeleton-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.ep-skeleton-btn {
+  width: 60px;
+  height: 30px;
+}
+.ep-skeleton-btn.icon {
+  width: 30px;
+}
+/* slight width variance per row so a repeated block doesn't look mechanically identical */
+.ep-skeleton-row:nth-child(3n+2) .ep-skeleton-line.title {
+  width: 22%;
+}
+.ep-skeleton-row:nth-child(3n+3) .ep-skeleton-line.title {
+  width: 40%;
+}
+.ep-skeleton-row:nth-child(2n) .ep-skeleton-line.meta {
+  width: 38%;
+}
+.ep-skeleton-row:nth-child(3n) .ep-skeleton-line.body {
+  width: 60%;
+}
+/* card variant - Dashboard activity feed */
+.ep-skeleton-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #222226;
+  border-bottom: 1px solid #1e1e1e;
+}
+/* grid/tile variant - Images/Uploads thumbnail grids */
+.ep-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+.ep-skeleton-tile {
+  aspect-ratio: 1;
+  width: 100%;
+  height: auto;
+}
+
 /* Typeahead dropdown  */
 .ep-typeahead-dropdown {
   position: absolute;

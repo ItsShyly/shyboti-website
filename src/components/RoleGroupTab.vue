@@ -418,8 +418,16 @@ watch(() => session.value?.channel, reload);
       <input v-if="items.length || searchQuery" v-model="searchQuery" class="search-input"
         :placeholder="t('roles.search_placeholder')" />
 
-      <div v-if="itemsLoading" class="mods-empty">
-        {{ isVip ? t("roles.loading_vips") : t("roles.loading") }}
+      <div v-if="itemsLoading" class="mod-list">
+        <div class="ep-skeleton-row" v-for="i in 6" :key="i">
+          <div class="ep-skeleton-block ep-skeleton-square"></div>
+          <div class="ep-skeleton-lines">
+            <div class="ep-skeleton-block ep-skeleton-line title"></div>
+          </div>
+          <div class="ep-skeleton-actions">
+            <div class="ep-skeleton-block ep-skeleton-btn"></div>
+          </div>
+        </div>
       </div>
       <div v-else-if="items.length === 0" class="mods-empty">
         {{ isVip ? t("roles.no_vips") : t("roles.no_mods") }}

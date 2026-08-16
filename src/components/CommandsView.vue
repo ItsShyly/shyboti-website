@@ -1009,7 +1009,32 @@ onUnmounted(() => {
     <div class="cmd-body">
       <!-- vvv default tab vvv -->
       <template v-if="activeTab === 'Default'">
-        <div v-if="loading" class="state-msg">{{ t("cmd.loading") }}</div>
+        <div v-if="loading" class="rows">
+          <div class="table-row" v-for="i in 8" :key="i">
+            <div></div>
+            <div>
+              <div class="ep-skeleton-block ep-skeleton-square"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block" style="height:11px;width:80%;"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block" style="height:9px;width:60%;"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block" style="height:9px;width:70%;"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+            </div>
+          </div>
+        </div>
         <div v-else-if="!botPresent" class="state-msg">{{ t("cmd.no_bot") }}</div>
         <div v-else-if="commands.length === 0" class="state-msg">
           {{ t("cmd.none") }} #{{ session?.channel }}
@@ -1136,7 +1161,32 @@ onUnmounted(() => {
           <div>{{ t("cmd.sort.actions") }}</div>
         </div>
 
-        <div v-if="customLoading" class="state-msg">{{ t("cmd.loading") }}</div>
+        <div v-if="customLoading" class="rows">
+          <div class="table-row custom-row" v-for="i in 8" :key="i">
+            <div></div>
+            <div>
+              <div class="ep-skeleton-block ep-skeleton-square"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block" style="height:11px;width:80%;"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block" style="height:9px;width:60%;"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block" style="height:9px;width:70%;"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+            </div>
+          </div>
+        </div>
         <div v-else-if="filteredCustom().length === 0" class="custom-empty">
           <div class="empty-icon" v-html="iconSvgFor('star')"></div>
           <div class="empty-title">{{ t("cmd.empty.title") }}</div>

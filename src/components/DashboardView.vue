@@ -718,8 +718,13 @@ function fmtActor(actor: string) {
     </div>
 
     <div v-if="error" class="feed-empty err">{{ error }}</div>
-    <div v-else-if="loading && !activity.length" class="feed-empty">
-      Loading…
+    <div v-else-if="loading && !activity.length" class="feed">
+      <div class="ep-skeleton-row feed-skeleton-row" v-for="i in 10" :key="i">
+        <div class="ep-skeleton-block ep-skeleton-square"></div>
+        <div class="ep-skeleton-lines">
+          <div class="ep-skeleton-block ep-skeleton-line title"></div>
+        </div>
+      </div>
     </div>
     <div v-else-if="!filteredActivity.length" class="feed-empty">
       {{ activity.length ? "No matching activity." : "No activity yet." }}
@@ -1082,6 +1087,11 @@ function fmtActor(actor: string) {
   background: #141418;
   border-bottom: 1px solid #1e1e1e;
   transition: background 0.1s;
+}
+
+.feed-skeleton-row {
+  padding: 8px 14px;
+  background: #141418;
 }
 
 .feed-row:hover {
