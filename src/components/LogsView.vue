@@ -3377,19 +3377,12 @@ function paintNameStyle(paint: {
     <div v-if="!searched && !loading" class="logs-empty">
       {{ t("logs.empty") }}
     </div>
-    <div v-else-if="loading" class="logs-skeleton-table">
-      <div class="logs-skeleton-row" v-for="i in 16" :key="i">
-        <div class="ep-skeleton-block logs-skeleton-time"></div>
-        <div class="ep-skeleton-block logs-skeleton-user"></div>
-        <div class="ep-skeleton-block logs-skeleton-msg"></div>
-      </div>
-    </div>
-    <div v-else-if="searched && !msgs.length && !loadingMore" class="logs-empty">
+    <div v-else-if="searched && !loading && !msgs.length && !loadingMore" class="logs-empty">
       {{ t("logs.no_results") }}
     </div>
 
     <div v-else-if="searched" class="logs-results">
-      <div class="logs-count">
+      <div class="logs-count" v-if="!loading">
         {{ msgs.length.toLocaleString() }} {{ t("logs.count") }}
       </div>
       <div class="logs-table-wrap" ref="tableWrapRef">
@@ -3400,12 +3393,19 @@ function paintNameStyle(paint: {
               <div>{{ t("logs.col.user") }}</div>
               <div>{{ t("logs.col.msg") }}</div>
             </div>
-            <div v-if="!isMobileView" class="day-jump-bar">
+            <div v-if="!isMobileView && !loading" class="day-jump-bar">
               <button class="day-jump-btn" @click="jumpOneDayUp">
                 <span v-html="iconSvg('arrow-up')"></span> jump to {{ jumpTargetDayLabel || "..." }}
               </button>
             </div>
-            <div class="logs-tbody-wrap">
+            <div v-if="loading" class="logs-skeleton-table">
+              <div class="logs-skeleton-row" v-for="i in 16" :key="i">
+                <div class="ep-skeleton-block logs-skeleton-time"></div>
+                <div class="ep-skeleton-block logs-skeleton-user"></div>
+                <div class="ep-skeleton-block logs-skeleton-msg"></div>
+              </div>
+            </div>
+            <div v-else class="logs-tbody-wrap">
               <!-- >>> pinned header always reflects viewportDayLabel - relying on in-flow rows' position:sticky broke once the day separator scrolled outside the render window -->
               <div v-if="viewportDayLabel" class="pinned-day-header">
                 {{ viewportDayLabel }}

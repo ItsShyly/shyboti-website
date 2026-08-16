@@ -1009,34 +1009,8 @@ onUnmounted(() => {
     <div class="cmd-body">
       <!-- vvv default tab vvv -->
       <template v-if="activeTab === 'Default'">
-        <div v-if="loading" class="rows">
-          <div class="table-row" v-for="i in 8" :key="i">
-            <div></div>
-            <div>
-              <div class="ep-skeleton-block ep-skeleton-square"></div>
-            </div>
-            <div>
-              <div class="ep-skeleton-block" style="height:11px;width:80%;"></div>
-            </div>
-            <div>
-              <div class="ep-skeleton-block" style="height:9px;width:60%;"></div>
-            </div>
-            <div>
-              <div class="ep-skeleton-block" style="height:9px;width:70%;"></div>
-            </div>
-            <div>
-              <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
-            </div>
-            <div>
-              <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
-            </div>
-            <div>
-              <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
-            </div>
-          </div>
-        </div>
-        <div v-else-if="!botPresent" class="state-msg">{{ t("cmd.no_bot") }}</div>
-        <div v-else-if="commands.length === 0" class="state-msg">
+        <div v-if="!loading && !botPresent" class="state-msg">{{ t("cmd.no_bot") }}</div>
+        <div v-else-if="!loading && commands.length === 0" class="state-msg">
           {{ t("cmd.none") }} #{{ session?.channel }}
         </div>
         <template v-else>
@@ -1054,7 +1028,33 @@ onUnmounted(() => {
             <div>{{ t("cmd.header.ucd") }}</div>
             <div>{{ t("cmd.sort.actions") }}</div>
           </div>
-          <div class="rows">
+          <div v-if="loading" class="rows">
+            <div class="table-row" v-for="i in 8" :key="i">
+              <div></div>
+              <div>
+                <div class="ep-skeleton-block ep-skeleton-square"></div>
+              </div>
+              <div>
+                <div class="ep-skeleton-block" style="height:11px;width:80%;"></div>
+              </div>
+              <div>
+                <div class="ep-skeleton-block" style="height:9px;width:60%;"></div>
+              </div>
+              <div>
+                <div class="ep-skeleton-block" style="height:9px;width:70%;"></div>
+              </div>
+              <div>
+                <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
+              </div>
+              <div>
+                <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
+              </div>
+              <div>
+                <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+              </div>
+            </div>
+          </div>
+          <div v-else class="rows">
             <template v-for="cmd in filtered()" :key="cmd.name">
               <div class="table-row" :class="{
                 saving: saving === cmd.name,
@@ -1146,7 +1146,7 @@ onUnmounted(() => {
       <!-- vvv custom tab vvv -->
       <template v-if="activeTab === 'Custom'">
 
-        <div v-if="!customLoading && filteredCustom().length > 0" class="table-header custom-table-header">
+        <div v-if="customLoading || filteredCustom().length > 0" class="table-header custom-table-header">
           <div></div>
           <div>{{ t("cmd.header.onoff") }}</div>
           <div class="sort-col" @click="setSort('name')">{{ t("cmd.sort.name") }}<span class="sort-arrow"
