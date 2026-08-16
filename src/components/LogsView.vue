@@ -3416,7 +3416,7 @@ function paintNameStyle(paint: {
                     class="log-row-outer log-row-automod">
                     <div class="log-row">
                       <div class="log-time-col">
-                        <div class="log-event-label tone-automod">
+                        <div class="log-event-label" :class="`tone-automod-${item.msg._status}`">
                           <span class="log-event-icon">⚠</span>
                           <span>{{ automodTagLabel(item.msg._status) }}</span>
                         </div>
@@ -3425,9 +3425,26 @@ function paintNameStyle(paint: {
                           {{ fmtTimeOnly(item.msg.timestamp) }}
                         </div>
                       </div>
-                      <div class="log-user">{{ item.msg.username }}</div>
+                      <div v-if="getRowData(item.msg).badges.length" class="log-badges">
+                        <template v-for="b in getRowData(item.msg).badges" :key="`${item.msg.id}-${b.kind}-${b.key}`">
+                          <img v-if="b.imageUrl" class="badge-img" fetchpriority="high" :src="b.imageUrl"
+                            :alt="b.title || b.label" :title="b.title || b.label" />
+                          <span v-else class="badge-fallback" :title="b.title || b.label">{{ b.label }}</span>
+                        </template>
+                      </div>
+                      <div class="log-user log-user-clickable"
+                        :data-snippet-paint="getRowData(item.msg).paintPreview" :style="getRowData(item.msg).nameStyle"
+                        @click.stop="
+                          openUserPopup(
+                            item.msg.username,
+                            channel || item.msg.channel?.replace('#', ''),
+                            $event,
+                          )
+                          ">
+                        {{ item.msg.displayName || item.msg.username }}
+                      </div>
                       <div class="log-msg-wrap">
-                        <div class="log-msg">{{ item.msg.text }}</div>
+                        <div class="log-msg" v-html="getRowData(item.msg).html"></div>
                       </div>
                     </div>
                   </div>
@@ -4980,10 +4997,28 @@ function paintNameStyle(paint: {
   align-items: center;
 }
 
-:deep(.log-event-label.tone-automod) {
+:deep(.log-event-label.tone-automod-held) {
   background: rgba(229, 192, 123, 0.16);
   border-color: rgba(229, 192, 123, 0.55);
   color: #e5c07b;
+}
+
+:deep(.log-event-label.tone-automod-approved) {
+  background: rgba(35, 209, 139, 0.16);
+  border-color: rgba(35, 209, 139, 0.55);
+  color: #23d18b;
+}
+
+:deep(.log-event-label.tone-automod-denied) {
+  background: rgba(241, 73, 73, 0.16);
+  border-color: rgba(241, 73, 73, 0.55);
+  color: #f14949;
+}
+
+:deep(.log-event-label.tone-automod-expired) {
+  background: rgba(136, 136, 136, 0.16);
+  border-color: rgba(136, 136, 136, 0.55);
+  color: #888;
 }
 
 .search-summary {
