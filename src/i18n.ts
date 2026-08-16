@@ -420,8 +420,6 @@ const translations: Record<Locale, Record<string, string>> = {
       "Pushes this term to Twitch's Blocked Terms list",
     "mod.action.automod_regex_warning":
       "Twitch's Blocked Terms list only triggers plain text, not regex",
-    "mod.badge.automod_synced": "synced",
-    "mod.badge.automod_synced_hint": "Pushed to Twitch's Blocked Terms list.",
     "mod.badge.automod_pending": "pending",
     "mod.badge.automod_pending_hint":
       "Not yet pushed to Twitch (missing scope, or the push failed) - re-auth via the dashboard if this persists.",
@@ -1265,9 +1263,6 @@ const translations: Record<Locale, Record<string, string>> = {
       "Sendet diesen Begriff an Twitchs eigene Blocked-Terms-Liste",
     "mod.action.automod_regex_warning":
       "Twitchs Blocked-Terms-Liste erkennt nur reinen Text, keine Regex!",
-    "mod.badge.automod_synced": "synchronisiert",
-    "mod.badge.automod_synced_hint":
-      "An Twitchs Blocked-Terms-Liste übertragen.",
     "mod.badge.automod_pending": "ausstehend",
     "mod.badge.automod_pending_hint":
       "Noch nicht an Twitch übertragen (fehlende Berechtigung oder Übertragung fehlgeschlagen)",

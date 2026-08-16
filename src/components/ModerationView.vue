@@ -851,10 +851,9 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 <div class="mod-item-main">
                   <div class="mod-item-title">
                     <span v-if="term.is_regex" class="item-badge regex-badge">{{ t("mod.badge.regex") }}</span>
-                    <span v-if="term.action === 'automod'" class="item-badge"
-                      :class="term.twitch_term_id ? 'automod-synced-badge' : 'automod-pending-badge'"
-                      :title="term.twitch_term_id ? t('mod.badge.automod_synced_hint') : t('mod.badge.automod_pending_hint')">
-                      {{ term.twitch_term_id ? t("mod.badge.automod_synced") : t("mod.badge.automod_pending") }}
+                    <span v-if="term.action === 'automod' && !term.twitch_term_id" class="item-badge automod-pending-badge"
+                      :title="t('mod.badge.automod_pending_hint')">
+                      {{ t("mod.badge.automod_pending") }}
                     </span>
                     <span class="item-term">{{ term.term }}</span>
                   </div>
@@ -1513,12 +1512,6 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   color: #c792ea;
   background: rgba(199, 146, 234, 0.12);
   border: 1px solid rgba(199, 146, 234, 0.3)
-}
-
-.automod-synced-badge {
-  color: #23d18b;
-  background: rgba(35, 209, 139, 0.12);
-  border: 1px solid rgba(35, 209, 139, 0.3)
 }
 
 .automod-pending-badge {
