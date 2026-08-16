@@ -1515,6 +1515,23 @@ watch(
       <div>
         <div class="obsconn-title">OBS Control</div>
       </div>
+      <div class="mode-bar">
+        <div class="mode-bar-left">
+          <span class="ep-field-label" style="margin: 0">mode</span>
+          <div class="switch" :class="editMode ? 'edit' : 'live'" @click="setMode(!editMode)">
+            <div class="knob"></div>
+          </div>
+          <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? "Edit" : "Live" }}</span>
+        </div>
+        <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> leaving —
+          loading fresh state…</span>
+        <span v-else class="mode-hint">{{
+          editMode
+            ? "Changes stage here until you press Save."
+            : "Changes apply to your stream instantly."
+        }}</span>
+      </div>
+
       <div class="obsconn-header-right">
         <div class="obs-status-bar" :class="connStatusClass">
           <div class="obs-status-dot"></div>
@@ -1545,7 +1562,7 @@ watch(
             <span class="obs-live-stat-label">bitrate</span>
             <span class="obs-live-stat-value">{{
               bitrateLabel ?? "not streaming"
-            }}</span>
+              }}</span>
           </div>
           <div class="obs-live-stat">
             <span class="obs-live-stat-label">preview size</span>
@@ -1612,22 +1629,6 @@ watch(
 
       <template v-if="agentConnected && obsConnected">
         <div class="ep-field-group">
-          <div class="mode-bar">
-            <div class="mode-bar-left">
-              <span class="ep-field-label" style="margin: 0">mode</span>
-              <div class="switch" :class="editMode ? 'edit' : 'live'" @click="setMode(!editMode)">
-                <div class="knob"></div>
-              </div>
-              <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? "Edit" : "Live" }}</span>
-            </div>
-            <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> leaving —
-              loading fresh state…</span>
-            <span v-else class="mode-hint">{{
-              editMode
-                ? "Changes stage here until you press Save."
-                : "Changes apply to your stream instantly."
-            }}</span>
-          </div>
 
           <div class="ep-field-label obs-section-label">
           </div>
@@ -1648,8 +1649,8 @@ watch(
                   </div>
                   <div class="obs-scene-name-row">
                     <div class="obs-scene-name">{{ currentScene }}</div>
-                    <button class="obs-scene-fs-btn" title="Edit scene layout"
-                      @click.stop="openCanvas(currentScene)" v-html="iconSvgFor('maximize')"></button>
+                    <button class="obs-scene-fs-btn" title="Edit scene layout" @click.stop="openCanvas(currentScene)"
+                      v-html="iconSvgFor('maximize')"></button>
                   </div>
                   <div class="obs-scene-live">live</div>
                 </div>
@@ -1672,8 +1673,8 @@ watch(
                 </div>
                 <div class="obs-scene-name-row">
                   <div class="obs-scene-name">{{ s.sceneName }}</div>
-                  <button class="obs-scene-fs-btn" title="Edit scene layout"
-                    @click.stop="openCanvas(s.sceneName)" v-html="iconSvgFor('maximize')"></button>
+                  <button class="obs-scene-fs-btn" title="Edit scene layout" @click.stop="openCanvas(s.sceneName)"
+                    v-html="iconSvgFor('maximize')"></button>
                 </div>
               </div>
             </div>
@@ -1705,7 +1706,7 @@ watch(
               <label class="ep-field-label">sources
                 <span v-if="selectedScene" class="ep-field-hint">{{
                   selectedScene
-                  }}</span></label>
+                }}</span></label>
               <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
                 @click="openAddSource" v-html="iconSvgFor('plus')"></button>
             </div>
@@ -1750,7 +1751,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-                }}</span></label>
+              }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
                 :class="{ pending: isSourcePending(src) }">
@@ -2625,10 +2626,12 @@ watch(
   cursor: pointer;
   flex-shrink: 0;
 }
+
 .obs-scene-fs-btn svg {
   width: 11px;
   height: 11px;
 }
+
 .obs-scene-fs-btn:hover {
   color: #9d6cff;
 }
