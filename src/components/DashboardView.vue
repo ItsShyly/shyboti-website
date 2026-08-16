@@ -650,7 +650,7 @@ function fmtActor(actor: string) {
         <div class="feed-day-header" @click.stop="toggleDay(group.date)">
           <span class="day-chevron">{{
             collapsedDays.has(group.date) ? "▶" : "▼"
-            }}</span>
+          }}</span>
           <span class="day-label">{{ group.date }}</span>
           <span class="day-count">{{ group.entries.length }}</span>
         </div>
@@ -725,7 +725,7 @@ function fmtActor(actor: string) {
             <div v-if="popupUser.ownFollowers !== null" class="popup-stat">
               <span class="stat-val">{{
                 fmtFollowers(popupUser.ownFollowers)
-                }}</span>
+              }}</span>
               <span class="stat-lbl">followers</span>
             </div>
           </div>
@@ -733,7 +733,7 @@ function fmtActor(actor: string) {
             <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">
               <span class="rel-icon">{{
                 popupUser.followedAt ? "♥" : "♥"
-                }}</span>
+              }}</span>
               <span class="rel-label">
                 <template v-if="popupUser.followedAt">Following for
                   {{ fmtDuration(popupUser.followedAt) }}</template>
@@ -743,7 +743,7 @@ function fmtActor(actor: string) {
             <div class="popup-rel" :class="popupUser.subbedSince ? 'rel-yes' : 'rel-no'">
               <span class="rel-icon">{{
                 popupUser.subbedSince ? "★" : "★"
-                }}</span>
+              }}</span>
               <span class="rel-label">
                 <template v-if="popupUser.subbedSince">
                   {{ subTierLabel(popupUser.subTier ?? "1000") }} ·
@@ -1017,8 +1017,8 @@ function fmtActor(actor: string) {
 }
 
 .feed-icon {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
