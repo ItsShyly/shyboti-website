@@ -41,6 +41,7 @@ interface CanvasItem {
   sourceName: string;
   sceneItemEnabled: boolean;
   isAudioSource: boolean;
+  inputKind: string | null;
   muted?: boolean;
   volumePercent?: number;
   positionX?: number;
@@ -57,8 +58,6 @@ interface CanvasItem {
 const items = ref<CanvasItem[]>([]);
 const baseWidth = ref(1920);
 const baseHeight = ref(1080);
-const screenshot = ref<string | null>(null);
-const dimMode = ref(false);
 const loading = ref(true);
 const stageRef = ref<HTMLElement | null>(null);
 
@@ -135,33 +134,18 @@ async function load() {
   } catch { }
   loading.value = false;
 }
-// >>> items placeable on the canvas need actual visual footprint 
-const placeableItems = computed(() =>
-  items.value.filter((it) => (it.width ?? 0) > 0 && (it.height ?? 0) > 0),
-);
 
-async function loadScreenshot() {
-  try {
-    // >>> the all-scenes picker loop is paused by the parent while this is open, so
-    // >>> this one screenshot can afford to be bigger/higher quality
-    const res = await fetch(
-      `${API}/obs/${props.channel}/screenshot?scene=${encodeURIComponent(props.sceneName)}&width=1920&quality=95`,
-      { headers: props.authHeaders },
-    );
-    if (res.ok) {
-      const d = (await res.json()) as { imageData: string | null };
-      if (d.imageData) screenshot.value = d.imageData;
-    }
-  } catch { }
-}
+const placeableItems = computed(() =>
+  items.value.filter(
+    (it) => it.inputKind === "browser_source" && (it.width ?? 0) > 0 && (it.height ?? 0) > 0,
+  ),
+);
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
   load();
-  loadScreenshot();
   pollTimer = setInterval(() => {
     if (!dragState.value && !resizeState.value) load();
-    loadScreenshot();
   }, 4000);
   window.addEventListener("keydown", onKeydown);
 });
@@ -417,23 +401,6 @@ function displayStyle(it: CanvasItem) {
 function onStageClick(e: MouseEvent) {
   if (e.target === stageRef.value) select(null);
 }
-
-// >>> single white layer at 80% opacity, clipped with a hole around the selected
-// >>> item so it's the only thing left un-dimmed
-const spotlightClipPath = computed(() => {
-  const it = selectedItem.value;
-  if (!it || !dimMode.value) return null;
-  const s = scale();
-  const e = effective(it);
-  const left = (e.positionX ?? 0) * s;
-  const top = (e.positionY ?? 0) * s;
-  const right = left + (e.width ?? 0) * s;
-  const bottom = top + (e.height ?? 0) * s;
-  return (
-    `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ` +
-    `${left}px ${top}px, ${left}px ${bottom}px, ${right}px ${bottom}px, ${right}px ${top}px, ${left}px ${top}px)`
-  );
-});
 </script>
 
 <template>
@@ -443,11 +410,6 @@ const spotlightClipPath = computed(() => {
         <div class="canvas-topbar">
           <div class="canvas-topbar-title">{{ sceneName }}</div>
           <div class="canvas-topbar-actions">
-            <button class="canvas-dim-btn" :class="{ active: dimMode }" :disabled="!selectedItem"
-              :title="selectedItem ? 'Dim everything except the selected source' : 'Select a source first'"
-              @click="dimMode = !dimMode">
-              <span v-html="iconSvgFor('sun')"></span> spotlight
-            </button>
             <button class="canvas-close-btn" title="Close (Esc)" @click="emit('close')"
               v-html="iconSvgFor('x')"></button>
           </div>
@@ -457,16 +419,16 @@ const spotlightClipPath = computed(() => {
           <div class="canvas-body">
             <div v-if="loading" class="canvas-loading">loading…</div>
             <div v-else-if="!placeableItems.length" class="canvas-loading">
-              No sources with layout data in this scene yet.<br />
+              No browser sources in this scene yet.<br />
               <span class="canvas-loading-hint">
-                If sources are showing up in the sidebar, your OBS agent may need updating
+                Only browser sources can be laid out here - other source types (webcam,
+                capture, etc.) can still be shown/hidden from the sidebar. If browser
+                sources you added aren't showing up, your OBS agent may need updating
                 (re-download it and restart it) to support the layout editor.
               </span>
             </div>
             <div v-else ref="stageRef" class="canvas-stage" :style="{ aspectRatio: `${baseWidth} / ${baseHeight}` }"
               @mousedown="onStageClick">
-              <img v-if="screenshot" :src="screenshot" alt="" class="canvas-backdrop" />
-
               <div v-for="it in placeableItems" :key="it.sceneItemId" class="canvas-item" :class="{
                 selected: it.sceneItemId === selectedId,
                 hidden_: !effective(it).sceneItemEnabled,
@@ -479,8 +441,6 @@ const spotlightClipPath = computed(() => {
                   <span class="canvas-handle br" @mousedown="onHandleMouseDown(it, 'br', $event)"></span>
                 </template>
               </div>
-
-              <div v-if="spotlightClipPath" class="canvas-spotlight" :style="{ clipPath: spotlightClipPath }"></div>
             </div>
           </div>
 
@@ -548,36 +508,6 @@ const spotlightClipPath = computed(() => {
   gap: 8px;
 }
 
-.canvas-dim-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid #2a2a30;
-  background: #111217;
-  color: #888;
-  font-family: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.canvas-dim-btn:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.canvas-dim-btn.active {
-  border-color: #e5c07b;
-  color: #e5c07b;
-  background: #e5c07b15;
-}
-
-.canvas-dim-btn svg {
-  width: 12px;
-  height: 12px;
-}
-
 .canvas-close-btn {
   width: 30px;
   height: 30px;
@@ -626,43 +556,36 @@ const spotlightClipPath = computed(() => {
   max-width: 420px;
 }
 
+
 .canvas-stage {
   position: relative;
   width: 100%;
   max-height: 100%;
   max-width: 100%;
-  background: #000;
+  background: #fff;
   overflow: hidden;
   border: 1px solid #2a2a30;
   user-select: none;
 }
 
-.canvas-backdrop {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  pointer-events: none;
-  opacity: 0.9;
-  z-index: 0;
-}
-
 .canvas-item {
   position: absolute;
-  border: 1px dashed rgba(157, 108, 255, 0.6);
+  border: 1px solid #6f2bff;
+  background: rgba(111, 43, 255, 0.12);
   cursor: move;
   transform-origin: 0 0;
   z-index: 3;
 }
 
 .canvas-item.hidden_ {
-  border-style: dotted;
-  opacity: 0.5;
+  border-style: dashed;
+  background: rgba(0, 0, 0, 0.05);
+  opacity: 0.6;
 }
 
 .canvas-item.selected {
   border: 2px solid #f14949;
+  background: rgba(241, 73, 73, 0.1);
 }
 
 .canvas-item-label {
@@ -670,8 +593,8 @@ const spotlightClipPath = computed(() => {
   top: -18px;
   left: -1px;
   font-size: 10px;
-  color: #e0e0e0;
-  background: #000000cc;
+  color: #fff;
+  background: #6f2bff;
   padding: 1px 5px;
   white-space: nowrap;
   pointer-events: none;
@@ -710,13 +633,6 @@ const spotlightClipPath = computed(() => {
   cursor: nwse-resize;
 }
 
-.canvas-spotlight {
-  position: absolute;
-  inset: 0;
-  background: rgba(255, 255, 255, 0.8);
-  pointer-events: none;
-  z-index: 1;
-}
 
 .canvas-sidebar {
   width: 220px;

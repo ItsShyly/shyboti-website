@@ -352,12 +352,7 @@ async function refreshScreenshot(sceneName: string, isLive: boolean) {
 }
 
 async function refreshAllShots() {
-  if (
-    !agentConnected.value ||
-    !obsConnected.value ||
-    !agentStatus.value?.screenshots ||
-    canvasSceneName.value // <<< fullscreen canvas takes over the screenshot budget for its one scene
-  )
+  if (!agentConnected.value || !obsConnected.value || !agentStatus.value?.screenshots)
     return;
   // >>> sequential, live scene first - hidden scenes skip unless they're the live one
   const live = scenes.value.find((s) => s.sceneName === currentScene.value);
@@ -1772,7 +1767,7 @@ watch(
                   <div class="obs-scene-name-row">
                     <div class="obs-scene-name">{{ currentScene }}</div>
                     <button class="obs-scene-fs-btn" title="Edit scene layout" @click.stop="openCanvas(currentScene)"
-                      v-html="iconSvgFor('maximize')"></button>
+                      v-html="iconSvgFor('edit')"></button>
                   </div>
                   <div class="obs-scene-live">live</div>
                 </div>
@@ -1796,7 +1791,7 @@ watch(
                 <div class="obs-scene-name-row">
                   <div class="obs-scene-name">{{ s.sceneName }}</div>
                   <button class="obs-scene-fs-btn" title="Edit scene layout" @click.stop="openCanvas(s.sceneName)"
-                    v-html="iconSvgFor('maximize')"></button>
+                    v-html="iconSvgFor('edit')"></button>
                 </div>
               </div>
             </div>
