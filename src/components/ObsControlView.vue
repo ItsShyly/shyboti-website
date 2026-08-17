@@ -9,7 +9,7 @@ import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
-import ObsSceneCanvas from "./ObsSceneCanvas.vue";
+import ObsOverlayEditor from "./ObsOverlayEditor.vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session, channelRole } = useAuth();
@@ -132,8 +132,6 @@ const scenes = ref<SceneInfo[]>([]);
 const selectedScene = ref("");
 const sources = ref<SourceInfo[]>([]);
 const sourcesLoading = ref(false);
-// >>> selection lives only in the fullscreen canvas (box click or its sidebar)
-const selectedListSourceId = ref<number | null>(null);
 
 const sceneBindings = ref<SceneBind[]>([]);
 const sourceBindings = ref<SourceBind[]>([]);
@@ -566,9 +564,11 @@ function stageSceneSwitch(name: string) {
 }
 
 // >>> fullscreen scene layout editor (drag-move / corner-resize sources)
-const canvasSceneName = ref<string | null>(null);
-function openCanvas(name: string) {
-  canvasSceneName.value = name;
+// >>> the overlay is one editor for the whole channel now, not per-scene - the
+// >>> pen just opens it; which scene/source it activates over is chosen in M4
+const overlayEditorOpen = ref(false);
+function openOverlayEditor() {
+  overlayEditorOpen.value = true;
 }
 
 function onToggleVisible(src: any) {
@@ -1766,7 +1766,7 @@ watch(
                   </div>
                   <div class="obs-scene-name-row">
                     <div class="obs-scene-name">{{ currentScene }}</div>
-                    <button class="obs-scene-fs-btn" title="Edit scene layout" @click.stop="openCanvas(currentScene)"
+                    <button class="obs-scene-fs-btn" title="Edit stream overlay" @click.stop="openOverlayEditor()"
                       v-html="iconSvgFor('edit')"></button>
                   </div>
                   <div class="obs-scene-live">live</div>
@@ -1790,7 +1790,7 @@ watch(
                 </div>
                 <div class="obs-scene-name-row">
                   <div class="obs-scene-name">{{ s.sceneName }}</div>
-                  <button class="obs-scene-fs-btn" title="Edit scene layout" @click.stop="openCanvas(s.sceneName)"
+                  <button class="obs-scene-fs-btn" title="Edit stream overlay" @click.stop="openOverlayEditor()"
                     v-html="iconSvgFor('edit')"></button>
                 </div>
               </div>
@@ -1814,10 +1814,8 @@ watch(
         </div>
       </template>
 
-      <ObsSceneCanvas v-if="canvasSceneName && session" :channel="session.channel" :scene-name="canvasSceneName"
-        :auth-headers="authHeaders" :edit-mode="editMode" :pending-edits="pendingSourceEdits"
-        :selected-id="selectedListSourceId" @update:selected-id="selectedListSourceId = $event"
-        @stage="(src, patch) => stageSourceEdit(src, patch, canvasSceneName!)" @close="canvasSceneName = null" />
+      <ObsOverlayEditor v-if="overlayEditorOpen && session" :channel="session.channel" :auth-headers="authHeaders"
+        @close="overlayEditorOpen = false" />
 
       <!-- >>> builder still works even if obs itself isn't connected -->
       <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"
