@@ -4,7 +4,7 @@ export interface OverlayElementStyle {
   fontFamily?: string;
   fontSize?: number;
   color?: string;
-  textAlign?: string;
+  textAlign?: "left" | "center" | "right" | "justify";
   fontWeight?: string;
   stroke?: boolean;
   strokeColor?: string;
