@@ -54,6 +54,26 @@ interface CanvasItem {
   sourceWidth?: number;
   sourceHeight?: number;
   url?: string;
+  alignment?: number;
+}
+
+function toTopLeft(x: number, y: number, w: number, h: number, alignment = 5) {
+  let left = x;
+  if (alignment & 2) left -= w;
+  else if (!(alignment & 1)) left -= w / 2;
+  let top = y;
+  if (alignment & 8) top -= h;
+  else if (!(alignment & 4)) top -= h / 2;
+  return { left, top };
+}
+function fromTopLeft(left: number, top: number, w: number, h: number, alignment = 5) {
+  let x = left;
+  if (alignment & 2) x += w;
+  else if (!(alignment & 1)) x += w / 2;
+  let y = top;
+  if (alignment & 8) y += h;
+  else if (!(alignment & 4)) y += h / 2;
+  return { positionX: x, positionY: y };
 }
 
 const items = ref<CanvasItem[]>([]);
@@ -94,10 +114,17 @@ watch(
 );
 
 
+
 function effective(it: CanvasItem): CanvasItem {
   const local = localTransform.value[it.sceneItemId];
   const p = pendingFor(it.sceneItemId);
-  const t = local ?? p?.transform;
+  let t = local;
+  if (!t && p?.transform) {
+    const w = it.sourceWidth ? it.sourceWidth * p.transform.scaleX : (it.width ?? 0);
+    const h = it.sourceHeight ? it.sourceHeight * p.transform.scaleY : (it.height ?? 0);
+    const { left, top } = toTopLeft(p.transform.positionX, p.transform.positionY, w, h, it.alignment);
+    t = { ...p.transform, positionX: left, positionY: top };
+  }
   if (!t && p === undefined) return it;
   return {
     ...it,
@@ -136,8 +163,17 @@ async function load() {
     }
     if (srcRes.ok) {
       const d = (await srcRes.json()) as { sources: CanvasItem[] };
-      // >>> same reversed-order fix as the main sources list
-      items.value = (d.sources ?? []).slice().reverse().map((it) => effective(it));
+
+      items.value = (d.sources ?? [])
+        .slice()
+        .reverse()
+        .map((it) => {
+          if (it.positionX == null || it.positionY == null || it.width == null || it.height == null)
+            return it;
+          const { left, top } = toTopLeft(it.positionX, it.positionY, it.width, it.height, it.alignment);
+          return { ...it, positionX: left, positionY: top };
+        })
+        .map((it) => effective(it));
     }
   } catch { }
   loading.value = false;
@@ -174,9 +210,7 @@ function scale(): number {
 function itemStyle(it: CanvasItem) {
   const e = effective(it);
   const s = scale();
-  // >>> fall back through sourceWidth/height (the browser source's own configured
-  // >>> size) and finally a flat placeholder, so a missing/failed transform fetch
-  // >>> still shows a draggable box instead of collapsing it to nothing
+
   const w = e.width || e.sourceWidth || 320;
   const h = e.height || e.sourceHeight || 240;
   return {
@@ -216,24 +250,41 @@ function currentTransform(it: CanvasItem): SourceTransform {
 }
 
 
+
+function toWireItem(it: CanvasItem): CanvasItem {
+  if (it.positionX == null || it.positionY == null) return it;
+  const aligned = fromTopLeft(it.positionX, it.positionY, it.width ?? 0, it.height ?? 0, it.alignment);
+  return { ...it, positionX: aligned.positionX, positionY: aligned.positionY };
+}
+
 async function commitTransform(it: CanvasItem, transform: SourceTransform) {
+  // >>> local display state stays top-left space - only the OBS-bound payload
+  // >>> (below) gets converted back to whatever alignment this item actually uses
   localTransform.value = { ...localTransform.value, [it.sceneItemId]: transform };
+  const w = it.sourceWidth ? it.sourceWidth * transform.scaleX : (effective(it).width ?? 0);
+  const h = it.sourceHeight ? it.sourceHeight * transform.scaleY : (effective(it).height ?? 0);
+  const aligned = fromTopLeft(transform.positionX, transform.positionY, w, h, it.alignment);
+  const wireTransform: SourceTransform = {
+    ...transform,
+    positionX: aligned.positionX,
+    positionY: aligned.positionY,
+  };
   if (props.editMode) {
-    emit("stage", it, { transform });
+    emit("stage", toWireItem(it), { transform: wireTransform });
     return;
   }
   try {
     await fetch(`${API}/obs/${props.channel}/source/transform`, {
       method: "POST",
       headers: { ...props.authHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({ scene: props.sceneName, sceneItemId: it.sceneItemId, transform }),
+      body: JSON.stringify({ scene: props.sceneName, sceneItemId: it.sceneItemId, transform: wireTransform }),
     });
   } catch { }
 }
 function toggleVisible(it: CanvasItem) {
   const target = !effective(it).sceneItemEnabled;
   if (props.editMode) {
-    emit("stage", it, { visible: target });
+    emit("stage", toWireItem(it), { visible: target });
     return;
   }
   fetch(`${API}/obs/${props.channel}/source/visibility`, {
