@@ -188,6 +188,22 @@ function itemStyle(it: CanvasItem) {
   };
 }
 
+function iframeStyle(it: CanvasItem) {
+  const e = effective(it);
+  const s = scale();
+  const w = e.width || e.sourceWidth || 320;
+  const h = e.height || e.sourceHeight || 240;
+  const nativeW = e.sourceWidth || w;
+  const nativeH = e.sourceHeight || h;
+  const scaleX = nativeW ? (w * s) / nativeW : 1;
+  const scaleY = nativeH ? (h * s) / nativeH : 1;
+  return {
+    width: `${nativeW}px`,
+    height: `${nativeH}px`,
+    transform: `scale(${scaleX}, ${scaleY})`,
+  };
+}
+
 function currentTransform(it: CanvasItem): SourceTransform {
   const e = effective(it);
   return {
@@ -450,7 +466,8 @@ function onStageClick(e: MouseEvent) {
                 selected: it.sceneItemId === selectedId,
                 hidden_: !effective(it).sceneItemEnabled,
               }" :style="displayStyle(it)" @mousedown="onItemMouseDown(it, $event)">
-                <iframe v-if="it.url" :src="it.url" class="canvas-item-frame" tabindex="-1"></iframe>
+                <iframe v-if="it.url" :src="it.url" class="canvas-item-frame" :style="iframeStyle(it)"
+                  tabindex="-1"></iframe>
                 <div v-else class="canvas-item-noframe">no preview</div>
                 <span class="canvas-item-label">{{ it.sourceName }}</span>
                 <template v-if="it.sceneItemId === selectedId">
@@ -630,11 +647,8 @@ function onStageClick(e: MouseEvent) {
 
 .canvas-item-frame {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  border: none;
-  /* >>> the box itself handles drag/select - clicks must pass through the iframe to it */
+  top: 0;
+  left: 0;
   pointer-events: none;
 }
 
