@@ -4,48 +4,47 @@ import { useRouter } from "vue-router";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
-import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session, channelRole, adminMode, logout, switchChannel } = useAuth();
 const { t } = useI18n();
 const router = useRouter();
 
 const isBroadcaster = ref(false);
-// >>> default true so real users don't see Remove Bot flash away before channelRole loads
+// default true so real users don't see Remove Bot flash away before channelRole loads
 const botPresent = computed(() => channelRole.value?.botPresent ?? true);
 
-// >>> danger zone also unlocks in admin mode, so an admin can act on any channel
+// danger zone also unlocks in admin mode, so an admin can act on any channel
 const dangerZoneUnlocked = computed(
   () => isBroadcaster.value || (!!session.value?.isAdmin && adminMode.value),
 );
 
-// >>> Remove Bot only makes sense if there's a bot to remove
+// Remove Bot only makes sense if there's a bot to remove
 const canRemoveBotCard = computed(
   () => dangerZoneUnlocked.value && botPresent.value,
 );
 
-// >>> Prefix
+// Prefix
 const prefix = ref("+");
 const prefixSaving = ref(false);
 const prefixSaved = ref(false);
 const prefixError = ref("");
 
-// >>> Log opt-out
+// Log opt-out
 const optedOut = ref(false);
 const optSaving = ref(false);
 const optMsg = ref("");
 
-// >>> Vanish hide
+// Vanish hide
 const vanishHide = ref(false);
 const vanishSaving = ref(false);
 const vanishMsg = ref("");
 
-// >>> Name history opt-out
+// Name history opt-out
 const nameHistOptedOut = ref(false);
 const nameHistSaving = ref(false);
 const nameHistMsg = ref("");
 
-// >>> 7TV
+// 7TV
 interface EmoteSetInfo {
   setId: string | null;
   setName: string | null;
@@ -59,13 +58,13 @@ const emoteSetSuccess = ref("");
 const emoteInput7tv = ref("");
 const emoteInputId = ref("");
 
-// >>> Remove bot
+// Remove bot
 const removeConfirm = ref(false);
 const removeRemoving = ref(false);
 const removeMsg = ref("");
 const removeError = ref("");
 
-// >>> Hidden tips reset
+// Hidden tips reset
 const tipsResetMsg = ref("");
 
 function resetAllHiddenInfos() {
@@ -294,7 +293,7 @@ async function doRemoveBot() {
   removeRemoving.value = false;
 }
 
-// >>> Delete all data
+// Delete all data
 const deleteConfirmInput = ref("");
 const deleting = ref(false);
 const deleteError = ref("");
@@ -339,167 +338,135 @@ async function doDeleteAllData() {
 
 <template>
   <div class="settings">
-    <div class="settings-header">
-      <h2 class="settings-title">{{ t("settings.title") }}</h2>
+    <header class="settings-header">
+      <h1 class="settings-title">{{ t("settings.title") }}</h1>
       <p class="settings-sub">
-        {{ t("settings.sub") }} <span class="chan">#{{ session?.channel }}</span>.
+        Manage settings for <span class="chan">#{{ session?.channel }}</span>.
       </p>
-    </div>
+    </header>
 
-    <div class="cards-grid">
-      <!-- >>> broadcaster only -->
-      <div class="card" v-if="isBroadcaster">
-        <div class="card-header">
-          <div class="card-title">{{ t("settings.prefix.title") }}</div>
-          <div class="card-sub">
-            {{ t("settings.prefix.sub") }} <code class="code">{{ prefix }}</code>command.
+    <!-- Chat behavior (broadcaster only) -->
+    <section v-if="isBroadcaster" class="settings-section">
+      <h2 class="section-title">Chat behavior</h2>
+      <div class="setting-list">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Command prefix</div>
+            <div class="setting-desc">
+              Used before commands, e.g. <code class="code">{{ prefix || "+" }}</code>ping.
+            </div>
+            <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
           </div>
-        </div>
-        <div class="card-body">
-          <div class="prefix-row">
+          <div class="setting-control prefix-control">
             <input v-model="prefix" class="prefix-input" maxlength="3" placeholder="+" @keydown.enter="savePrefix"
               spellcheck="false" />
-            <span class="prefix-preview"><span class="pre">{{ prefix || "+" }}</span>ping</span>
-          </div>
-          <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
-          <div class="section-note"><span v-html="iconSvgFor('alert-triangle')"></span> {{ t("settings.prefix.note") }}</div>
-        </div>
-        <div class="card-footer">
-          <button class="save-btn" @click="savePrefix" :disabled="prefixSaving || !prefix">
-            <template v-if="prefixSaved"><span v-html="iconSvgFor('check')"></span> {{ t("settings.saved") }}</template>
-            <template v-else-if="prefixSaving">{{ t("settings.saving") }}</template>
-            <template v-else>{{ t("settings.prefix.save") }}</template>
-          </button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">{{ t("settings.optout.title") }}</div>
-          <div class="card-sub">{{ t("settings.optout.sub") }}</div>
-        </div>
-        <div class="card-body">
-          <div class="toggle-row">
-            <div class="status-dot" :class="{ active: !optedOut }"></div>
-            <span class="status-text">{{
-              optedOut
-                ? t("settings.optout.hidden")
-                : t("settings.optout.visible")
-            }}</span>
-            <div class="spacer"></div>
-            <span class="status-badge" :class="optedOut ? 'badge-off' : 'badge-on'">
+            <button class="btn btn-primary" @click="savePrefix" :disabled="prefixSaving || !prefix">
               {{
-                optedOut
-                  ? t("settings.optout.badge.out")
-                  : t("settings.optout.badge.in")
+                prefixSaving
+                  ? t("settings.saving")
+                  : prefixSaved
+                    ? t("settings.saved")
+                    : t("settings.prefix.save")
               }}
-            </span>
+            </button>
           </div>
-          <div v-if="optMsg" class="card-msg ok">{{ optMsg }}</div>
         </div>
-        <div class="card-footer">
-          <button class="toggle-btn" :class="{ 'toggle-btn-on': optedOut }" @click="toggleOptOut" :disabled="optSaving">
-            {{
-              optSaving
-                ? "..."
-                : optedOut
-                  ? t("settings.optout.btn.in")
-                  : t("settings.optout.btn.out")
-            }}
-          </button>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Hide vanish timeouts</div>
+            <div class="setting-desc">
+              Hides short timeouts from the dashboard when the user typed a
+              vanish command.
+            </div>
+            <div class="setting-desc-detects">
+              Detects <code class="code">!v</code>
+              <code class="code">!vanish</code>
+              <code class="code">+v</code>
+              <code class="code">+vanish</code>
+            </div>
+            <div v-if="vanishMsg" class="status-msg ok">{{ vanishMsg }}</div>
+          </div>
+          <div class="setting-control">
+            <button class="btn btn-toggle" :class="{ active: vanishHide }" @click="
+              vanishHide = !vanishHide;
+            saveVanish();
+            " :disabled="vanishSaving">
+              {{ vanishSaving ? "..." : vanishHide ? "Disable" : "Enable" }}
+            </button>
+          </div>
         </div>
       </div>
+    </section>
 
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Previous Usernames</div>
-          <div class="card-sub">
-            Hide your previous Twitch usernames from being shown on other users'
-            screens.
+    <!-- Privacy -->
+    <section class="settings-section">
+      <h2 class="section-title">Privacy</h2>
+      <div class="setting-list">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Chat log visibility</div>
+            <div class="setting-desc">{{ t("settings.optout.sub") }}</div>
+            <div v-if="optMsg" class="status-msg ok">{{ optMsg }}</div>
+          </div>
+          <div class="setting-control">
+            <button class="btn btn-toggle" :class="{ active: optedOut }" @click="toggleOptOut" :disabled="optSaving">
+              {{
+                optSaving
+                  ? "..."
+                  : optedOut
+                    ? t("settings.optout.btn.in")
+                    : t("settings.optout.btn.out")
+              }}
+            </button>
           </div>
         </div>
-        <div class="card-body">
-          <div class="toggle-row">
-            <div class="status-dot" :class="{ active: !nameHistOptedOut }"></div>
-            <span class="status-text">{{
-              nameHistOptedOut ? "Name history hidden" : "Name history visible"
-              }}</span>
-            <div class="spacer"></div>
-            <span class="status-badge" :class="nameHistOptedOut ? 'badge-off' : 'badge-on'">
-              {{ nameHistOptedOut ? "Hidden" : "Visible" }}
-            </span>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Previous usernames</div>
+            <div class="setting-desc">
+              Hide your previous Twitch usernames from being shown on other
+              users' screens.
+            </div>
+            <div v-if="nameHistMsg" class="status-msg ok">{{ nameHistMsg }}</div>
           </div>
-          <div v-if="nameHistMsg" class="card-msg ok">{{ nameHistMsg }}</div>
-        </div>
-        <div class="card-footer">
-          <button class="toggle-btn" :class="{ 'toggle-btn-on': nameHistOptedOut }" @click="toggleNameHistOptOut"
-            :disabled="nameHistSaving">
-            {{
-              nameHistSaving
-                ? "..."
-                : nameHistOptedOut
-                  ? "Show Names"
-                  : "Hide Names"
-            }}
-          </button>
+          <div class="setting-control">
+            <button class="btn btn-toggle" :class="{ active: nameHistOptedOut }" @click="toggleNameHistOptOut"
+              :disabled="nameHistSaving">
+              {{
+                nameHistSaving
+                  ? "..."
+                  : nameHistOptedOut
+                    ? "Show Names"
+                    : "Hide Names"
+              }}
+            </button>
+          </div>
         </div>
       </div>
+    </section>
 
-      <!-- >>> broadcaster only -->
-      <div class="card" v-if="isBroadcaster">
-        <div class="card-header">
-          <div class="card-title">Hide Vanish Timeouts</div>
-          <div class="card-sub">
-            Hides short timeouts from the dashboard when the user typed a vanish
-            command.
-          </div>
+    <!-- Integrations (broadcaster only) -->
+    <section v-if="isBroadcaster" class="settings-section">
+      <h2 class="section-title">Integrations</h2>
+      <div class="integration-panel">
+        <div class="integration-header">
+          <div class="integration-title">7TV Emote Set</div>
+          <div class="integration-desc">{{ t("settings.7tv.sub") }}</div>
         </div>
-        <div class="card-body">
-          <div class="toggle-row">
-            <div class="status-dot" :class="{ active: vanishHide }"></div>
-            <span class="status-text">{{
-              vanishHide ? "Vanish timeouts hidden" : "All timeouts visible"
-              }}</span>
-            <div class="spacer"></div>
-            <span class="status-badge" :class="vanishHide ? 'badge-on' : 'badge-off'">
-              {{ vanishHide ? "ON" : "OFF" }}
-            </span>
-          </div>
-          <div class="section-note">
-            Detects: <code class="code">!v</code>
-            <code class="code">!vanish</code> <code class="code">+v</code>
-            <code class="code">+vanish</code>
-          </div>
-          <div v-if="vanishMsg" class="card-msg ok">{{ vanishMsg }}</div>
-        </div>
-        <div class="card-footer">
-          <button class="toggle-btn" :class="{ 'toggle-btn-on': vanishHide }" @click="
-            vanishHide = !vanishHide;
-          saveVanish();
-          " :disabled="vanishSaving">
-            {{ vanishSaving ? "..." : vanishHide ? "Disable" : "Enable" }}
-          </button>
-        </div>
-      </div>
-
-      <!-- >>> broadcaster only, spans 2 cols -->
-      <div class="card card-wide" v-if="isBroadcaster">
-        <div class="card-header">
-          <div class="card-icon card-icon-7tv">&#10022;</div>
-          <div class="card-title">{{ t("settings.7tv.title") }}</div>
-          <div class="card-sub">{{ t("settings.7tv.sub") }}</div>
-        </div>
-        <div class="card-body">
-          <div v-if="emoteSetLoading" class="card-loading">Loading...</div>
+        <div class="integration-body">
+          <div v-if="emoteSetLoading" class="loading">Loading...</div>
           <template v-else>
             <div v-if="emoteSet.setId" class="emote-current">
-              <span class="emote-name">{{
-                emoteSet.setName ?? emoteSet.setId
-                }}</span>
-              <span class="emote-id">{{ emoteSet.setId }}</span>
-              <span v-if="emoteSet.emoteCount" class="emote-count">{{ emoteSet.emoteCount }} {{ t("settings.7tv.emotes")
-                }}</span>
-              <button class="danger-sm" @click="remove7tvSet" :disabled="emoteSetSaving">
+              <span class="emote-name">
+                {{ emoteSet.setName ?? emoteSet.setId }}
+              </span>
+              <span class="emote-meta">
+                {{ emoteSet.setId }} · {{ emoteSet.emoteCount }}
+                {{ t("settings.7tv.emotes") }}
+              </span>
+              <button class="btn btn-remove" @click="remove7tvSet" :disabled="emoteSetSaving">
                 {{
                   emoteSetSaving
                     ? t("settings.7tv.removing")
@@ -507,10 +474,12 @@ async function doDeleteAllData() {
                 }}
               </button>
             </div>
-            <div v-else class="emote-none">{{ t("settings.7tv.none") }}</div>
-            <div class="emote-row">
-              <span class="emote-lbl">{{ t("settings.7tv.by_channel") }}</span>
-              <button class="fetch-btn" :disabled="emoteSetSaving" @click="
+            <div v-else class="emote-none">
+              {{ t("settings.7tv.none") }}
+            </div>
+
+            <div class="emote-form-row">
+              <button class="btn btn-fetch" :disabled="emoteSetSaving" @click="
                 emoteInput7tv = session?.channel ?? '';
               emoteInputId = '';
               fetch7tvSet();
@@ -521,14 +490,15 @@ async function doDeleteAllData() {
                     : t("settings.7tv.fetch")
                 }}
               </button>
+              <span class="emote-lbl">by channel name</span>
             </div>
-            <div class="emote-row">
-              <span class="emote-lbl">{{ t("settings.7tv.by_id") }}</span>
+
+            <div class="emote-form-row">
               <input v-model="emoteInputId" class="field-sm" :placeholder="t('settings.7tv.by_id.ph')" @keydown.enter="
                 emoteInput7tv = '';
               fetch7tvSet();
               " :disabled="emoteSetSaving" />
-              <button class="fetch-btn" :disabled="emoteSetSaving || !emoteInputId.trim()" @click="
+              <button class="btn btn-fetch" :disabled="emoteSetSaving || !emoteInputId.trim()" @click="
                 emoteInput7tv = '';
               fetch7tvSet();
               ">
@@ -539,682 +509,565 @@ async function doDeleteAllData() {
                 }}
               </button>
             </div>
-            <div v-if="emoteSetError" class="card-msg err">
+
+            <div v-if="emoteSetError" class="status-msg err">
               {{ emoteSetError }}
             </div>
-            <div v-if="emoteSetSuccess" class="card-msg ok">
-              &#10003; {{ emoteSetSuccess }}
+            <div v-if="emoteSetSuccess" class="status-msg ok">
+              ✓ {{ emoteSetSuccess }}
             </div>
           </template>
         </div>
       </div>
+    </section>
 
-      <!-- >>> broadcaster or admin-mode admin - warning, less severe than delete -->
-      <div class="card card-warning" v-if="canRemoveBotCard">
-        <div class="card-header">
-          <div class="card-icon card-icon-warning">&#9888;</div>
-          <div class="card-title">{{ t("settings.remove.title") }}</div>
-          <div class="card-sub">{{ t("settings.remove.sub") }}</div>
-        </div>
-        <div class="card-body">
-          <div v-if="removeMsg" class="card-msg ok">{{ removeMsg }}</div>
-          <div v-if="removeError" class="card-msg err">{{ removeError }}</div>
-          <div v-if="removeConfirm" class="confirm-box confirm-box-warning">
-            <div class="confirm-text">
-              {{ t("settings.remove.confirm")
-              }}<strong>#{{ session?.channel }}</strong>?
-              {{ t("settings.remove.confirm2") }}
+    <!-- Interface -->
+    <section class="settings-section">
+      <h2 class="section-title">Interface</h2>
+      <div class="setting-list">
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-label">Hidden tips</div>
+            <div class="setting-desc">
+              Restore all info tips you've dismissed (e.g. the snippet hint in
+              Logs).
             </div>
-            <div class="confirm-actions">
-              <button class="confirm-no" @click="removeConfirm = false">
+            <div v-if="tipsResetMsg" class="status-msg ok">{{ tipsResetMsg }}</div>
+          </div>
+          <div class="setting-control">
+            <button class="btn btn-secondary" @click="resetAllHiddenInfos">
+              Show hidden tips
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Danger zone -->
+    <section v-if="canRemoveBotCard || dangerZoneUnlocked" class="settings-section danger-section">
+      <h2 class="section-title danger-title">Danger zone</h2>
+      <div class="danger-list">
+        <div v-if="canRemoveBotCard" class="danger-row warning">
+          <div class="danger-info">
+            <div class="danger-label">Remove bot from channel</div>
+            <div class="danger-desc">{{ t("settings.remove.sub") }}</div>
+            <div v-if="removeMsg" class="status-msg ok">{{ removeMsg }}</div>
+            <div v-if="removeError" class="status-msg err">{{ removeError }}</div>
+            <div v-if="removeConfirm" class="confirm-inline">
+              <span>
+                Remove from <strong>#{{ session?.channel }}</strong>?
+                {{ t("settings.remove.confirm2") }}
+              </span>
+              <button class="btn btn-confirm-no" @click="removeConfirm = false">
                 {{ t("settings.remove.no") }}
               </button>
-              <button class="confirm-yes confirm-yes-warning" @click="doRemoveBot">
+              <button class="btn btn-confirm-yes" @click="doRemoveBot">
                 {{ t("settings.remove.yes") }}
               </button>
             </div>
           </div>
+          <div class="danger-control">
+            <button class="btn btn-danger-warn" @click="clickRemoveBot" :disabled="removeRemoving">
+              {{
+                removeRemoving
+                  ? t("settings.remove.removing")
+                  : t("settings.remove.btn")
+              }}
+            </button>
+          </div>
         </div>
-        <div class="card-footer" v-if="!removeMsg">
-          <button class="remove-btn warn-btn" @click="clickRemoveBot" :disabled="removeRemoving">
-            {{
-              removeRemoving
-                ? t("settings.remove.removing")
-                : t("settings.remove.btn")
-            }}
-          </button>
-        </div>
-      </div>
 
-      <!-- >>> broadcaster or admin-mode admin -->
-      <div class="card card-danger" v-if="dangerZoneUnlocked">
-        <div class="card-header">
-          <div class="card-icon card-icon-danger">&#9888;</div>
-          <div class="card-title">{{ t("settings.delete.title") }}</div>
-          <div class="card-sub">
-            {{ t("settings.delete.sub") }}<strong>#{{ session?.channel }}</strong>.
+        <div v-if="dangerZoneUnlocked" class="danger-row delete">
+          <div class="danger-info">
+            <div class="danger-label">Delete all channel data</div>
+            <div class="danger-desc">
+              {{ t("settings.delete.sub") }}
+              <strong>#{{ session?.channel }}</strong>.
+            </div>
+            <div v-if="deleteError" class="status-msg err">{{ deleteError }}</div>
+            <div class="delete-confirm">
+              <span>Type <strong>DELETE</strong> to confirm.</span>
+              <input v-model="deleteConfirmInput" class="delete-input" type="text" placeholder="DELETE"
+                :disabled="deleting" />
+            </div>
           </div>
-        </div>
-        <div class="card-body">
-          <div v-if="deleteError" class="card-msg err">{{ deleteError }}</div>
-          <div class="confirm-text">
-            {{ t("settings.delete.type_prompt") }}<strong>DELETE</strong>
+          <div class="danger-control">
+            <button class="btn btn-danger-delete" :disabled="!deleteConfirmValid || deleting" @click="doDeleteAllData">
+              {{
+                deleting
+                  ? t("settings.delete.deleting")
+                  : t("settings.delete.btn")
+              }}
+            </button>
           </div>
-          <input
-            v-model="deleteConfirmInput"
-            class="delete-confirm-input"
-            type="text"
-            placeholder="DELETE"
-            :disabled="deleting"
-          />
-        </div>
-        <div class="card-footer">
-          <button
-            class="remove-btn"
-            :disabled="!deleteConfirmValid || deleting"
-            @click="doDeleteAllData"
-          >
-            {{
-              deleting
-                ? t("settings.delete.deleting")
-                : t("settings.delete.btn")
-            }}
-          </button>
         </div>
       </div>
-
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Hidden Tips</div>
-          <div class="card-sub">
-            Restore all info tips you've dismissed (e.g. the snippet hint in
-            Logs).
-          </div>
-        </div>
-        <div class="card-body">
-          <div v-if="tipsResetMsg" class="card-msg ok">{{ tipsResetMsg }}</div>
-          <div v-else class="section-note">
-            Tips that you've hidden via "Don't show again" will reappear.
-          </div>
-        </div>
-        <div class="card-footer">
-          <button class="toggle-btn" @click="resetAllHiddenInfos">
-            Show all hidden Infos again
-          </button>
-        </div>
-      </div>
-    </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
-/* ── Page shell ─────────────────────────────────────────────────────────────── */
 .settings {
+  max-width: 840px;
+  margin: 0 auto;
+  padding: 32px 20px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 32px;
+  color: #ddd;
+  font-size: 14px;
 }
 
 .settings-header {
+  border-bottom: 1px solid #27272f;
   padding-bottom: 16px;
-  border-bottom: 1px solid #222;
 }
 
 .settings-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #e0e0e0;
-  margin-bottom: 4px;
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+  color: #e5e5e5;
 }
 
 .settings-sub {
-  font-size: 12px;
-  color: #666;
+  color: #777;
+  margin: 8px 0 0;
+  font-size: 13px;
 }
 
 .chan {
-  color: #9d6cff;
+  color: #a78bfa;
 }
 
-/* ── Card grid ──────────────────────────────────────────────────────────────── */
-.cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
-  align-items: stretch;
-  /* cards in the same row grow to equal height */
-}
-
-/* ── Card shell ─────────────────────────────────────────────────────────────── */
-/* Every card is header / body / footer  three zones, same padding, perfectly
-   aligned across the grid because all cards share the same CSS structure.      */
-.card {
-  background: #1a1a1e;
-  border: 1px solid #1e1e24;
-  display: flex;
-  flex-direction: column;
-  transition: border-color 0.15s;
-  overflow: hidden;
-}
-
-.card:hover {
-  border-color: #2a2a36;
-}
-
-.card-wide {
-  grid-column: span 2;
-}
-
-.card-danger {
-  border-color: #f1494922;
-  background: #1a1014;
-}
-
-.card-danger:hover {
-  border-color: #f1494944;
-}
-
-.card-warning {
-  border-color: #f59e0b22;
-  background: #1a1610;
-}
-
-.card-warning:hover {
-  border-color: #f59e0b44;
-}
-
-/* ── Zone 1: header ─────────────────────────────────────────────────────────── */
-.card-header {
-  padding: 20px 20px 16px;
-  border-bottom: 1px solid #1e1e24;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.card-icon {
-  font-size: 18px;
-  color: #9d6cff;
-  line-height: 1;
-  margin-bottom: 4px;
-}
-
-.card-icon-7tv {
-  color: #9d6cff;
-}
-
-.card-icon-danger {
-  color: #f14949;
-}
-
-.card-icon-warning {
-  color: #f59e0b;
-}
-
-.card-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #e0e0e0;
-}
-
-.card-sub {
-  font-size: 11px;
-  color: #555;
-  line-height: 1.55;
-}
-
-/* ── Zone 2: body ───────────────────────────────────────────────────────────── */
-.card-body {
-  padding: 16px 20px;
+.settings-section {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  flex: 1;
-  /* grows so all cards in a row reach the same total height */
 }
 
-/* ── Zone 3: footer ─────────────────────────────────────────────────────────── */
-.card-footer {
-  padding: 12px 20px;
-  border-top: 1px solid #1e1e24;
+.section-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #666;
+  margin: 0 0 4px;
+}
+
+.section-title.danger-title {
+  color: #ef4444;
+}
+
+.setting-list {
   display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  min-height: 56px;
-  /* fixed height keeps footers on the same baseline */
+  flex-direction: column;
+  border: 1px solid #25252c;
+  border-radius: 4px;
+  background: #15151a;
 }
 
-/* ── Shared micro-components ────────────────────────────────────────────────── */
+.setting-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #1f1f25;
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
+.setting-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.setting-label {
+  font-weight: 600;
+  color: #e5e5e5;
+  margin-bottom: 4px;
+}
+
+.setting-desc {
+  color: #888;
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.setting-desc-detects {
+  color: #666;
+  font-size: 11.5px;
+}
+
 .code {
   font-family: "Consolas", "Fira Mono", monospace;
-  color: #9d6cff;
-  font-size: 11px;
-  background: rgba(111, 43, 255, 0.1);
-  padding: 1px 5px;
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.1);
+  padding: 1px 4px;
+  border-radius: 2px;
 }
 
-/* Status row used by toggle cards */
-.toggle-row {
+.setting-control {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #2a2a30;
-  flex-shrink: 0;
-  transition: background 0.25s;
-}
-
-.status-dot.active {
-  background: #23d18b;
-}
-
-.status-text {
-  font-size: 12px;
-  color: #777;
-}
-
-.spacer {
-  flex: 1;
-}
-
-.status-badge {
-  font-size: 9px;
-  font-weight: 700;
-  padding: 2px 8px;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-}
-
-.badge-on {
-  color: #23d18b;
-  background: rgba(35, 209, 139, 0.1);
-  border: 1px solid rgba(35, 209, 139, 0.28);
-}
-
-.badge-off {
-  color: #555;
-  background: rgba(85, 85, 85, 0.1);
-  border: 1px solid rgba(85, 85, 85, 0.25);
-}
-
-.section-note {
-  font-size: 11px;
-  color: #555;
-  line-height: 1.5;
-  background: rgba(229, 192, 123, 0.04);
-  border-left: 2px solid #e5c07b2a;
-  padding: 5px 8px;
-}
-
-.card-loading {
-  font-size: 12px;
-  color: #555;
-}
-
-.card-msg {
-  font-size: 11px;
-  padding: 5px 10px;
-  line-height: 1.4;
-}
-
-.card-msg.ok {
-  color: #23d18b;
-  background: rgba(35, 209, 139, 0.06);
-  border-left: 2px solid #23d18b;
-}
-
-.card-msg.err {
-  color: #f14949;
-  background: rgba(241, 73, 73, 0.06);
-  border-left: 2px solid #f14949;
-}
-
-.field-error {
-  font-size: 11px;
-  color: #f14949;
-}
-
-/* ── Prefix card ────────────────────────────────────────────────────────────── */
-.prefix-row {
-  display: flex;
+.prefix-control {
+  gap: 12px;
   align-items: center;
-  gap: 14px;
 }
 
 .prefix-input {
-  width: 54px;
-  background: #0d0d10;
-  border: 1px solid #2a2a30;
-  color: #e0e0e0;
-  font-family: "Consolas", "Fira Mono", monospace;
-  font-size: 22px;
-  font-weight: 700;
-  padding: 6px 10px;
-  outline: none;
+  width: 56px;
+  height: 36px;
+  background: #111115;
+  border: 1px solid #33333b;
+  color: #e5e5e5;
   text-align: center;
+  font-size: 18px;
+  font-weight: 600;
+  outline: none;
+  border-radius: 3px;
 }
 
 .prefix-input:focus {
-  border-color: #6f2bff88;
+  border-color: #a78bfa;
 }
 
-.prefix-preview {
-  font-family: "Consolas", "Fira Mono", monospace;
-  font-size: 14px;
-  color: #888;
-}
-
-.prefix-preview .pre {
-  color: #9d6cff;
-  font-weight: 700;
-}
-
-/* ── Buttons  same height everywhere ──────────────────────────────────────── */
-.save-btn {
-  height: 34px;
-  padding: 0 20px;
-  border: none;
-  background: #6f2bff;
-  color: #fff;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.save-btn:hover:not(:disabled) {
-  background: #7f3fff;
-}
-
-.save-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.toggle-btn {
-  height: 34px;
-  padding: 0 18px;
-  border: 1px solid #2a2a30;
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid #3a3a44;
   background: transparent;
-  color: #888;
-  font-family: inherit;
-  font-size: 11px;
+  color: #ccc;
+  font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
+  border-radius: 3px;
   transition: all 0.15s;
+  white-space: nowrap;
 }
 
-.toggle-btn:hover:not(:disabled) {
-  border-color: #9d6cff55;
-  color: #9d6cff;
+.btn:hover:not(:disabled) {
+  border-color: #555;
+  color: #fff;
 }
 
-.toggle-btn.toggle-btn-on {
-  border-color: #23d18b44;
-  color: #23d18b;
-  background: rgba(35, 209, 139, 0.06);
-}
-
-.toggle-btn.toggle-btn-on:hover:not(:disabled) {
-  background: rgba(35, 209, 139, 0.14);
-}
-
-.toggle-btn:disabled {
+.btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.remove-btn {
-  height: 34px;
-  padding: 0 20px;
-  border: 1px solid #f1494966;
-  background: transparent;
-  color: #f14949;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    border-color 0.15s;
+.btn-primary {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: #fff;
 }
 
-.remove-btn:hover:not(:disabled) {
-  background: rgba(241, 73, 73, 0.1);
-  border-color: #f14949;
+.btn-primary:hover:not(:disabled) {
+  background: #8b5cf6;
+  border-color: #8b5cf6;
 }
 
-.remove-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+.btn-toggle {
+  min-width: 70px;
 }
 
-.warn-btn {
-  border-color: #f59e0b66;
+.btn-toggle.active {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #10b981;
+}
+
+.btn-secondary {
+  border-color: #3a3a44;
+}
+
+.btn-remove {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #ef4444;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 11.5px;
+  margin-left: auto;
+}
+
+.btn-remove:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
+}
+
+.btn-fetch {
+  border-color: rgba(124, 58, 237, 0.4);
+  color: #a78bfa;
+  height: 32px;
+  padding: 0 14px;
+  font-size: 11.5px;
+}
+
+.btn-fetch:hover:not(:disabled) {
+  background: rgba(124, 58, 237, 0.1);
+  border-color: #a78bfa;
+}
+
+.btn-danger-warn {
+  border-color: rgba(245, 158, 11, 0.55);
   color: #f59e0b;
 }
 
-.warn-btn:hover:not(:disabled) {
+.btn-danger-warn:hover:not(:disabled) {
   background: rgba(245, 158, 11, 0.1);
   border-color: #f59e0b;
 }
 
-.delete-confirm-input {
-  width: 100%;
-  max-width: 220px;
-  margin-top: 8px;
-  background: #0d0d10;
-  border: 1px solid #f1494944;
-  color: #e0e0e0;
-  font-family: "Consolas", "Fira Mono", monospace;
-  font-size: 14px;
-  padding: 8px 10px;
-  outline: none;
-  box-sizing: border-box;
+.btn-danger-delete {
+  border-color: rgba(239, 68, 68, 0.55);
+  color: #ef4444;
 }
 
-.delete-confirm-input:focus {
-  border-color: #f14949;
+.btn-danger-delete:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: #ef4444;
 }
 
-/* ── 7TV card internals ─────────────────────────────────────────────────────── */
+.btn-confirm-no {
+  border-color: #3a3a44;
+  color: #aaa;
+}
+
+.btn-confirm-no:hover:not(:disabled) {
+  border-color: #555;
+}
+
+.btn-confirm-yes {
+  border-color: #ef4444;
+  background: #ef4444;
+  color: #fff;
+}
+
+.btn-confirm-yes:hover:not(:disabled) {
+  background: #f87171;
+}
+
+.field-error {
+  color: #ef4444;
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.status-msg {
+  font-size: 12px;
+  margin-top: 6px;
+  padding: 4px 8px;
+}
+
+.status-msg.ok {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.06);
+  border-left: 2px solid #10b981;
+}
+
+.status-msg.err {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.06);
+  border-left: 2px solid #ef4444;
+}
+
+.integration-panel {
+  border: 1px solid #25252c;
+  background: #15151a;
+  border-radius: 4px;
+}
+
+.integration-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid #1f1f25;
+}
+
+.integration-title {
+  font-weight: 600;
+  color: #e5e5e5;
+}
+
+.integration-desc {
+  color: #888;
+  font-size: 12.5px;
+  margin-top: 4px;
+}
+
+.integration-body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.loading,
+.emote-none {
+  color: #777;
+  font-size: 13px;
+}
+
 .emote-current {
   display: flex;
-  align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
-  background: #0d0d10;
-  border: 1px solid #1e1e24;
-  padding: 8px 12px;
+  align-items: center;
+  gap: 10px;
+  background: #111115;
+  border: 1px solid #2a2a32;
+  padding: 10px 12px;
+  border-radius: 3px;
 }
 
 .emote-name {
+  font-weight: 600;
+  color: #e5e5e5;
+}
+
+.emote-meta {
+  color: #888;
   font-size: 12px;
-  font-weight: 700;
-  color: #e0e0e0;
 }
 
-.emote-id {
-  font-size: 10px;
-  color: #555;
-  font-family: monospace;
-}
-
-.emote-count {
-  font-size: 11px;
-  color: #9d6cff;
-  background: rgba(111, 43, 255, 0.1);
-  padding: 1px 6px;
-}
-
-.emote-none {
-  font-size: 12px;
-  color: #555;
-}
-
-.emote-row {
+.emote-form-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .emote-lbl {
-  font-size: 11px;
-  color: #666;
-  min-width: 130px;
-  white-space: nowrap;
+  color: #777;
+  font-size: 12px;
 }
 
 .field-sm {
   height: 32px;
+  min-width: 160px;
   flex: 1;
-  min-width: 100px;
-  background: #0d0d10;
-  border: 1px solid #2a2a30;
-  color: #e0e0e0;
-  font-family: inherit;
-  font-size: 11px;
-  padding: 0 8px;
+  background: #111115;
+  border: 1px solid #33333b;
+  color: #e5e5e5;
+  padding: 0 10px;
+  font-size: 13px;
   outline: none;
+  border-radius: 3px;
 }
 
 .field-sm:focus {
-  border-color: #6f2bff55;
+  border-color: #a78bfa;
 }
 
 .field-sm:disabled {
   opacity: 0.4;
 }
 
-.fetch-btn {
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid #6f2bff44;
-  background: transparent;
-  color: #9d6cff;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.fetch-btn:hover:not(:disabled) {
-  background: rgba(111, 43, 255, 0.1);
-}
-
-.fetch-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.danger-sm {
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid #f1494944;
-  background: transparent;
-  color: #f14949;
-  font-family: inherit;
-  font-size: 10px;
-  cursor: pointer;
-  margin-left: auto;
-}
-
-.danger-sm:hover:not(:disabled) {
-  background: rgba(241, 73, 73, 0.1);
-}
-
-.danger-sm:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* ── Confirm dialog ─────────────────────────────────────────────────────────── */
-.confirm-box {
-  background: rgba(241, 73, 73, 0.04);
-  border: 1px solid #f1494930;
-  padding: 12px;
+.danger-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
-.confirm-text {
-  font-size: 12px;
-  color: #ccc;
-  line-height: 1.6;
-}
-
-.confirm-text strong {
-  color: #9d6cff;
-}
-
-.confirm-actions {
+.danger-row {
   display: flex;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 18px;
+  border: 1px solid #2a2a32;
+  border-left: 3px solid;
+  border-radius: 4px;
+  background: #15151a;
 }
 
-.confirm-no {
-  height: 32px;
-  padding: 0 14px;
-  border: 1px solid #2a2a30;
-  background: transparent;
+.danger-row.warning {
+  border-left-color: #f59e0b;
+}
+
+.danger-row.delete {
+  border-left-color: #ef4444;
+}
+
+.danger-info {
+  flex: 1;
+}
+
+.danger-label {
+  font-weight: 600;
+  color: #e5e5e5;
+}
+
+.danger-desc {
   color: #888;
-  font-family: inherit;
-  font-size: 12px;
-  cursor: pointer;
+  font-size: 12.5px;
+  margin-top: 4px;
 }
 
-.confirm-no:hover {
-  border-color: #555;
-  color: #e0e0e0;
+.danger-control {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
 }
 
-.confirm-yes {
-  height: 32px;
-  padding: 0 14px;
-  border: none;
-  background: #f14949;
-  color: #fff;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
+.confirm-inline {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12.5px;
+  color: #bbb;
 }
 
-.confirm-yes:hover {
-  background: #ff5a5a;
+.confirm-inline strong {
+  color: #f59e0b;
 }
 
-.confirm-box-warning {
-  background: rgba(245, 158, 11, 0.04);
-  border-color: #f59e0b30;
+.delete-confirm {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.confirm-yes-warning {
-  background: #f59e0b;
+.delete-confirm strong {
+  color: #ef4444;
 }
 
-.confirm-yes-warning:hover {
-  background: #ffb02e;
+.delete-input {
+  height: 36px;
+  width: 140px;
+  background: #111115;
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  color: #e5e5e5;
+  padding: 0 10px;
+  font-size: 13px;
+  outline: none;
+  border-radius: 3px;
 }
 
-/* ── Responsive ─────────────────────────────────────────────────────────────── */
-@media (max-width: 860px) {
-  .card-wide {
-    grid-column: span 1;
+.delete-input:focus {
+  border-color: #ef4444;
+}
+
+@media (max-width: 640px) {
+
+  .setting-row,
+  .danger-row {
+    flex-direction: column;
+    gap: 12px;
   }
-}
 
-@media (max-width: 520px) {
-  .cards-grid {
-    grid-template-columns: 1fr;
+  .setting-control,
+  .danger-control {
+    align-self: flex-end;
   }
 }
 </style>
