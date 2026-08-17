@@ -1,4 +1,12 @@
-export type OverlayElementType = "text" | "variable-text" | "image";
+export type OverlayElementType =
+  | "text"
+  | "variable-text"
+  | "image"
+  | "video"
+  | "audio"
+  | "shape";
+
+export type ShapeVariant = "border" | "background-box" | "frame";
 
 export interface OverlayElementStyle {
   fontFamily?: string;
@@ -6,12 +14,17 @@ export interface OverlayElementStyle {
   color?: string;
   textAlign?: "left" | "center" | "right" | "justify";
   fontWeight?: string;
+  letterSpacing?: number;
   stroke?: boolean;
   strokeColor?: string;
   shadow?: boolean;
   shadowColor?: string;
   padding?: number;
   background?: string;
+  borderColor?: string;
+  borderWidth?: number;
+  borderRadius?: number;
+  borderStyle?: "solid" | "dashed" | "dotted";
 }
 
 export interface OverlayElement {
@@ -45,8 +58,23 @@ export interface Overlay {
 
 // >>> client-generated but permanent - stays as the row's id once saved, no swap needed
 export function newElementId(): string {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  if (typeof crypto !== "undefined" && crypto.randomUUID)
+    return crypto.randomUUID();
   return `el_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function baseElement(type: OverlayElementType) {
+  return {
+    id: newElementId(),
+    type,
+    rotation: 0,
+    z_index: 0,
+    locked: false,
+    visible: true,
+    group_id: null as string | null,
+    style: {} as OverlayElementStyle,
+    data: {} as Record<string, any>,
+  };
 }
 
 export function defaultElement(
@@ -54,25 +82,43 @@ export function defaultElement(
   centerX: number,
   centerY: number,
 ): OverlayElement {
-  const base = {
-    id: newElementId(),
-    type,
-    rotation: 0,
-    z_index: 0,
-    locked: false,
-    visible: true,
-    group_id: null,
-    style: {} as OverlayElementStyle,
-    data: {},
-  };
-  if (type === "image") {
+  const base = baseElement(type);
+
+  if (type === "image" || type === "video") {
+    return {
+      ...base,
+      x: centerX - 160,
+      y: centerY - 90,
+      w: 320,
+      h: 180,
+      content: "",
+    };
+  }
+  if (type === "audio") {
+    return {
+      ...base,
+      x: centerX - 20,
+      y: centerY - 20,
+      w: 40,
+      h: 40,
+      content: "",
+    };
+  }
+  if (type === "shape") {
     return {
       ...base,
       x: centerX - 100,
-      y: centerY - 100,
+      y: centerY - 60,
       w: 200,
-      h: 200,
+      h: 120,
       content: "",
+      data: { variant: "border" as ShapeVariant },
+      style: {
+        borderColor: "#6f2bff",
+        borderWidth: 3,
+        borderRadius: 0,
+        borderStyle: "solid",
+      },
     };
   }
   return {
@@ -84,4 +130,36 @@ export function defaultElement(
     content: type === "variable-text" ? "" : "New text",
     style: { fontSize: 32, color: "#ffffff" },
   };
+}
+
+export function shapeDefaultStyle(variant: ShapeVariant): OverlayElementStyle {
+  if (variant === "background-box")
+    return { background: "rgba(0,0,0,0.6)", borderWidth: 0, borderRadius: 0 };
+  if (variant === "frame")
+    return {
+      borderColor: "#ffffff",
+      borderWidth: 8,
+      borderRadius: 0,
+      borderStyle: "solid",
+    };
+  return {
+    borderColor: "#6f2bff",
+    borderWidth: 3,
+    borderRadius: 0,
+    borderStyle: "solid",
+  };
+}
+
+// >>> adding a video also creates a small paired audio-control element next to it
+export function defaultVideoWithAudio(
+  centerX: number,
+  centerY: number,
+): [OverlayElement, OverlayElement] {
+  const video = defaultElement("video", centerX, centerY);
+  const audio = defaultElement("audio", centerX, centerY);
+  audio.x = video.x + video.w + 12;
+  audio.y = video.y;
+  audio.data = { linkedVideoId: video.id, muted: true };
+  video.data = { linkedAudioId: audio.id };
+  return [video, audio];
 }

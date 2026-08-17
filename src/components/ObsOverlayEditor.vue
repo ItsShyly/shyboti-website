@@ -4,12 +4,18 @@ import { API } from "../api";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import {
   defaultElement,
+  defaultVideoWithAudio,
+  shapeDefaultStyle,
+  newElementId,
   type OverlayElement,
   type OverlayElementType,
+  type ShapeVariant,
 } from "../composables/overlayTypes";
 import ObsOverlayCanvasStage from "./ObsOverlayCanvasStage.vue";
 import ObsOverlayElementGallery from "./ObsOverlayElementGallery.vue";
 import ObsOverlayVariablePicker from "./ObsOverlayVariablePicker.vue";
+import ObsOverlayStylePanel from "./ObsOverlayStylePanel.vue";
+import ObsOverlayLayersPanel from "./ObsOverlayLayersPanel.vue";
 
 const props = defineProps<{
   channel: string;
@@ -26,10 +32,8 @@ const baseWidth = ref(1920);
 const baseHeight = ref(1080);
 const pendingElements = ref<OverlayElement[]>([]);
 const deletedIds = ref<string[]>([]);
-// >>> ids that exist on the server as of the last load - anything else is
-// >>> new-this-session and never needs a delete call if removed before Save
 const savedIds = ref<Set<string>>(new Set());
-const selectedId = ref<string | null>(null);
+const selectedIds = ref<string[]>([]);
 const dirty = ref(false);
 
 // >>> visual-only brightness slider - never rendered live, same as the old canvas
@@ -39,9 +43,58 @@ const stageBackground = computed(() => {
   return `rgba(${v}, ${v}, ${v}, ${(100 - stageBrightness.value) / 100})`;
 });
 
-const selectedElement = computed(
-  () => pendingElements.value.find((e) => e.id === selectedId.value) ?? null,
+const selectedElement = computed(() =>
+  selectedIds.value.length === 1
+    ? pendingElements.value.find((e) => e.id === selectedIds.value[0]) ?? null
+    : null,
 );
+
+// vvv history (undo/redo) vvv
+const historyPast = ref<OverlayElement[][]>([]);
+const historyFuture = ref<OverlayElement[][]>([]);
+const HISTORY_CAP = 50;
+function snapshot(): OverlayElement[] {
+  return JSON.parse(JSON.stringify(pendingElements.value));
+}
+function pushHistory() {
+  historyPast.value.push(snapshot());
+  if (historyPast.value.length > HISTORY_CAP) historyPast.value.shift();
+  historyFuture.value = [];
+}
+function undo() {
+  if (!historyPast.value.length) return;
+  const prev = historyPast.value.pop()!;
+  historyFuture.value.push(snapshot());
+  pendingElements.value = prev;
+  selectedIds.value = [];
+  dirty.value = true;
+}
+function redo() {
+  if (!historyFuture.value.length) return;
+  const next = historyFuture.value.pop()!;
+  historyPast.value.push(snapshot());
+  pendingElements.value = next;
+  selectedIds.value = [];
+  dirty.value = true;
+}
+// ^^^ history ^^^
+
+function applyPatch(id: string, patch: Partial<OverlayElement>) {
+  const idx = pendingElements.value.findIndex((e) => e.id === id);
+  if (idx === -1) return;
+  pendingElements.value = pendingElements.value.map((e, i) =>
+    i === idx ? { ...e, ...patch } : e,
+  );
+  dirty.value = true;
+}
+function updateElement(id: string, patch: Partial<OverlayElement>) {
+  pushHistory();
+  applyPatch(id, patch);
+}
+function updateElements(updates: Array<{ id: string; patch: Partial<OverlayElement> }>) {
+  pushHistory();
+  for (const u of updates) applyPatch(u.id, u.patch);
+}
 
 function toWireElement(el: OverlayElement) {
   return {
@@ -105,9 +158,10 @@ async function load() {
       savedIds.value = new Set(pendingElements.value.map((e) => e.id));
       deletedIds.value = [];
       dirty.value = false;
+      historyPast.value = [];
+      historyFuture.value = [];
     }
   } catch { }
-  // >>> best-effort real canvas size - falls back to 1920x1080 if the agent's offline
   try {
     const vs = await fetch(`${API}/obs/${props.channel}/video-settings`, {
       headers: props.authHeaders,
@@ -121,33 +175,153 @@ async function load() {
   loading.value = false;
 }
 
-function addElement(type: OverlayElementType) {
+function nextZ() {
+  return pendingElements.value.reduce((m, e) => Math.max(m, e.z_index), 0) + 1;
+}
+
+function addElement(type: OverlayElementType, variant?: ShapeVariant) {
+  pushHistory();
+  if (type === "video") {
+    const [video, audio] = defaultVideoWithAudio(baseWidth.value / 2, baseHeight.value / 2);
+    video.z_index = nextZ();
+    audio.z_index = video.z_index + 1;
+    pendingElements.value = [...pendingElements.value, video, audio];
+    selectedIds.value = [video.id];
+    dirty.value = true;
+    return;
+  }
   const el = defaultElement(type, baseWidth.value / 2, baseHeight.value / 2);
-  el.z_index =
-    pendingElements.value.reduce((max, e) => Math.max(max, e.z_index), 0) + 1;
+  if (type === "shape" && variant) {
+    el.data = { variant };
+    el.style = shapeDefaultStyle(variant);
+  }
+  el.z_index = nextZ();
   pendingElements.value = [...pendingElements.value, el];
-  selectedId.value = el.id;
+  selectedIds.value = [el.id];
   dirty.value = true;
 }
 
-function updateElement(id: string, patch: Partial<OverlayElement>) {
-  const idx = pendingElements.value.findIndex((e) => e.id === id);
+function onSelect(id: string | null, additive: boolean) {
+  if (id === null) {
+    selectedIds.value = [];
+    return;
+  }
+  if (additive) {
+    selectedIds.value = selectedIds.value.includes(id)
+      ? selectedIds.value.filter((x) => x !== id)
+      : [...selectedIds.value, id];
+    return;
+  }
+  // >>> clicking one member of a group selects the whole group
+  const el = pendingElements.value.find((e) => e.id === id);
+  if (el?.group_id) {
+    selectedIds.value = pendingElements.value
+      .filter((e) => e.group_id === el.group_id)
+      .map((e) => e.id);
+  } else {
+    selectedIds.value = [id];
+  }
+}
+
+function deleteSelected() {
+  if (!selectedIds.value.length) return;
+  pushHistory();
+  for (const id of selectedIds.value) {
+    if (savedIds.value.has(id)) deletedIds.value.push(id);
+  }
+  const toDelete = new Set(selectedIds.value);
+  pendingElements.value = pendingElements.value.filter((e) => !toDelete.has(e.id));
+  selectedIds.value = [];
+  dirty.value = true;
+}
+
+function toggleLock(id: string) {
+  const el = pendingElements.value.find((e) => e.id === id);
+  if (!el) return;
+  pushHistory();
+  applyPatch(id, { locked: !el.locked });
+}
+function toggleVisible(id: string) {
+  const el = pendingElements.value.find((e) => e.id === id);
+  if (!el) return;
+  pushHistory();
+  applyPatch(id, { visible: !el.visible });
+}
+function reorderElement(id: string, dir: "front" | "back" | "forward" | "backward") {
+  pushHistory();
+  const sorted = [...pendingElements.value].sort((a, b) => a.z_index - b.z_index);
+  const idx = sorted.findIndex((e) => e.id === id);
   if (idx === -1) return;
-  pendingElements.value = pendingElements.value.map((e, i) =>
-    i === idx ? { ...e, ...patch } : e,
+  if (dir === "front") {
+    applyPatch(id, { z_index: nextZ() });
+  } else if (dir === "back") {
+    const minZ = Math.min(...pendingElements.value.map((e) => e.z_index), 0);
+    applyPatch(id, { z_index: minZ - 1 });
+  } else if (dir === "forward" && idx < sorted.length - 1) {
+    const neighbor = sorted[idx + 1]!;
+    applyPatch(id, { z_index: neighbor.z_index });
+    applyPatch(neighbor.id, { z_index: sorted[idx]!.z_index });
+  } else if (dir === "backward" && idx > 0) {
+    const neighbor = sorted[idx - 1]!;
+    applyPatch(id, { z_index: neighbor.z_index });
+    applyPatch(neighbor.id, { z_index: sorted[idx]!.z_index });
+  }
+}
+
+function groupSelected() {
+  if (selectedIds.value.length < 2) return;
+  pushHistory();
+  const gid = newElementId();
+  const set = new Set(selectedIds.value);
+  pendingElements.value = pendingElements.value.map((e) =>
+    set.has(e.id) ? { ...e, group_id: gid } : e,
+  );
+  dirty.value = true;
+}
+function ungroupSelected() {
+  pushHistory();
+  const set = new Set(selectedIds.value);
+  pendingElements.value = pendingElements.value.map((e) =>
+    set.has(e.id) ? { ...e, group_id: null } : e,
   );
   dirty.value = true;
 }
 
-function deleteSelected() {
-  if (!selectedId.value) return;
-  const id = selectedId.value;
-  // >>> only rows that actually exist on the server need a delete call
-  if (savedIds.value.has(id)) deletedIds.value.push(id);
-  pendingElements.value = pendingElements.value.filter((e) => e.id !== id);
-  selectedId.value = null;
+// vvv copy/paste/duplicate - remaps ids + internal video<->audio links vvv
+const clipboard = ref<OverlayElement[]>([]);
+function copySelected() {
+  clipboard.value = pendingElements.value
+    .filter((e) => selectedIds.value.includes(e.id))
+    .map((e) => JSON.parse(JSON.stringify(e)));
+}
+function pasteFrom(source: OverlayElement[]) {
+  if (!source.length) return;
+  pushHistory();
+  const idMap = new Map<string, string>();
+  const gid = source.some((e) => e.group_id) ? newElementId() : null;
+  const copies = source.map((e) => {
+    const id = newElementId();
+    idMap.set(e.id, id);
+    return { ...JSON.parse(JSON.stringify(e)), id, x: e.x + 24, y: e.y + 24, group_id: e.group_id ? gid : null };
+  });
+  for (const c of copies) {
+    if (c.data?.linkedVideoId && idMap.has(c.data.linkedVideoId))
+      c.data = { ...c.data, linkedVideoId: idMap.get(c.data.linkedVideoId) };
+    if (c.data?.linkedAudioId && idMap.has(c.data.linkedAudioId))
+      c.data = { ...c.data, linkedAudioId: idMap.get(c.data.linkedAudioId) };
+  }
+  pendingElements.value = [...pendingElements.value, ...copies];
+  selectedIds.value = copies.map((c) => c.id);
   dirty.value = true;
 }
+function pasteClipboard() {
+  pasteFrom(clipboard.value);
+}
+function duplicateSelected() {
+  const sel = pendingElements.value.filter((e) => selectedIds.value.includes(e.id));
+  pasteFrom(sel);
+}
+// ^^^ copy/paste/duplicate ^^^
 
 function insertVariableToken(token: string) {
   if (!selectedElement.value) return;
@@ -155,6 +329,47 @@ function insertVariableToken(token: string) {
     content: (selectedElement.value.content || "") + token,
   });
 }
+
+// vvv templates - localStorage only, no backend needed for this v1 pass vvv
+interface OverlayTemplate {
+  name: string;
+  elements: OverlayElement[];
+}
+const templateStore = ref<OverlayTemplate[]>([]);
+const templateNames = computed(() => templateStore.value.map((t) => t.name));
+const templateKey = computed(() => `shyboti_overlay_templates_${props.channel}`);
+function loadTemplates() {
+  try {
+    const raw = localStorage.getItem(templateKey.value);
+    templateStore.value = raw ? JSON.parse(raw) : [];
+  } catch {
+    templateStore.value = [];
+  }
+}
+function persistTemplates() {
+  try {
+    localStorage.setItem(templateKey.value, JSON.stringify(templateStore.value));
+  } catch { }
+}
+function saveSelectionAsTemplate() {
+  if (!selectedIds.value.length) return;
+  const name = window.prompt("Template name?")?.trim();
+  if (!name) return;
+  const elements = pendingElements.value
+    .filter((e) => selectedIds.value.includes(e.id))
+    .map((e) => JSON.parse(JSON.stringify(e)));
+  templateStore.value = [...templateStore.value.filter((t) => t.name !== name), { name, elements }];
+  persistTemplates();
+}
+function addTemplate(name: string) {
+  const tpl = templateStore.value.find((t) => t.name === name);
+  if (tpl) pasteFrom(tpl.elements);
+}
+function deleteTemplate(name: string) {
+  templateStore.value = templateStore.value.filter((t) => t.name !== name);
+  persistTemplates();
+}
+// ^^^ templates ^^^
 
 async function save() {
   saving.value = true;
@@ -176,14 +391,45 @@ async function save() {
 
 function discard() {
   load();
-  selectedId.value = null;
+  selectedIds.value = [];
 }
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === "Escape") emit("close");
+  if (e.key === "Escape") {
+    emit("close");
+    return;
+  }
+  const target = e.target as HTMLElement;
+  const isEditable =
+    target.tagName === "INPUT" ||
+    target.tagName === "TEXTAREA" ||
+    target.tagName === "SELECT" ||
+    target.isContentEditable;
+  if (isEditable) return;
+  const mod = e.ctrlKey || e.metaKey;
+  if (mod && e.key.toLowerCase() === "z" && e.shiftKey) {
+    e.preventDefault();
+    redo();
+  } else if (mod && e.key.toLowerCase() === "z") {
+    e.preventDefault();
+    undo();
+  } else if (mod && e.key.toLowerCase() === "c") {
+    e.preventDefault();
+    copySelected();
+  } else if (mod && e.key.toLowerCase() === "v") {
+    e.preventDefault();
+    pasteClipboard();
+  } else if (mod && e.key.toLowerCase() === "d") {
+    e.preventDefault();
+    duplicateSelected();
+  } else if (e.key === "Delete" || e.key === "Backspace") {
+    e.preventDefault();
+    deleteSelected();
+  }
 }
 onMounted(() => {
   load();
+  loadTemplates();
   window.addEventListener("keydown", onKeydown);
 });
 onUnmounted(() => {
@@ -208,6 +454,17 @@ const overlayUrl = computed(() =>
                 title="Canvas brightness (editor-only, never rendered live)" />
               <span v-html="iconSvgFor('sun')"></span>
             </div>
+            <button class="ovl-btn-cancel" :disabled="!historyPast.length" @click="undo" title="Undo (Ctrl+Z)">
+              <span v-html="iconSvgFor('corner-up-left')"></span>
+            </button>
+            <button class="ovl-btn-cancel" :disabled="!historyFuture.length" @click="redo"
+              title="Redo (Ctrl+Shift+Z)">
+              <span v-html="iconSvgFor('corner-up-right')"></span>
+            </button>
+            <button class="ovl-btn-cancel" :disabled="!selectedIds.length" @click="saveSelectionAsTemplate"
+              title="Save selection as reusable template">
+              Save as template
+            </button>
             <button class="ovl-btn-cancel" :disabled="!dirty || saving" @click="discard">Discard</button>
             <button class="ovl-btn-save" :disabled="!dirty || saving" @click="save">
               {{ saving ? "Saving…" : "Save" }}
@@ -217,33 +474,40 @@ const overlayUrl = computed(() =>
         </div>
 
         <div class="ovl-content">
-          <ObsOverlayElementGallery @add="addElement" />
+          <ObsOverlayElementGallery :templates="templateNames" @add="addElement" @add-template="addTemplate"
+            @delete-template="deleteTemplate" />
 
           <div class="ovl-body">
             <div v-if="loading" class="ovl-loading">loading…</div>
-            <ObsOverlayCanvasStage v-else :elements="pendingElements" v-model:selected-id="selectedId"
+            <ObsOverlayCanvasStage v-else :elements="pendingElements" :selected-ids="selectedIds"
               :base-width="baseWidth" :base-height="baseHeight" :style="{ background: stageBackground }"
-              @update-element="updateElement" />
+              @select="onSelect" @update-element="updateElement" @update-elements="updateElements" />
           </div>
 
           <div class="ovl-props">
-            <div class="ovl-props-title">properties</div>
             <template v-if="selectedElement">
+              <div class="ovl-props-title">properties</div>
               <div class="ovl-props-type">{{ selectedElement.type }}</div>
 
-              <label class="ovl-props-label">
-                {{ selectedElement.type === "image" ? "Image URL" : "Content" }}
-              </label>
-              <textarea v-if="selectedElement.type !== 'image'" class="ovl-props-textarea"
-                :value="selectedElement.content" :placeholder="selectedElement.type === 'variable-text'
-                  ? 'e.g. $counter.wins'
-                  : 'Text to show'
-                  " @input="updateElement(selectedElement.id, { content: ($event.target as HTMLTextAreaElement).value })" />
-              <input v-else class="ovl-props-input" :value="selectedElement.content" placeholder="https://…"
-                @input="updateElement(selectedElement.id, { content: ($event.target as HTMLInputElement).value })" />
+              <template v-if="!['shape', 'audio'].includes(selectedElement.type)">
+                <label class="ovl-props-label">
+                  {{ selectedElement.type === "image" || selectedElement.type === "video" ? "Media URL" : "Content" }}
+                </label>
+                <textarea v-if="selectedElement.type === 'text' || selectedElement.type === 'variable-text'"
+                  class="ovl-props-textarea" :value="selectedElement.content" :placeholder="selectedElement.type === 'variable-text'
+                    ? 'e.g. $counter.wins'
+                    : 'Text to show'
+                    "
+                  @input="updateElement(selectedElement.id, { content: ($event.target as HTMLTextAreaElement).value })" />
+                <input v-else class="ovl-props-input" :value="selectedElement.content" placeholder="https://…"
+                  @input="updateElement(selectedElement.id, { content: ($event.target as HTMLInputElement).value })" />
 
-              <ObsOverlayVariablePicker v-if="selectedElement.type === 'variable-text'" :channel="channel"
-                :auth-headers="authHeaders" @insert="insertVariableToken" />
+                <ObsOverlayVariablePicker v-if="selectedElement.type === 'variable-text'" :channel="channel"
+                  :auth-headers="authHeaders" @insert="insertVariableToken" />
+              </template>
+
+              <ObsOverlayStylePanel :element="selectedElement!"
+                @update="(patch) => updateElement(selectedElement!.id, patch)" />
 
               <div class="ovl-props-row">
                 <label class="ovl-props-check">
@@ -262,7 +526,17 @@ const overlayUrl = computed(() =>
                 <span v-html="iconSvgFor('trash')"></span> Delete
               </button>
             </template>
+            <div v-else-if="selectedIds.length > 1" class="ovl-props-empty">
+              {{ selectedIds.length }} elements selected.
+              <button class="ovl-btn-delete" @click="deleteSelected">
+                <span v-html="iconSvgFor('trash')"></span> Delete all
+              </button>
+            </div>
             <div v-else class="ovl-props-empty">Select an element, or add one from the gallery.</div>
+
+            <ObsOverlayLayersPanel :elements="pendingElements" :selected-ids="selectedIds" @select="onSelect"
+              @toggle-lock="toggleLock" @toggle-visible="toggleVisible" @reorder="reorderElement"
+              @group="groupSelected" @ungroup="ungroupSelected" />
 
             <div v-if="overlayUrl" class="ovl-url-box">
               <div class="ovl-props-label">Overlay page (add as a Browser Source in OBS)</div>
@@ -289,9 +563,9 @@ const overlayUrl = computed(() =>
 
 .ovl-modal {
   width: 100%;
-  max-width: 1500px;
+  max-width: 1600px;
   height: 100%;
-  max-height: 900px;
+  max-height: 920px;
   background: #0a0a0d;
   border: 1px solid #2a2a30;
   display: flex;
@@ -372,6 +646,14 @@ const overlayUrl = computed(() =>
   font-family: inherit;
   font-size: 12px;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ovl-btn-cancel svg {
+  width: 12px;
+  height: 12px;
 }
 
 .ovl-btn-cancel:hover:not(:disabled) {
@@ -423,7 +705,7 @@ const overlayUrl = computed(() =>
 }
 
 .ovl-props {
-  width: 260px;
+  width: 270px;
   flex-shrink: 0;
   border-left: 1px solid #1e1e22;
   display: flex;
@@ -469,7 +751,7 @@ const overlayUrl = computed(() =>
 }
 
 .ovl-props-textarea {
-  min-height: 60px;
+  min-height: 50px;
   resize: vertical;
 }
 
@@ -520,6 +802,10 @@ const overlayUrl = computed(() =>
   color: #555;
   font-size: 11px;
   line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
 }
 
 .ovl-url-box {

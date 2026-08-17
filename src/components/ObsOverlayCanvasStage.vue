@@ -1,19 +1,22 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import type { OverlayElement } from "../composables/overlayTypes";
 
 const props = defineProps<{
   elements: OverlayElement[];
-  selectedId: string | null;
+  selectedIds: string[];
   baseWidth: number;
   baseHeight: number;
 }>();
 const emit = defineEmits<{
-  "update:selectedId": [id: string | null];
+  select: [id: string | null, additive: boolean];
   "update-element": [id: string, patch: Partial<OverlayElement>];
+  "update-elements": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
 }>();
 
 const stageRef = ref<HTMLElement | null>(null);
+const GRID = 10; // <<< canvas units
+const SNAP_PX = 8; // <<< screen-px proximity to trigger element-edge snap
 
 function scale(): number {
   const el = stageRef.value;
@@ -21,33 +24,78 @@ function scale(): number {
   return el.getBoundingClientRect().width / props.baseWidth;
 }
 
-function select(id: string | null) {
-  emit("update:selectedId", id);
+function select(id: string | null, additive: boolean) {
+  emit("select", id, additive);
 }
 
-// vvv drag-to-move vvv
+// vvv snapping vvv
+const snapGuides = ref<{ x: number | null; y: number | null }>({ x: null, y: null });
+function snapValue(raw: { x: number; y: number; w: number; h: number }, selfId: string, disableSnap: boolean) {
+  if (disableSnap) {
+    snapGuides.value = { x: null, y: null };
+    return raw;
+  }
+  let { x, y, w, h } = raw;
+  const s = scale() || 1;
+  let snappedX: number | null = null;
+  let snappedY: number | null = null;
+
+  const others = props.elements.filter((e) => e.id !== selfId && e.visible);
+  const myEdgesX = [x, x + w / 2, x + w];
+  const myEdgesY = [y, y + h / 2, y + h];
+  for (const other of others) {
+    const oEdgesX = [other.x, other.x + other.w / 2, other.x + other.w];
+    const oEdgesY = [other.y, other.y + other.h / 2, other.y + other.h];
+    for (const mx of myEdgesX) {
+      for (const ox of oEdgesX) {
+        if (Math.abs((mx - ox) * s) < SNAP_PX) {
+          x += ox - mx;
+          snappedX = ox;
+        }
+      }
+    }
+    for (const my of myEdgesY) {
+      for (const oy of oEdgesY) {
+        if (Math.abs((my - oy) * s) < SNAP_PX) {
+          y += oy - my;
+          snappedY = oy;
+        }
+      }
+    }
+  }
+  snapGuides.value = { x: snappedX, y: snappedY };
+  if (snappedX === null) x = Math.round(x / GRID) * GRID;
+  if (snappedY === null) y = Math.round(y / GRID) * GRID;
+  return { x, y, w, h };
+}
+// ^^^ snapping ^^^
+
+// vvv drag-to-move (moves every selected element together) vvv
 const dragState = ref<{
   id: string;
   startMouseX: number;
   startMouseY: number;
-  startX: number;
-  startY: number;
+  origins: Record<string, { x: number; y: number }>;
 } | null>(null);
-const dragPreview = ref<{ id: string; x: number; y: number } | null>(null);
+const dragPreview = ref<Record<string, { x: number; y: number }>>({});
 
 function onItemMouseDown(el: OverlayElement, e: MouseEvent) {
   if ((e.target as HTMLElement).closest(".ovl-handle")) return;
   if (el.locked) return;
-  select(el.id);
+  const additive = e.shiftKey || e.ctrlKey || e.metaKey;
+  if (!props.selectedIds.includes(el.id) || additive) select(el.id, additive);
   e.preventDefault();
   e.stopPropagation();
-  dragState.value = {
-    id: el.id,
-    startMouseX: e.clientX,
-    startMouseY: e.clientY,
-    startX: el.x,
-    startY: el.y,
-  };
+
+  const movingIds = props.selectedIds.includes(el.id) && !additive
+    ? props.selectedIds
+    : [el.id];
+  const origins: Record<string, { x: number; y: number }> = {};
+  for (const id of movingIds) {
+    const it = props.elements.find((e2) => e2.id === id);
+    if (it) origins[id] = { x: it.x, y: it.y };
+  }
+  dragState.value = { id: el.id, startMouseX: e.clientX, startMouseY: e.clientY, origins };
   window.addEventListener("mousemove", onDragMove);
   window.addEventListener("mouseup", onDragEnd);
 }
@@ -55,11 +103,25 @@ function onDragMove(e: MouseEvent) {
   const d = dragState.value;
   if (!d) return;
   const s = scale() || 1;
-  dragPreview.value = {
-    id: d.id,
-    x: d.startX + (e.clientX - d.startMouseX) / s,
-    y: d.startY + (e.clientY - d.startMouseY) / s,
-  };
+  const dx = (e.clientX - d.startMouseX) / s;
+  const dy = (e.clientY - d.startMouseY) / s;
+  const primary = props.elements.find((el) => el.id === d.id);
+  const primaryOrigin = d.origins[d.id];
+  if (!primary || !primaryOrigin) return;
+
+  const snapped = snapValue(
+    { x: primaryOrigin.x + dx, y: primaryOrigin.y + dy, w: primary.w, h: primary.h },
+    d.id,
+    e.altKey,
+  );
+  const appliedDx = snapped.x - primaryOrigin.x;
+  const appliedDy = snapped.y - primaryOrigin.y;
+
+  const preview: Record<string, { x: number; y: number }> = {};
+  for (const [id, origin] of Object.entries(d.origins)) {
+    preview[id] = { x: origin.x + appliedDx, y: origin.y + appliedDy };
+  }
+  dragPreview.value = preview;
 }
 function onDragEnd() {
   window.removeEventListener("mousemove", onDragMove);
@@ -67,13 +129,18 @@ function onDragEnd() {
   const d = dragState.value;
   dragState.value = null;
   const preview = dragPreview.value;
-  dragPreview.value = null;
-  if (!d || !preview) return;
-  emit("update-element", d.id, { x: preview.x, y: preview.y });
+  dragPreview.value = {};
+  snapGuides.value = { x: null, y: null };
+  if (!d) return;
+  const updates = Object.entries(preview).map(([id, pos]) => ({
+    id,
+    patch: { x: pos.x, y: pos.y },
+  }));
+  if (updates.length) emit("update-elements", updates);
 }
 // ^^^ drag-to-move ^^^
 
-// vvv corner resize vvv
+// vvv corner resize (single-selection only) vvv
 type Corner = "tl" | "tr" | "bl" | "br";
 const resizeState = ref<{
   id: string;
@@ -81,19 +148,12 @@ const resizeState = ref<{
   anchorX: number;
   anchorY: number;
 } | null>(null);
-const resizePreview = ref<{
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-} | null>(null);
+const resizePreview = ref<{ id: string; x: number; y: number; w: number; h: number } | null>(null);
 
 function onHandleMouseDown(el: OverlayElement, corner: Corner, e: MouseEvent) {
   if (el.locked) return;
   e.preventDefault();
   e.stopPropagation();
-  select(el.id);
   const anchor =
     corner === "tl"
       ? { x: el.x + el.w, y: el.y + el.h }
@@ -139,6 +199,10 @@ function onResizeMove(e: MouseEvent) {
     newX = r.anchorX;
     newY = r.anchorY;
   }
+  if (!e.altKey) {
+    newW = Math.round(newW / GRID) * GRID;
+    newH = Math.round(newH / GRID) * GRID;
+  }
   resizePreview.value = { id: r.id, x: newX, y: newY, w: newW, h: newH };
 }
 function onResizeEnd() {
@@ -149,21 +213,17 @@ function onResizeEnd() {
   const preview = resizePreview.value;
   resizePreview.value = null;
   if (!r || !preview) return;
-  emit("update-element", r.id, {
-    x: preview.x,
-    y: preview.y,
-    w: preview.w,
-    h: preview.h,
-  });
+  emit("update-element", r.id, { x: preview.x, y: preview.y, w: preview.w, h: preview.h });
 }
 // ^^^ corner resize ^^^
 
 function displayStyle(el: OverlayElement) {
   const s = scale();
-  if (dragPreview.value?.id === el.id) {
+  const dp = dragPreview.value[el.id];
+  if (dp) {
     return {
-      left: `${dragPreview.value.x * s}px`,
-      top: `${dragPreview.value.y * s}px`,
+      left: `${dp.x * s}px`,
+      top: `${dp.y * s}px`,
       width: `${el.w * s}px`,
       height: `${el.h * s}px`,
       transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
@@ -188,8 +248,17 @@ function displayStyle(el: OverlayElement) {
 }
 
 function onStageClick(e: MouseEvent) {
-  if (e.target === stageRef.value) select(null);
+  if (e.target === stageRef.value) select(null, false);
 }
+
+const guideStyleX = computed(() => {
+  if (snapGuides.value.x === null) return null;
+  return { left: `${snapGuides.value.x * scale()}px` };
+});
+const guideStyleY = computed(() => {
+  if (snapGuides.value.y === null) return null;
+  return { top: `${snapGuides.value.y * scale()}px` };
+});
 
 defineExpose({ stageRef });
 </script>
@@ -197,12 +266,24 @@ defineExpose({ stageRef });
 <template>
   <div ref="stageRef" class="ovl-stage" :style="{ aspectRatio: `${baseWidth} / ${baseHeight}` }"
     @mousedown="onStageClick">
+    <div v-if="guideStyleX" class="ovl-guide ovl-guide-v" :style="guideStyleX"></div>
+    <div v-if="guideStyleY" class="ovl-guide ovl-guide-h" :style="guideStyleY"></div>
+
     <div v-for="el in elements" :key="el.id" class="ovl-item" :class="{
-      selected: el.id === selectedId,
+      selected: selectedIds.includes(el.id),
       hidden_: !el.visible,
       locked: el.locked,
     }" :style="displayStyle(el)" @mousedown="onItemMouseDown(el, $event)">
       <img v-if="el.type === 'image'" :src="el.content" class="ovl-item-img" draggable="false" />
+      <video v-else-if="el.type === 'video'" :src="el.content" class="ovl-item-img" muted></video>
+      <div v-else-if="el.type === 'audio'" class="ovl-item-audio">
+        {{ el.data.muted !== false ? "🔇" : "🔊" }}
+      </div>
+      <div v-else-if="el.type === 'shape'" class="ovl-item-shape" :style="{
+        background: el.style.background || 'transparent',
+        border: el.style.borderWidth ? `${el.style.borderWidth}px ${el.style.borderStyle || 'solid'} ${el.style.borderColor || '#fff'}` : 'none',
+        borderRadius: (el.style.borderRadius || 0) + 'px',
+      }"></div>
       <div v-else class="ovl-item-text" :style="{
         fontFamily: el.style.fontFamily || 'inherit',
         fontSize: (el.style.fontSize || 32) + 'px',
@@ -213,7 +294,7 @@ defineExpose({ stageRef });
         {{ el.type === 'variable-text' ? (el.content || '(empty variable)') : (el.content || '(empty text)') }}
       </div>
       <span class="ovl-item-label">{{ el.type }}</span>
-      <template v-if="el.id === selectedId && !el.locked">
+      <template v-if="selectedIds.length === 1 && el.id === selectedIds[0] && !el.locked">
         <span class="ovl-handle tl" @mousedown="onHandleMouseDown(el, 'tl', $event)"></span>
         <span class="ovl-handle tr" @mousedown="onHandleMouseDown(el, 'tr', $event)"></span>
         <span class="ovl-handle bl" @mousedown="onHandleMouseDown(el, 'bl', $event)"></span>
@@ -233,6 +314,25 @@ defineExpose({ stageRef });
   overflow: hidden;
   border: 1px solid #2a2a30;
   user-select: none;
+}
+
+.ovl-guide {
+  position: absolute;
+  background: #f14949;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.ovl-guide-v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.ovl-guide-h {
+  left: 0;
+  right: 0;
+  height: 1px;
 }
 
 .ovl-item {
@@ -260,6 +360,24 @@ defineExpose({ stageRef });
   width: 100%;
   height: 100%;
   object-fit: contain;
+  pointer-events: none;
+}
+
+.ovl-item-audio {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  font-size: 20px;
+  pointer-events: none;
+}
+
+.ovl-item-shape {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
   pointer-events: none;
 }
 
