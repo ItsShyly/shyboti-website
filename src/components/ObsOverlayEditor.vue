@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { API } from "../api";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import {
@@ -20,14 +20,24 @@ import ObsOverlayLayersPanel from "./ObsOverlayLayersPanel.vue";
 const props = defineProps<{
   channel: string;
   authHeaders: Record<string, string>;
+  scenes: string[];
+  currentScene: string;
 }>();
 const emit = defineEmits<{
   close: [];
+  // >>> parent can't see editor-only state once it unmounts, so it needs to know
+  // >>> whenever the dim/fade crosses the "obscured" threshold while we're open
+  "dimmer-change": [obscured: boolean];
+  "active-change": [active: boolean];
 }>();
 
 const loading = ref(true);
 const saving = ref(false);
+const activating = ref(false);
 const overlayId = ref<string | null>(null);
+const overlayActive = ref(false);
+const overlayTargetScene = ref("");
+const activateScene = ref("");
 const baseWidth = ref(1920);
 const baseHeight = ref(1080);
 const pendingElements = ref<OverlayElement[]>([]);
@@ -36,11 +46,16 @@ const savedIds = ref<Set<string>>(new Set());
 const selectedIds = ref<string[]>([]);
 const dirty = ref(false);
 
-// >>> visual-only brightness slider - never rendered live, same as the old canvas
+// >>> editor-only spotlight controls - never rendered on the live overlay page,
+// >>> just CSS on the local stage so contrast is easier to judge while editing
 const stageBrightness = ref(100);
-const stageBackground = computed(() => {
-  const v = Math.round((stageBrightness.value / 100) * 255);
-  return `rgba(${v}, ${v}, ${v}, ${(100 - stageBrightness.value) / 100})`;
+const stageOpacity = ref(100);
+const stageFilterStyle = computed(() => ({
+  filter: `brightness(${stageBrightness.value}%)`,
+  opacity: stageOpacity.value / 100,
+}));
+watch([stageBrightness, stageOpacity], () => {
+  emit("dimmer-change", stageBrightness.value < 100 || stageOpacity.value < 100);
 });
 
 const selectedElement = computed(() =>
@@ -154,6 +169,9 @@ async function load() {
     if (res.ok) {
       const d = (await res.json()) as { overlay: any; elements: any[] };
       overlayId.value = d.overlay?.id ?? null;
+      overlayActive.value = !!d.overlay?.active;
+      overlayTargetScene.value = d.overlay?.target_scene ?? "";
+      emit("active-change", overlayActive.value);
       pendingElements.value = (d.elements ?? []).map(fromWireElement);
       savedIds.value = new Set(pendingElements.value.map((e) => e.id));
       deletedIds.value = [];
@@ -162,6 +180,9 @@ async function load() {
       historyFuture.value = [];
     }
   } catch { }
+  if (!activateScene.value) {
+    activateScene.value = overlayTargetScene.value || props.currentScene || props.scenes[0] || "";
+  }
   try {
     const vs = await fetch(`${API}/obs/${props.channel}/video-settings`, {
       headers: props.authHeaders,
@@ -323,6 +344,41 @@ function duplicateSelected() {
 }
 // ^^^ copy/paste/duplicate ^^^
 
+// vvv activation - immediate, not part of the staged/Save flow vvv
+// >>> disabled once active in a different scene
+const activationLocked = computed(
+  () => overlayActive.value && overlayTargetScene.value && overlayTargetScene.value !== activateScene.value,
+);
+async function toggleActive() {
+  if (activating.value) return;
+  activating.value = true;
+  try {
+    if (overlayActive.value) {
+      const res = await fetch(`${API}/overlay/${props.channel}/deactivate`, {
+        method: "POST",
+        headers: props.authHeaders,
+      });
+      if (res.ok) {
+        overlayActive.value = false;
+        emit("active-change", false);
+      }
+    } else {
+      const res = await fetch(`${API}/overlay/${props.channel}/activate`, {
+        method: "POST",
+        headers: { ...props.authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ scene: activateScene.value }),
+      });
+      if (res.ok) {
+        overlayActive.value = true;
+        overlayTargetScene.value = activateScene.value;
+        emit("active-change", true);
+      }
+    }
+  } catch { }
+  activating.value = false;
+}
+// ^^^ activation ^^^
+
 function insertVariableToken(token: string) {
   if (!selectedElement.value) return;
   updateElement(selectedElement.value.id, {
@@ -450,15 +506,20 @@ const overlayUrl = computed(() =>
           <div class="ovl-topbar-actions">
             <div class="ovl-brightness">
               <span v-html="iconSvgFor('moon')"></span>
-              <input type="range" min="0" max="100" v-model.number="stageBrightness"
+              <input type="range" min="0" max="200" v-model.number="stageBrightness"
                 title="Canvas brightness (editor-only, never rendered live)" />
               <span v-html="iconSvgFor('sun')"></span>
+            </div>
+            <div class="ovl-brightness">
+              <span v-html="iconSvgFor('eye')"></span>
+              <input type="range" min="0" max="100" v-model.number="stageOpacity"
+                title="Canvas opacity (editor-only, never rendered live)" />
+              <span v-html="iconSvgFor('eye-off')"></span>
             </div>
             <button class="ovl-btn-cancel" :disabled="!historyPast.length" @click="undo" title="Undo (Ctrl+Z)">
               <span v-html="iconSvgFor('corner-up-left')"></span>
             </button>
-            <button class="ovl-btn-cancel" :disabled="!historyFuture.length" @click="redo"
-              title="Redo (Ctrl+Shift+Z)">
+            <button class="ovl-btn-cancel" :disabled="!historyFuture.length" @click="redo" title="Redo (Ctrl+Shift+Z)">
               <span v-html="iconSvgFor('corner-up-right')"></span>
             </button>
             <button class="ovl-btn-cancel" :disabled="!selectedIds.length" @click="saveSelectionAsTemplate"
@@ -473,6 +534,22 @@ const overlayUrl = computed(() =>
           </div>
         </div>
 
+        <!-- >>> pinned, stays visible in full-screen just like OBS's own safe-area bar -->
+        <div class="ovl-activate-bar">
+          <span class="ovl-activate-dot" :class="{ on: overlayActive }"></span>
+          <span class="ovl-activate-status">{{ overlayActive ? "Overlay is live in OBS" : "Overlay is not active"
+            }}</span>
+          <select v-model="activateScene" class="ovl-activate-select" :disabled="overlayActive">
+            <option v-for="s in scenes" :key="s" :value="s">{{ s }}</option>
+          </select>
+          <button class="ovl-activate-btn" :class="{ on: overlayActive }"
+            :disabled="activating || (!overlayActive && activationLocked) || !activateScene"
+            :title="activationLocked ? `Already active in “${overlayTargetScene}” - deactivate there first` : ''"
+            @click="toggleActive">
+            {{ activating ? "…" : overlayActive ? "Deactivate" : "Activate" }}
+          </button>
+        </div>
+
         <div class="ovl-content">
           <ObsOverlayElementGallery :templates="templateNames" @add="addElement" @add-template="addTemplate"
             @delete-template="deleteTemplate" />
@@ -480,8 +557,8 @@ const overlayUrl = computed(() =>
           <div class="ovl-body">
             <div v-if="loading" class="ovl-loading">loading…</div>
             <ObsOverlayCanvasStage v-else :elements="pendingElements" :selected-ids="selectedIds"
-              :base-width="baseWidth" :base-height="baseHeight" :style="{ background: stageBackground }"
-              @select="onSelect" @update-element="updateElement" @update-elements="updateElements" />
+              :base-width="baseWidth" :base-height="baseHeight" :style="stageFilterStyle" @select="onSelect"
+              @update-element="updateElement" @update-elements="updateElements" />
           </div>
 
           <div class="ovl-props">
@@ -535,8 +612,8 @@ const overlayUrl = computed(() =>
             <div v-else class="ovl-props-empty">Select an element, or add one from the gallery.</div>
 
             <ObsOverlayLayersPanel :elements="pendingElements" :selected-ids="selectedIds" @select="onSelect"
-              @toggle-lock="toggleLock" @toggle-visible="toggleVisible" @reorder="reorderElement"
-              @group="groupSelected" @ungroup="ungroupSelected" />
+              @toggle-lock="toggleLock" @toggle-visible="toggleVisible" @reorder="reorderElement" @group="groupSelected"
+              @ungroup="ungroupSelected" />
 
             <div v-if="overlayUrl" class="ovl-url-box">
               <div class="ovl-props-label">Overlay page (add as a Browser Source in OBS)</div>
@@ -591,6 +668,82 @@ const overlayUrl = computed(() =>
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.ovl-activate-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  flex-shrink: 0;
+  border-bottom: 1px solid #1e1e22;
+  background: #0d0d10;
+}
+
+.ovl-activate-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #555;
+  flex-shrink: 0;
+}
+
+.ovl-activate-dot.on {
+  background: #4ec9b0;
+  box-shadow: 0 0 6px #4ec9b0aa;
+}
+
+.ovl-activate-status {
+  color: #888;
+  font-size: 12px;
+  margin-right: auto;
+}
+
+.ovl-activate-select {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #2a2a30;
+  background: #111217;
+  color: #ccc;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.ovl-activate-select:disabled {
+  opacity: 0.6;
+}
+
+.ovl-activate-btn {
+  height: 30px;
+  padding: 0 16px;
+  border: 1px solid #2a2a30;
+  background: #111217;
+  color: #ccc;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ovl-activate-btn:hover:not(:disabled) {
+  border-color: #6f2bff;
+  color: #9d6cff;
+}
+
+.ovl-activate-btn.on {
+  background: #f1494922;
+  border-color: #f1494966;
+  color: #f68f8f;
+}
+
+.ovl-activate-btn.on:hover:not(:disabled) {
+  border-color: #f14949;
+  color: #f14949;
+}
+
+.ovl-activate-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .ovl-brightness {
