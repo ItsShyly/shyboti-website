@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { API } from "../api";
 import { useAuth } from "../auth";
@@ -335,60 +335,6 @@ async function doDeleteAllData() {
   }
   deleting.value = false;
 }
-
-// vvv scrollspy nav vvv
-const sections = computed(() => {
-  const list: { id: string; label: string }[] = [];
-  if (isBroadcaster.value) list.push({ id: "chat", label: "Chat behavior" });
-  list.push({ id: "privacy", label: "Privacy" });
-  if (isBroadcaster.value)
-    list.push({ id: "integrations", label: "Integrations" });
-  list.push({ id: "interface", label: "Interface" });
-  if (canRemoveBotCard.value || dangerZoneUnlocked.value)
-    list.push({ id: "danger", label: "Danger zone" });
-  return list;
-});
-
-const activeSection = ref("");
-const bodyRef = ref<HTMLElement | null>(null);
-const sectionEls: Record<string, HTMLElement> = {};
-function setSectionRef(id: string) {
-  return (el: any) => {
-    if (el) sectionEls[id] = el as HTMLElement;
-    else delete sectionEls[id];
-  };
-}
-
-// >>> root:null tracks the page's real scroll container
-let observer: IntersectionObserver | null = null;
-function setupObserver() {
-  observer?.disconnect();
-  observer = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          const id = (entry.target as HTMLElement).dataset.sectionId;
-          if (id) activeSection.value = id;
-        }
-      }
-    },
-    { root: null, rootMargin: "0px 0px -70% 0px", threshold: 0 },
-  );
-  for (const sec of sections.value) {
-    const el = sectionEls[sec.id];
-    if (el) observer.observe(el);
-  }
-  if (!activeSection.value && sections.value.length)
-    activeSection.value = sections.value[0]!.id;
-}
-
-onMounted(() => nextTick(setupObserver));
-watch(sections, () => nextTick(setupObserver));
-
-function scrollToSection(id: string) {
-  sectionEls[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
-// ^^^ scrollspy nav ^^^
 </script>
 
 <template>
@@ -400,10 +346,9 @@ function scrollToSection(id: string) {
       </p>
     </header>
 
-    <div class="settings-layout">
-      <div class="settings-body" ref="bodyRef">
+    <div class="settings-body">
         <!-- Chat behavior (broadcaster only) -->
-        <section v-if="isBroadcaster" class="settings-section" data-section-id="chat" :ref="setSectionRef('chat')">
+        <section v-if="isBroadcaster" class="settings-section">
           <h2 class="section-title">Chat behavior</h2>
           <div class="setting-list">
             <div class="setting-row">
@@ -457,7 +402,7 @@ function scrollToSection(id: string) {
         </section>
 
         <!-- Privacy -->
-        <section class="settings-section" data-section-id="privacy" :ref="setSectionRef('privacy')">
+        <section class="settings-section">
           <h2 class="section-title">Privacy</h2>
           <div class="setting-list">
             <div class="setting-row">
@@ -506,8 +451,7 @@ function scrollToSection(id: string) {
         </section>
 
         <!-- Integrations (broadcaster only) -->
-        <section v-if="isBroadcaster" class="settings-section" data-section-id="integrations"
-          :ref="setSectionRef('integrations')">
+        <section v-if="isBroadcaster" class="settings-section">
           <h2 class="section-title">Integrations</h2>
           <div class="integration-panel">
             <div class="integration-header">
@@ -582,7 +526,7 @@ function scrollToSection(id: string) {
         </section>
 
         <!-- Interface -->
-        <section class="settings-section" data-section-id="interface" :ref="setSectionRef('interface')">
+        <section class="settings-section">
           <h2 class="section-title">Interface</h2>
           <div class="setting-list">
             <div class="setting-row">
@@ -604,8 +548,7 @@ function scrollToSection(id: string) {
         </section>
 
         <!-- Danger zone -->
-        <section v-if="canRemoveBotCard || dangerZoneUnlocked" class="settings-section danger-section"
-          data-section-id="danger" :ref="setSectionRef('danger')">
+        <section v-if="canRemoveBotCard || dangerZoneUnlocked" class="settings-section danger-section">
           <h2 class="section-title danger-title">Danger zone</h2>
           <div class="danger-list">
             <div v-if="canRemoveBotCard" class="danger-row warning">
@@ -665,15 +608,6 @@ function scrollToSection(id: string) {
             </div>
           </div>
         </section>
-      </div>
-
-      <nav class="settings-nav">
-        <button v-for="sec in sections" :key="sec.id" class="nav-item" :class="{ active: activeSection === sec.id }"
-          @click="scrollToSection(sec.id)">
-          <span class="nav-square" :class="{ on: activeSection === sec.id }"></span>
-          <span class="nav-label">{{ sec.label }}</span>
-        </button>
-      </nav>
     </div>
   </div>
 </template>
@@ -707,90 +641,13 @@ function scrollToSection(id: string) {
   color: #9d6cff;
 }
 
-.settings-layout {
-  display: flex;
-  align-items: flex-start;
-  gap: 40px;
-}
-
 .settings-body {
-  flex: 1;
-  max-width: 560px;
-  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 36px;
-}
-
-.settings-nav {
-  flex-shrink: 0;
-  width: 170px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  position: sticky;
-  top: 0;
-}
-
-.nav-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding: 6px 4px;
-  border: none;
-  background: transparent;
-  color: #555;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-}
-
-.nav-item:hover {
-  color: #aaa;
-}
-
-.nav-item.active {
-  color: #9d6cff;
-}
-
-.nav-square {
-  width: 8px;
-  height: 8px;
-  flex-shrink: 0;
-  border: 1px solid #333;
-  background: transparent;
-}
-
-.nav-square.on {
-  background: #6f2bff;
-  border-color: #9d6cff;
-}
-
-.nav-label {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-@media (max-width: 860px) {
-  .settings-layout {
-    flex-direction: column-reverse;
-    gap: 20px;
-  }
-
-  .settings-nav {
-    width: 100%;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 4px 16px;
-    position: static;
-  }
-
-  .settings-body {
-    max-width: none;
-  }
+  max-width: 560px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .settings-section {
