@@ -53,6 +53,7 @@ interface CanvasItem {
   height?: number;
   sourceWidth?: number;
   sourceHeight?: number;
+  url?: string;
 }
 
 const items = ref<CanvasItem[]>([]);
@@ -449,6 +450,8 @@ function onStageClick(e: MouseEvent) {
                 selected: it.sceneItemId === selectedId,
                 hidden_: !effective(it).sceneItemEnabled,
               }" :style="displayStyle(it)" @mousedown="onItemMouseDown(it, $event)">
+                <iframe v-if="it.url" :src="it.url" class="canvas-item-frame" tabindex="-1"></iframe>
+                <div v-else class="canvas-item-noframe">no preview</div>
                 <span class="canvas-item-label">{{ it.sourceName }}</span>
                 <template v-if="it.sceneItemId === selectedId">
                   <span class="canvas-handle tl" @mousedown="onHandleMouseDown(it, 'tl', $event)"></span>
@@ -609,22 +612,41 @@ function onStageClick(e: MouseEvent) {
 
 .canvas-item {
   position: absolute;
-  border: 1px solid #6f2bff;
-  background: rgba(111, 43, 255, 0.12);
+  border: 1px solid rgba(111, 43, 255, 0.5);
   cursor: move;
   transform-origin: 0 0;
   z-index: 3;
+  overflow: hidden;
 }
 
 .canvas-item.hidden_ {
   border-style: dashed;
-  background: rgba(0, 0, 0, 0.05);
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .canvas-item.selected {
   border: 2px solid #f14949;
-  background: rgba(241, 73, 73, 0.1);
+}
+
+.canvas-item-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  /* >>> the box itself handles drag/select - clicks must pass through the iframe to it */
+  pointer-events: none;
+}
+
+.canvas-item-noframe {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #999;
+  background: rgba(111, 43, 255, 0.08);
 }
 
 .canvas-item-label {
@@ -637,6 +659,7 @@ function onStageClick(e: MouseEvent) {
   padding: 1px 5px;
   white-space: nowrap;
   pointer-events: none;
+  z-index: 1;
 }
 
 .canvas-handle {
