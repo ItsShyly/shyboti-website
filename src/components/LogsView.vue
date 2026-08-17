@@ -2318,7 +2318,7 @@ function renderMsgWithMap(text: string, em: EmoteMap): string {
       continue;
     }
     const cls = entry.overlay ? "chat-emote emote-overlay" : "chat-emote";
-    const img = `<img class="${cls}" src="${entry.url}" alt="${esc(tok)}" title="${esc(tok)}" fetchpriority="high">`;
+    const img = `<img class="${cls}" src="${esc(entry.url)}" alt="${esc(tok)}" title="${esc(tok)}" fetchpriority="high">`;
     pieces.push({ html: img, isOverlay: entry.overlay, isEmote: true });
   }
 

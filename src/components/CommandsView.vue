@@ -1295,7 +1295,7 @@ onUnmounted(() => {
             <div class="empty-title">OBS isn't set up yet</div>
             <div class="empty-sub">
               Set up the agent on the
-              <router-link to="/obs-connection" class="obs-cmd-link">OBS connection</router-link>
+              <router-link to="/obs-control" class="obs-cmd-link">OBS Control</router-link>
               page, then commands you add here will appear.
             </div>
           </div>
