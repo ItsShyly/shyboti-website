@@ -700,6 +700,9 @@ function onStageClick(e: MouseEvent) {
   position: absolute;
   top: 0;
   left: 0;
+  border: none;
+
+  transform-origin: 0 0;
   pointer-events: none;
 }
 
