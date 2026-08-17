@@ -48,68 +48,33 @@ async function openChatterino() {
 
 <template>
   <div class="uploads-view">
-    <div class="service-card" @click="router.push('/images')">
-      <div class="card-icon images-icon">
-        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="4" y="8" width="40" height="32" rx="4" stroke="currentColor" stroke-width="2.5" />
-          <path d="M4 32L14 20L22 28L30 18L44 32" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"
-            stroke-linecap="round" />
-          <circle cx="34" cy="20" r="4" stroke="currentColor" stroke-width="2.5" />
-          <circle cx="38" cy="12" r="7" fill="#6f2bff" opacity="0.9" />
-          <path d="M38 15.5V9M35.5 11.5L38 9L40.5 11.5" stroke="white" stroke-width="1.8" stroke-linecap="round"
-            stroke-linejoin="round" />
-        </svg>
+    <div class="tool-row" @click="router.push('/images')">
+      <div class="tool-main">
+        <span class="tool-name">{{ t("uploads.images") }}</span>
+        <span class="tool-sub">{{ t("uploads.images.sub") }}</span>
       </div>
-      <div class="card-body">
-        <div class="card-title">{{ t("uploads.images") }}</div>
-        <div class="card-sub">{{ t("uploads.images.sub") }}</div>
-        <div class="card-url">i.shyboti.de/<span class="url-id">id</span></div>
-      </div>
-      <div class="card-btns">
-        <button v-if="session" class="your-btn" @click.stop="router.push('/images?gallery=1')">
-          <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="1" y="1" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.4" />
-            <rect x="8" y="1" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.4" />
-            <rect x="1" y="8" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.4" />
-            <rect x="8" y="8" width="5" height="5" rx="0.8" stroke="currentColor" stroke-width="1.4" />
-          </svg>
+      <span class="tool-url">i.shyboti.de/<span class="url-id">id</span></span>
+      <div class="tool-actions">
+        <button v-if="session" class="tool-action" @click.stop="router.push('/images?gallery=1')">
           {{ t("uploads.images.your") }}
         </button>
-        <button class="chatterino-btn" @click.stop="openChatterino()">
-          <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4" />
-            <path d="M7 6v4M7 4.5v.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-          </svg>
+        <button class="tool-action" @click.stop="openChatterino()">
           Chatterino
         </button>
       </div>
     </div>
 
-    <div class="service-card" @click="router.push('/notes')">
-      <div class="card-icon notes-icon">
-        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="8" y="4" width="28" height="36" rx="3" stroke="currentColor" stroke-width="2.5" />
-          <path d="M28 4V14H36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-            stroke-linejoin="round" />
-          <path d="M14 20h16M14 26h16M14 32h10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-          <circle cx="38" cy="38" r="7" fill="#4ec9b0" opacity="0.9" />
-          <path d="M38 41V35M35.5 37.5L38 35L40.5 37.5" stroke="white" stroke-width="1.8" stroke-linecap="round"
-            stroke-linejoin="round" />
-        </svg>
+    <div class="tool-row" @click="router.push('/notes')">
+      <div class="tool-main">
+        <span class="tool-name">{{ t("uploads.notes") }}</span>
+        <span class="tool-sub">{{ t("uploads.notes.sub") }}</span>
       </div>
-      <div class="card-body">
-        <div class="card-title">{{ t("uploads.notes") }}</div>
-        <div class="card-sub">{{ t("uploads.notes.sub") }}</div>
-        <div class="card-url">
-          n.shyboti.de/<span class="url-id notes-url-id">id</span>
-        </div>
+      <span class="tool-url">n.shyboti.de/<span class="url-id">id</span></span>
+      <div class="tool-actions">
+        <button v-if="session" class="tool-action" @click.stop="router.push('/notes?list=1')">
+          {{ t("uploads.notes.your") }}
+        </button>
       </div>
-      <button v-if="session" class="your-btn notes-btn" @click.stop="router.push('/notes?list=1')">
-        <svg viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M1 3.5h12M1 7h12M1 10.5h8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-        </svg>
-        {{ t("uploads.notes.your") }}
-      </button>
     </div>
   </div>
 
@@ -187,167 +152,83 @@ async function openChatterino() {
 <style scoped>
 .uploads-view {
   display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  align-content: flex-start;
-}
-
-.service-card {
-  position: relative;
-  background: #1a1a1e;
-  border: 1px solid #2a2a30;
-  width: 280px;
-  display: flex;
   flex-direction: column;
-  gap: 0;
-  cursor: pointer;
-  transition:
-    border-color 0.2s,
-    transform 0.15s;
-  overflow: hidden;
+  max-width: 560px;
 }
 
-.service-card:hover {
-  border-color: #3a3a44;
-  transform: translateY(-2px);
-}
-
-.service-card:active {
-  transform: translateY(0);
-}
-
-.card-icon {
-  height: 140px;
+.tool-row {
   display: flex;
   align-items: center;
-  justify-content: center;
-  background: #111217;
+  gap: 14px;
+  padding: 12px 14px;
+  background: #1a1a1e;
+  border: 1px solid #2a2a30;
+  border-bottom: none;
+  cursor: pointer;
+  transition: background 0.1s;
+  flex-wrap: wrap;
+}
+
+.tool-row:last-child {
   border-bottom: 1px solid #2a2a30;
 }
 
-.card-icon svg {
-  width: 72px;
-  height: 72px;
+.tool-row:hover {
+  background: #1e1e22;
 }
 
-.images-icon {
-  color: #9d6cff;
-}
-
-.notes-icon {
-  color: #4ec9b0;
-}
-
-.card-body {
-  padding: 16px 18px 10px;
+.tool-main {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: baseline;
+  gap: 10px;
+  flex: 1;
+  min-width: 160px;
 }
 
-.card-title {
-  font-size: 18px;
+.tool-name {
+  font-size: 13px;
   font-weight: 700;
   color: #e0e0e0;
+  flex-shrink: 0;
 }
 
-.card-sub {
-  font-size: 12px;
+.tool-sub {
+  font-size: 11px;
   color: #555;
 }
 
-.card-url {
+.tool-url {
   font-family: "Consolas", "Fira Mono", monospace;
   font-size: 11px;
   color: #444;
-  margin-top: 4px;
+  flex-shrink: 0;
 }
 
 .url-id {
   color: #9d6cff;
 }
 
-.notes-url-id {
-  color: #4ec9b0;
-}
-
-.card-btns {
+.tool-actions {
   display: flex;
-  align-items: center;
   gap: 8px;
-  margin: 0 12px 14px;
-  flex-wrap: wrap;
-}
-
-.card-btns .your-btn {
-  margin: 0;
-}
-
-.your-btn {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  margin: 0 12px 14px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid #9d6cff44;
-  background: rgba(111, 43, 255, 0.06);
-  color: #9d6cff;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-  align-self: flex-start;
-}
-
-.your-btn:hover {
-  background: rgba(111, 43, 255, 0.16);
-  border-color: #9d6cff88;
-}
-
-.your-btn svg {
-  width: 13px;
-  height: 13px;
   flex-shrink: 0;
 }
 
-.notes-btn {
-  border-color: #4ec9b044;
-  color: #4ec9b0;
-  background: rgba(78, 201, 176, 0.06);
-}
-
-.notes-btn:hover {
-  background: rgba(78, 201, 176, 0.16);
-  border-color: #4ec9b088;
-}
-
-.chatterino-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  height: 32px;
+.tool-action {
+  height: 26px;
   padding: 0 10px;
   border: 1px solid #2a2a30;
   background: transparent;
-  color: #555;
+  color: #888;
   font-family: inherit;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
   cursor: pointer;
 }
 
-.chatterino-btn:hover {
-  border-color: #9d6cff55;
+.tool-action:hover {
+  border-color: #6f2bff55;
   color: #9d6cff;
-  background: rgba(111, 43, 255, 0.06);
-}
-
-.chatterino-btn svg {
-  width: 11px;
-  height: 11px;
-  flex-shrink: 0;
+  background: #6f2bff0c;
 }
 
 .modal-backdrop {
@@ -502,12 +383,10 @@ async function openChatterino() {
 }
 
 @media (max-width: 680px) {
-  .uploads-view {
-    gap: 14px;
-  }
-
-  .service-card {
-    width: 100%;
+  .tool-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 }
 </style>

@@ -1187,10 +1187,8 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-        <div v-else-if="filteredCustom().length === 0" class="custom-empty">
-          <div class="empty-icon" v-html="iconSvgFor('star')"></div>
-          <div class="empty-title">{{ t("cmd.empty.title") }}</div>
-          <div class="empty-sub">{{ t("cmd.empty.sub") }}</div>
+        <div v-else-if="filteredCustom().length === 0" class="ep-empty">
+          {{ t("cmd.empty.title") }}<br />{{ t("cmd.empty.sub") }}
         </div>
 
         <template v-else>
@@ -1290,27 +1288,19 @@ onUnmounted(() => {
         <div v-if="obsLoading" class="state-msg">{{ t("cmd.loading") }}</div>
 
         <template v-else-if="!obsPaired">
-          <div class="custom-empty">
-            <div class="empty-icon" v-html="iconSvgFor('star')"></div>
-            <div class="empty-title">OBS isn't set up yet</div>
-            <div class="empty-sub">
-              Set up the agent on the
-              <router-link to="/obs-connection" class="obs-cmd-link">OBS connection</router-link>
-              page, then commands you add here will appear.
-            </div>
+          <div class="ep-empty">
+            OBS isn't set up yet<br />Set up the agent on the
+            <router-link to="/obs-connection" class="obs-cmd-link">OBS connection</router-link>
+            page, then commands you add here will appear.
           </div>
         </template>
 
         <template v-else>
           <!-- >>> count and new button live in ep-view-header -->
 
-          <div v-if="obsCommandCount === 0" class="custom-empty">
-            <div class="empty-icon" v-html="iconSvgFor('star')"></div>
-            <div class="empty-title">No OBS commands yet</div>
-            <div class="empty-sub">
-              Click <strong>+ New</strong> to create your first scene or source
-              command.
-            </div>
+          <div v-if="obsCommandCount === 0" class="ep-empty">
+            No OBS commands yet<br />Click <strong>+ New</strong> to create your
+            first scene or source command.
           </div>
 
           <template v-else>
@@ -1875,33 +1865,6 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-}
-
-.custom-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 48px 24px;
-  color: #444;
-  text-align: center;
-}
-
-.empty-icon {
-  font-size: 24px;
-  color: #333;
-  margin-bottom: 12px;
-}
-
-.empty-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: #555;
-  margin-bottom: 6px;
-}
-
-.empty-sub {
-  font-size: 12px;
-  color: #444;
 }
 
 .custom-actions {

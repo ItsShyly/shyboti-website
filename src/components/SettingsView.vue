@@ -4,7 +4,6 @@ import { useRouter } from "vue-router";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
-import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session, channelRole, adminMode, logout, switchChannel } = useAuth();
 const { t } = useI18n();
@@ -346,159 +345,92 @@ async function doDeleteAllData() {
       </p>
     </div>
 
-    <div class="cards-grid">
-      <!-- >>> broadcaster only -->
-      <div class="card" v-if="isBroadcaster">
-        <div class="card-header">
-          <div class="card-title">{{ t("settings.prefix.title") }}</div>
-          <div class="card-sub">
+    <div class="settings-list">
+      <div class="setting-row" v-if="isBroadcaster">
+        <div class="setting-info">
+          <div class="setting-label">{{ t("settings.prefix.title") }}</div>
+          <div class="setting-desc">
             {{ t("settings.prefix.sub") }} <code class="code">{{ prefix }}</code>command.
           </div>
         </div>
-        <div class="card-body">
-          <div class="prefix-row">
-            <input v-model="prefix" class="prefix-input" maxlength="3" placeholder="+" @keydown.enter="savePrefix"
-              spellcheck="false" />
-            <span class="prefix-preview"><span class="pre">{{ prefix || "+" }}</span>ping</span>
-          </div>
-          <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
-          <div class="section-note"><span v-html="iconSvgFor('alert-triangle')"></span> {{ t("settings.prefix.note") }}</div>
-        </div>
-        <div class="card-footer">
+        <div class="setting-control">
+          <input v-model="prefix" class="prefix-input" maxlength="3" placeholder="+" @keydown.enter="savePrefix"
+            spellcheck="false" />
+          <span class="prefix-preview"><span class="pre">{{ prefix || "+" }}</span>ping</span>
           <button class="save-btn" @click="savePrefix" :disabled="prefixSaving || !prefix">
-            <template v-if="prefixSaved"><span v-html="iconSvgFor('check')"></span> {{ t("settings.saved") }}</template>
+            <template v-if="prefixSaved">{{ t("settings.saved") }}</template>
             <template v-else-if="prefixSaving">{{ t("settings.saving") }}</template>
             <template v-else>{{ t("settings.prefix.save") }}</template>
           </button>
         </div>
       </div>
+      <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
 
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">{{ t("settings.optout.title") }}</div>
-          <div class="card-sub">{{ t("settings.optout.sub") }}</div>
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">{{ t("settings.optout.title") }}</div>
+          <div class="setting-desc">{{ t("settings.optout.sub") }}</div>
         </div>
-        <div class="card-body">
-          <div class="toggle-row">
-            <div class="status-dot" :class="{ active: !optedOut }"></div>
-            <span class="status-text">{{
-              optedOut
-                ? t("settings.optout.hidden")
-                : t("settings.optout.visible")
-            }}</span>
-            <div class="spacer"></div>
-            <span class="status-badge" :class="optedOut ? 'badge-off' : 'badge-on'">
-              {{
-                optedOut
-                  ? t("settings.optout.badge.out")
-                  : t("settings.optout.badge.in")
-              }}
-            </span>
-          </div>
-          <div v-if="optMsg" class="card-msg ok">{{ optMsg }}</div>
-        </div>
-        <div class="card-footer">
-          <button class="toggle-btn" :class="{ 'toggle-btn-on': optedOut }" @click="toggleOptOut" :disabled="optSaving">
-            {{
-              optSaving
-                ? "..."
-                : optedOut
-                  ? t("settings.optout.btn.in")
-                  : t("settings.optout.btn.out")
-            }}
+        <div class="setting-control">
+          <span v-if="optMsg" class="setting-msg">{{ optMsg }}</span>
+          <button class="ep-toggle-btn" :class="{ on: !optedOut }" @click="toggleOptOut" :disabled="optSaving">
+            <span class="ep-toggle-knob"></span>
           </button>
         </div>
       </div>
 
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Previous Usernames</div>
-          <div class="card-sub">
-            Hide your previous Twitch usernames from being shown on other users'
-            screens.
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Previous Usernames</div>
+          <div class="setting-desc">
+            Hide your previous Twitch usernames from being shown on other
+            users' screens.
           </div>
         </div>
-        <div class="card-body">
-          <div class="toggle-row">
-            <div class="status-dot" :class="{ active: !nameHistOptedOut }"></div>
-            <span class="status-text">{{
-              nameHistOptedOut ? "Name history hidden" : "Name history visible"
-              }}</span>
-            <div class="spacer"></div>
-            <span class="status-badge" :class="nameHistOptedOut ? 'badge-off' : 'badge-on'">
-              {{ nameHistOptedOut ? "Hidden" : "Visible" }}
-            </span>
-          </div>
-          <div v-if="nameHistMsg" class="card-msg ok">{{ nameHistMsg }}</div>
-        </div>
-        <div class="card-footer">
-          <button class="toggle-btn" :class="{ 'toggle-btn-on': nameHistOptedOut }" @click="toggleNameHistOptOut"
+        <div class="setting-control">
+          <span v-if="nameHistMsg" class="setting-msg">{{ nameHistMsg }}</span>
+          <button class="ep-toggle-btn" :class="{ on: !nameHistOptedOut }" @click="toggleNameHistOptOut"
             :disabled="nameHistSaving">
-            {{
-              nameHistSaving
-                ? "..."
-                : nameHistOptedOut
-                  ? "Show Names"
-                  : "Hide Names"
-            }}
+            <span class="ep-toggle-knob"></span>
           </button>
         </div>
       </div>
 
-      <!-- >>> broadcaster only -->
-      <div class="card" v-if="isBroadcaster">
-        <div class="card-header">
-          <div class="card-title">Hide Vanish Timeouts</div>
-          <div class="card-sub">
-            Hides short timeouts from the dashboard when the user typed a vanish
-            command.
+      <div class="setting-row" v-if="isBroadcaster">
+        <div class="setting-info">
+          <div class="setting-label">Hide Vanish Timeouts</div>
+          <div class="setting-desc">
+            Hides short timeouts from the dashboard when the user typed
+            <code class="code">!v</code>, <code class="code">!vanish</code>,
+            <code class="code">+v</code> or <code class="code">+vanish</code>.
           </div>
         </div>
-        <div class="card-body">
-          <div class="toggle-row">
-            <div class="status-dot" :class="{ active: vanishHide }"></div>
-            <span class="status-text">{{
-              vanishHide ? "Vanish timeouts hidden" : "All timeouts visible"
-              }}</span>
-            <div class="spacer"></div>
-            <span class="status-badge" :class="vanishHide ? 'badge-on' : 'badge-off'">
-              {{ vanishHide ? "ON" : "OFF" }}
-            </span>
-          </div>
-          <div class="section-note">
-            Detects: <code class="code">!v</code>
-            <code class="code">!vanish</code> <code class="code">+v</code>
-            <code class="code">+vanish</code>
-          </div>
-          <div v-if="vanishMsg" class="card-msg ok">{{ vanishMsg }}</div>
-        </div>
-        <div class="card-footer">
-          <button class="toggle-btn" :class="{ 'toggle-btn-on': vanishHide }" @click="
+        <div class="setting-control">
+          <span v-if="vanishMsg" class="setting-msg">{{ vanishMsg }}</span>
+          <button class="ep-toggle-btn" :class="{ on: vanishHide }" @click="
             vanishHide = !vanishHide;
           saveVanish();
           " :disabled="vanishSaving">
-            {{ vanishSaving ? "..." : vanishHide ? "Disable" : "Enable" }}
+            <span class="ep-toggle-knob"></span>
           </button>
         </div>
       </div>
 
-      <!-- >>> broadcaster only, spans 2 cols -->
-      <div class="card card-wide" v-if="isBroadcaster">
-        <div class="card-header">
-          <div class="card-icon card-icon-7tv">&#10022;</div>
-          <div class="card-title">{{ t("settings.7tv.title") }}</div>
-          <div class="card-sub">{{ t("settings.7tv.sub") }}</div>
+      <div class="setting-block" v-if="isBroadcaster">
+        <div class="setting-info">
+          <div class="setting-label">{{ t("settings.7tv.title") }}</div>
+          <div class="setting-desc">{{ t("settings.7tv.sub") }}</div>
         </div>
-        <div class="card-body">
-          <div v-if="emoteSetLoading" class="card-loading">Loading...</div>
+        <div class="setting-body">
+          <div v-if="emoteSetLoading" class="block-loading">Loading...</div>
           <template v-else>
             <div v-if="emoteSet.setId" class="emote-current">
               <span class="emote-name">{{
                 emoteSet.setName ?? emoteSet.setId
                 }}</span>
               <span class="emote-id">{{ emoteSet.setId }}</span>
-              <span v-if="emoteSet.emoteCount" class="emote-count">{{ emoteSet.emoteCount }} {{ t("settings.7tv.emotes")
-                }}</span>
+              <span v-if="emoteSet.emoteCount" class="emote-count">{{ emoteSet.emoteCount }} {{
+                t("settings.7tv.emotes") }}</span>
               <button class="danger-sm" @click="remove7tvSet" :disabled="emoteSetSaving">
                 {{
                   emoteSetSaving
@@ -539,116 +471,96 @@ async function doDeleteAllData() {
                 }}
               </button>
             </div>
-            <div v-if="emoteSetError" class="card-msg err">
+            <div v-if="emoteSetError" class="setting-msg err">
               {{ emoteSetError }}
             </div>
-            <div v-if="emoteSetSuccess" class="card-msg ok">
-              &#10003; {{ emoteSetSuccess }}
+            <div v-if="emoteSetSuccess" class="setting-msg ok">
+              {{ emoteSetSuccess }}
             </div>
           </template>
         </div>
       </div>
 
-      <!-- >>> broadcaster or admin-mode admin - warning, less severe than delete -->
-      <div class="card card-warning" v-if="canRemoveBotCard">
-        <div class="card-header">
-          <div class="card-icon card-icon-warning">&#9888;</div>
-          <div class="card-title">{{ t("settings.remove.title") }}</div>
-          <div class="card-sub">{{ t("settings.remove.sub") }}</div>
-        </div>
-        <div class="card-body">
-          <div v-if="removeMsg" class="card-msg ok">{{ removeMsg }}</div>
-          <div v-if="removeError" class="card-msg err">{{ removeError }}</div>
-          <div v-if="removeConfirm" class="confirm-box confirm-box-warning">
-            <div class="confirm-text">
-              {{ t("settings.remove.confirm")
-              }}<strong>#{{ session?.channel }}</strong>?
-              {{ t("settings.remove.confirm2") }}
-            </div>
-            <div class="confirm-actions">
-              <button class="confirm-no" @click="removeConfirm = false">
-                {{ t("settings.remove.no") }}
-              </button>
-              <button class="confirm-yes confirm-yes-warning" @click="doRemoveBot">
-                {{ t("settings.remove.yes") }}
-              </button>
-            </div>
-          </div>
-        </div>
-        <div class="card-footer" v-if="!removeMsg">
-          <button class="remove-btn warn-btn" @click="clickRemoveBot" :disabled="removeRemoving">
+      <div class="setting-row">
+        <div class="setting-info">
+          <div class="setting-label">Hidden Tips</div>
+          <div class="setting-desc">
             {{
-              removeRemoving
-                ? t("settings.remove.removing")
-                : t("settings.remove.btn")
+              tipsResetMsg ||
+              "Restore all info tips you've dismissed (e.g. the snippet hint in Logs)."
             }}
-          </button>
-        </div>
-      </div>
-
-      <!-- >>> broadcaster or admin-mode admin -->
-      <div class="card card-danger" v-if="dangerZoneUnlocked">
-        <div class="card-header">
-          <div class="card-icon card-icon-danger">&#9888;</div>
-          <div class="card-title">{{ t("settings.delete.title") }}</div>
-          <div class="card-sub">
-            {{ t("settings.delete.sub") }}<strong>#{{ session?.channel }}</strong>.
           </div>
         </div>
-        <div class="card-body">
-          <div v-if="deleteError" class="card-msg err">{{ deleteError }}</div>
-          <div class="confirm-text">
-            {{ t("settings.delete.type_prompt") }}<strong>DELETE</strong>
-          </div>
-          <input
-            v-model="deleteConfirmInput"
-            class="delete-confirm-input"
-            type="text"
-            placeholder="DELETE"
-            :disabled="deleting"
-          />
-        </div>
-        <div class="card-footer">
-          <button
-            class="remove-btn"
-            :disabled="!deleteConfirmValid || deleting"
-            @click="doDeleteAllData"
-          >
-            {{
-              deleting
-                ? t("settings.delete.deleting")
-                : t("settings.delete.btn")
-            }}
-          </button>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">Hidden Tips</div>
-          <div class="card-sub">
-            Restore all info tips you've dismissed (e.g. the snippet hint in
-            Logs).
-          </div>
-        </div>
-        <div class="card-body">
-          <div v-if="tipsResetMsg" class="card-msg ok">{{ tipsResetMsg }}</div>
-          <div v-else class="section-note">
-            Tips that you've hidden via "Don't show again" will reappear.
-          </div>
-        </div>
-        <div class="card-footer">
-          <button class="toggle-btn" @click="resetAllHiddenInfos">
+        <div class="setting-control">
+          <button class="ep-btn-cancel" @click="resetAllHiddenInfos">
             Show all hidden Infos again
           </button>
         </div>
       </div>
     </div>
+
+    <div class="danger-zone" v-if="canRemoveBotCard || dangerZoneUnlocked">
+      <div class="danger-zone-title">Danger zone</div>
+
+      <template v-if="canRemoveBotCard">
+        <div class="danger-row">
+          <div class="setting-info">
+            <div class="setting-label warn">{{ t("settings.remove.title") }}</div>
+            <div class="setting-desc">{{ t("settings.remove.sub") }}</div>
+          </div>
+          <div class="setting-control">
+            <span v-if="removeMsg" class="setting-msg ok">{{ removeMsg }}</span>
+            <span v-if="removeError" class="setting-msg err">{{ removeError }}</span>
+            <button v-if="!removeMsg" class="remove-btn warn-btn" @click="clickRemoveBot" :disabled="removeRemoving">
+              {{
+                removeRemoving
+                  ? t("settings.remove.removing")
+                  : t("settings.remove.btn")
+              }}
+            </button>
+          </div>
+        </div>
+        <div v-if="removeConfirm" class="confirm-box confirm-box-warning">
+          <div class="confirm-text">
+            {{ t("settings.remove.confirm")
+            }}<strong>#{{ session?.channel }}</strong>?
+            {{ t("settings.remove.confirm2") }}
+          </div>
+          <div class="confirm-actions">
+            <button class="confirm-no" @click="removeConfirm = false">
+              {{ t("settings.remove.no") }}
+            </button>
+            <button class="confirm-yes confirm-yes-warning" @click="doRemoveBot">
+              {{ t("settings.remove.yes") }}
+            </button>
+          </div>
+        </div>
+      </template>
+
+      <div class="danger-row" v-if="dangerZoneUnlocked">
+        <div class="setting-info">
+          <div class="setting-label danger">{{ t("settings.delete.title") }}</div>
+          <div class="setting-desc">
+            {{ t("settings.delete.sub") }}<strong>#{{ session?.channel }}</strong>.
+            {{ t("settings.delete.type_prompt") }}<strong>DELETE</strong>
+          </div>
+        </div>
+        <div class="setting-control delete-control">
+          <input v-model="deleteConfirmInput" class="delete-confirm-input" type="text" placeholder="DELETE"
+            :disabled="deleting" />
+          <button class="remove-btn" :disabled="!deleteConfirmValid || deleting" @click="doDeleteAllData">
+            {{
+              deleting ? t("settings.delete.deleting") : t("settings.delete.btn")
+            }}
+          </button>
+        </div>
+      </div>
+      <div v-if="deleteError" class="field-error">{{ deleteError }}</div>
+    </div>
   </div>
 </template>
 
 <style scoped>
-/* ── Page shell ─────────────────────────────────────────────────────────────── */
 .settings {
   display: flex;
   flex-direction: column;
@@ -676,115 +588,82 @@ async function doDeleteAllData() {
   color: #9d6cff;
 }
 
-/* ── Card grid ──────────────────────────────────────────────────────────────── */
-.cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
-  align-items: stretch;
-  /* cards in the same row grow to equal height */
-}
-
-/* ── Card shell ─────────────────────────────────────────────────────────────── */
-/* Every card is header / body / footer  three zones, same padding, perfectly
-   aligned across the grid because all cards share the same CSS structure.      */
-.card {
-  background: #1a1a1e;
-  border: 1px solid #1e1e24;
+.settings-list {
   display: flex;
   flex-direction: column;
-  transition: border-color 0.15s;
-  overflow: hidden;
 }
 
-.card:hover {
-  border-color: #2a2a36;
-}
-
-.card-wide {
-  grid-column: span 2;
-}
-
-.card-danger {
-  border-color: #f1494922;
-  background: #1a1014;
-}
-
-.card-danger:hover {
-  border-color: #f1494944;
-}
-
-.card-warning {
-  border-color: #f59e0b22;
-  background: #1a1610;
-}
-
-.card-warning:hover {
-  border-color: #f59e0b44;
-}
-
-/* ── Zone 1: header ─────────────────────────────────────────────────────────── */
-.card-header {
-  padding: 20px 20px 16px;
+.setting-row,
+.setting-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 4px;
   border-bottom: 1px solid #1e1e24;
+  flex-wrap: wrap;
+}
+
+.setting-block {
+  align-items: flex-start;
+  flex-direction: column;
+}
+
+.setting-info {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
+  min-width: 220px;
 }
 
-.card-icon {
-  font-size: 18px;
-  color: #9d6cff;
-  line-height: 1;
-  margin-bottom: 4px;
+.setting-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #ccc;
 }
 
-.card-icon-7tv {
-  color: #9d6cff;
-}
-
-.card-icon-danger {
-  color: #f14949;
-}
-
-.card-icon-warning {
+.setting-label.warn {
   color: #f59e0b;
 }
 
-.card-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: #e0e0e0;
+.setting-label.danger {
+  color: #f14949;
 }
 
-.card-sub {
+.setting-desc {
   font-size: 11px;
   color: #555;
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
-/* ── Zone 2: body ───────────────────────────────────────────────────────────── */
-.card-body {
-  padding: 16px 20px;
+.setting-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.setting-body {
+  width: 100%;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  flex: 1;
-  /* grows so all cards in a row reach the same total height */
+  gap: 10px;
+  margin-top: 4px;
 }
 
-/* ── Zone 3: footer ─────────────────────────────────────────────────────────── */
-.card-footer {
-  padding: 12px 20px;
-  border-top: 1px solid #1e1e24;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  min-height: 56px;
-  /* fixed height keeps footers on the same baseline */
+.setting-msg {
+  font-size: 11px;
+  color: #23d18b;
 }
 
-/* ── Shared micro-components ────────────────────────────────────────────────── */
+.setting-msg.ok {
+  color: #23d18b;
+}
+
+.setting-msg.err {
+  color: #f14949;
+}
+
 .code {
   font-family: "Consolas", "Fira Mono", monospace;
   color: #9d6cff;
@@ -793,108 +672,22 @@ async function doDeleteAllData() {
   padding: 1px 5px;
 }
 
-/* Status row used by toggle cards */
-.toggle-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #2a2a30;
-  flex-shrink: 0;
-  transition: background 0.25s;
-}
-
-.status-dot.active {
-  background: #23d18b;
-}
-
-.status-text {
-  font-size: 12px;
-  color: #777;
-}
-
-.spacer {
-  flex: 1;
-}
-
-.status-badge {
-  font-size: 9px;
-  font-weight: 700;
-  padding: 2px 8px;
-  letter-spacing: 0.06em;
-  white-space: nowrap;
-}
-
-.badge-on {
-  color: #23d18b;
-  background: rgba(35, 209, 139, 0.1);
-  border: 1px solid rgba(35, 209, 139, 0.28);
-}
-
-.badge-off {
-  color: #555;
-  background: rgba(85, 85, 85, 0.1);
-  border: 1px solid rgba(85, 85, 85, 0.25);
-}
-
-.section-note {
-  font-size: 11px;
-  color: #555;
-  line-height: 1.5;
-  background: rgba(229, 192, 123, 0.04);
-  border-left: 2px solid #e5c07b2a;
-  padding: 5px 8px;
-}
-
-.card-loading {
-  font-size: 12px;
-  color: #555;
-}
-
-.card-msg {
-  font-size: 11px;
-  padding: 5px 10px;
-  line-height: 1.4;
-}
-
-.card-msg.ok {
-  color: #23d18b;
-  background: rgba(35, 209, 139, 0.06);
-  border-left: 2px solid #23d18b;
-}
-
-.card-msg.err {
-  color: #f14949;
-  background: rgba(241, 73, 73, 0.06);
-  border-left: 2px solid #f14949;
-}
-
 .field-error {
   font-size: 11px;
   color: #f14949;
+  padding: 0 4px 10px;
 }
 
-/* ── Prefix card ────────────────────────────────────────────────────────────── */
-.prefix-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
+/* Prefix */
 .prefix-input {
-  width: 54px;
+  width: 46px;
   background: #0d0d10;
   border: 1px solid #2a2a30;
   color: #e0e0e0;
   font-family: "Consolas", "Fira Mono", monospace;
-  font-size: 22px;
+  font-size: 16px;
   font-weight: 700;
-  padding: 6px 10px;
+  padding: 5px 8px;
   outline: none;
   text-align: center;
 }
@@ -905,7 +698,7 @@ async function doDeleteAllData() {
 
 .prefix-preview {
   font-family: "Consolas", "Fira Mono", monospace;
-  font-size: 14px;
+  font-size: 12px;
   color: #888;
 }
 
@@ -914,10 +707,9 @@ async function doDeleteAllData() {
   font-weight: 700;
 }
 
-/* ── Buttons  same height everywhere ──────────────────────────────────────── */
 .save-btn {
-  height: 34px;
-  padding: 0 20px;
+  height: 30px;
+  padding: 0 16px;
   border: none;
   background: #6f2bff;
   color: #fff;
@@ -937,41 +729,9 @@ async function doDeleteAllData() {
   cursor: not-allowed;
 }
 
-.toggle-btn {
-  height: 34px;
-  padding: 0 18px;
-  border: 1px solid #2a2a30;
-  background: transparent;
-  color: #888;
-  font-family: inherit;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.toggle-btn:hover:not(:disabled) {
-  border-color: #9d6cff55;
-  color: #9d6cff;
-}
-
-.toggle-btn.toggle-btn-on {
-  border-color: #23d18b44;
-  color: #23d18b;
-  background: rgba(35, 209, 139, 0.06);
-}
-
-.toggle-btn.toggle-btn-on:hover:not(:disabled) {
-  background: rgba(35, 209, 139, 0.14);
-}
-
-.toggle-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
 .remove-btn {
-  height: 34px;
-  padding: 0 20px;
+  height: 30px;
+  padding: 0 16px;
   border: 1px solid #f1494966;
   background: transparent;
   color: #f14949;
@@ -1004,16 +764,18 @@ async function doDeleteAllData() {
   border-color: #f59e0b;
 }
 
+.delete-control {
+  flex-wrap: wrap;
+}
+
 .delete-confirm-input {
-  width: 100%;
-  max-width: 220px;
-  margin-top: 8px;
+  width: 120px;
   background: #0d0d10;
   border: 1px solid #f1494944;
   color: #e0e0e0;
   font-family: "Consolas", "Fira Mono", monospace;
-  font-size: 14px;
-  padding: 8px 10px;
+  font-size: 12px;
+  padding: 6px 8px;
   outline: none;
   box-sizing: border-box;
 }
@@ -1022,7 +784,12 @@ async function doDeleteAllData() {
   border-color: #f14949;
 }
 
-/* ── 7TV card internals ─────────────────────────────────────────────────────── */
+/* 7TV block internals */
+.block-loading {
+  font-size: 12px;
+  color: #555;
+}
+
 .emote-current {
   display: flex;
   align-items: center;
@@ -1072,7 +839,7 @@ async function doDeleteAllData() {
 }
 
 .field-sm {
-  height: 32px;
+  height: 30px;
   flex: 1;
   min-width: 100px;
   background: #0d0d10;
@@ -1093,7 +860,7 @@ async function doDeleteAllData() {
 }
 
 .fetch-btn {
-  height: 32px;
+  height: 30px;
   padding: 0 14px;
   border: 1px solid #6f2bff44;
   background: transparent;
@@ -1115,7 +882,7 @@ async function doDeleteAllData() {
 }
 
 .danger-sm {
-  height: 28px;
+  height: 26px;
   padding: 0 10px;
   border: 1px solid #f1494944;
   background: transparent;
@@ -1135,7 +902,35 @@ async function doDeleteAllData() {
   cursor: not-allowed;
 }
 
-/* ── Confirm dialog ─────────────────────────────────────────────────────────── */
+/* Danger zone */
+.danger-zone {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #f1494930;
+  background: #180f12;
+  padding: 4px 16px;
+}
+
+.danger-zone-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #f14949;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 10px 0;
+}
+
+.danger-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 0;
+  border-top: 1px solid #f1494920;
+  flex-wrap: wrap;
+}
+
+/* Confirm dialog */
 .confirm-box {
   background: rgba(241, 73, 73, 0.04);
   border: 1px solid #f1494930;
@@ -1143,6 +938,7 @@ async function doDeleteAllData() {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin-bottom: 12px;
 }
 
 .confirm-text {
@@ -1205,16 +1001,17 @@ async function doDeleteAllData() {
   background: #ffb02e;
 }
 
-/* ── Responsive ─────────────────────────────────────────────────────────────── */
-@media (max-width: 860px) {
-  .card-wide {
-    grid-column: span 1;
-  }
-}
+@media (max-width: 600px) {
 
-@media (max-width: 520px) {
-  .cards-grid {
-    grid-template-columns: 1fr;
+  .setting-row,
+  .setting-block,
+  .danger-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .setting-control {
+    width: 100%;
   }
 }
 </style>

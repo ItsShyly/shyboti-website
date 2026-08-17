@@ -156,55 +156,25 @@ async function addEntry() {
 
 <template>
   <div class="tools-view">
-    <div class="service-card" @click="router.push('/obs-widgets')">
-      <div class="card-icon obs-icon">
-        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="4" y="6" width="40" height="28" rx="4" stroke="currentColor" stroke-width="2.5" />
-          <path d="M16 34v6M32 34v6M12 40h24" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-          <circle cx="36" cy="14" r="4" fill="#f14949" opacity="0.9" />
-          <path d="M10 18h16M10 24h10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity="0.6" />
-        </svg>
+    <div class="tool-row" @click="router.push('/obs-widgets')">
+      <div class="tool-main">
+        <span class="tool-name">{{ t("feat.obs.title") }}</span>
+        <span class="tool-sub">{{ t("feat.obs.sub") }}</span>
       </div>
-      <div class="card-body">
-        <div class="card-title">{{ t("feat.obs.title") }}</div>
-        <div class="card-sub">{{ t("feat.obs.sub") }}</div>
-        <div class="card-url">
-          obs.shyboti.de/<span class="url-id obs-url-id">id</span>
-        </div>
+      <span class="tool-url">obs.shyboti.de/<span class="url-id">id</span></span>
+    </div>
+
+    <div class="tool-row" @click="openVars">
+      <div class="tool-main">
+        <span class="tool-name">{{ t("feat.vars.title") }}</span>
+        <span class="tool-sub">{{ t("feat.vars.sub") }}</span>
       </div>
     </div>
 
-    <div class="service-card" @click="openVars">
-      <div class="card-icon vars-icon">
-        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="4" y="8" width="18" height="10" rx="2" stroke="currentColor" stroke-width="2.5" />
-          <rect x="4" y="26" width="18" height="10" rx="2" stroke="currentColor" stroke-width="2.5" />
-          <path d="M26 13h18M26 31h12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-          <path d="M40 27l4 4-4 4" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
-            stroke-linejoin="round" />
-        </svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">{{ t("feat.vars.title") }}</div>
-        <div class="card-sub">{{ t("feat.vars.sub") }}</div>
-      </div>
-    </div>
-
-    <div v-if="!hideAdminRestricted" class="service-card"
-      @click="session && router.push('/obs-control')">
-      <div class="card-icon obsconn-icon">
-        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="4" y="10" width="40" height="26" rx="3" stroke="currentColor" stroke-width="2.5" />
-          <circle cx="24" cy="23" r="7" stroke="currentColor" stroke-width="2.5" />
-          <path d="M14 40h20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" />
-          <circle cx="38" cy="10" r="7" fill="#9d6cff" opacity="0.9" />
-          <path d="M35 10h6M38 7v6" stroke="#141418" stroke-width="1.8" stroke-linecap="round"
-            stroke-linejoin="round" />
-        </svg>
-      </div>
-      <div class="card-body">
-        <div class="card-title">OBS Control</div>
-        <div class="card-sub">Switch scenes and control sources from chat</div>
+    <div v-if="!hideAdminRestricted" class="tool-row" @click="session && router.push('/obs-control')">
+      <div class="tool-main">
+        <span class="tool-name">OBS Control</span>
+        <span class="tool-sub">Switch scenes and control sources from chat</span>
       </div>
     </div>
   </div>
@@ -469,127 +439,59 @@ async function addEntry() {
 <style scoped>
 .tools-view {
   display: flex;
-  flex-wrap: wrap;
-  gap: 20px;
-  align-content: flex-start;
+  flex-direction: column;
+  max-width: 560px;
 }
 
-.service-card {
-  position: relative;
+.tool-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 12px 14px;
   background: #1a1a1e;
   border: 1px solid #2a2a30;
-  width: 280px;
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  border-bottom: none;
   cursor: pointer;
-  transition:
-    border-color 0.2s,
-    transform 0.15s;
-  overflow: hidden;
+  transition: background 0.1s;
 }
 
-.service-card:hover {
-  border-color: #3a3a44;
-  transform: translateY(-2px);
-}
-
-.service-card:active {
-  transform: translateY(0);
-}
-
-.card-icon {
-  height: 140px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #111217;
+.tool-row:last-child {
   border-bottom: 1px solid #2a2a30;
 }
 
-.card-icon svg {
-  width: 72px;
-  height: 72px;
+.tool-row:hover {
+  background: #1e1e22;
 }
 
-.obs-icon {
-  color: #f14949;
-}
-
-.vars-icon {
-  color: #e5c07b;
-}
-
-.obsconn-icon {
-  color: #9d6cff;
-}
-
-.obsconn-locked-hint {
-  font-size: 10px;
-  color: #444;
-  padding: 0 18px 14px;
-}
-
-.card-body {
-  padding: 16px 18px 10px;
+.tool-main {
   display: flex;
-  flex-direction: column;
-  gap: 5px;
+  align-items: baseline;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
 }
 
-.card-title {
-  font-size: 18px;
+.tool-name {
+  font-size: 13px;
   font-weight: 700;
   color: #e0e0e0;
+  flex-shrink: 0;
 }
 
-.card-sub {
-  font-size: 12px;
+.tool-sub {
+  font-size: 11px;
   color: #555;
 }
 
-.card-url {
+.tool-url {
   font-family: "Consolas", "Fira Mono", monospace;
   font-size: 11px;
   color: #444;
-  margin-top: 4px;
+  flex-shrink: 0;
 }
 
-.obs-url-id {
-  color: #f14949;
-}
-
-.obs-btn {
-  border-color: #f1494944;
-  color: #f14949;
-  background: rgba(241, 73, 73, 0.06);
-}
-
-.obs-btn:hover {
-  background: rgba(241, 73, 73, 0.16);
-  border-color: #f1494988;
-}
-
-.vars-btn {
-  border-color: #e5c07b44;
-  color: #e5c07b;
-  background: rgba(229, 192, 123, 0.06);
-}
-
-.vars-btn:hover {
-  background: rgba(229, 192, 123, 0.16);
-  border-color: #e5c07b88;
-}
-
-.obsconn-btn {
-  border-color: #9d6cff44;
+.url-id {
   color: #9d6cff;
-  background: rgba(157, 108, 255, 0.06);
-}
-
-.obsconn-btn:hover {
-  background: rgba(157, 108, 255, 0.16);
-  border-color: #9d6cff88;
 }
 
 .vars-backdrop {
@@ -841,12 +743,10 @@ async function addEntry() {
 }
 
 @media (max-width: 680px) {
-  .tools-view {
-    gap: 14px;
-  }
-
-  .service-card {
-    width: 100%;
+  .tool-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
   }
 }
 </style>
