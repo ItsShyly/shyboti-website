@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session, channelRole, adminMode, logout, switchChannel } = useAuth();
 const { t } = useI18n();
@@ -514,7 +515,7 @@ async function doDeleteAllData() {
               {{ emoteSetError }}
             </div>
             <div v-if="emoteSetSuccess" class="status-msg ok">
-              ✓ {{ emoteSetSuccess }}
+              <span class="status-icon" v-html="iconSvgFor('check')"></span>{{ emoteSetSuccess }}
             </div>
           </template>
         </div>
@@ -608,70 +609,65 @@ async function doDeleteAllData() {
 
 <style scoped>
 .settings {
-  max-width: 840px;
-  margin: 0 auto;
-  padding: 32px 20px;
   display: flex;
   flex-direction: column;
-  gap: 32px;
-  color: #ddd;
-  font-size: 14px;
+  gap: 24px;
 }
 
 .settings-header {
-  border-bottom: 1px solid #27272f;
+  border-bottom: 1px solid #222;
   padding-bottom: 16px;
 }
 
 .settings-title {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 700;
   margin: 0;
-  color: #e5e5e5;
+  color: #e0e0e0;
 }
 
 .settings-sub {
-  color: #777;
-  margin: 8px 0 0;
-  font-size: 13px;
+  color: #555;
+  margin: 4px 0 0;
+  font-size: 12px;
 }
 
 .chan {
-  color: #a78bfa;
+  color: #9d6cff;
 }
 
 .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .section-title {
-  font-size: 13px;
+  font-size: 11px;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #666;
-  margin: 0 0 4px;
+  letter-spacing: 0.06em;
+  color: #555;
+  margin: 0;
 }
 
 .section-title.danger-title {
-  color: #ef4444;
+  color: #f14949;
 }
 
 .setting-list {
   display: flex;
   flex-direction: column;
-  border: 1px solid #25252c;
-  border-radius: 4px;
-  background: #15151a;
+  border: 1px solid #2a2a30;
+  background: #1a1a1e;
 }
 
 .setting-row {
   display: flex;
   align-items: flex-start;
   gap: 24px;
-  padding: 16px 18px;
-  border-bottom: 1px solid #1f1f25;
+  padding: 12px 14px;
+  border-bottom: 1px solid #1e1e1e;
 }
 
 .setting-row:last-child {
@@ -684,29 +680,29 @@ async function doDeleteAllData() {
 }
 
 .setting-label {
-  font-weight: 600;
-  color: #e5e5e5;
-  margin-bottom: 4px;
+  font-weight: 700;
+  font-size: 13px;
+  color: #ccc;
+  margin-bottom: 3px;
 }
 
 .setting-desc {
-  color: #888;
-  font-size: 12.5px;
+  color: #555;
+  font-size: 11px;
   line-height: 1.5;
-  margin-bottom: 6px;
+  margin-bottom: 5px;
 }
 
 .setting-desc-detects {
-  color: #666;
-  font-size: 11.5px;
+  color: #444;
+  font-size: 10px;
 }
 
 .code {
   font-family: "Consolas", "Fira Mono", monospace;
-  color: #a78bfa;
-  background: rgba(167, 139, 250, 0.1);
-  padding: 1px 4px;
-  border-radius: 2px;
+  color: #9d6cff;
+  background: rgba(111, 43, 255, 0.1);
+  padding: 1px 5px;
 }
 
 .setting-control {
@@ -717,47 +713,47 @@ async function doDeleteAllData() {
 }
 
 .prefix-control {
-  gap: 12px;
+  gap: 10px;
   align-items: center;
 }
 
 .prefix-input {
-  width: 56px;
-  height: 36px;
-  background: #111115;
-  border: 1px solid #33333b;
-  color: #e5e5e5;
+  width: 46px;
+  height: 34px;
+  background: #111217;
+  border: 1px solid #2a2a30;
+  color: #e0e0e0;
   text-align: center;
-  font-size: 18px;
-  font-weight: 600;
+  font-family: "Consolas", "Fira Mono", monospace;
+  font-size: 16px;
+  font-weight: 700;
   outline: none;
-  border-radius: 3px;
 }
 
 .prefix-input:focus {
-  border-color: #a78bfa;
+  border-color: #6f2bff88;
 }
 
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 36px;
+  height: 34px;
   padding: 0 16px;
-  border: 1px solid #3a3a44;
+  border: 1px solid #2a2a30;
   background: transparent;
-  color: #ccc;
-  font-size: 12.5px;
-  font-weight: 500;
+  color: #888;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
   cursor: pointer;
-  border-radius: 3px;
   transition: all 0.15s;
   white-space: nowrap;
 }
 
 .btn:hover:not(:disabled) {
   border-color: #555;
-  color: #fff;
+  color: #e0e0e0;
 }
 
 .btn:disabled {
@@ -766,80 +762,80 @@ async function doDeleteAllData() {
 }
 
 .btn-primary {
-  background: #7c3aed;
-  border-color: #7c3aed;
+  background: #6f2bff;
+  border-color: #6f2bff;
   color: #fff;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: #8b5cf6;
-  border-color: #8b5cf6;
+  background: #7f3fff;
+  border-color: #7f3fff;
 }
 
 .btn-toggle {
-  min-width: 70px;
+  min-width: 66px;
 }
 
 .btn-toggle.active {
-  background: rgba(16, 185, 129, 0.12);
-  border-color: rgba(16, 185, 129, 0.45);
-  color: #10b981;
+  background: rgba(35, 209, 139, 0.1);
+  border-color: rgba(35, 209, 139, 0.4);
+  color: #23d18b;
 }
 
 .btn-secondary {
-  border-color: #3a3a44;
+  border-color: #2a2a30;
 }
 
 .btn-remove {
-  border-color: rgba(239, 68, 68, 0.4);
-  color: #ef4444;
-  height: 32px;
-  padding: 0 12px;
-  font-size: 11.5px;
+  border-color: rgba(241, 73, 73, 0.4);
+  color: #f14949;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 10px;
   margin-left: auto;
 }
 
 .btn-remove:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: #ef4444;
+  background: rgba(241, 73, 73, 0.1);
+  border-color: #f14949;
 }
 
 .btn-fetch {
-  border-color: rgba(124, 58, 237, 0.4);
-  color: #a78bfa;
-  height: 32px;
-  padding: 0 14px;
-  font-size: 11.5px;
+  border-color: rgba(111, 43, 255, 0.4);
+  color: #9d6cff;
+  height: 28px;
+  padding: 0 12px;
+  font-size: 10px;
 }
 
 .btn-fetch:hover:not(:disabled) {
-  background: rgba(124, 58, 237, 0.1);
-  border-color: #a78bfa;
+  background: rgba(111, 43, 255, 0.1);
+  border-color: #9d6cff;
 }
 
 .btn-danger-warn {
-  border-color: rgba(245, 158, 11, 0.55);
-  color: #f59e0b;
+  border-color: rgba(229, 192, 123, 0.5);
+  color: #e5c07b;
 }
 
 .btn-danger-warn:hover:not(:disabled) {
-  background: rgba(245, 158, 11, 0.1);
-  border-color: #f59e0b;
+  background: rgba(229, 192, 123, 0.1);
+  border-color: #e5c07b;
 }
 
 .btn-danger-delete {
-  border-color: rgba(239, 68, 68, 0.55);
-  color: #ef4444;
+  border-color: rgba(241, 73, 73, 0.55);
+  color: #f14949;
 }
 
 .btn-danger-delete:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.1);
-  border-color: #ef4444;
+  background: rgba(241, 73, 73, 0.1);
+  border-color: #f14949;
 }
 
 .btn-confirm-no {
-  border-color: #3a3a44;
-  color: #aaa;
+  border-color: #2a2a30;
+  color: #888;
 }
 
 .btn-confirm-no:hover:not(:disabled) {
@@ -847,72 +843,87 @@ async function doDeleteAllData() {
 }
 
 .btn-confirm-yes {
-  border-color: #ef4444;
-  background: #ef4444;
+  border-color: #f14949;
+  background: #f14949;
   color: #fff;
 }
 
 .btn-confirm-yes:hover:not(:disabled) {
-  background: #f87171;
+  background: #ff5a5a;
 }
 
 .field-error {
-  color: #ef4444;
-  font-size: 12px;
+  color: #f14949;
+  font-size: 11px;
   margin-top: 4px;
 }
 
 .status-msg {
-  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
   margin-top: 6px;
   padding: 4px 8px;
 }
 
+.status-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 11px;
+  height: 11px;
+}
+
+.status-icon :deep(svg) {
+  width: 100%;
+  height: 100%;
+}
+
 .status-msg.ok {
-  color: #10b981;
-  background: rgba(16, 185, 129, 0.06);
-  border-left: 2px solid #10b981;
+  color: #23d18b;
+  background: rgba(35, 209, 139, 0.06);
+  border-left: 2px solid #23d18b;
 }
 
 .status-msg.err {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.06);
-  border-left: 2px solid #ef4444;
+  color: #f14949;
+  background: rgba(241, 73, 73, 0.06);
+  border-left: 2px solid #f14949;
 }
 
 .integration-panel {
-  border: 1px solid #25252c;
-  background: #15151a;
-  border-radius: 4px;
+  border: 1px solid #2a2a30;
+  background: #1a1a1e;
 }
 
 .integration-header {
-  padding: 16px 18px;
-  border-bottom: 1px solid #1f1f25;
+  padding: 12px 14px;
+  border-bottom: 1px solid #1e1e1e;
 }
 
 .integration-title {
-  font-weight: 600;
-  color: #e5e5e5;
+  font-weight: 700;
+  font-size: 13px;
+  color: #ccc;
 }
 
 .integration-desc {
-  color: #888;
-  font-size: 12.5px;
-  margin-top: 4px;
+  color: #555;
+  font-size: 11px;
+  margin-top: 3px;
 }
 
 .integration-body {
-  padding: 16px 18px;
+  padding: 14px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .loading,
 .emote-none {
-  color: #777;
-  font-size: 13px;
+  color: #555;
+  font-size: 12px;
 }
 
 .emote-current {
@@ -920,20 +931,20 @@ async function doDeleteAllData() {
   flex-wrap: wrap;
   align-items: center;
   gap: 10px;
-  background: #111115;
-  border: 1px solid #2a2a32;
-  padding: 10px 12px;
-  border-radius: 3px;
+  background: #111217;
+  border: 1px solid #1e1e24;
+  padding: 8px 12px;
 }
 
 .emote-name {
-  font-weight: 600;
-  color: #e5e5e5;
+  font-weight: 700;
+  color: #e0e0e0;
+  font-size: 12px;
 }
 
 .emote-meta {
-  color: #888;
-  font-size: 12px;
+  color: #555;
+  font-size: 11px;
 }
 
 .emote-form-row {
@@ -944,25 +955,25 @@ async function doDeleteAllData() {
 }
 
 .emote-lbl {
-  color: #777;
-  font-size: 12px;
+  color: #555;
+  font-size: 11px;
 }
 
 .field-sm {
-  height: 32px;
+  height: 30px;
   min-width: 160px;
   flex: 1;
-  background: #111115;
-  border: 1px solid #33333b;
-  color: #e5e5e5;
+  background: #111217;
+  border: 1px solid #2a2a30;
+  color: #e0e0e0;
+  font-family: inherit;
   padding: 0 10px;
-  font-size: 13px;
+  font-size: 12px;
   outline: none;
-  border-radius: 3px;
 }
 
 .field-sm:focus {
-  border-color: #a78bfa;
+  border-color: #6f2bff88;
 }
 
 .field-sm:disabled {
@@ -972,26 +983,25 @@ async function doDeleteAllData() {
 .danger-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .danger-row {
   display: flex;
   align-items: flex-start;
   gap: 24px;
-  padding: 18px;
-  border: 1px solid #2a2a32;
-  border-left: 3px solid;
-  border-radius: 4px;
-  background: #15151a;
+  padding: 14px;
+  border: 1px solid;
 }
 
 .danger-row.warning {
-  border-left-color: #f59e0b;
+  border-color: rgba(229, 192, 123, 0.2);
+  background: #1a1610;
 }
 
 .danger-row.delete {
-  border-left-color: #ef4444;
+  border-color: rgba(241, 73, 73, 0.2);
+  background: #1a1014;
 }
 
 .danger-info {
@@ -999,14 +1009,15 @@ async function doDeleteAllData() {
 }
 
 .danger-label {
-  font-weight: 600;
-  color: #e5e5e5;
+  font-weight: 700;
+  font-size: 13px;
+  color: #ccc;
 }
 
 .danger-desc {
-  color: #888;
-  font-size: 12.5px;
-  margin-top: 4px;
+  color: #555;
+  font-size: 11px;
+  margin-top: 3px;
 }
 
 .danger-control {
@@ -1016,45 +1027,47 @@ async function doDeleteAllData() {
 }
 
 .confirm-inline {
-  margin-top: 12px;
+  margin-top: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 12.5px;
-  color: #bbb;
+  font-size: 11px;
+  color: #888;
 }
 
 .confirm-inline strong {
-  color: #f59e0b;
+  color: #e5c07b;
 }
 
 .delete-confirm {
-  margin-top: 12px;
+  margin-top: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+  font-size: 11px;
+  color: #888;
 }
 
 .delete-confirm strong {
-  color: #ef4444;
+  color: #f14949;
 }
 
 .delete-input {
-  height: 36px;
-  width: 140px;
-  background: #111115;
-  border: 1px solid rgba(239, 68, 68, 0.55);
-  color: #e5e5e5;
+  height: 34px;
+  width: 120px;
+  background: #111217;
+  border: 1px solid rgba(241, 73, 73, 0.5);
+  color: #e0e0e0;
+  font-family: "Consolas", "Fira Mono", monospace;
   padding: 0 10px;
-  font-size: 13px;
+  font-size: 12px;
   outline: none;
-  border-radius: 3px;
 }
 
 .delete-input:focus {
-  border-color: #ef4444;
+  border-color: #f14949;
 }
 
 @media (max-width: 640px) {
@@ -1062,7 +1075,7 @@ async function doDeleteAllData() {
   .setting-row,
   .danger-row {
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
 
   .setting-control,
