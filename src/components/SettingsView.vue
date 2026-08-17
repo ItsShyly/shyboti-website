@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import { API } from "../api";
 import { useAuth } from "../auth";
@@ -335,6 +335,60 @@ async function doDeleteAllData() {
   }
   deleting.value = false;
 }
+
+// vvv scrollspy nav vvv
+const sections = computed(() => {
+  const list: { id: string; label: string }[] = [];
+  if (isBroadcaster.value) list.push({ id: "chat", label: "Chat behavior" });
+  list.push({ id: "privacy", label: "Privacy" });
+  if (isBroadcaster.value)
+    list.push({ id: "integrations", label: "Integrations" });
+  list.push({ id: "interface", label: "Interface" });
+  if (canRemoveBotCard.value || dangerZoneUnlocked.value)
+    list.push({ id: "danger", label: "Danger zone" });
+  return list;
+});
+
+const activeSection = ref("");
+const bodyRef = ref<HTMLElement | null>(null);
+const sectionEls: Record<string, HTMLElement> = {};
+function setSectionRef(id: string) {
+  return (el: any) => {
+    if (el) sectionEls[id] = el as HTMLElement;
+    else delete sectionEls[id];
+  };
+}
+
+// >>> root:null tracks the page's real scroll container
+let observer: IntersectionObserver | null = null;
+function setupObserver() {
+  observer?.disconnect();
+  observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const id = (entry.target as HTMLElement).dataset.sectionId;
+          if (id) activeSection.value = id;
+        }
+      }
+    },
+    { root: null, rootMargin: "0px 0px -70% 0px", threshold: 0 },
+  );
+  for (const sec of sections.value) {
+    const el = sectionEls[sec.id];
+    if (el) observer.observe(el);
+  }
+  if (!activeSection.value && sections.value.length)
+    activeSection.value = sections.value[0]!.id;
+}
+
+onMounted(() => nextTick(setupObserver));
+watch(sections, () => nextTick(setupObserver));
+
+function scrollToSection(id: string) {
+  sectionEls[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+// ^^^ scrollspy nav ^^^
 </script>
 
 <template>
@@ -346,264 +400,281 @@ async function doDeleteAllData() {
       </p>
     </header>
 
-    <!-- Chat behavior (broadcaster only) -->
-    <section v-if="isBroadcaster" class="settings-section">
-      <h2 class="section-title">Chat behavior</h2>
-      <div class="setting-list">
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-label">Command prefix</div>
-            <div class="setting-desc">
-              Used before commands, e.g. <code class="code">{{ prefix || "+" }}</code>ping.
+    <div class="settings-layout">
+      <div class="settings-body" ref="bodyRef">
+        <!-- Chat behavior (broadcaster only) -->
+        <section v-if="isBroadcaster" class="settings-section" data-section-id="chat" :ref="setSectionRef('chat')">
+          <h2 class="section-title">Chat behavior</h2>
+          <div class="setting-list">
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-label">Command prefix</div>
+                <div class="setting-desc">
+                  Used before commands, e.g. <code class="code">{{ prefix || "+" }}</code>ping.
+                </div>
+                <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
+              </div>
+              <div class="setting-control prefix-control">
+                <input v-model="prefix" class="prefix-input" maxlength="3" placeholder="+" @keydown.enter="savePrefix"
+                  spellcheck="false" />
+                <button class="btn btn-primary" @click="savePrefix" :disabled="prefixSaving || !prefix">
+                  {{
+                    prefixSaving
+                      ? t("settings.saving")
+                      : prefixSaved
+                        ? t("settings.saved")
+                        : t("settings.prefix.save")
+                  }}
+                </button>
+              </div>
             </div>
-            <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
-          </div>
-          <div class="setting-control prefix-control">
-            <input v-model="prefix" class="prefix-input" maxlength="3" placeholder="+" @keydown.enter="savePrefix"
-              spellcheck="false" />
-            <button class="btn btn-primary" @click="savePrefix" :disabled="prefixSaving || !prefix">
-              {{
-                prefixSaving
-                  ? t("settings.saving")
-                  : prefixSaved
-                    ? t("settings.saved")
-                    : t("settings.prefix.save")
-              }}
-            </button>
-          </div>
-        </div>
 
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-label">Hide vanish timeouts</div>
-            <div class="setting-desc">
-              Hides short timeouts from the dashboard when the user typed a
-              vanish command.
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-label">Hide vanish timeouts</div>
+                <div class="setting-desc">
+                  Hides short timeouts from the dashboard when the user typed a
+                  vanish command.
+                </div>
+                <div class="setting-desc-detects">
+                  Detects <code class="code">!v</code>
+                  <code class="code">!vanish</code>
+                  <code class="code">+v</code>
+                  <code class="code">+vanish</code>
+                </div>
+                <div v-if="vanishMsg" class="status-msg ok">{{ vanishMsg }}</div>
+              </div>
+              <div class="setting-control">
+                <button class="btn btn-toggle" :class="{ active: vanishHide }" @click="
+                  vanishHide = !vanishHide;
+                saveVanish();
+                " :disabled="vanishSaving">
+                  {{ vanishSaving ? "..." : vanishHide ? "Disable" : "Enable" }}
+                </button>
+              </div>
             </div>
-            <div class="setting-desc-detects">
-              Detects <code class="code">!v</code>
-              <code class="code">!vanish</code>
-              <code class="code">+v</code>
-              <code class="code">+vanish</code>
+          </div>
+        </section>
+
+        <!-- Privacy -->
+        <section class="settings-section" data-section-id="privacy" :ref="setSectionRef('privacy')">
+          <h2 class="section-title">Privacy</h2>
+          <div class="setting-list">
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-label">Chat log visibility</div>
+                <div class="setting-desc">{{ t("settings.optout.sub") }}</div>
+                <div v-if="optMsg" class="status-msg ok">{{ optMsg }}</div>
+              </div>
+              <div class="setting-control">
+                <button class="btn btn-toggle" :class="{ active: optedOut }" @click="toggleOptOut"
+                  :disabled="optSaving">
+                  {{
+                    optSaving
+                      ? "..."
+                      : optedOut
+                        ? t("settings.optout.btn.in")
+                        : t("settings.optout.btn.out")
+                  }}
+                </button>
+              </div>
             </div>
-            <div v-if="vanishMsg" class="status-msg ok">{{ vanishMsg }}</div>
+
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-label">Previous usernames</div>
+                <div class="setting-desc">
+                  Hide your previous Twitch usernames from being shown on other
+                  users' screens.
+                </div>
+                <div v-if="nameHistMsg" class="status-msg ok">{{ nameHistMsg }}</div>
+              </div>
+              <div class="setting-control">
+                <button class="btn btn-toggle" :class="{ active: nameHistOptedOut }" @click="toggleNameHistOptOut"
+                  :disabled="nameHistSaving">
+                  {{
+                    nameHistSaving
+                      ? "..."
+                      : nameHistOptedOut
+                        ? "Show Names"
+                        : "Hide Names"
+                  }}
+                </button>
+              </div>
+            </div>
           </div>
-          <div class="setting-control">
-            <button class="btn btn-toggle" :class="{ active: vanishHide }" @click="
-              vanishHide = !vanishHide;
-            saveVanish();
-            " :disabled="vanishSaving">
-              {{ vanishSaving ? "..." : vanishHide ? "Disable" : "Enable" }}
-            </button>
+        </section>
+
+        <!-- Integrations (broadcaster only) -->
+        <section v-if="isBroadcaster" class="settings-section" data-section-id="integrations"
+          :ref="setSectionRef('integrations')">
+          <h2 class="section-title">Integrations</h2>
+          <div class="integration-panel">
+            <div class="integration-header">
+              <div class="integration-title">7TV Emote Set</div>
+              <div class="integration-desc">{{ t("settings.7tv.sub") }}</div>
+            </div>
+            <div class="integration-body">
+              <div v-if="emoteSetLoading" class="loading">Loading...</div>
+              <template v-else>
+                <div v-if="emoteSet.setId" class="emote-current">
+                  <span class="emote-name">
+                    {{ emoteSet.setName ?? emoteSet.setId }}
+                  </span>
+                  <span class="emote-meta">
+                    {{ emoteSet.setId }} · {{ emoteSet.emoteCount }}
+                    {{ t("settings.7tv.emotes") }}
+                  </span>
+                  <button class="btn btn-remove" @click="remove7tvSet" :disabled="emoteSetSaving">
+                    {{
+                      emoteSetSaving
+                        ? t("settings.7tv.removing")
+                        : t("settings.7tv.remove")
+                    }}
+                  </button>
+                </div>
+                <div v-else class="emote-none">
+                  {{ t("settings.7tv.none") }}
+                </div>
+
+                <div class="emote-form-row">
+                  <button class="btn btn-fetch" :disabled="emoteSetSaving" @click="
+                    emoteInput7tv = session?.channel ?? '';
+                  emoteInputId = '';
+                  fetch7tvSet();
+                  ">
+                    {{
+                      emoteSetSaving
+                        ? t("settings.7tv.fetching")
+                        : t("settings.7tv.fetch")
+                    }}
+                  </button>
+                  <span class="emote-lbl">by channel name</span>
+                </div>
+
+                <div class="emote-form-row">
+                  <input v-model="emoteInputId" class="field-sm" :placeholder="t('settings.7tv.by_id.ph')"
+                    @keydown.enter="
+                      emoteInput7tv = '';
+                    fetch7tvSet();
+                    " :disabled="emoteSetSaving" />
+                  <button class="btn btn-fetch" :disabled="emoteSetSaving || !emoteInputId.trim()" @click="
+                    emoteInput7tv = '';
+                  fetch7tvSet();
+                  ">
+                    {{
+                      emoteSetSaving
+                        ? t("settings.7tv.fetching")
+                        : t("settings.7tv.fetch")
+                    }}
+                  </button>
+                </div>
+
+                <div v-if="emoteSetError" class="status-msg err">
+                  {{ emoteSetError }}
+                </div>
+                <div v-if="emoteSetSuccess" class="status-msg ok">
+                  <span class="status-icon" v-html="iconSvgFor('check')"></span>{{ emoteSetSuccess }}
+                </div>
+              </template>
+            </div>
           </div>
-        </div>
+        </section>
+
+        <!-- Interface -->
+        <section class="settings-section" data-section-id="interface" :ref="setSectionRef('interface')">
+          <h2 class="section-title">Interface</h2>
+          <div class="setting-list">
+            <div class="setting-row">
+              <div class="setting-info">
+                <div class="setting-label">Hidden tips</div>
+                <div class="setting-desc">
+                  Restore all info tips you've dismissed (e.g. the snippet hint in
+                  Logs).
+                </div>
+                <div v-if="tipsResetMsg" class="status-msg ok">{{ tipsResetMsg }}</div>
+              </div>
+              <div class="setting-control">
+                <button class="btn btn-secondary" @click="resetAllHiddenInfos">
+                  Show hidden tips
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Danger zone -->
+        <section v-if="canRemoveBotCard || dangerZoneUnlocked" class="settings-section danger-section"
+          data-section-id="danger" :ref="setSectionRef('danger')">
+          <h2 class="section-title danger-title">Danger zone</h2>
+          <div class="danger-list">
+            <div v-if="canRemoveBotCard" class="danger-row warning">
+              <div class="danger-info">
+                <div class="danger-label">Remove bot from channel</div>
+                <div class="danger-desc">{{ t("settings.remove.sub") }}</div>
+                <div v-if="removeMsg" class="status-msg ok">{{ removeMsg }}</div>
+                <div v-if="removeError" class="status-msg err">{{ removeError }}</div>
+                <div v-if="removeConfirm" class="confirm-inline">
+                  <span>
+                    Remove from <strong>#{{ session?.channel }}</strong>?
+                    {{ t("settings.remove.confirm2") }}
+                  </span>
+                  <button class="btn btn-confirm-no" @click="removeConfirm = false">
+                    {{ t("settings.remove.no") }}
+                  </button>
+                  <button class="btn btn-confirm-yes" @click="doRemoveBot">
+                    {{ t("settings.remove.yes") }}
+                  </button>
+                </div>
+              </div>
+              <div class="danger-control">
+                <button class="btn btn-danger-warn" @click="clickRemoveBot" :disabled="removeRemoving">
+                  {{
+                    removeRemoving
+                      ? t("settings.remove.removing")
+                      : t("settings.remove.btn")
+                  }}
+                </button>
+              </div>
+            </div>
+
+            <div v-if="dangerZoneUnlocked" class="danger-row delete">
+              <div class="danger-info">
+                <div class="danger-label">Delete all channel data</div>
+                <div class="danger-desc">
+                  {{ t("settings.delete.sub") }}
+                  <strong>#{{ session?.channel }}</strong>.
+                </div>
+                <div v-if="deleteError" class="status-msg err">{{ deleteError }}</div>
+                <div class="delete-confirm">
+                  <span>Type <strong>DELETE</strong> to confirm.</span>
+                  <input v-model="deleteConfirmInput" class="delete-input" type="text" placeholder="DELETE"
+                    :disabled="deleting" />
+                </div>
+              </div>
+              <div class="danger-control">
+                <button class="btn btn-danger-delete" :disabled="!deleteConfirmValid || deleting"
+                  @click="doDeleteAllData">
+                  {{
+                    deleting
+                      ? t("settings.delete.deleting")
+                      : t("settings.delete.btn")
+                  }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
-    </section>
 
-    <!-- Privacy -->
-    <section class="settings-section">
-      <h2 class="section-title">Privacy</h2>
-      <div class="setting-list">
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-label">Chat log visibility</div>
-            <div class="setting-desc">{{ t("settings.optout.sub") }}</div>
-            <div v-if="optMsg" class="status-msg ok">{{ optMsg }}</div>
-          </div>
-          <div class="setting-control">
-            <button class="btn btn-toggle" :class="{ active: optedOut }" @click="toggleOptOut" :disabled="optSaving">
-              {{
-                optSaving
-                  ? "..."
-                  : optedOut
-                    ? t("settings.optout.btn.in")
-                    : t("settings.optout.btn.out")
-              }}
-            </button>
-          </div>
-        </div>
-
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-label">Previous usernames</div>
-            <div class="setting-desc">
-              Hide your previous Twitch usernames from being shown on other
-              users' screens.
-            </div>
-            <div v-if="nameHistMsg" class="status-msg ok">{{ nameHistMsg }}</div>
-          </div>
-          <div class="setting-control">
-            <button class="btn btn-toggle" :class="{ active: nameHistOptedOut }" @click="toggleNameHistOptOut"
-              :disabled="nameHistSaving">
-              {{
-                nameHistSaving
-                  ? "..."
-                  : nameHistOptedOut
-                    ? "Show Names"
-                    : "Hide Names"
-              }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Integrations (broadcaster only) -->
-    <section v-if="isBroadcaster" class="settings-section">
-      <h2 class="section-title">Integrations</h2>
-      <div class="integration-panel">
-        <div class="integration-header">
-          <div class="integration-title">7TV Emote Set</div>
-          <div class="integration-desc">{{ t("settings.7tv.sub") }}</div>
-        </div>
-        <div class="integration-body">
-          <div v-if="emoteSetLoading" class="loading">Loading...</div>
-          <template v-else>
-            <div v-if="emoteSet.setId" class="emote-current">
-              <span class="emote-name">
-                {{ emoteSet.setName ?? emoteSet.setId }}
-              </span>
-              <span class="emote-meta">
-                {{ emoteSet.setId }} · {{ emoteSet.emoteCount }}
-                {{ t("settings.7tv.emotes") }}
-              </span>
-              <button class="btn btn-remove" @click="remove7tvSet" :disabled="emoteSetSaving">
-                {{
-                  emoteSetSaving
-                    ? t("settings.7tv.removing")
-                    : t("settings.7tv.remove")
-                }}
-              </button>
-            </div>
-            <div v-else class="emote-none">
-              {{ t("settings.7tv.none") }}
-            </div>
-
-            <div class="emote-form-row">
-              <button class="btn btn-fetch" :disabled="emoteSetSaving" @click="
-                emoteInput7tv = session?.channel ?? '';
-              emoteInputId = '';
-              fetch7tvSet();
-              ">
-                {{
-                  emoteSetSaving
-                    ? t("settings.7tv.fetching")
-                    : t("settings.7tv.fetch")
-                }}
-              </button>
-              <span class="emote-lbl">by channel name</span>
-            </div>
-
-            <div class="emote-form-row">
-              <input v-model="emoteInputId" class="field-sm" :placeholder="t('settings.7tv.by_id.ph')" @keydown.enter="
-                emoteInput7tv = '';
-              fetch7tvSet();
-              " :disabled="emoteSetSaving" />
-              <button class="btn btn-fetch" :disabled="emoteSetSaving || !emoteInputId.trim()" @click="
-                emoteInput7tv = '';
-              fetch7tvSet();
-              ">
-                {{
-                  emoteSetSaving
-                    ? t("settings.7tv.fetching")
-                    : t("settings.7tv.fetch")
-                }}
-              </button>
-            </div>
-
-            <div v-if="emoteSetError" class="status-msg err">
-              {{ emoteSetError }}
-            </div>
-            <div v-if="emoteSetSuccess" class="status-msg ok">
-              <span class="status-icon" v-html="iconSvgFor('check')"></span>{{ emoteSetSuccess }}
-            </div>
-          </template>
-        </div>
-      </div>
-    </section>
-
-    <!-- Interface -->
-    <section class="settings-section">
-      <h2 class="section-title">Interface</h2>
-      <div class="setting-list">
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-label">Hidden tips</div>
-            <div class="setting-desc">
-              Restore all info tips you've dismissed (e.g. the snippet hint in
-              Logs).
-            </div>
-            <div v-if="tipsResetMsg" class="status-msg ok">{{ tipsResetMsg }}</div>
-          </div>
-          <div class="setting-control">
-            <button class="btn btn-secondary" @click="resetAllHiddenInfos">
-              Show hidden tips
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- Danger zone -->
-    <section v-if="canRemoveBotCard || dangerZoneUnlocked" class="settings-section danger-section">
-      <h2 class="section-title danger-title">Danger zone</h2>
-      <div class="danger-list">
-        <div v-if="canRemoveBotCard" class="danger-row warning">
-          <div class="danger-info">
-            <div class="danger-label">Remove bot from channel</div>
-            <div class="danger-desc">{{ t("settings.remove.sub") }}</div>
-            <div v-if="removeMsg" class="status-msg ok">{{ removeMsg }}</div>
-            <div v-if="removeError" class="status-msg err">{{ removeError }}</div>
-            <div v-if="removeConfirm" class="confirm-inline">
-              <span>
-                Remove from <strong>#{{ session?.channel }}</strong>?
-                {{ t("settings.remove.confirm2") }}
-              </span>
-              <button class="btn btn-confirm-no" @click="removeConfirm = false">
-                {{ t("settings.remove.no") }}
-              </button>
-              <button class="btn btn-confirm-yes" @click="doRemoveBot">
-                {{ t("settings.remove.yes") }}
-              </button>
-            </div>
-          </div>
-          <div class="danger-control">
-            <button class="btn btn-danger-warn" @click="clickRemoveBot" :disabled="removeRemoving">
-              {{
-                removeRemoving
-                  ? t("settings.remove.removing")
-                  : t("settings.remove.btn")
-              }}
-            </button>
-          </div>
-        </div>
-
-        <div v-if="dangerZoneUnlocked" class="danger-row delete">
-          <div class="danger-info">
-            <div class="danger-label">Delete all channel data</div>
-            <div class="danger-desc">
-              {{ t("settings.delete.sub") }}
-              <strong>#{{ session?.channel }}</strong>.
-            </div>
-            <div v-if="deleteError" class="status-msg err">{{ deleteError }}</div>
-            <div class="delete-confirm">
-              <span>Type <strong>DELETE</strong> to confirm.</span>
-              <input v-model="deleteConfirmInput" class="delete-input" type="text" placeholder="DELETE"
-                :disabled="deleting" />
-            </div>
-          </div>
-          <div class="danger-control">
-            <button class="btn btn-danger-delete" :disabled="!deleteConfirmValid || deleting" @click="doDeleteAllData">
-              {{
-                deleting
-                  ? t("settings.delete.deleting")
-                  : t("settings.delete.btn")
-              }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
+      <nav class="settings-nav">
+        <button v-for="sec in sections" :key="sec.id" class="nav-item" :class="{ active: activeSection === sec.id }"
+          @click="scrollToSection(sec.id)">
+          <span class="nav-square" :class="{ on: activeSection === sec.id }"></span>
+          <span class="nav-label">{{ sec.label }}</span>
+        </button>
+      </nav>
+    </div>
   </div>
 </template>
 
@@ -634,6 +705,92 @@ async function doDeleteAllData() {
 
 .chan {
   color: #9d6cff;
+}
+
+.settings-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 40px;
+}
+
+.settings-body {
+  flex: 1;
+  max-width: 560px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 36px;
+}
+
+.settings-nav {
+  flex-shrink: 0;
+  width: 170px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 0;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 4px;
+  border: none;
+  background: transparent;
+  color: #555;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  color: #aaa;
+}
+
+.nav-item.active {
+  color: #9d6cff;
+}
+
+.nav-square {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border: 1px solid #333;
+  background: transparent;
+}
+
+.nav-square.on {
+  background: #6f2bff;
+  border-color: #9d6cff;
+}
+
+.nav-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 860px) {
+  .settings-layout {
+    flex-direction: column-reverse;
+    gap: 20px;
+  }
+
+  .settings-nav {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 16px;
+    position: static;
+  }
+
+  .settings-body {
+    max-width: none;
+  }
 }
 
 .settings-section {
