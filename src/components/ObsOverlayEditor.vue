@@ -468,14 +468,14 @@ function toggleVisible(id: string) {
   save({ silent: true }); // <<< hide/show is expected to apply immediately, not wait for Save
 }
 function hideAllLayers() {
+  // >>> staged like any other edit - the pendingElements watcher already handles the
+  // >>> save itself if Live Update is on, don't force-save when it's off
   if (!pendingElements.value.some((e) => e.visible)) return;
   updateElements(pendingElements.value.map((e) => ({ id: e.id, patch: { visible: false } })));
-  save({ silent: true });
 }
 function showAllLayers() {
   if (!pendingElements.value.some((e) => !e.visible)) return;
   updateElements(pendingElements.value.map((e) => ({ id: e.id, patch: { visible: true } })));
-  save({ silent: true });
 }
 
 function groupSelected() {
