@@ -54,6 +54,30 @@ function setBackgroundAlpha(alphaPct: number) {
 }
 // ^^^ background ^^^
 
+// vvv solid colors (text/outline/shadow/border) = color swatch + opacity slider too -
+// vvv unlike background, alpha 0 must stay truly transparent, never fall back to opaque vvv
+type SolidColorKey = "color" | "strokeColor" | "shadowColor" | "borderColor";
+function parseSolidColor(value: string | undefined, fallbackHex: string): { hex: string; alpha: number } {
+  if (!value) return { hex: fallbackHex, alpha: 100 };
+  return parseBackground(value);
+}
+function hexAlphaToRgbaColor(hex: string, alphaPct: number): string {
+  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!m) return hex;
+  const r = parseInt(m[1]!, 16), g = parseInt(m[2]!, 16), b = parseInt(m[3]!, 16);
+  const a = Math.max(0, Math.min(100, alphaPct)) / 100;
+  return `rgba(${r}, ${g}, ${b}, ${a.toFixed(2)})`;
+}
+function setSolidColorHex(key: SolidColorKey, fallbackHex: string, hex: string) {
+  const current = parseSolidColor(props.element.style[key], fallbackHex);
+  setStyle({ [key]: hexAlphaToRgbaColor(hex, current.alpha) });
+}
+function setSolidColorAlpha(key: SolidColorKey, fallbackHex: string, alphaPct: number) {
+  const current = parseSolidColor(props.element.style[key], fallbackHex);
+  setStyle({ [key]: hexAlphaToRgbaColor(current.hex, alphaPct) });
+}
+// ^^^ solid colors ^^^
+
 // >>> aspect-lock keeps w/h ratio fixed while editing either field
 const aspectLocked = ref(false);
 const aspectRatio = computed(() =>

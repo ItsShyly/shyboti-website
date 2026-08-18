@@ -257,11 +257,46 @@ async function fetchPreviewValues() {
   try {
     const res = await fetch(
       `${API}/overlay/${props.channel}/${currentOverlayId.value}/preview-values`,
-      { headers: props.authHeaders },
+      { headers: props.authHeaders, cache: "no-store" },
     );
     if (res.ok) previewValues.value = await res.json();
   } catch { }
 }
+
+// vvv counters used by this overlay's elements - quick +/- right from the editor vvv
+const usedCounterNames = computed(() => {
+  const names = new Set<string>();
+  for (const el of pendingElements.value) {
+    if (el.type !== "variable-text") continue;
+    for (const m of el.content.matchAll(/\$counter\.(\w+)/g)) names.add(m[1]!);
+  }
+  return [...names].sort();
+});
+const counterValues = ref<Record<string, number>>({});
+async function fetchCounterValues() {
+  try {
+    const res = await fetch(`${API}/variables/${props.channel}`, {
+      headers: props.authHeaders,
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const d = (await res.json()) as { counters: { name: string; value: number }[] };
+      counterValues.value = Object.fromEntries((d.counters ?? []).map((c) => [c.name, c.value]));
+    }
+  } catch { }
+}
+async function bumpCounter(name: string, delta: number) {
+  const next = (counterValues.value[name] ?? 0) + delta;
+  counterValues.value = { ...counterValues.value, [name]: next };
+  try {
+    await fetch(`${API}/variables/${props.channel}/counter/${name}`, {
+      method: "PUT",
+      headers: { ...props.authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ value: String(next) }),
+    });
+  } catch { }
+}
+// ^^^ counters ^^^
 
 async function load() {
   loading.value = true;
@@ -742,10 +777,14 @@ function onWindowMousedownForMenu(e: MouseEvent) {
 }
 onMounted(() => {
   load();
+  fetchCounterValues();
   window.addEventListener("keydown", onKeydown);
   // >>> capture phase - canvas item clicks stopPropagation(), bubble phase would never see them
   window.addEventListener("mousedown", onWindowMousedownForMenu, true);
-  previewTimer = setInterval(fetchPreviewValues, 5000);
+  previewTimer = setInterval(() => {
+    fetchPreviewValues();
+    fetchCounterValues();
+  }, 5000);
   clockTimer = setInterval(() => (clockNow.value = Date.now()), 1000);
 });
 onUnmounted(() => {
@@ -904,6 +943,16 @@ onUnmounted(() => {
               @toggle-lock="toggleLock" @toggle-visible="toggleVisible" @update-elements="updateElements"
               @hide-all="hideAllLayers" @show-all="showAllLayers" @delete="deleteOne" @group="groupSelected"
               @ungroup="ungroupSelected" />
+
+            <div v-if="usedCounterNames.length" class="ovl-counters">
+              <div class="ovl-counters-title">counters</div>
+              <div v-for="name in usedCounterNames" :key="name" class="ovl-counters-row">
+                <span class="ovl-counters-name">${{ name }}</span>
+                <span class="ovl-counters-value">{{ counterValues[name] ?? 0 }}</span>
+                <button class="ovl-counters-btn" title="Decrease" @click="bumpCounter(name, -1)">−</button>
+                <button class="ovl-counters-btn" title="Increase" @click="bumpCounter(name, 1)">+</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1045,6 +1094,67 @@ onUnmounted(() => {
   color: #666;
   opacity: 0.6;
   font-size: 10px;
+}
+
+.ovl-counters {
+  border-top: 1px solid #1e1e22;
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.ovl-counters-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #555;
+  margin-bottom: 6px;
+}
+
+.ovl-counters-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px;
+}
+
+.ovl-counters-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: #9d6cff;
+  font-family: "Consolas", "Fira Mono", monospace;
+}
+
+.ovl-counters-value {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #e0e0e0;
+  min-width: 24px;
+  text-align: right;
+}
+
+.ovl-counters-btn {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #2a2a30;
+  background: #111217;
+  color: #888;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.ovl-counters-btn:hover {
+  border-color: #6f2bff;
+  color: #9d6cff;
 }
 
 .ovl-activate-select {
