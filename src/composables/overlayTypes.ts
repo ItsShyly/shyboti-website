@@ -45,17 +45,19 @@ export interface OverlayElement {
   data: Record<string, any>;
 }
 
+export interface OverlaySceneAttachment {
+  scene: string;
+  active: boolean;
+  obs_input_name: string;
+}
+
 export interface Overlay {
   channel: string;
   id: string;
   name: string;
-  active: boolean;
-  target_scene: string;
-  target_source: string;
-  obs_scene_item_id: number | null;
-  obs_input_name: string;
   mouse_tracking: boolean;
   refresh_ms: number;
+  scenes: OverlaySceneAttachment[];
 }
 
 // >>> client-generated but permanent - stays as the row's id once saved, no swap needed

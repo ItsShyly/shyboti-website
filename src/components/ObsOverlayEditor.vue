@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { API } from "../api";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import {
@@ -24,6 +24,11 @@ const props = defineProps<{
   scenes: string[];
   currentScene: string;
   initialOverlayId?: string;
+  // >>> which scene the user actually clicked "edit" on - falls back to currentScene
+  initialScene?: string;
+  // >>> only true from ObsControlView, where we know the agent/OBS connection state -
+  // >>> the standalone Tools page can't promise that, so hide/show + scene-preview hide there
+  obsReady?: boolean;
 }>();
 const emit = defineEmits<{
   close: [];
@@ -37,12 +42,15 @@ const currentOverlayId = ref<string | null>(null);
 const currentOverlay = computed(
   () => overlays.value.find((o) => o.id === currentOverlayId.value) ?? null,
 );
-const overlayAdded = computed(() => !!currentOverlay.value?.obs_input_name);
-const overlayVisible = computed(() => !!currentOverlay.value?.active);
-const overlayTargetScene = computed(() => currentOverlay.value?.target_scene || "");
+const currentAttachment = computed(
+  () => currentOverlay.value?.scenes.find((s) => s.scene === activateScene.value) ?? null,
+);
+const overlayAdded = computed(() => !!currentAttachment.value);
+const overlayVisible = computed(() => !!currentAttachment.value?.active);
 const activateScene = ref("");
 const renaming = ref(false);
 const renameDraft = ref("");
+const menuOpen = ref(false);
 
 const baseWidth = ref(1920);
 const baseHeight = ref(1080);
@@ -53,8 +61,30 @@ const selectedIds = ref<string[]>([]);
 const dirty = ref(false);
 const previewValues = ref<Record<string, string>>({});
 
-// >>> editor-only backdrop - never rendered live, just lets you eyeball white vs black text
-const stageBackdrop = ref<"checker" | "white" | "black">("checker");
+// >>> editor-only backdrop - never rendered live, just lets you eyeball contrast or
+// >>> compare against the real scene (only offered while the overlay is hidden there)
+const stageBackdrop = ref<"checker" | "white" | "black" | "scene">("checker");
+const sceneShotUrl = ref<string | null>(null);
+async function loadSceneShot() {
+  if (!props.obsReady || !props.channel || !activateScene.value) return;
+  try {
+    const res = await fetch(
+      `${API}/obs/${props.channel}/screenshot?scene=${encodeURIComponent(activateScene.value)}&width=800&quality=70`,
+      { headers: props.authHeaders },
+    );
+    if (res.ok) {
+      const d = (await res.json()) as { imageData: string | null };
+      sceneShotUrl.value = d.imageData ? `data:image/jpeg;base64,${d.imageData}` : null;
+    }
+  } catch { }
+}
+function pickBackdrop(b: "checker" | "white" | "black" | "scene") {
+  stageBackdrop.value = b;
+  if (b === "scene") loadSceneShot();
+}
+watch(activateScene, () => {
+  if (stageBackdrop.value === "scene") loadSceneShot();
+});
 
 const selectedElement = computed(() =>
   selectedIds.value.length === 1
@@ -170,8 +200,9 @@ async function loadOverlaysList() {
   } catch { }
   if (!currentOverlayId.value || !overlays.value.some((o) => o.id === currentOverlayId.value)) {
     const wanted = props.initialOverlayId;
-    const attachedToScene = overlays.value.find(
-      (o) => o.obs_input_name && o.target_scene === props.currentScene,
+    const wantedScene = props.initialScene || props.currentScene;
+    const attachedToScene = overlays.value.find((o) =>
+      o.scenes.some((s) => s.scene === wantedScene),
     );
     currentOverlayId.value =
       (wanted && overlays.value.some((o) => o.id === wanted) ? wanted : null) ??
@@ -220,7 +251,12 @@ async function load() {
   await loadOverlaysList();
   await loadElements();
   if (!activateScene.value) {
-    activateScene.value = overlayTargetScene.value || props.currentScene || props.scenes[0] || "";
+    activateScene.value =
+      currentOverlay.value?.scenes[0]?.scene ||
+      props.initialScene ||
+      props.currentScene ||
+      props.scenes[0] ||
+      "";
   }
   try {
     const vs = await fetch(`${API}/obs/${props.channel}/video-settings`, {
@@ -443,12 +479,11 @@ function duplicateSelected() {
 }
 // ^^^ copy/paste/duplicate ^^^
 
-// vvv add/remove/show/hide/swap - immediate, not part of the staged/Save flow vvv
+// vvv add/remove/show/hide/hide-all/swap - immediate, not part of the staged/Save flow vvv
 // >>> whichever OTHER overlay is currently attached to the picked scene, if any
 const occupantOverlay = computed(() =>
   overlays.value.find(
-    (o) =>
-      o.id !== currentOverlayId.value && o.obs_input_name && o.target_scene === activateScene.value,
+    (o) => o.id !== currentOverlayId.value && o.scenes.some((s) => s.scene === activateScene.value),
   ),
 );
 async function addToScene() {
@@ -466,6 +501,7 @@ async function addToScene() {
     if (res.ok) await loadOverlaysList();
   } catch { }
   busy.value = false;
+  menuOpen.value = false;
 }
 async function removeFromScene() {
   if (busy.value || !currentOverlay.value) return;
@@ -473,11 +509,16 @@ async function removeFromScene() {
   try {
     const res = await fetch(
       `${API}/overlay/${props.channel}/${currentOverlay.value.id}/remove-from-scene`,
-      { method: "POST", headers: props.authHeaders },
+      {
+        method: "POST",
+        headers: { ...props.authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ scene: activateScene.value }),
+      },
     );
     if (res.ok) await loadOverlaysList();
   } catch { }
   busy.value = false;
+  menuOpen.value = false;
 }
 async function toggleVisibility() {
   if (busy.value || !currentOverlay.value) return;
@@ -486,11 +527,29 @@ async function toggleVisibility() {
   try {
     const res = await fetch(
       `${API}/overlay/${props.channel}/${currentOverlay.value.id}/${action}`,
-      { method: "POST", headers: props.authHeaders },
+      {
+        method: "POST",
+        headers: { ...props.authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ scene: activateScene.value }),
+      },
     );
     if (res.ok) await loadOverlaysList();
   } catch { }
   busy.value = false;
+  menuOpen.value = false;
+}
+async function hideAll() {
+  if (busy.value || !currentOverlay.value) return;
+  busy.value = true;
+  try {
+    const res = await fetch(`${API}/overlay/${props.channel}/${currentOverlay.value.id}/hide-all`, {
+      method: "POST",
+      headers: props.authHeaders,
+    });
+    if (res.ok) await loadOverlaysList();
+  } catch { }
+  busy.value = false;
+  menuOpen.value = false;
 }
 async function swapIn() {
   if (busy.value || !currentOverlay.value) return;
@@ -504,8 +563,9 @@ async function swapIn() {
     if (res.ok) await loadOverlaysList();
   } catch { }
   busy.value = false;
+  menuOpen.value = false;
 }
-// ^^^ add/remove/show/hide/swap ^^^
+// ^^^ add/remove/show/hide/hide-all/swap ^^^
 
 function insertVariableToken(token: string) {
   if (!selectedElement.value) return;
@@ -546,6 +606,13 @@ function onKeydown(e: KeyboardEvent) {
     emit("close");
     return;
   }
+  const mod = e.ctrlKey || e.metaKey;
+  // >>> Ctrl+S works everywhere, even while focused in a field - overrides the browser's save-page
+  if (mod && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    save();
+    return;
+  }
   const target = e.target as HTMLElement;
   const isEditable =
     target.tagName === "INPUT" ||
@@ -553,7 +620,6 @@ function onKeydown(e: KeyboardEvent) {
     target.tagName === "SELECT" ||
     target.isContentEditable;
   if (isEditable) return;
-  const mod = e.ctrlKey || e.metaKey;
   if (mod && e.key.toLowerCase() === "z" && e.shiftKey) {
     e.preventDefault();
     redo();
@@ -575,13 +641,19 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 let previewTimer: ReturnType<typeof setInterval> | null = null;
+function onWindowMousedownForMenu(e: MouseEvent) {
+  if (!menuOpen.value) return;
+  if (!(e.target as HTMLElement).closest(".ovl-activate-menu")) menuOpen.value = false;
+}
 onMounted(() => {
   load();
   window.addEventListener("keydown", onKeydown);
+  window.addEventListener("mousedown", onWindowMousedownForMenu);
   previewTimer = setInterval(fetchPreviewValues, 5000);
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeydown);
+  window.removeEventListener("mousedown", onWindowMousedownForMenu);
   if (previewTimer) clearInterval(previewTimer);
 });
 </script>
@@ -611,7 +683,10 @@ onUnmounted(() => {
           <div class="ovl-topbar-actions">
             <div class="ovl-backdrop-swatches" title="Canvas backdrop (editor-only, never rendered live)">
               <button v-for="b in (['checker', 'white', 'black'] as const)" :key="b" class="ovl-backdrop-swatch"
-                :class="[b, { active: stageBackdrop === b }]" :title="b" @click="stageBackdrop = b"></button>
+                :class="[b, { active: stageBackdrop === b }]" :title="b" @click="pickBackdrop(b)"></button>
+              <button v-if="obsReady && !overlayVisible" class="ovl-backdrop-swatch scene"
+                :class="{ active: stageBackdrop === 'scene' }" title="preview the real scene behind the canvas"
+                @click="pickBackdrop('scene')" v-html="iconSvgFor('monitor')"></button>
             </div>
             <button class="ovl-btn-cancel" :disabled="!historyPast.length" @click="undo" title="Undo (Ctrl+Z)">
               <span v-html="iconSvgFor('corner-up-left')"></span>
@@ -632,30 +707,37 @@ onUnmounted(() => {
           <span class="ovl-activate-dot" :class="{ on: overlayVisible }"></span>
           <span class="ovl-activate-status">
             <template v-if="overlayAdded">{{ overlayVisible ? "Live in OBS - " : "Added, hidden - " }}{{
-              overlayTargetScene }}</template>
-            <template v-else>Not added to any scene yet</template>
+              activateScene }}</template>
+            <template v-else-if="occupantOverlay">“{{ occupantOverlay.name }}” is on this scene</template>
+            <template v-else>Not added to {{ activateScene || "a scene" }}</template>
           </span>
-          <select v-model="activateScene" class="ovl-activate-select" :disabled="overlayAdded">
+          <span v-if="currentOverlay && currentOverlay.scenes.length > 1" class="ovl-activate-count">
+            on {{ currentOverlay.scenes.length }} scenes
+          </span>
+          <select v-model="activateScene" class="ovl-activate-select">
             <option v-for="s in scenes" :key="s" :value="s">{{ s }}</option>
           </select>
           <template v-if="!overlayAdded">
             <button v-if="occupantOverlay" class="ovl-activate-btn" :disabled="busy || !activateScene"
               :title="`Replaces “${occupantOverlay.name}”, currently attached to this scene`" @click="swapIn">
-              {{ busy ? "…" : `Swap in (replaces "${occupantOverlay.name}")` }}
+              {{ busy ? "…" : "Swap in" }}
             </button>
             <button v-else class="ovl-activate-btn" :disabled="busy || !activateScene" @click="addToScene">
               {{ busy ? "…" : "Add to scene" }}
             </button>
           </template>
-          <template v-else>
-            <button class="ovl-activate-btn" :class="{ on: overlayVisible }" :disabled="busy"
-              @click="toggleVisibility">
-              {{ busy ? "…" : overlayVisible ? "Hide" : "Show" }}
+          <div v-else class="ovl-activate-menu">
+            <button class="ovl-activate-btn" :disabled="busy" @click="menuOpen = !menuOpen">
+              {{ busy ? "…" : "Manage" }} <span v-html="iconSvgFor('chevron-down')"></span>
             </button>
-            <button class="ovl-activate-btn" :disabled="busy" @click="removeFromScene">
-              {{ busy ? "…" : "Remove from scene" }}
-            </button>
-          </template>
+            <div v-if="menuOpen" class="ovl-activate-menu-list">
+              <button v-if="obsReady" @click="toggleVisibility">
+                {{ overlayVisible ? "Hide overlay source" : "Show overlay source" }}
+              </button>
+              <button v-if="obsReady" @click="hideAll">Make invisible (all scenes)</button>
+              <button @click="removeFromScene">Remove from scene</button>
+            </div>
+          </div>
         </div>
 
         <div class="ovl-content">
@@ -665,8 +747,8 @@ onUnmounted(() => {
             <div v-if="loading" class="ovl-loading">loading…</div>
             <ObsOverlayCanvasStage v-else :elements="pendingElements" :selected-ids="selectedIds"
               :base-width="baseWidth" :base-height="baseHeight" :backdrop="stageBackdrop"
-              :preview-values="previewValues" @select="onSelect" @update-element="updateElement"
-              @update-elements="updateElements" @delete-element="deleteOne" />
+              :scene-shot-url="sceneShotUrl" :preview-values="previewValues" @select="onSelect"
+              @update-element="updateElement" @update-elements="updateElements" @delete-element="deleteOne" />
           </div>
 
           <div class="ovl-props">
@@ -696,13 +778,17 @@ onUnmounted(() => {
 
               <div class="ovl-props-row">
                 <label class="ovl-props-check">
-                  <input type="checkbox" :checked="selectedElement.visible"
-                    @change="updateElement(selectedElement.id, { visible: ($event.target as HTMLInputElement).checked })" />
+                  <div class="ep-toggle-btn" :class="{ on: selectedElement.visible }"
+                    @click="updateElement(selectedElement.id, { visible: !selectedElement.visible })">
+                    <span class="ep-toggle-knob"></span>
+                  </div>
                   visible
                 </label>
                 <label class="ovl-props-check">
-                  <input type="checkbox" :checked="selectedElement.locked"
-                    @change="updateElement(selectedElement.id, { locked: ($event.target as HTMLInputElement).checked })" />
+                  <div class="ep-toggle-btn" :class="{ on: selectedElement.locked }"
+                    @click="updateElement(selectedElement.id, { locked: !selectedElement.locked })">
+                    <span class="ep-toggle-knob"></span>
+                  </div>
                   locked
                 </label>
               </div>
@@ -905,6 +991,57 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
+.ovl-activate-count {
+  color: #555;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+.ovl-activate-menu {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ovl-activate-menu .ovl-activate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ovl-activate-menu .ovl-activate-btn svg {
+  width: 10px;
+  height: 10px;
+}
+
+.ovl-activate-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 190px;
+  background: #1a1a1e;
+  border: 1px solid #2a2a30;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  z-index: 50;
+}
+
+.ovl-activate-menu-list button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: #ccc;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ovl-activate-menu-list button:hover {
+  background: #6f2bff18;
+  color: #e0e0e0;
+}
+
 .ovl-backdrop-swatches {
   display: flex;
   align-items: center;
@@ -933,6 +1070,22 @@ onUnmounted(() => {
 
 .ovl-backdrop-swatch.black {
   background: #000000;
+}
+
+.ovl-backdrop-swatch.scene {
+  width: auto;
+  height: 16px;
+  padding: 0 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0d0d10;
+  color: #888;
+}
+
+.ovl-backdrop-swatch.scene svg {
+  width: 10px;
+  height: 10px;
 }
 
 .ovl-backdrop-swatch.active {

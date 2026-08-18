@@ -7,7 +7,8 @@ const props = defineProps<{
   selectedIds: string[];
   baseWidth: number;
   baseHeight: number;
-  backdrop?: "checker" | "white" | "black";
+  backdrop?: "checker" | "white" | "black" | "scene";
+  sceneShotUrl?: string | null;
   previewValues?: Record<string, string>;
 }>();
 const emit = defineEmits<{
@@ -24,6 +25,11 @@ const stageStyle = computed(() => {
   else if (props.backdrop === "black") s.background = "#000000";
   return s;
 });
+const sceneBackdropStyle = computed(() =>
+  props.backdrop === "scene" && props.sceneShotUrl
+    ? { backgroundImage: `url(${props.sceneShotUrl})` }
+    : {},
+);
 const GRID = 10; // <<< canvas units
 const SNAP_PX = 8; // <<< screen-px proximity to trigger element-edge snap
 
@@ -333,6 +339,7 @@ defineExpose({ stageRef });
 
 <template>
   <div ref="stageRef" class="ovl-stage" :style="stageStyle" @mousedown="onStageClick">
+    <div v-if="backdrop === 'scene' && sceneShotUrl" class="ovl-scene-backdrop" :style="sceneBackdropStyle"></div>
     <div v-if="guideStyleX" class="ovl-guide ovl-guide-v" :style="guideStyleX"></div>
     <div v-if="guideStyleY" class="ovl-guide ovl-guide-h" :style="guideStyleY"></div>
 
@@ -417,9 +424,18 @@ defineExpose({ stageRef });
   height: 1px;
 }
 
+.ovl-scene-backdrop {
+  position: absolute;
+  inset: 0;
+  opacity: 0.5;
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+
 .ovl-item {
   position: absolute;
-  border: 1px solid rgba(111, 43, 255, 0.5);
+  border: 1px solid transparent;
   cursor: move;
   transform-origin: 0 0;
   overflow: hidden;
@@ -427,6 +443,7 @@ defineExpose({ stageRef });
 
 .ovl-item.hidden_ {
   border-style: dashed;
+  border-color: #555;
   opacity: 0.5;
 }
 
@@ -470,7 +487,6 @@ defineExpose({ stageRef });
   word-break: break-word;
   overflow: hidden;
   box-sizing: border-box;
-  pointer-events: none;
 }
 
 .ovl-item-text-edit {

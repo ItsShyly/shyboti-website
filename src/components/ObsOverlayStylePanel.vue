@@ -23,7 +23,6 @@ function setData(patch: Record<string, any>) {
 
 const num = (e: Event) => Number((e.target as HTMLInputElement).value) || 0;
 const str = (e: Event) => (e.target as HTMLInputElement).value;
-const checked = (e: Event) => (e.target as HTMLInputElement).checked;
 
 // >>> aspect-lock keeps w/h ratio fixed while editing either field
 const aspectLocked = ref(false);
@@ -59,6 +58,7 @@ function setVariant(variant: ShapeVariant) {
 const collapsed = reactive<Record<string, boolean>>({
   position: true,
   border: true,
+  typography: true,
 });
 function toggle(key: string) {
   collapsed[key] = !collapsed[key];
@@ -106,76 +106,90 @@ const alignOptions = [
         <input type="number" :value="Math.round(element.rotation)" @change="set({ rotation: num($event) })" />
       </label>
       <label class="ovl-style-check">
-        <input type="checkbox" v-model="aspectLocked" />
+        <div class="ep-toggle-btn" :class="{ on: aspectLocked }" @click="aspectLocked = !aspectLocked">
+          <span class="ep-toggle-knob"></span>
+        </div>
         lock aspect
       </label>
     </div>
 
-    <!-- vvv typography + box alignment - text/variable-text only vvv -->
+    <!-- vvv typography + box alignment - text/variable-text only, auto-collapsed vvv -->
     <template v-if="isTextLike">
-      <div class="ovl-style-section-title-static">typography</div>
-      <label class="ovl-style-field">
-        Font family
-        <input type="text" :value="element.style.fontFamily || ''" placeholder="inherit"
-          @change="setStyle({ fontFamily: str($event) })" />
-      </label>
-      <div class="ovl-style-grid">
-        <label class="ovl-style-num">
-          Size
-          <input type="number" :value="element.style.fontSize ?? 32" @change="setStyle({ fontSize: num($event) })" />
+      <button class="ovl-style-section-title" @click="toggle('typography')">
+        <span v-html="iconSvgFor(collapsed.typography ? 'chevron-right' : 'chevron-down')"></span>
+        typography
+      </button>
+      <template v-if="!collapsed.typography">
+        <label class="ovl-style-field">
+          Font family
+          <input type="text" :value="element.style.fontFamily || ''" placeholder="inherit"
+            @change="setStyle({ fontFamily: str($event) })" />
         </label>
-        <label class="ovl-style-num">
-          Letter sp.
-          <input type="number" :value="element.style.letterSpacing ?? 0"
-            @change="setStyle({ letterSpacing: num($event) })" />
-        </label>
-      </div>
-      <label class="ovl-style-field">
-        Weight
-        <select :value="element.style.fontWeight || 'normal'" @change="setStyle({ fontWeight: str($event) })">
-          <option value="normal">normal</option>
-          <option value="bold">bold</option>
-          <option value="300">light</option>
-          <option value="900">black</option>
-        </select>
-      </label>
-      <label class="ovl-style-field">
-        Color
-        <input type="color" :value="element.style.color || '#ffffff'" @input="setStyle({ color: str($event) })" />
-      </label>
-      <label class="ovl-style-check">
-        <input type="checkbox" :checked="!!element.style.stroke" @change="setStyle({ stroke: checked($event) })" />
-        outline
-      </label>
-      <label v-if="element.style.stroke" class="ovl-style-field">
-        Outline color
-        <input type="color" :value="element.style.strokeColor || '#000000'"
-          @input="setStyle({ strokeColor: str($event) })" />
-      </label>
-      <label class="ovl-style-check">
-        <input type="checkbox" :checked="!!element.style.shadow" @change="setStyle({ shadow: checked($event) })" />
-        drop shadow
-      </label>
-      <label v-if="element.style.shadow" class="ovl-style-field">
-        Shadow color
-        <input type="color" :value="element.style.shadowColor || '#000000'"
-          @input="setStyle({ shadowColor: str($event) })" />
-      </label>
-      <label class="ovl-style-field">
-        Padding
-        <input type="number" :value="element.style.padding ?? 0" @change="setStyle({ padding: num($event) })" />
-      </label>
-      <label class="ovl-style-field">
-        Alignment
-        <div class="ovl-style-align-grid">
-          <button v-for="opt in alignOptions" :key="opt.h + opt.v" class="ovl-style-align-btn" :class="{
-            active: (element.style.textAlign || 'left') === opt.h && (element.style.verticalAlign || 'top') === opt.v,
-          }" :title="`${opt.v} ${opt.h}`"
-            @click="setStyle({ textAlign: opt.h, verticalAlign: opt.v })">
-            <span class="ovl-style-align-dot"></span>
-          </button>
+        <div class="ovl-style-grid">
+          <label class="ovl-style-num">
+            Size
+            <input type="number" :value="element.style.fontSize ?? 32"
+              @change="setStyle({ fontSize: num($event) })" />
+          </label>
+          <label class="ovl-style-num">
+            Letter sp.
+            <input type="number" :value="element.style.letterSpacing ?? 0"
+              @change="setStyle({ letterSpacing: num($event) })" />
+          </label>
         </div>
-      </label>
+        <label class="ovl-style-field">
+          Weight
+          <select :value="element.style.fontWeight || 'normal'" @change="setStyle({ fontWeight: str($event) })">
+            <option value="normal">normal</option>
+            <option value="bold">bold</option>
+            <option value="300">light</option>
+            <option value="900">black</option>
+          </select>
+        </label>
+        <label class="ovl-style-field">
+          Color
+          <input type="color" :value="element.style.color || '#ffffff'" @input="setStyle({ color: str($event) })" />
+        </label>
+        <label class="ovl-style-check">
+          <div class="ep-toggle-btn" :class="{ on: !!element.style.stroke }"
+            @click="setStyle({ stroke: !element.style.stroke })">
+            <span class="ep-toggle-knob"></span>
+          </div>
+          outline
+        </label>
+        <label v-if="element.style.stroke" class="ovl-style-field">
+          Outline color
+          <input type="color" :value="element.style.strokeColor || '#000000'"
+            @input="setStyle({ strokeColor: str($event) })" />
+        </label>
+        <label class="ovl-style-check">
+          <div class="ep-toggle-btn" :class="{ on: !!element.style.shadow }"
+            @click="setStyle({ shadow: !element.style.shadow })">
+            <span class="ep-toggle-knob"></span>
+          </div>
+          drop shadow
+        </label>
+        <label v-if="element.style.shadow" class="ovl-style-field">
+          Shadow color
+          <input type="color" :value="element.style.shadowColor || '#000000'"
+            @input="setStyle({ shadowColor: str($event) })" />
+        </label>
+        <label class="ovl-style-field">
+          Padding
+          <input type="number" :value="element.style.padding ?? 0" @change="setStyle({ padding: num($event) })" />
+        </label>
+        <label class="ovl-style-field">
+          Alignment
+          <div class="ovl-style-align-grid">
+            <button v-for="opt in alignOptions" :key="opt.h + opt.v" class="ovl-style-align-btn" :class="{
+              active: (element.style.textAlign || 'left') === opt.h && (element.style.verticalAlign || 'top') === opt.v,
+            }" :title="`${opt.v} ${opt.h}`"
+              @click="setStyle({ textAlign: opt.h, verticalAlign: opt.v })">
+              <span class="ovl-style-align-dot"></span>
+            </button>
+          </div>
+        </label>
+      </template>
     </template>
 
     <!-- vvv shape - variant only vvv -->
@@ -234,7 +248,10 @@ const alignOptions = [
     <template v-if="isAudio">
       <div class="ovl-style-section-title-static">audio</div>
       <label class="ovl-style-check">
-        <input type="checkbox" :checked="element.data.muted !== false" @change="setData({ muted: checked($event) })" />
+        <div class="ep-toggle-btn" :class="{ on: element.data.muted !== false }"
+          @click="setData({ muted: element.data.muted === false })">
+          <span class="ep-toggle-knob"></span>
+        </div>
         muted
       </label>
     </template>
@@ -333,6 +350,7 @@ const alignOptions = [
 }
 
 .ovl-style-field input[type="text"],
+.ovl-style-field input[type="number"],
 .ovl-style-field select,
 .ovl-style-num input[type="number"] {
   background: #111217;

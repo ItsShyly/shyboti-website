@@ -88,12 +88,13 @@ onMounted(load);
     </div>
     <div v-else class="oov-list">
       <div v-for="o in overlays" :key="o.id" class="oov-row">
-        <span class="oov-dot" :class="{ on: o.active }"></span>
+        <span class="oov-dot" :class="{ on: o.scenes.some((s) => s.active) }"></span>
         <div class="oov-row-main">
           <div class="oov-row-name">{{ o.name }}</div>
           <div class="oov-row-status">
-            <template v-if="o.obs_input_name">{{ o.active ? "Live in" : "Added to (hidden) " }} {{ o.target_scene
-              }}</template>
+            <template v-if="o.scenes.length">
+              {{ o.scenes.map((s) => `${s.scene}${s.active ? "" : " (hidden)"}`).join(", ") }}
+            </template>
             <template v-else>Not added to a scene</template>
           </div>
         </div>

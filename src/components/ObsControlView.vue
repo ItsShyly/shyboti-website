@@ -567,6 +567,7 @@ function stageSceneSwitch(name: string) {
 // >>> the overlay is one editor for the whole channel now, not per-scene - the
 // >>> pen just opens it; which scene/source it activates over is chosen in M4
 const overlayEditorOpen = ref(false);
+const overlayEditorScene = ref("");
 // >>> only the editor being open pauses previews - it has its own local canvas, no
 // >>> point double-polling OBS screenshots behind it. Never gated on overlay-active,
 // >>> since a live overlay is the NORMAL state while streaming, not a reason to stop.
@@ -574,7 +575,8 @@ const previewsPaused = computed(() => overlayEditorOpen.value);
 watch(previewsPaused, (paused) => {
   if (!paused) restartShotLoop();
 });
-function openOverlayEditor() {
+function openOverlayEditor(sceneName: string) {
+  overlayEditorScene.value = sceneName;
   overlayEditorOpen.value = true;
 }
 function closeOverlayEditor() {
@@ -1776,7 +1778,8 @@ watch(
                   </div>
                   <div class="obs-scene-name-row">
                     <div class="obs-scene-name">{{ currentScene }}</div>
-                    <button class="obs-scene-fs-btn" title="Edit stream overlay" @click.stop="openOverlayEditor()"
+                    <button class="obs-scene-fs-btn" title="Edit stream overlay"
+                      @click.stop="openOverlayEditor(currentScene)"
                       v-html="iconSvgFor('edit')"></button>
                   </div>
                   <div class="obs-scene-live">live</div>
@@ -1800,8 +1803,8 @@ watch(
                 </div>
                 <div class="obs-scene-name-row">
                   <div class="obs-scene-name">{{ s.sceneName }}</div>
-                  <button class="obs-scene-fs-btn" title="Edit stream overlay" @click.stop="openOverlayEditor()"
-                    v-html="iconSvgFor('edit')"></button>
+                  <button class="obs-scene-fs-btn" title="Edit stream overlay"
+                    @click.stop="openOverlayEditor(s.sceneName)" v-html="iconSvgFor('edit')"></button>
                 </div>
               </div>
             </div>
@@ -1825,7 +1828,8 @@ watch(
       </template>
 
       <ObsOverlayEditor v-if="overlayEditorOpen && session" :channel="session.channel" :auth-headers="authHeaders"
-        :scenes="scenes.map((s) => s.sceneName)" :current-scene="currentScene" @close="closeOverlayEditor" />
+        :scenes="scenes.map((s) => s.sceneName)" :current-scene="currentScene" :initial-scene="overlayEditorScene"
+        :obs-ready="agentConnected && obsConnected" @close="closeOverlayEditor" />
 
       <!-- >>> builder still works even if obs itself isn't connected -->
       <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"
