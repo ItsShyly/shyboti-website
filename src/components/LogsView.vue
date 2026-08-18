@@ -2587,7 +2587,9 @@ const _rowCacheVersion = ref(0);
 
 function getRowData(m: LogMsg): RowData {
   _rowCacheVersion.value; // <<< forces re-render when cache is cleared
-  const key = m.id ?? `${m.timestamp}:${m.username}`;
+  // >>> || not ?? - CLEARMSG/deletion log entries have id:"" (falsy but not nullish),
+  // >>> so ?? let every one of them across the whole log collide into the same cache key
+  const key = m.id || `${m.timestamp}:${m.username}`;
   const cached = _rowCache.get(key);
   if (cached) return cached; // <<< O(1) path, no reactive access beyond _rowCacheVersion
   const d: RowData = {
@@ -2625,6 +2627,10 @@ const paintCache = new Map<
 >();
 const paintStyles = ref<Map<string, Record<string, string>>>(new Map());
 const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map());
+// >>> image-based 7tv paints (background-clip:text + url(...)) render invisible text
+// >>> until the image actually loads - track confirmed-loaded urls so buildPaintStyle
+// >>> can keep the name in a solid fallback color until then, never blank
+const paintImagesLoaded = new Set<string>();
 
 // >>> bust the WHOLE row cache only for channel-wide changes; paints/7tv-badges/personal-emotes
 // >>> trickle in per-user via commitCosmetics, which invalidates just those rows instead (see below)
@@ -2640,7 +2646,7 @@ function invalidateRowsForUsers(usernames: Set<string>) {
   for (const m of msgs.value) {
     const key = (m.username ?? "").toLowerCase();
     if (usernames.has(key)) {
-      _rowCache.delete(m.id ?? `${m.timestamp}:${m.username}`);
+      _rowCache.delete(m.id || `${m.timestamp}:${m.username}`);
     }
   }
   _rowCacheVersion.value++;
@@ -2721,6 +2727,7 @@ function buildPaintStyle(
     repeat?: boolean;
   },
   fallbackColor?: string,
+  imageReady = true,
 ): Record<string, string> {
   const styles: Record<string, string> = {};
   const stopsArr = Array.isArray(paint.stops) ? paint.stops : [];
@@ -2766,8 +2773,19 @@ function buildPaintStyle(
       styles["backgroundColor"] = intToRgba(paint.color);
     styles["backgroundClip"] = "text";
     styles["WebkitBackgroundClip"] = "text";
-    styles["color"] = "transparent";
-    styles["WebkitTextFillColor"] = "transparent";
+    // >>> the paint image is a real network fetch - stay in a solid, visible color until
+    // >>> it's actually loaded instead of going transparent-on-nothing (blank name)
+    if (imageReady) {
+      styles["color"] = "transparent";
+      styles["WebkitTextFillColor"] = "transparent";
+    } else {
+      const solid =
+        paint.color !== null && paint.color !== undefined
+          ? intToRgba(paint.color)
+          : fallbackColor ?? "#ffffff";
+      styles["color"] = solid;
+      styles["WebkitTextFillColor"] = solid;
+    }
     styles["lineHeight"] = "1.1rem";
   } else if (paint.color !== null && paint.color !== undefined) {
     styles["--snippet-paint-preview"] = intToOpaqueOnDark(paint.color);
@@ -2802,6 +2820,37 @@ function drainPaintQueue() {
   }
 }
 
+// >>> loads an image-paint's background in the background; once it's actually decoded,
+// >>> re-derive that one user's style with imageReady:true and patch just their rows
+function preloadPaintImageThenUpgrade(
+  username: string,
+  paint: {
+    imageUrl: string | null;
+    stops: { at: number; color: number }[];
+    shadows: any[];
+    color?: number | null;
+    angle?: number | null;
+    function?: string | null;
+    repeat?: boolean;
+  },
+  fallbackColor?: string,
+) {
+  const url = paint.imageUrl;
+  if (!url || paintImagesLoaded.has(url)) return;
+  const img = new Image();
+  img.onload = () => {
+    paintImagesLoaded.add(url);
+    const m = new Map(paintStyles.value);
+    m.set(username, buildPaintStyle(paint, fallbackColor, true));
+    paintStyles.value = m;
+    invalidateRowsForUsers(new Set([username]));
+  };
+  img.onerror = () => {
+    paintImagesLoaded.add(url); // <<< stop retrying a broken url on every render
+  };
+  img.src = url;
+}
+
 // >>> writes into plain accumulator maps (no reactivity); call commitCosmetics() once after the loop for one atomic update
 function applyCosmetic(
   key: string,
@@ -2831,7 +2880,10 @@ function applyCosmetic(
 ) {
   if (data.paint) {
     paintCache.set(key, data.paint);
-    acc.paints.set(key, buildPaintStyle(data.paint, userColorByName(key)));
+    const imgUrl = data.paint.imageUrl;
+    const ready = !imgUrl || paintImagesLoaded.has(imgUrl);
+    acc.paints.set(key, buildPaintStyle(data.paint, userColorByName(key), ready));
+    if (!ready) preloadPaintImageThenUpgrade(key, data.paint, userColorByName(key));
   } else {
     if (!paintCache.has(key)) paintCache.set(key, null);
   }
