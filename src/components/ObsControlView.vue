@@ -2028,7 +2028,7 @@ watch(
         </div>
 
         <div class="ep-panel-body">
-          <div class="ep-field-group">
+          <div v-if="!agentConnected" class="ep-field-group">
             <label class="ep-field-label">Set up the ShyBoti Agent</label>
             <ol class="obs-setup-steps">
               <li>
@@ -2139,7 +2139,7 @@ watch(
             </div>
           </div>
 
-          <div v-if="agentStatus?.paired" class="ep-field-group">
+          <div v-if="agentConnected" class="ep-field-group">
             <label class="ep-field-label">Agent controls</label>
             <div class="obs-dl-row">
               <button class="ep-btn-cancel obs-dl-btn" @click="openAgentPairingPage">
