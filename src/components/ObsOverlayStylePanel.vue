@@ -221,12 +221,19 @@ const alignOptions = [
       <!-- vvv color is a distinct concern from font shape - own section, auto-collapsed vvv -->
       <button class="ovl-style-section-title" @click="toggle('color')">
         <span v-html="iconSvgFor(collapsed.color ? 'chevron-right' : 'chevron-down')"></span>
-        color
+        text styling
       </button>
       <template v-if="!collapsed.color">
         <label class="ovl-style-field">
           Text color
-          <input type="color" :value="element.style.color || '#ffffff'" @input="setStyle({ color: str($event) })" />
+          <div class="ovl-style-bg-row">
+            <input type="color" :value="parseSolidColor(element.style.color, '#ffffff').hex"
+              @input="setSolidColorHex('color', '#ffffff', ($event.target as HTMLInputElement).value)" />
+            <input type="range" min="0" max="100" :value="parseSolidColor(element.style.color, '#ffffff').alpha"
+              title="opacity"
+              @input="setSolidColorAlpha('color', '#ffffff', Number(($event.target as HTMLInputElement).value))" />
+            <span class="ovl-style-bg-pct">{{ parseSolidColor(element.style.color, '#ffffff').alpha }}%</span>
+          </div>
         </label>
         <label class="ovl-style-check">
           <div class="ep-toggle-btn" :class="{ on: !!element.style.stroke }"
@@ -237,8 +244,14 @@ const alignOptions = [
         </label>
         <label v-if="element.style.stroke" class="ovl-style-field">
           Outline color
-          <input type="color" :value="element.style.strokeColor || '#000000'"
-            @input="setStyle({ strokeColor: str($event) })" />
+          <div class="ovl-style-bg-row">
+            <input type="color" :value="parseSolidColor(element.style.strokeColor, '#000000').hex"
+              @input="setSolidColorHex('strokeColor', '#000000', ($event.target as HTMLInputElement).value)" />
+            <input type="range" min="0" max="100"
+              :value="parseSolidColor(element.style.strokeColor, '#000000').alpha" title="opacity"
+              @input="setSolidColorAlpha('strokeColor', '#000000', Number(($event.target as HTMLInputElement).value))" />
+            <span class="ovl-style-bg-pct">{{ parseSolidColor(element.style.strokeColor, '#000000').alpha }}%</span>
+          </div>
         </label>
         <label class="ovl-style-check">
           <div class="ep-toggle-btn" :class="{ on: !!element.style.shadow }"
@@ -249,8 +262,14 @@ const alignOptions = [
         </label>
         <label v-if="element.style.shadow" class="ovl-style-field">
           Shadow color
-          <input type="color" :value="element.style.shadowColor || '#000000'"
-            @input="setStyle({ shadowColor: str($event) })" />
+          <div class="ovl-style-bg-row">
+            <input type="color" :value="parseSolidColor(element.style.shadowColor, '#000000').hex"
+              @input="setSolidColorHex('shadowColor', '#000000', ($event.target as HTMLInputElement).value)" />
+            <input type="range" min="0" max="100"
+              :value="parseSolidColor(element.style.shadowColor, '#000000').alpha" title="opacity"
+              @input="setSolidColorAlpha('shadowColor', '#000000', Number(($event.target as HTMLInputElement).value))" />
+            <span class="ovl-style-bg-pct">{{ parseSolidColor(element.style.shadowColor, '#000000').alpha }}%</span>
+          </div>
         </label>
       </template>
     </template>
@@ -297,8 +316,14 @@ const alignOptions = [
         </div>
         <label class="ovl-style-field">
           Border color
-          <input type="color" :value="element.style.borderColor || '#ffffff'"
-            @input="setStyle({ borderColor: str($event) })" />
+          <div class="ovl-style-bg-row">
+            <input type="color" :value="parseSolidColor(element.style.borderColor, '#ffffff').hex"
+              @input="setSolidColorHex('borderColor', '#ffffff', ($event.target as HTMLInputElement).value)" />
+            <input type="range" min="0" max="100" :value="parseSolidColor(element.style.borderColor, '#ffffff').alpha"
+              title="opacity"
+              @input="setSolidColorAlpha('borderColor', '#ffffff', Number(($event.target as HTMLInputElement).value))" />
+            <span class="ovl-style-bg-pct">{{ parseSolidColor(element.style.borderColor, '#ffffff').alpha }}%</span>
+          </div>
         </label>
         <label class="ovl-style-field">
           Border style
