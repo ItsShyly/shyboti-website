@@ -4015,20 +4015,17 @@ function paintNameStyle(paint: {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 14px;
+  padding: 5px 14px;
+  background: #7c3aed;
+  color: #fff;
+  border: none;
   border-radius: 999px;
-  border: 1px solid #6f2bff44;
-  background: rgba(20, 14, 34, 0.85);
-  backdrop-filter: blur(6px);
-  color: #b9a6ff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  transition:
-    color 0.15s,
-    border-color 0.15s,
-    background 0.15s;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  transition: background 0.15s;
 }
 
 .day-jump-btn svg {
@@ -4037,9 +4034,7 @@ function paintNameStyle(paint: {
 }
 
 .day-jump-btn:hover {
-  color: #fff;
-  border-color: #6f2bff;
-  background: rgba(111, 43, 255, 0.35);
+  background: #6d28d9;
 }
 
 .logs-tbody-wrap {
