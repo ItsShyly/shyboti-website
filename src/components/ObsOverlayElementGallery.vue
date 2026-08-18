@@ -2,13 +2,8 @@
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import type { OverlayElementType, ShapeVariant } from "../composables/overlayTypes";
 
-defineProps<{
-  templates: string[];
-}>();
 const emit = defineEmits<{
   add: [type: OverlayElementType, variant?: ShapeVariant];
-  "add-template": [name: string];
-  "delete-template": [name: string];
 }>();
 
 const entries: { type: OverlayElementType; variant?: ShapeVariant; label: string; icon: string }[] = [
@@ -30,18 +25,6 @@ const entries: { type: OverlayElementType; variant?: ShapeVariant; label: string
       <span class="ovl-gallery-icon" v-html="iconSvgFor(entry.icon)"></span>
       {{ entry.label }}
     </button>
-
-    <template v-if="templates.length">
-      <div class="ovl-gallery-title">templates</div>
-      <div v-for="name in templates" :key="name" class="ovl-gallery-template-row">
-        <button class="ovl-gallery-item ovl-gallery-template-btn" @click="emit('add-template', name)">
-          <span class="ovl-gallery-icon" v-html="iconSvgFor('copy')"></span>
-          {{ name }}
-        </button>
-        <button class="ovl-gallery-template-del" title="Delete template" @click="emit('delete-template', name)"
-          v-html="iconSvgFor('x')"></button>
-      </div>
-    </template>
   </div>
 </template>
 
@@ -54,6 +37,11 @@ const entries: { type: OverlayElementType; variant?: ShapeVariant; label: string
   flex-direction: column;
   padding: 4px;
   overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.ovl-gallery::-webkit-scrollbar {
+  display: none;
 }
 
 .ovl-gallery-title {
@@ -92,39 +80,4 @@ const entries: { type: OverlayElementType; variant?: ShapeVariant; label: string
   color: #6f2bff;
 }
 
-.ovl-gallery-template-row {
-  display: flex;
-  align-items: center;
-}
-
-.ovl-gallery-template-btn {
-  flex: 1;
-  min-width: 0;
-}
-
-.ovl-gallery-template-btn .ovl-gallery-icon {
-  color: #4ec9b0;
-}
-
-.ovl-gallery-template-del {
-  width: 22px;
-  height: 34px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: #555;
-  cursor: pointer;
-}
-
-.ovl-gallery-template-del:hover {
-  color: #f14949;
-}
-
-.ovl-gallery-template-del svg {
-  width: 10px;
-  height: 10px;
-}
 </style>

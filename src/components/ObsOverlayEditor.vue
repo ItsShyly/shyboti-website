@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { API } from "../api";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import {
@@ -7,6 +7,7 @@ import {
   defaultVideoWithAudio,
   shapeDefaultStyle,
   newElementId,
+  type Overlay,
   type OverlayElement,
   type OverlayElementType,
   type ShapeVariant,
@@ -22,22 +23,27 @@ const props = defineProps<{
   authHeaders: Record<string, string>;
   scenes: string[];
   currentScene: string;
+  initialOverlayId?: string;
 }>();
 const emit = defineEmits<{
   close: [];
-  // >>> parent can't see editor-only state once it unmounts, so it needs to know
-  // >>> whenever the dim/fade crosses the "obscured" threshold while we're open
-  "dimmer-change": [obscured: boolean];
-  "active-change": [active: boolean];
 }>();
 
 const loading = ref(true);
 const saving = ref(false);
-const activating = ref(false);
-const overlayId = ref<string | null>(null);
-const overlayActive = ref(false);
-const overlayTargetScene = ref("");
+const busy = ref(false); // <<< add/remove/show/hide/swap in flight
+const overlays = ref<Overlay[]>([]);
+const currentOverlayId = ref<string | null>(null);
+const currentOverlay = computed(
+  () => overlays.value.find((o) => o.id === currentOverlayId.value) ?? null,
+);
+const overlayAdded = computed(() => !!currentOverlay.value?.obs_input_name);
+const overlayVisible = computed(() => !!currentOverlay.value?.active);
+const overlayTargetScene = computed(() => currentOverlay.value?.target_scene || "");
 const activateScene = ref("");
+const renaming = ref(false);
+const renameDraft = ref("");
+
 const baseWidth = ref(1920);
 const baseHeight = ref(1080);
 const pendingElements = ref<OverlayElement[]>([]);
@@ -45,18 +51,10 @@ const deletedIds = ref<string[]>([]);
 const savedIds = ref<Set<string>>(new Set());
 const selectedIds = ref<string[]>([]);
 const dirty = ref(false);
+const previewValues = ref<Record<string, string>>({});
 
-// >>> editor-only spotlight controls - never rendered on the live overlay page,
-// >>> just CSS on the local stage so contrast is easier to judge while editing
-const stageBrightness = ref(100);
-const stageOpacity = ref(100);
-const stageFilterStyle = computed(() => ({
-  filter: `brightness(${stageBrightness.value}%)`,
-  opacity: stageOpacity.value / 100,
-}));
-watch([stageBrightness, stageOpacity], () => {
-  emit("dimmer-change", stageBrightness.value < 100 || stageOpacity.value < 100);
-});
+// >>> editor-only backdrop - never rendered live, just lets you eyeball white vs black text
+const stageBackdrop = ref<"checker" | "white" | "black">("checker");
 
 const selectedElement = computed(() =>
   selectedIds.value.length === 1
@@ -160,18 +158,41 @@ function fromWireElement(row: any): OverlayElement {
   };
 }
 
-async function load() {
-  loading.value = true;
+async function loadOverlaysList() {
   try {
-    const res = await fetch(`${API}/overlay/${props.channel}`, {
+    const res = await fetch(`${API}/overlays/${props.channel}`, {
+      headers: props.authHeaders,
+    });
+    if (res.ok) {
+      const d = (await res.json()) as { overlays: Overlay[] };
+      overlays.value = d.overlays ?? [];
+    }
+  } catch { }
+  if (!currentOverlayId.value || !overlays.value.some((o) => o.id === currentOverlayId.value)) {
+    const wanted = props.initialOverlayId;
+    const attachedToScene = overlays.value.find(
+      (o) => o.obs_input_name && o.target_scene === props.currentScene,
+    );
+    currentOverlayId.value =
+      (wanted && overlays.value.some((o) => o.id === wanted) ? wanted : null) ??
+      attachedToScene?.id ??
+      overlays.value[0]?.id ??
+      null;
+  }
+}
+
+async function loadElements() {
+  if (!currentOverlayId.value) {
+    pendingElements.value = [];
+    savedIds.value = new Set();
+    return;
+  }
+  try {
+    const res = await fetch(`${API}/overlay/${props.channel}/${currentOverlayId.value}`, {
       headers: props.authHeaders,
     });
     if (res.ok) {
       const d = (await res.json()) as { overlay: any; elements: any[] };
-      overlayId.value = d.overlay?.id ?? null;
-      overlayActive.value = !!d.overlay?.active;
-      overlayTargetScene.value = d.overlay?.target_scene ?? "";
-      emit("active-change", overlayActive.value);
       pendingElements.value = (d.elements ?? []).map(fromWireElement);
       savedIds.value = new Set(pendingElements.value.map((e) => e.id));
       deletedIds.value = [];
@@ -180,6 +201,24 @@ async function load() {
       historyFuture.value = [];
     }
   } catch { }
+  fetchPreviewValues();
+}
+
+async function fetchPreviewValues() {
+  if (!currentOverlayId.value) return;
+  try {
+    const res = await fetch(
+      `${API}/overlay/${props.channel}/${currentOverlayId.value}/preview-values`,
+      { headers: props.authHeaders },
+    );
+    if (res.ok) previewValues.value = await res.json();
+  } catch { }
+}
+
+async function load() {
+  loading.value = true;
+  await loadOverlaysList();
+  await loadElements();
   if (!activateScene.value) {
     activateScene.value = overlayTargetScene.value || props.currentScene || props.scenes[0] || "";
   }
@@ -195,6 +234,82 @@ async function load() {
   } catch { }
   loading.value = false;
 }
+
+// vvv switch/create/rename/delete overlays vvv
+function confirmDiscardIfDirty(): boolean {
+  if (!dirty.value) return true;
+  return window.confirm("Discard unsaved changes to this overlay?");
+}
+function cycleOverlay(dir: 1 | -1) {
+  if (!overlays.value.length) return;
+  const idx = overlays.value.findIndex((o) => o.id === currentOverlayId.value);
+  const next = overlays.value[(idx + dir + overlays.value.length) % overlays.value.length];
+  if (next) switchOverlay(next.id);
+}
+async function switchOverlay(id: string) {
+  if (id === currentOverlayId.value) return;
+  if (!confirmDiscardIfDirty()) return;
+  currentOverlayId.value = id;
+  selectedIds.value = [];
+  await loadElements();
+}
+async function createOverlay() {
+  try {
+    const res = await fetch(`${API}/overlays/${props.channel}`, {
+      method: "POST",
+      headers: props.authHeaders,
+    });
+    if (res.ok) {
+      const d = (await res.json()) as { overlay: Overlay };
+      overlays.value = [...overlays.value, d.overlay];
+      currentOverlayId.value = d.overlay.id;
+      selectedIds.value = [];
+      await loadElements();
+    }
+  } catch { }
+}
+function startRename() {
+  if (!currentOverlay.value) return;
+  renameDraft.value = currentOverlay.value.name;
+  renaming.value = true;
+}
+async function commitRename() {
+  const name = renameDraft.value.trim();
+  renaming.value = false;
+  if (!name || !currentOverlay.value || name === currentOverlay.value.name) return;
+  try {
+    const res = await fetch(`${API}/overlays/${props.channel}/${currentOverlay.value.id}`, {
+      method: "PUT",
+      headers: { ...props.authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (res.ok) {
+      overlays.value = overlays.value.map((o) =>
+        o.id === currentOverlay.value!.id ? { ...o, name } : o,
+      );
+    }
+  } catch { }
+}
+async function deleteOverlay() {
+  if (!currentOverlay.value) return;
+  if (!window.confirm(`Delete overlay "${currentOverlay.value.name}"? This can't be undone.`))
+    return;
+  const id = currentOverlay.value.id;
+  try {
+    const res = await fetch(`${API}/overlays/${props.channel}/${id}`, {
+      method: "DELETE",
+      headers: props.authHeaders,
+    });
+    if (res.ok) {
+      overlays.value = overlays.value.filter((o) => o.id !== id);
+      currentOverlayId.value = null;
+      selectedIds.value = [];
+      if (!overlays.value.length) await createOverlay();
+      else await loadElements();
+    }
+  } catch { }
+}
+// ^^^ switch/create/rename/delete overlays ^^^
 
 function nextZ() {
   return pendingElements.value.reduce((m, e) => Math.max(m, e.z_index), 0) + 1;
@@ -255,6 +370,10 @@ function deleteSelected() {
   selectedIds.value = [];
   dirty.value = true;
 }
+function deleteOne(id: string) {
+  selectedIds.value = [id];
+  deleteSelected();
+}
 
 function toggleLock(id: string) {
   const el = pendingElements.value.find((e) => e.id === id);
@@ -267,26 +386,6 @@ function toggleVisible(id: string) {
   if (!el) return;
   pushHistory();
   applyPatch(id, { visible: !el.visible });
-}
-function reorderElement(id: string, dir: "front" | "back" | "forward" | "backward") {
-  pushHistory();
-  const sorted = [...pendingElements.value].sort((a, b) => a.z_index - b.z_index);
-  const idx = sorted.findIndex((e) => e.id === id);
-  if (idx === -1) return;
-  if (dir === "front") {
-    applyPatch(id, { z_index: nextZ() });
-  } else if (dir === "back") {
-    const minZ = Math.min(...pendingElements.value.map((e) => e.z_index), 0);
-    applyPatch(id, { z_index: minZ - 1 });
-  } else if (dir === "forward" && idx < sorted.length - 1) {
-    const neighbor = sorted[idx + 1]!;
-    applyPatch(id, { z_index: neighbor.z_index });
-    applyPatch(neighbor.id, { z_index: sorted[idx]!.z_index });
-  } else if (dir === "backward" && idx > 0) {
-    const neighbor = sorted[idx - 1]!;
-    applyPatch(id, { z_index: neighbor.z_index });
-    applyPatch(neighbor.id, { z_index: sorted[idx]!.z_index });
-  }
 }
 
 function groupSelected() {
@@ -344,40 +443,69 @@ function duplicateSelected() {
 }
 // ^^^ copy/paste/duplicate ^^^
 
-// vvv activation - immediate, not part of the staged/Save flow vvv
-// >>> disabled once active in a different scene
-const activationLocked = computed(
-  () => overlayActive.value && overlayTargetScene.value && overlayTargetScene.value !== activateScene.value,
+// vvv add/remove/show/hide/swap - immediate, not part of the staged/Save flow vvv
+// >>> whichever OTHER overlay is currently attached to the picked scene, if any
+const occupantOverlay = computed(() =>
+  overlays.value.find(
+    (o) =>
+      o.id !== currentOverlayId.value && o.obs_input_name && o.target_scene === activateScene.value,
+  ),
 );
-async function toggleActive() {
-  if (activating.value) return;
-  activating.value = true;
+async function addToScene() {
+  if (busy.value || !currentOverlay.value) return;
+  busy.value = true;
   try {
-    if (overlayActive.value) {
-      const res = await fetch(`${API}/overlay/${props.channel}/deactivate`, {
-        method: "POST",
-        headers: props.authHeaders,
-      });
-      if (res.ok) {
-        overlayActive.value = false;
-        emit("active-change", false);
-      }
-    } else {
-      const res = await fetch(`${API}/overlay/${props.channel}/activate`, {
+    const res = await fetch(
+      `${API}/overlay/${props.channel}/${currentOverlay.value.id}/add-to-scene`,
+      {
         method: "POST",
         headers: { ...props.authHeaders, "Content-Type": "application/json" },
         body: JSON.stringify({ scene: activateScene.value }),
-      });
-      if (res.ok) {
-        overlayActive.value = true;
-        overlayTargetScene.value = activateScene.value;
-        emit("active-change", true);
-      }
-    }
+      },
+    );
+    if (res.ok) await loadOverlaysList();
   } catch { }
-  activating.value = false;
+  busy.value = false;
 }
-// ^^^ activation ^^^
+async function removeFromScene() {
+  if (busy.value || !currentOverlay.value) return;
+  busy.value = true;
+  try {
+    const res = await fetch(
+      `${API}/overlay/${props.channel}/${currentOverlay.value.id}/remove-from-scene`,
+      { method: "POST", headers: props.authHeaders },
+    );
+    if (res.ok) await loadOverlaysList();
+  } catch { }
+  busy.value = false;
+}
+async function toggleVisibility() {
+  if (busy.value || !currentOverlay.value) return;
+  busy.value = true;
+  const action = overlayVisible.value ? "hide" : "show";
+  try {
+    const res = await fetch(
+      `${API}/overlay/${props.channel}/${currentOverlay.value.id}/${action}`,
+      { method: "POST", headers: props.authHeaders },
+    );
+    if (res.ok) await loadOverlaysList();
+  } catch { }
+  busy.value = false;
+}
+async function swapIn() {
+  if (busy.value || !currentOverlay.value) return;
+  busy.value = true;
+  try {
+    const res = await fetch(`${API}/overlay/${props.channel}/${currentOverlay.value.id}/swap`, {
+      method: "POST",
+      headers: { ...props.authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ scene: activateScene.value }),
+    });
+    if (res.ok) await loadOverlaysList();
+  } catch { }
+  busy.value = false;
+}
+// ^^^ add/remove/show/hide/swap ^^^
 
 function insertVariableToken(token: string) {
   if (!selectedElement.value) return;
@@ -386,67 +514,30 @@ function insertVariableToken(token: string) {
   });
 }
 
-// vvv templates - localStorage only, no backend needed for this v1 pass vvv
-interface OverlayTemplate {
-  name: string;
-  elements: OverlayElement[];
-}
-const templateStore = ref<OverlayTemplate[]>([]);
-const templateNames = computed(() => templateStore.value.map((t) => t.name));
-const templateKey = computed(() => `shyboti_overlay_templates_${props.channel}`);
-function loadTemplates() {
-  try {
-    const raw = localStorage.getItem(templateKey.value);
-    templateStore.value = raw ? JSON.parse(raw) : [];
-  } catch {
-    templateStore.value = [];
-  }
-}
-function persistTemplates() {
-  try {
-    localStorage.setItem(templateKey.value, JSON.stringify(templateStore.value));
-  } catch { }
-}
-function saveSelectionAsTemplate() {
-  if (!selectedIds.value.length) return;
-  const name = window.prompt("Template name?")?.trim();
-  if (!name) return;
-  const elements = pendingElements.value
-    .filter((e) => selectedIds.value.includes(e.id))
-    .map((e) => JSON.parse(JSON.stringify(e)));
-  templateStore.value = [...templateStore.value.filter((t) => t.name !== name), { name, elements }];
-  persistTemplates();
-}
-function addTemplate(name: string) {
-  const tpl = templateStore.value.find((t) => t.name === name);
-  if (tpl) pasteFrom(tpl.elements);
-}
-function deleteTemplate(name: string) {
-  templateStore.value = templateStore.value.filter((t) => t.name !== name);
-  persistTemplates();
-}
-// ^^^ templates ^^^
-
 async function save() {
+  if (!currentOverlayId.value) return;
   saving.value = true;
   try {
-    const res = await fetch(`${API}/overlay/${props.channel}/elements/bulk`, {
-      method: "PUT",
-      headers: { ...props.authHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        elements: pendingElements.value.map(toWireElement),
-        deletedIds: deletedIds.value,
-      }),
-    });
+    const res = await fetch(
+      `${API}/overlay/${props.channel}/${currentOverlayId.value}/elements/bulk`,
+      {
+        method: "PUT",
+        headers: { ...props.authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          elements: pendingElements.value.map(toWireElement),
+          deletedIds: deletedIds.value,
+        }),
+      },
+    );
     if (res.ok) {
-      await load();
+      await loadElements();
     }
   } catch { }
   saving.value = false;
 }
 
 function discard() {
-  load();
+  loadElements();
   selectedIds.value = [];
 }
 
@@ -483,18 +574,16 @@ function onKeydown(e: KeyboardEvent) {
     deleteSelected();
   }
 }
+let previewTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
   load();
-  loadTemplates();
   window.addEventListener("keydown", onKeydown);
+  previewTimer = setInterval(fetchPreviewValues, 5000);
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeydown);
+  if (previewTimer) clearInterval(previewTimer);
 });
-
-const overlayUrl = computed(() =>
-  overlayId.value ? `https://obs.shyboti.de/overlay/${overlayId.value}` : "",
-);
 </script>
 
 <template>
@@ -502,29 +591,33 @@ const overlayUrl = computed(() =>
     <div class="ovl-overlay">
       <div class="ovl-modal">
         <div class="ovl-topbar">
-          <div class="ovl-topbar-title">Stream Overlay</div>
+          <div class="ovl-switcher">
+            <button class="ovl-switcher-nav" title="Previous overlay" :disabled="overlays.length < 2"
+              @click="cycleOverlay(-1)" v-html="iconSvgFor('chevron-left')"></button>
+            <input v-if="renaming" v-model="renameDraft" class="ovl-switcher-input" autofocus
+              @blur="commitRename" @keydown.enter="commitRename"
+              @keydown.esc="renaming = false" />
+            <button v-else class="ovl-switcher-label" :title="`${overlays.length} overlay(s) - click to rename`"
+              @click="startRename">
+              {{ currentOverlay?.name || "Stream Overlay" }}
+            </button>
+            <button class="ovl-switcher-nav" title="Next overlay" :disabled="overlays.length < 2"
+              @click="cycleOverlay(1)" v-html="iconSvgFor('chevron-right')"></button>
+            <button class="ovl-switcher-nav" title="New overlay" @click="createOverlay"
+              v-html="iconSvgFor('plus')"></button>
+            <button class="ovl-switcher-nav" title="Delete this overlay" :disabled="overlays.length < 2"
+              @click="deleteOverlay" v-html="iconSvgFor('trash')"></button>
+          </div>
           <div class="ovl-topbar-actions">
-            <div class="ovl-brightness">
-              <span v-html="iconSvgFor('moon')"></span>
-              <input type="range" min="0" max="200" v-model.number="stageBrightness"
-                title="Canvas brightness (editor-only, never rendered live)" />
-              <span v-html="iconSvgFor('sun')"></span>
-            </div>
-            <div class="ovl-brightness">
-              <span v-html="iconSvgFor('eye')"></span>
-              <input type="range" min="0" max="100" v-model.number="stageOpacity"
-                title="Canvas opacity (editor-only, never rendered live)" />
-              <span v-html="iconSvgFor('eye-off')"></span>
+            <div class="ovl-backdrop-swatches" title="Canvas backdrop (editor-only, never rendered live)">
+              <button v-for="b in (['checker', 'white', 'black'] as const)" :key="b" class="ovl-backdrop-swatch"
+                :class="[b, { active: stageBackdrop === b }]" :title="b" @click="stageBackdrop = b"></button>
             </div>
             <button class="ovl-btn-cancel" :disabled="!historyPast.length" @click="undo" title="Undo (Ctrl+Z)">
               <span v-html="iconSvgFor('corner-up-left')"></span>
             </button>
             <button class="ovl-btn-cancel" :disabled="!historyFuture.length" @click="redo" title="Redo (Ctrl+Shift+Z)">
               <span v-html="iconSvgFor('corner-up-right')"></span>
-            </button>
-            <button class="ovl-btn-cancel" :disabled="!selectedIds.length" @click="saveSelectionAsTemplate"
-              title="Save selection as reusable template">
-              Save as template
             </button>
             <button class="ovl-btn-cancel" :disabled="!dirty || saving" @click="discard">Discard</button>
             <button class="ovl-btn-save" :disabled="!dirty || saving" @click="save">
@@ -536,29 +629,44 @@ const overlayUrl = computed(() =>
 
         <!-- >>> pinned, stays visible in full-screen just like OBS's own safe-area bar -->
         <div class="ovl-activate-bar">
-          <span class="ovl-activate-dot" :class="{ on: overlayActive }"></span>
-          <span class="ovl-activate-status">{{ overlayActive ? "Overlay is live in OBS" : "Overlay is not active"
-            }}</span>
-          <select v-model="activateScene" class="ovl-activate-select" :disabled="overlayActive">
+          <span class="ovl-activate-dot" :class="{ on: overlayVisible }"></span>
+          <span class="ovl-activate-status">
+            <template v-if="overlayAdded">{{ overlayVisible ? "Live in OBS - " : "Added, hidden - " }}{{
+              overlayTargetScene }}</template>
+            <template v-else>Not added to any scene yet</template>
+          </span>
+          <select v-model="activateScene" class="ovl-activate-select" :disabled="overlayAdded">
             <option v-for="s in scenes" :key="s" :value="s">{{ s }}</option>
           </select>
-          <button class="ovl-activate-btn" :class="{ on: overlayActive }"
-            :disabled="activating || (!overlayActive && activationLocked) || !activateScene"
-            :title="activationLocked ? `Already active in “${overlayTargetScene}” - deactivate there first` : ''"
-            @click="toggleActive">
-            {{ activating ? "…" : overlayActive ? "Deactivate" : "Activate" }}
-          </button>
+          <template v-if="!overlayAdded">
+            <button v-if="occupantOverlay" class="ovl-activate-btn" :disabled="busy || !activateScene"
+              :title="`Replaces “${occupantOverlay.name}”, currently attached to this scene`" @click="swapIn">
+              {{ busy ? "…" : `Swap in (replaces "${occupantOverlay.name}")` }}
+            </button>
+            <button v-else class="ovl-activate-btn" :disabled="busy || !activateScene" @click="addToScene">
+              {{ busy ? "…" : "Add to scene" }}
+            </button>
+          </template>
+          <template v-else>
+            <button class="ovl-activate-btn" :class="{ on: overlayVisible }" :disabled="busy"
+              @click="toggleVisibility">
+              {{ busy ? "…" : overlayVisible ? "Hide" : "Show" }}
+            </button>
+            <button class="ovl-activate-btn" :disabled="busy" @click="removeFromScene">
+              {{ busy ? "…" : "Remove from scene" }}
+            </button>
+          </template>
         </div>
 
         <div class="ovl-content">
-          <ObsOverlayElementGallery :templates="templateNames" @add="addElement" @add-template="addTemplate"
-            @delete-template="deleteTemplate" />
+          <ObsOverlayElementGallery @add="addElement" />
 
           <div class="ovl-body">
             <div v-if="loading" class="ovl-loading">loading…</div>
             <ObsOverlayCanvasStage v-else :elements="pendingElements" :selected-ids="selectedIds"
-              :base-width="baseWidth" :base-height="baseHeight" :style="stageFilterStyle" @select="onSelect"
-              @update-element="updateElement" @update-elements="updateElements" />
+              :base-width="baseWidth" :base-height="baseHeight" :backdrop="stageBackdrop"
+              :preview-values="previewValues" @select="onSelect" @update-element="updateElement"
+              @update-elements="updateElements" @delete-element="deleteOne" />
           </div>
 
           <div class="ovl-props">
@@ -612,13 +720,8 @@ const overlayUrl = computed(() =>
             <div v-else class="ovl-props-empty">Select an element, or add one from the gallery.</div>
 
             <ObsOverlayLayersPanel :elements="pendingElements" :selected-ids="selectedIds" @select="onSelect"
-              @toggle-lock="toggleLock" @toggle-visible="toggleVisible" @reorder="reorderElement" @group="groupSelected"
-              @ungroup="ungroupSelected" />
-
-            <div v-if="overlayUrl" class="ovl-url-box">
-              <div class="ovl-props-label">Overlay page (add as a Browser Source in OBS)</div>
-              <code class="ovl-url">{{ overlayUrl }}</code>
-            </div>
+              @toggle-lock="toggleLock" @toggle-visible="toggleVisible" @update-elements="updateElements"
+              @group="groupSelected" @ungroup="ungroupSelected" />
           </div>
         </div>
       </div>
@@ -658,10 +761,66 @@ const overlayUrl = computed(() =>
   border-bottom: 1px solid #1e1e22;
 }
 
-.ovl-topbar-title {
+.ovl-switcher {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ovl-switcher-nav {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #2a2a30;
+  background: #111217;
+  color: #888;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ovl-switcher-nav svg {
+  width: 11px;
+  height: 11px;
+}
+
+.ovl-switcher-nav:hover:not(:disabled) {
+  border-color: #6f2bff;
+  color: #9d6cff;
+}
+
+.ovl-switcher-nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ovl-switcher-label,
+.ovl-switcher-input {
+  height: 24px;
+  padding: 0 8px;
   color: #e0e0e0;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  max-width: 220px;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.ovl-switcher-label:hover {
+  border-color: #2a2a30;
+}
+
+.ovl-switcher-input {
+  border-color: #6f2bff88;
+  background: #111217;
+  cursor: text;
+  outline: none;
 }
 
 .ovl-topbar-actions {
@@ -746,27 +905,39 @@ const overlayUrl = computed(() =>
   cursor: not-allowed;
 }
 
-.ovl-brightness {
+.ovl-backdrop-swatches {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: 30px;
-  padding: 0 12px;
+  padding: 0 8px;
   border: 1px solid #2a2a30;
   background: #111217;
-  color: #666;
 }
 
-.ovl-brightness svg {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-}
-
-.ovl-brightness input[type="range"] {
-  width: 90px;
-  accent-color: #6f2bff;
+.ovl-backdrop-swatch {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #444;
   cursor: pointer;
+  padding: 0;
+}
+
+.ovl-backdrop-swatch.checker {
+  background: repeating-conic-gradient(#1a1a1e 0% 25%, #2a2a30 0% 50%) 50% / 8px 8px;
+}
+
+.ovl-backdrop-swatch.white {
+  background: #ffffff;
+}
+
+.ovl-backdrop-swatch.black {
+  background: #000000;
+}
+
+.ovl-backdrop-swatch.active {
+  border-color: #6f2bff;
+  outline: 1px solid #6f2bff;
 }
 
 .ovl-btn-save {
@@ -866,6 +1037,11 @@ const overlayUrl = computed(() =>
   gap: 8px;
   padding: 10px 12px;
   overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.ovl-props::-webkit-scrollbar {
+  display: none;
 }
 
 .ovl-props-title {
@@ -961,19 +1137,4 @@ const overlayUrl = computed(() =>
   align-items: flex-start;
 }
 
-.ovl-url-box {
-  margin-top: auto;
-  padding-top: 10px;
-  border-top: 1px solid #1e1e22;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.ovl-url {
-  font-family: "Consolas", "Fira Mono", monospace;
-  font-size: 10px;
-  color: #4ec9b0;
-  word-break: break-all;
-}
 </style>

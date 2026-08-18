@@ -9,7 +9,7 @@ import { useAuth } from "../auth";
 const OWN_CHANNEL_ONLY_PATHS = ["/uploads", "/images", "/notes"];
 
 // >>> Additionally off-limits specifically while admin-moded via admin mode
-const ADMIN_MODE_BLOCKED_PATHS = ["/obs-control"];
+const ADMIN_MODE_BLOCKED_PATHS = ["/obs-control", "/obs-overlays"];
 
 // >>> defineAsyncComponent for navigation
 function lazy(loader: () => Promise<any>) {
@@ -62,6 +62,10 @@ const router = createRouter({
     {
       path: "/obs-control",
       component: lazy(() => import("../components/ObsControlView.vue")),
+    },
+    {
+      path: "/obs-overlays",
+      component: lazy(() => import("../components/ObsOverlaysView.vue")),
     },
     {
       path: "/notes",

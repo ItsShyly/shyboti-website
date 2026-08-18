@@ -207,6 +207,23 @@ async function addEntry() {
         <div class="card-sub">Switch scenes and control sources from chat</div>
       </div>
     </div>
+
+    <div v-if="!hideAdminRestricted" class="service-card"
+      @click="session && router.push('/obs-overlays')">
+      <div class="card-icon obsconn-icon">
+        <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="4" y="4" width="40" height="40" rx="3" stroke="currentColor" stroke-width="2.5" />
+          <rect x="10" y="10" width="16" height="10" rx="1.5" stroke="currentColor" stroke-width="2.2" />
+          <line x1="10" y1="28" x2="30" y2="28" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+          <line x1="10" y1="34" x2="22" y2="34" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+          <circle cx="36" cy="18" r="6" fill="#9d6cff" opacity="0.9" />
+        </svg>
+      </div>
+      <div class="card-body">
+        <div class="card-title">OBS Overlays</div>
+        <div class="card-sub">Manage and control your stream overlays</div>
+      </div>
+    </div>
   </div>
 
   <!-- vvv variables & counters modal vvv -->

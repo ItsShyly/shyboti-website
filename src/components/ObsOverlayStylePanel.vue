@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, reactive } from "vue";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 import type { OverlayElement, ShapeVariant } from "../composables/overlayTypes";
 import { shapeDefaultStyle } from "../composables/overlayTypes";
 
@@ -53,13 +54,37 @@ function setVariant(variant: ShapeVariant) {
   setData({ variant });
   setStyle(shapeDefaultStyle(variant));
 }
+
+// >>> position&size + border&background start collapsed, everything else stays open
+const collapsed = reactive<Record<string, boolean>>({
+  position: true,
+  border: true,
+});
+function toggle(key: string) {
+  collapsed[key] = !collapsed[key];
+}
+
+const alignOptions = [
+  { h: "left", v: "top" },
+  { h: "center", v: "top" },
+  { h: "right", v: "top" },
+  { h: "left", v: "middle" },
+  { h: "center", v: "middle" },
+  { h: "right", v: "middle" },
+  { h: "left", v: "bottom" },
+  { h: "center", v: "bottom" },
+  { h: "right", v: "bottom" },
+] as const;
 </script>
 
 <template>
   <div class="ovl-style-panel">
-    <!-- vvv transform - applies to every element vvv -->
-    <div class="ovl-style-section-title">position &amp; size</div>
-    <div class="ovl-style-grid">
+    <!-- vvv transform - applies to every element, auto-collapsed vvv -->
+    <button class="ovl-style-section-title" @click="toggle('position')">
+      <span v-html="iconSvgFor(collapsed.position ? 'chevron-right' : 'chevron-down')"></span>
+      position &amp; size
+    </button>
+    <div v-if="!collapsed.position" class="ovl-style-grid">
       <label class="ovl-style-num">
         X
         <input type="number" :value="Math.round(element.x)" @change="set({ x: num($event) })" />
@@ -86,9 +111,9 @@ function setVariant(variant: ShapeVariant) {
       </label>
     </div>
 
-    <!-- vvv typography - text/variable-text only vvv -->
+    <!-- vvv typography + box alignment - text/variable-text only vvv -->
     <template v-if="isTextLike">
-      <div class="ovl-style-section-title">typography</div>
+      <div class="ovl-style-section-title-static">typography</div>
       <label class="ovl-style-field">
         Font family
         <input type="text" :value="element.style.fontFamily || ''" placeholder="inherit"
@@ -105,25 +130,15 @@ function setVariant(variant: ShapeVariant) {
             @change="setStyle({ letterSpacing: num($event) })" />
         </label>
       </div>
-      <div class="ovl-style-grid-2">
-        <label class="ovl-style-field">
-          Weight
-          <select :value="element.style.fontWeight || 'normal'" @change="setStyle({ fontWeight: str($event) })">
-            <option value="normal">normal</option>
-            <option value="bold">bold</option>
-            <option value="300">light</option>
-            <option value="900">black</option>
-          </select>
-        </label>
-        <label class="ovl-style-field">
-          Align
-          <select :value="element.style.textAlign || 'left'" @change="setStyle({ textAlign: str($event) as any })">
-            <option value="left">left</option>
-            <option value="center">center</option>
-            <option value="right">right</option>
-          </select>
-        </label>
-      </div>
+      <label class="ovl-style-field">
+        Weight
+        <select :value="element.style.fontWeight || 'normal'" @change="setStyle({ fontWeight: str($event) })">
+          <option value="normal">normal</option>
+          <option value="bold">bold</option>
+          <option value="300">light</option>
+          <option value="900">black</option>
+        </select>
+      </label>
       <label class="ovl-style-field">
         Color
         <input type="color" :value="element.style.color || '#ffffff'" @input="setStyle({ color: str($event) })" />
@@ -150,11 +165,22 @@ function setVariant(variant: ShapeVariant) {
         Padding
         <input type="number" :value="element.style.padding ?? 0" @change="setStyle({ padding: num($event) })" />
       </label>
+      <label class="ovl-style-field">
+        Alignment
+        <div class="ovl-style-align-grid">
+          <button v-for="opt in alignOptions" :key="opt.h + opt.v" class="ovl-style-align-btn" :class="{
+            active: (element.style.textAlign || 'left') === opt.h && (element.style.verticalAlign || 'top') === opt.v,
+          }" :title="`${opt.v} ${opt.h}`"
+            @click="setStyle({ textAlign: opt.h, verticalAlign: opt.v })">
+            <span class="ovl-style-align-dot"></span>
+          </button>
+        </div>
+      </label>
     </template>
 
-    <!-- vvv shape - variant + border/background vvv -->
+    <!-- vvv shape - variant only vvv -->
     <template v-if="isShape">
-      <div class="ovl-style-section-title">shape</div>
+      <div class="ovl-style-section-title-static">shape</div>
       <div class="ovl-style-grid-2">
         <button v-for="v in (['border', 'background-box', 'frame'] as ShapeVariant[])" :key="v"
           class="ovl-style-variant-btn" :class="{ active: shapeVariant === v }" @click="setVariant(v)">
@@ -163,43 +189,50 @@ function setVariant(variant: ShapeVariant) {
       </div>
     </template>
 
-    <!-- vvv border+background - shape/image/video vvv -->
-    <template v-if="isShape || isImage || isVideo">
-      <div class="ovl-style-section-title">border &amp; background</div>
-      <label class="ovl-style-field">
-        Background
-        <input type="text" :value="element.style.background || ''" placeholder="none, e.g. rgba(0,0,0,0.6)"
-          @change="setStyle({ background: str($event) })" />
-      </label>
-      <div class="ovl-style-grid">
-        <label class="ovl-style-num">
-          Border w.
-          <input type="number" :value="element.style.borderWidth ?? 0" @change="setStyle({ borderWidth: num($event) })" />
+    <!-- vvv border+background - shape/image/video/text, auto-collapsed vvv -->
+    <template v-if="isShape || isImage || isVideo || isTextLike">
+      <button class="ovl-style-section-title" @click="toggle('border')">
+        <span v-html="iconSvgFor(collapsed.border ? 'chevron-right' : 'chevron-down')"></span>
+        border &amp; background
+      </button>
+      <template v-if="!collapsed.border">
+        <label class="ovl-style-field">
+          Background
+          <input type="text" :value="element.style.background || ''" placeholder="none, e.g. rgba(0,0,0,0.6)"
+            @change="setStyle({ background: str($event) })" />
         </label>
-        <label class="ovl-style-num">
-          Radius
-          <input type="number" :value="element.style.borderRadius ?? 0"
-            @change="setStyle({ borderRadius: num($event) })" />
+        <div class="ovl-style-grid">
+          <label class="ovl-style-num">
+            Border w.
+            <input type="number" :value="element.style.borderWidth ?? 0"
+              @change="setStyle({ borderWidth: num($event) })" />
+          </label>
+          <label class="ovl-style-num">
+            Radius
+            <input type="number" :value="element.style.borderRadius ?? 0"
+              @change="setStyle({ borderRadius: num($event) })" />
+          </label>
+        </div>
+        <label class="ovl-style-field">
+          Border color
+          <input type="color" :value="element.style.borderColor || '#ffffff'"
+            @input="setStyle({ borderColor: str($event) })" />
         </label>
-      </div>
-      <label class="ovl-style-field">
-        Border color
-        <input type="color" :value="element.style.borderColor || '#ffffff'"
-          @input="setStyle({ borderColor: str($event) })" />
-      </label>
-      <label class="ovl-style-field">
-        Border style
-        <select :value="element.style.borderStyle || 'solid'" @change="setStyle({ borderStyle: str($event) as any })">
-          <option value="solid">solid</option>
-          <option value="dashed">dashed</option>
-          <option value="dotted">dotted</option>
-        </select>
-      </label>
+        <label class="ovl-style-field">
+          Border style
+          <select :value="element.style.borderStyle || 'solid'"
+            @change="setStyle({ borderStyle: str($event) as any })">
+            <option value="solid">solid</option>
+            <option value="dashed">dashed</option>
+            <option value="dotted">dotted</option>
+          </select>
+        </label>
+      </template>
     </template>
 
     <!-- vvv audio - just the mute toggle for its linked video vvv -->
     <template v-if="isAudio">
-      <div class="ovl-style-section-title">audio</div>
+      <div class="ovl-style-section-title-static">audio</div>
       <label class="ovl-style-check">
         <input type="checkbox" :checked="element.data.muted !== false" @change="setData({ muted: checked($event) })" />
         muted
@@ -215,7 +248,8 @@ function setVariant(variant: ShapeVariant) {
   gap: 6px;
 }
 
-.ovl-style-section-title {
+.ovl-style-section-title,
+.ovl-style-section-title-static {
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
@@ -224,8 +258,69 @@ function setVariant(variant: ShapeVariant) {
   margin-top: 8px;
 }
 
-.ovl-style-section-title:first-child {
+.ovl-style-section-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.ovl-style-section-title:hover {
+  color: #9d6cff;
+}
+
+.ovl-style-section-title svg {
+  width: 10px;
+  height: 10px;
+  flex-shrink: 0;
+}
+
+.ovl-style-section-title:first-child,
+.ovl-style-section-title-static:first-child {
   margin-top: 0;
+}
+
+.ovl-style-align-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  width: 84px;
+}
+
+.ovl-style-align-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #2a2a30;
+  background: #111217;
+  cursor: pointer;
+}
+
+.ovl-style-align-btn:hover {
+  border-color: #6f2bff88;
+}
+
+.ovl-style-align-btn.active {
+  border-color: #6f2bff;
+  background: #6f2bff22;
+}
+
+.ovl-style-align-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #666;
+}
+
+.ovl-style-align-btn.active .ovl-style-align-dot {
+  background: #9d6cff;
 }
 
 .ovl-style-field,

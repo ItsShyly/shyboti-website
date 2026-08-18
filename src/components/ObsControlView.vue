@@ -567,30 +567,18 @@ function stageSceneSwitch(name: string) {
 // >>> the overlay is one editor for the whole channel now, not per-scene - the
 // >>> pen just opens it; which scene/source it activates over is chosen in M4
 const overlayEditorOpen = ref(false);
-const dimmerActive = ref(false);
-const overlayActive = ref(false);
-const previewsPaused = computed(
-  () => overlayEditorOpen.value || dimmerActive.value || overlayActive.value,
-);
+// >>> only the editor being open pauses previews - it has its own local canvas, no
+// >>> point double-polling OBS screenshots behind it. Never gated on overlay-active,
+// >>> since a live overlay is the NORMAL state while streaming, not a reason to stop.
+const previewsPaused = computed(() => overlayEditorOpen.value);
 watch(previewsPaused, (paused) => {
   if (!paused) restartShotLoop();
 });
-async function refreshOverlayActive() {
-  if (!session.value) return;
-  try {
-    const res = await fetch(`${API}/overlay/${session.value.channel}`, { headers: authHeaders.value });
-    if (!res.ok) return;
-    const d = await res.json();
-    overlayActive.value = !!d.overlay?.active;
-  } catch { }
-}
 function openOverlayEditor() {
   overlayEditorOpen.value = true;
 }
 function closeOverlayEditor() {
   overlayEditorOpen.value = false;
-  dimmerActive.value = false;
-  refreshOverlayActive();
 }
 
 function onToggleVisible(src: any) {
@@ -1602,7 +1590,6 @@ async function forceAllPreviews() {
 let categoryPollTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
   load();
-  refreshOverlayActive();
   pollTimer = setInterval(async () => {
     await poll();
     if (agentConnected.value && obsConnected.value && selectedScene.value)
@@ -1838,8 +1825,7 @@ watch(
       </template>
 
       <ObsOverlayEditor v-if="overlayEditorOpen && session" :channel="session.channel" :auth-headers="authHeaders"
-        :scenes="scenes.map((s) => s.sceneName)" :current-scene="currentScene" @close="closeOverlayEditor"
-        @dimmer-change="dimmerActive = $event" @active-change="overlayActive = $event" />
+        :scenes="scenes.map((s) => s.sceneName)" :current-scene="currentScene" @close="closeOverlayEditor" />
 
       <!-- >>> builder still works even if obs itself isn't connected -->
       <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"

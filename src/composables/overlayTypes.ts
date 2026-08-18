@@ -13,6 +13,7 @@ export interface OverlayElementStyle {
   fontSize?: number;
   color?: string;
   textAlign?: "left" | "center" | "right" | "justify";
+  verticalAlign?: "top" | "middle" | "bottom";
   fontWeight?: string;
   letterSpacing?: number;
   stroke?: boolean;
@@ -47,6 +48,7 @@ export interface OverlayElement {
 export interface Overlay {
   channel: string;
   id: string;
+  name: string;
   active: boolean;
   target_scene: string;
   target_source: string;

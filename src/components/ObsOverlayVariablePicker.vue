@@ -94,10 +94,15 @@ onMounted(() => { });
   width: 200px;
   max-height: 240px;
   overflow-y: auto;
+  scrollbar-width: none;
   background: #1a1a1e;
   border: 1px solid #2a2a30;
   z-index: 50;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.ovl-varpick-menu::-webkit-scrollbar {
+  display: none;
 }
 
 .ovl-varpick-group {

@@ -258,7 +258,7 @@ function buildStaticIndex(): SearchResult[] {
       category: "Tools",
       icon: "monitor",
       action: () => router.push("/obs-widgets"),
-      sub: "Live browser sources for OBS",
+      sub: "Simple browser sources for OBS containing text and/or Variables",
     },
     {
       label: "OBS Control",
@@ -765,7 +765,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <span v-if="showLogsChip && logsQuery" class="search-match-nav">
           <span class="search-match-count">{{
             logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0 matches"
-          }}</span>
+            }}</span>
           <button v-if="logsMatchCount" class="search-match-step" title="Previous match (Shift+Enter)"
             @mousedown.prevent="logsRequestJump(-1)">
             <span v-html="iconSvg('chevron-up')"></span>
@@ -944,7 +944,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span v-if="showLogsChip && logsQuery" class="search-match-nav">
             <span class="search-match-count">{{
               logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0"
-            }}</span>
+              }}</span>
             <button v-if="logsMatchCount" class="search-match-step" title="Previous match"
               @mousedown.prevent="logsRequestJump(-1)">
               <span v-html="iconSvg('chevron-up')"></span>
@@ -991,7 +991,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
                 sidebarOpen = false;
                 ">
                 <span v-if="r.icon && r.icon in ICONS" class="result-icon" v-html="iconSvg(r.icon)"></span>
-              <span v-else class="result-icon">{{ r.icon }}</span>
+                <span v-else class="result-icon">{{ r.icon }}</span>
                 <span class="result-label">{{ r.label }}</span>
                 <span v-if="r.sub" class="result-sub">{{ r.sub }}</span>
               </button>
@@ -1077,11 +1077,12 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span class="footer-sep">|</span>
           <router-link to="/privacy" class="footer-link">{{
             t("footer.privacy")
-          }}</router-link>
+            }}</router-link>
         </footer>
       </main>
     </div>
-    <span v-if="toast" class="toast toast-float"><span class="toast-icon" v-html="iconSvg('check')"></span>{{ toast }}</span>
+    <span v-if="toast" class="toast toast-float"><span class="toast-icon" v-html="iconSvg('check')"></span>{{ toast
+      }}</span>
   </div>
 </template>
 

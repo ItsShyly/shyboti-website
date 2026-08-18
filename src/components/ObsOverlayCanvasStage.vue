@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import type { OverlayElement } from "../composables/overlayTypes";
 
 const props = defineProps<{
@@ -7,14 +7,23 @@ const props = defineProps<{
   selectedIds: string[];
   baseWidth: number;
   baseHeight: number;
+  backdrop?: "checker" | "white" | "black";
+  previewValues?: Record<string, string>;
 }>();
 const emit = defineEmits<{
   select: [id: string | null, additive: boolean];
   "update-element": [id: string, patch: Partial<OverlayElement>];
   "update-elements": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
+  "delete-element": [id: string];
 }>();
 
 const stageRef = ref<HTMLElement | null>(null);
+const stageStyle = computed(() => {
+  const s: Record<string, string> = { aspectRatio: `${props.baseWidth} / ${props.baseHeight}` };
+  if (props.backdrop === "white") s.background = "#ffffff";
+  else if (props.backdrop === "black") s.background = "#000000";
+  return s;
+});
 const GRID = 10; // <<< canvas units
 const SNAP_PX = 8; // <<< screen-px proximity to trigger element-edge snap
 
@@ -81,6 +90,7 @@ const dragPreview = ref<Record<string, { x: number; y: number }>>({});
 
 function onItemMouseDown(el: OverlayElement, e: MouseEvent) {
   if ((e.target as HTMLElement).closest(".ovl-handle")) return;
+  if (editingId.value === el.id) return;
   if (el.locked) return;
   const additive = e.shiftKey || e.ctrlKey || e.metaKey;
   if (!props.selectedIds.includes(el.id) || additive) select(el.id, additive);
@@ -251,6 +261,64 @@ function onStageClick(e: MouseEvent) {
   if (e.target === stageRef.value) select(null, false);
 }
 
+// vvv double-click to edit text content directly on the canvas vvv
+const editingId = ref<string | null>(null);
+function startEdit(el: OverlayElement) {
+  if (el.locked || (el.type !== "text" && el.type !== "variable-text")) return;
+  editingId.value = el.id;
+  nextTick(() => {
+    const node = stageRef.value?.querySelector(
+      `[data-edit-id="${el.id}"]`,
+    ) as HTMLElement | null;
+    if (!node) return;
+    node.textContent = el.content;
+    node.focus();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  });
+}
+function commitEdit(el: OverlayElement) {
+  if (editingId.value !== el.id) return;
+  const node = stageRef.value?.querySelector(
+    `[data-edit-id="${el.id}"]`,
+  ) as HTMLElement | null;
+  const text = node?.textContent ?? el.content;
+  editingId.value = null;
+  if (text !== el.content) emit("update-element", el.id, { content: text });
+}
+function displayText(el: OverlayElement) {
+  if (el.type === "variable-text") {
+    const resolved = props.previewValues?.[el.id];
+    return resolved || el.content || "(empty variable)";
+  }
+  return el.content || "(empty text)";
+}
+// ^^^ double-click to edit ^^^
+
+// vvv right-click context menu vvv
+const contextMenu = ref<{ x: number; y: number; id: string } | null>(null);
+function onItemContextMenu(el: OverlayElement, e: MouseEvent) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (!props.selectedIds.includes(el.id)) select(el.id, false);
+  contextMenu.value = { x: e.clientX, y: e.clientY, id: el.id };
+}
+function ctxDelete() {
+  if (contextMenu.value) emit("delete-element", contextMenu.value.id);
+  contextMenu.value = null;
+}
+function onWindowMousedown(e: MouseEvent) {
+  if (!contextMenu.value) return;
+  if (!(e.target as HTMLElement).closest(".ovl-ctx-menu")) contextMenu.value = null;
+}
+onMounted(() => window.addEventListener("mousedown", onWindowMousedown));
+onUnmounted(() => window.removeEventListener("mousedown", onWindowMousedown));
+// ^^^ context menu ^^^
+
 const guideStyleX = computed(() => {
   if (snapGuides.value.x === null) return null;
   return { left: `${snapGuides.value.x * scale()}px` };
@@ -264,8 +332,7 @@ defineExpose({ stageRef });
 </script>
 
 <template>
-  <div ref="stageRef" class="ovl-stage" :style="{ aspectRatio: `${baseWidth} / ${baseHeight}` }"
-    @mousedown="onStageClick">
+  <div ref="stageRef" class="ovl-stage" :style="stageStyle" @mousedown="onStageClick">
     <div v-if="guideStyleX" class="ovl-guide ovl-guide-v" :style="guideStyleX"></div>
     <div v-if="guideStyleY" class="ovl-guide ovl-guide-h" :style="guideStyleY"></div>
 
@@ -273,7 +340,8 @@ defineExpose({ stageRef });
       selected: selectedIds.includes(el.id),
       hidden_: !el.visible,
       locked: el.locked,
-    }" :style="displayStyle(el)" @mousedown="onItemMouseDown(el, $event)">
+    }" :style="displayStyle(el)" @mousedown="onItemMouseDown(el, $event)"
+      @contextmenu="onItemContextMenu(el, $event)">
       <img v-if="el.type === 'image'" :src="el.content" class="ovl-item-img" draggable="false" />
       <video v-else-if="el.type === 'video'" :src="el.content" class="ovl-item-img" muted></video>
       <div v-else-if="el.type === 'audio'" class="ovl-item-audio">
@@ -290,8 +358,17 @@ defineExpose({ stageRef });
         color: el.style.color || '#fff',
         textAlign: el.style.textAlign || 'left',
         fontWeight: el.style.fontWeight || 'normal',
-      }">
-        {{ el.type === 'variable-text' ? (el.content || '(empty variable)') : (el.content || '(empty text)') }}
+        background: el.style.background || 'transparent',
+        border: el.style.borderWidth ? `${el.style.borderWidth}px ${el.style.borderStyle || 'solid'} ${el.style.borderColor || '#fff'}` : 'none',
+        borderRadius: (el.style.borderRadius || 0) + 'px',
+        display: 'flex',
+        alignItems: el.style.verticalAlign === 'middle' ? 'center' : el.style.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start',
+        justifyContent: el.style.textAlign === 'center' ? 'center' : el.style.textAlign === 'right' ? 'flex-end' : 'flex-start',
+      }" @dblclick.stop="startEdit(el)">
+        <div v-if="editingId === el.id" class="ovl-item-text-edit" contenteditable="true" :data-edit-id="el.id"
+          @mousedown.stop @blur="commitEdit(el)"
+          @keydown.enter.prevent="($event.target as HTMLElement).blur()"></div>
+        <span v-else>{{ displayText(el) }}</span>
       </div>
       <span class="ovl-item-label">{{ el.type }}</span>
       <template v-if="selectedIds.length === 1 && el.id === selectedIds[0] && !el.locked">
@@ -300,6 +377,11 @@ defineExpose({ stageRef });
         <span class="ovl-handle bl" @mousedown="onHandleMouseDown(el, 'bl', $event)"></span>
         <span class="ovl-handle br" @mousedown="onHandleMouseDown(el, 'br', $event)"></span>
       </template>
+    </div>
+
+    <div v-if="contextMenu" class="ovl-ctx-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+      @mousedown.stop>
+      <button @click="ctxDelete">Delete</button>
     </div>
   </div>
 </template>
@@ -387,7 +469,43 @@ defineExpose({ stageRef });
   white-space: pre-wrap;
   word-break: break-word;
   overflow: hidden;
+  box-sizing: border-box;
   pointer-events: none;
+}
+
+.ovl-item-text-edit {
+  pointer-events: auto;
+  outline: none;
+  cursor: text;
+  min-width: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ovl-ctx-menu {
+  position: fixed;
+  z-index: 3000;
+  background: #1a1a1e;
+  border: 1px solid #2a2a30;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  min-width: 120px;
+}
+
+.ovl-ctx-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  color: #f14949;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ovl-ctx-menu button:hover {
+  background: #f1494915;
 }
 
 .ovl-item-label {

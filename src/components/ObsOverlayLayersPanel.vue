@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { ref, computed } from "vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import type { OverlayElement } from "../composables/overlayTypes";
 
@@ -11,7 +11,7 @@ const emit = defineEmits<{
   select: [id: string, additive: boolean];
   "toggle-lock": [id: string];
   "toggle-visible": [id: string];
-  reorder: [id: string, dir: "front" | "back" | "forward" | "backward"];
+  "update-elements": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
   group: [];
   ungroup: [];
 }>();
@@ -30,26 +30,56 @@ const canUngroup = computed(() =>
 function onRowClick(id: string, e: MouseEvent) {
   emit("select", id, e.shiftKey || e.ctrlKey || e.metaKey);
 }
+
+const collapsed = ref(false);
+
+// vvv drag rows to reorder - drop reassigns z_index for the whole list vvv
+const dragIndex = ref<number | null>(null);
+function onDragStart(i: number) {
+  dragIndex.value = i;
+}
+function onDrop(i: number) {
+  if (dragIndex.value === null || dragIndex.value === i) {
+    dragIndex.value = null;
+    return;
+  }
+  const order = [...sorted.value];
+  const [moved] = order.splice(dragIndex.value, 1);
+  order.splice(i, 0, moved!);
+  dragIndex.value = null;
+  const n = order.length;
+  emit(
+    "update-elements",
+    order.map((el, idx) => ({ id: el.id, patch: { z_index: n - idx } })),
+  );
+}
+// ^^^ drag reorder ^^^
 </script>
 
 <template>
   <div class="ovl-layers">
-    <div class="ovl-layers-title">
-      layers
+    <div class="ovl-layers-title" @click="collapsed = !collapsed">
+      <span class="ovl-layers-title-left">
+        <span class="ovl-layers-caret" v-html="iconSvgFor(collapsed ? 'chevron-right' : 'chevron-down')"></span>
+        layers
+      </span>
       <div class="ovl-layers-group-actions">
-        <button class="ovl-layers-mini-btn" :disabled="!canGroup" title="Group selection" @click="emit('group')">
+        <button class="ovl-layers-mini-btn" :disabled="!canGroup" title="Group selection"
+          @click.stop="emit('group')">
           group
         </button>
-        <button class="ovl-layers-mini-btn" :disabled="!canUngroup" title="Ungroup" @click="emit('ungroup')">
+        <button class="ovl-layers-mini-btn" :disabled="!canUngroup" title="Ungroup" @click.stop="emit('ungroup')">
           ungroup
         </button>
       </div>
     </div>
-    <div class="ovl-layers-list">
-      <div v-for="el in sorted" :key="el.id" class="ovl-layers-row" :class="{
+    <div v-if="!collapsed" class="ovl-layers-list">
+      <div v-for="(el, idx) in sorted" :key="el.id" class="ovl-layers-row" :class="{
         selected: selectedIds.includes(el.id),
         grouped: !!el.group_id,
-      }" @click="onRowClick(el.id, $event)">
+      }" draggable="true" @dragstart="onDragStart(idx)" @dragover.prevent @drop="onDrop(idx)"
+        @click="onRowClick(el.id, $event)">
+        <span class="ovl-layers-grip" v-html="iconSvgFor('grip')"></span>
         <button class="ovl-layers-icon-btn" :title="el.visible ? 'Hide' : 'Show'"
           @click.stop="emit('toggle-visible', el.id)" v-html="iconSvgFor(el.visible ? 'eye' : 'eye-off')"></button>
         <button class="ovl-layers-icon-btn" :title="el.locked ? 'Unlock' : 'Lock'"
@@ -57,12 +87,6 @@ function onRowClick(id: string, e: MouseEvent) {
           :class="{ dim: !el.locked }"></button>
         <span class="ovl-layers-type">{{ el.type }}</span>
         <span class="ovl-layers-content">{{ el.content || '—' }}</span>
-        <div class="ovl-layers-z-btns">
-          <button class="ovl-layers-icon-btn" title="Forward" @click.stop="emit('reorder', el.id, 'forward')"
-            v-html="iconSvgFor('chevron-up')"></button>
-          <button class="ovl-layers-icon-btn" title="Backward" @click.stop="emit('reorder', el.id, 'backward')"
-            v-html="iconSvgFor('chevron-down')"></button>
-        </div>
       </div>
       <div v-if="!sorted.length" class="ovl-layers-empty">no elements yet</div>
     </div>
@@ -82,6 +106,7 @@ function onRowClick(id: string, e: MouseEvent) {
 .ovl-layers-title {
   display: flex;
   align-items: center;
+  gap: 4px;
   justify-content: space-between;
   font-size: 10px;
   font-weight: 700;
@@ -89,6 +114,23 @@ function onRowClick(id: string, e: MouseEvent) {
   letter-spacing: 0.06em;
   color: #555;
   margin-bottom: 6px;
+  cursor: pointer;
+}
+
+.ovl-layers-title-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ovl-layers-caret {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.ovl-layers-caret svg {
+  width: 10px;
+  height: 10px;
 }
 
 .ovl-layers-group-actions {
@@ -122,6 +164,7 @@ function onRowClick(id: string, e: MouseEvent) {
 .ovl-layers-list {
   max-height: 180px;
   overflow-y: auto;
+  scrollbar-width: none;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -135,6 +178,18 @@ function onRowClick(id: string, e: MouseEvent) {
   background: #111217;
   border-left: 2px solid transparent;
   cursor: pointer;
+}
+
+.ovl-layers-grip {
+  display: flex;
+  flex-shrink: 0;
+  color: #444;
+  cursor: grab;
+}
+
+.ovl-layers-grip svg {
+  width: 11px;
+  height: 11px;
 }
 
 .ovl-layers-row:hover {
@@ -194,19 +249,8 @@ function onRowClick(id: string, e: MouseEvent) {
   color: #666;
 }
 
-.ovl-layers-z-btns {
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-}
-
-.ovl-layers-z-btns .ovl-layers-icon-btn {
-  height: 9px;
-}
-
-.ovl-layers-z-btns svg {
-  width: 9px;
-  height: 9px;
+.ovl-layers-list::-webkit-scrollbar {
+  display: none;
 }
 
 .ovl-layers-empty {
