@@ -303,12 +303,10 @@ async function load() {
   await loadOverlaysList();
   await loadElements();
   if (!activateScene.value) {
-    activateScene.value =
-      props.initialScene ||
-      currentOverlay.value?.scenes[0]?.scene ||
-      props.currentScene ||
-      props.scenes[0] ||
-      "";
+    // >>> only auto-pick when there's an actual reason to - a specific scene was clicked,
+    // >>> or this overlay is already attached somewhere. Otherwise leave it unset so the
+    // >>> picker shows "pick scene" instead of silently guessing one (e.g. fresh from Tools)
+    activateScene.value = props.initialScene || currentOverlay.value?.scenes[0]?.scene || "";
   }
   try {
     const vs = await fetch(`${API}/obs/${props.channel}/video-settings`, {
@@ -881,6 +879,7 @@ onUnmounted(() => {
             on {{ currentOverlay.scenes.length }} scenes
           </span>
           <select v-model="activateScene" class="ovl-activate-select">
+            <option value="" disabled>pick scene</option>
             <option v-for="s in scenes" :key="s" :value="s">{{ s }}</option>
           </select>
           <template v-if="!overlayAdded">
