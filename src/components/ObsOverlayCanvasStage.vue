@@ -53,8 +53,12 @@ function scale(): number {
   return el.getBoundingClientRect().width / props.baseWidth;
 }
 
-// >>> front of stack (highest z) rendered last, so it's visually on top - matches layers panel
-const sortedElements = computed(() => [...props.elements].sort((a, b) => a.z_index - b.z_index));
+// >>> front of stack (highest z) rendered last, so it's visually on top - matches layers panel.
+// >>> hidden elements are skipped entirely here (matches the real OBS output), not just dimmed -
+// >>> toggle them back on from the layers panel, which still lists them regardless
+const sortedElements = computed(() =>
+  [...props.elements].filter((e) => e.visible).sort((a, b) => a.z_index - b.z_index),
+);
 
 function select(id: string | null, additive: boolean) {
   emit("select", id, additive);
@@ -466,7 +470,6 @@ defineExpose({ stageRef });
 
     <div v-for="el in sortedElements" :key="el.id" class="ovl-item" :class="{
       selected: selectedIds.includes(el.id),
-      hidden_: !el.visible,
       locked: el.locked,
     }" :style="displayStyle(el)" @mousedown="onItemMouseDown(el, $event)"
       @contextmenu="onItemContextMenu(el, $event)">
@@ -558,12 +561,6 @@ defineExpose({ stageRef });
   border: 1px solid transparent;
   cursor: move;
   transform-origin: 0 0;
-}
-
-.ovl-item.hidden_ {
-  border-style: dashed;
-  border-color: #555;
-  opacity: 0.5;
 }
 
 .ovl-item.locked {
