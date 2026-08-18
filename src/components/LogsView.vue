@@ -805,6 +805,34 @@ function nextMonth(ym: { y: number; m: number }): { y: number; m: number } {
   return ym.m === 12 ? { y: ym.y + 1, m: 1 } : { y: ym.y, m: ym.m + 1 };
 }
 
+const PROBE_BATCH = 4; // <<< network-bound, not cpu-bound - a handful of parallel requests is cheap
+
+// >>> checks several consecutive days/months in parallel instead of one at a time - a
+// >>> long empty stretch (sparse channel, narrow user filter) used to mean N sequential
+// >>> awaited round-trips before any real data showed up. Semantics unchanged: still
+// >>> stops at the chronologically-nearest non-empty result, just probes ahead concurrently.
+async function probeBatch<C>(
+  start: C,
+  step: (c: C) => C,
+  withinBound: (c: C) => boolean,
+  fetchFn: (c: C) => Promise<LogMsg[]>,
+): Promise<{ hit: LogMsg[] | null; nextCursor: C | null }> {
+  const batch: C[] = [];
+  let c: C | null = start;
+  for (let i = 0; i < PROBE_BATCH && c && withinBound(c); i++) {
+    batch.push(c);
+    c = step(c);
+  }
+  if (!batch.length) return { hit: null, nextCursor: null };
+  const results = await Promise.all(batch.map(fetchFn));
+  for (let i = 0; i < batch.length; i++) {
+    if (results[i]!.length > 0) {
+      return { hit: results[i]!, nextCursor: step(batch[i]!) };
+    }
+  }
+  return { hit: null, nextCursor: c };
+}
+
 async function prependMsgs(newMsgs: LogMsg[]) {
   const body = getBody();
   const existingIds = new Set(msgs.value.map((m) => m.id));
@@ -936,23 +964,31 @@ async function loadOlder() {
       noMore.value = true;
       return;
     }
-    const cur = cursorMonth;
-    if (new Date(cur.y, cur.m - 1, 1) < cutoff) {
+    if (new Date(cursorMonth.y, cursorMonth.m - 1, 1) < cutoff) {
       noMore.value = true;
       return;
     }
     loadingMore.value = true;
     await nextTick();
     try {
-      const full = await fetchMonth(ch, cur.y, cur.m, signal);
+      const { hit, nextCursor } = await probeBatch<{ y: number; m: number }>(
+        cursorMonth,
+        prevMonth,
+        (c) => new Date(c.y, c.m - 1, 1) >= cutoff,
+        (c) => fetchMonth(ch, c.y, c.m, signal),
+      );
       if (signal.aborted) {
         loadingMore.value = false;
         return;
       }
-      cursorMonth = prevMonth(cur);
-      if (full.length > 0) await prependMsgs(full);
+      cursorMonth = nextCursor;
+      if (hit) await prependMsgs(hit);
       else {
         loadingMore.value = false;
+        if (!cursorMonth || new Date(cursorMonth.y, cursorMonth.m - 1, 1) < cutoff) {
+          noMore.value = true;
+          return;
+        }
         return loadOlder();
       }
     } catch { }
@@ -962,29 +998,31 @@ async function loadOlder() {
       noMore.value = true;
       return;
     }
-    const d = cursorDate;
-    if (d < cutoff) {
+    if (cursorDate < cutoff) {
       noMore.value = true;
       return;
     }
     loadingMore.value = true;
     await nextTick();
     try {
-      const full = await fetchDay(
-        ch,
-        d.getFullYear(),
-        d.getMonth() + 1,
-        d.getDate(),
-        signal,
+      const { hit, nextCursor } = await probeBatch<Date>(
+        cursorDate,
+        prevDay,
+        (c) => c >= cutoff,
+        (c) => fetchDay(ch, c.getFullYear(), c.getMonth() + 1, c.getDate(), signal),
       );
       if (signal.aborted) {
         loadingMore.value = false;
         return;
       }
-      cursorDate = prevDay(d);
-      if (full.length > 0) await prependMsgs(full);
+      cursorDate = nextCursor;
+      if (hit) await prependMsgs(hit);
       else {
         loadingMore.value = false;
+        if (!cursorDate || cursorDate < cutoff) {
+          noMore.value = true;
+          return;
+        }
         return loadOlder();
       }
     } catch { }
@@ -1008,62 +1046,76 @@ async function loadNewer() {
       noNewer.value = true;
       return;
     }
-    loadingNewer.value = true;
-    const cur = cursorNewerMonth;
-    cursorNewerMonth = nextMonth(cur);
-    if (new Date(cur.y, cur.m - 1, 1) > today) {
+    if (new Date(cursorNewerMonth.y, cursorNewerMonth.m - 1, 1) > today) {
       noNewer.value = true;
-      loadingNewer.value = false;
       return;
     }
+    loadingNewer.value = true;
     try {
-      const newMsgs = await fetchMonth(ch, cur.y, cur.m, signal);
+      const { hit, nextCursor } = await probeBatch<{ y: number; m: number }>(
+        cursorNewerMonth,
+        nextMonth,
+        (c) => new Date(c.y, c.m - 1, 1) <= today,
+        (c) => fetchMonth(ch, c.y, c.m, signal),
+      );
       if (signal.aborted) {
         loadingNewer.value = false;
         return;
       }
-      if (newMsgs.length > 0) await appendMsgs(newMsgs);
+      cursorNewerMonth = nextCursor;
+      if (hit) await appendMsgs(hit);
       else {
         loadingNewer.value = false;
+        if (
+          !cursorNewerMonth ||
+          new Date(cursorNewerMonth.y, cursorNewerMonth.m - 1, 1) > today
+        ) {
+          noNewer.value = true;
+          return;
+        }
         return loadNewer();
       }
     } catch { }
     loadingNewer.value = false;
-    if (new Date(cursorNewerMonth.y, cursorNewerMonth.m - 1, 1) > today)
+    if (
+      cursorNewerMonth &&
+      new Date(cursorNewerMonth.y, cursorNewerMonth.m - 1, 1) > today
+    )
       noNewer.value = true;
   } else {
     if (!cursorNewerDate) {
       noNewer.value = true;
       return;
     }
-    loadingNewer.value = true;
-    const d = cursorNewerDate;
-    cursorNewerDate = nextDay(d);
-    if (d > today) {
+    if (cursorNewerDate > today) {
       noNewer.value = true;
-      loadingNewer.value = false;
       return;
     }
+    loadingNewer.value = true;
     try {
-      const newMsgs = await fetchDay(
-        ch,
-        d.getFullYear(),
-        d.getMonth() + 1,
-        d.getDate(),
-        signal,
+      const { hit, nextCursor } = await probeBatch<Date>(
+        cursorNewerDate,
+        nextDay,
+        (c) => c <= today,
+        (c) => fetchDay(ch, c.getFullYear(), c.getMonth() + 1, c.getDate(), signal),
       );
       if (signal.aborted) {
         loadingNewer.value = false;
         return;
       }
-      if (newMsgs.length > 0) await appendMsgs(newMsgs);
+      cursorNewerDate = nextCursor;
+      if (hit) await appendMsgs(hit);
       else {
         loadingNewer.value = false;
+        if (!cursorNewerDate || cursorNewerDate > today) {
+          noNewer.value = true;
+          return;
+        }
         return loadNewer();
       }
     } catch { }
     loadingNewer.value = false;
-    if (cursorNewerDate > today) noNewer.value = true;
+    if (cursorNewerDate && cursorNewerDate > today) noNewer.value = true;
   }
 }
 
@@ -1619,14 +1671,16 @@ async function search() {
       const cutoff = new Date();
       cutoff.setFullYear(cutoff.getFullYear() - 1);
       while (!msgs.value.length && cursorMonth && !abortCtrl.signal.aborted) {
-        const cur: { y: number; m: number } = cursorMonth!;
-        if (new Date(cur.y, cur.m - 1, 1) < cutoff) break;
-        cursorMonth = prevMonth(cur);
-        let _wr: LogMsg[] = [];
-        try {
-          _wr = await fetchMonth(ch, cur.y, cur.m, abortCtrl.signal);
-        } catch { }
-        msgs.value = _wr;
+        const startCursor: { y: number; m: number } = cursorMonth;
+        if (new Date(startCursor.y, startCursor.m - 1, 1) < cutoff) break;
+        const probed = await probeBatch<{ y: number; m: number }>(
+          startCursor,
+          prevMonth,
+          (c) => new Date(c.y, c.m - 1, 1) >= cutoff,
+          (c) => fetchMonth(ch, c.y, c.m, abortCtrl.signal),
+        );
+        cursorMonth = probed.nextCursor;
+        if (probed.hit) msgs.value = probed.hit;
       }
     }
     loading.value = false;
@@ -1657,7 +1711,8 @@ async function search() {
     } catch { }
     msgs.value = _raw;
     cursorDate = prevDay(today);
-    // >>> If today empty, walk backwards up to 1 year to find logs
+    // >>> If today empty, walk backwards up to 1 year to find logs - probing a batch of
+    // >>> days in parallel instead of one sequential round-trip at a time
     if (!msgs.value.length && !abortCtrl.signal.aborted) {
       const cutoff = new Date();
       cutoff.setFullYear(cutoff.getFullYear() - 1);
@@ -1667,19 +1722,15 @@ async function search() {
         cursorDate > cutoff &&
         !abortCtrl.signal.aborted
       ) {
-        const d: Date = cursorDate!;
-        cursorDate = prevDay(d);
-        let _wr: LogMsg[] = [];
-        try {
-          _wr = await fetchDay(
-            ch,
-            d.getFullYear(),
-            d.getMonth() + 1,
-            d.getDate(),
-            abortCtrl.signal,
-          );
-        } catch { }
-        msgs.value = _wr;
+        const startCursor: Date = cursorDate;
+        const probed = await probeBatch<Date>(
+          startCursor,
+          prevDay,
+          (c) => c > cutoff,
+          (c) => fetchDay(ch, c.getFullYear(), c.getMonth() + 1, c.getDate(), abortCtrl.signal),
+        );
+        cursorDate = probed.nextCursor;
+        if (probed.hit) msgs.value = probed.hit;
       }
     }
     loading.value = false;
@@ -2073,13 +2124,27 @@ function parseDayLabel(label: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
+// >>> nearest day-marker index at (or before) each position - precomputed once per
+// >>> displayItems rebuild instead of an O(n) backward scan on every scroll frame
+const dayMarkerIndexAt = computed<Int32Array>(() => {
+  const list = displayItems.value;
+  const arr = new Int32Array(list.length);
+  let last = -1;
+  for (let i = 0; i < list.length; i++) {
+    if (list[i]!.kind === "day") last = i;
+    arr[i] = last;
+  }
+  return arr;
+});
+
 function dayLabelForIndex(idx: number): string | null {
   const list = displayItems.value;
+  if (!list.length) return null;
   const i0 = Math.max(0, Math.min(idx, list.length - 1));
-  // >>> scan backward for a day separator; else derive from the message timestamp
-  for (let i = i0; i >= 0; i--) {
-    const it = list[i]!;
-    if (it.kind === "day") return it.label;
+  const markerIdx = dayMarkerIndexAt.value[i0]!;
+  if (markerIdx >= 0) {
+    const marker = list[markerIdx];
+    if (marker && marker.kind === "day") return marker.label;
   }
   // >>> no separator found above, use the timestamp of the item at idx
   const fallback = list[i0];
@@ -2561,22 +2626,25 @@ const paintCache = new Map<
 const paintStyles = ref<Map<string, Record<string, string>>>(new Map());
 const personalEmoteMaps = ref<Map<string, EmoteMap>>(new Map());
 
-// >>> bust row cache on any visual dep change; these maps are replaced atomically so a shallow watch is enough
-watch(
-  [
-    emoteMap,
-    personalEmoteMaps,
-    paintStyles,
-    twitchBadgeMap,
-    sevenTvBadgeMap,
-    hide7tv,
-    plainUsernames,
-  ],
-  () => {
-    _rowCache.clear();
-    _rowCacheVersion.value++;
-  },
-);
+// >>> bust the WHOLE row cache only for channel-wide changes; paints/7tv-badges/personal-emotes
+// >>> trickle in per-user via commitCosmetics, which invalidates just those rows instead (see below)
+watch([emoteMap, twitchBadgeMap, hide7tv, plainUsernames], () => {
+  _rowCache.clear();
+  _rowCacheVersion.value++;
+});
+
+// >>> targeted invalidation - only the rows belonging to the given usernames get recomputed,
+// >>> so one trickled-in paint/badge doesn't force every visible row's html to rebuild
+function invalidateRowsForUsers(usernames: Set<string>) {
+  if (!usernames.size) return;
+  for (const m of msgs.value) {
+    const key = (m.username ?? "").toLowerCase();
+    if (usernames.has(key)) {
+      _rowCache.delete(m.id ?? `${m.timestamp}:${m.username}`);
+    }
+  }
+  _rowCacheVersion.value++;
+}
 
 // >>> Paint CSS watcher (registered here because paintStyles must be declared first).
 watch([paintStyles, plainUsernames, hide7tv], () => {
@@ -2827,6 +2895,14 @@ function commitCosmetics(acc: {
     const m = new Map(personalEmoteMaps.value);
     acc.emotes.forEach((v, k) => m.set(k, v));
     personalEmoteMaps.value = m;
+  }
+  if (acc.paints.size || acc.badges.size || acc.emotes.size) {
+    const changed = new Set<string>([
+      ...acc.paints.keys(),
+      ...acc.badges.keys(),
+      ...acc.emotes.keys(),
+    ]);
+    invalidateRowsForUsers(changed);
   }
 }
 
