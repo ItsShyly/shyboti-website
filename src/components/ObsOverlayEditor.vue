@@ -505,6 +505,33 @@ async function addToScene() {
   busy.value = false;
   menuOpen.value = false;
 }
+// >>> makes an independent copy of this overlay (own elements) and attaches the copy
+// >>> to the picked scene - lets a scene diverge instead of sharing the same content
+async function duplicateToScene() {
+  if (busy.value || !currentOverlay.value || !activateScene.value) return;
+  busy.value = true;
+  try {
+    const dupRes = await fetch(
+      `${API}/overlays/${props.channel}/${currentOverlay.value.id}/duplicate`,
+      { method: "POST", headers: props.authHeaders },
+    );
+    if (dupRes.ok) {
+      const d = (await dupRes.json()) as { overlay: Overlay };
+      const addRes = await fetch(`${API}/overlay/${props.channel}/${d.overlay.id}/add-to-scene`, {
+        method: "POST",
+        headers: { ...props.authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ scene: activateScene.value }),
+      });
+      if (addRes.ok) {
+        currentOverlayId.value = d.overlay.id;
+        selectedIds.value = [];
+        await loadOverlaysList();
+        await loadElements();
+      }
+    }
+  } catch { }
+  busy.value = false;
+}
 async function removeFromScene() {
   if (busy.value || !currentOverlay.value) return;
   busy.value = true;
@@ -779,9 +806,16 @@ onUnmounted(() => {
               :title="`Replaces “${occupantOverlay.name}”, currently attached to this scene`" @click="swapIn">
               {{ busy ? "…" : "Swap in" }}
             </button>
-            <button v-else class="ovl-activate-btn" :disabled="busy || !activateScene" @click="addToScene">
-              {{ busy ? "…" : "Add to scene" }}
-            </button>
+            <template v-else>
+              <button class="ovl-activate-btn" :disabled="busy || !activateScene" @click="addToScene">
+                {{ busy ? "…" : "Add to scene" }}
+              </button>
+              <button class="ovl-activate-btn" :disabled="busy || !activateScene"
+                title="Make an independent copy of this overlay and attach the copy to this scene"
+                @click="duplicateToScene">
+                Duplicate to this scene
+              </button>
+            </template>
           </template>
           <div v-else class="ovl-activate-menu">
             <button class="ovl-activate-btn" :disabled="busy" @click="menuOpen = !menuOpen">
