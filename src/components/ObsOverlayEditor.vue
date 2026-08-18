@@ -731,9 +731,27 @@ function discard() {
   selectedIds.value = [];
 }
 
+// vvv confirm before closing with unsaved changes vvv
+const closeConfirmOpen = ref(false);
+function requestClose() {
+  if (dirty.value) closeConfirmOpen.value = true;
+  else emit("close");
+}
+async function saveAndClose() {
+  closeConfirmOpen.value = false;
+  await save();
+  emit("close");
+}
+function discardAndClose() {
+  closeConfirmOpen.value = false;
+  emit("close");
+}
+// ^^^ confirm before closing ^^^
+
 function onKeydown(e: KeyboardEvent) {
   if (e.key === "Escape") {
-    emit("close");
+    if (closeConfirmOpen.value) closeConfirmOpen.value = false;
+    else requestClose();
     return;
   }
   const mod = e.ctrlKey || e.metaKey;
@@ -845,7 +863,7 @@ onUnmounted(() => {
             <button class="ovl-btn-save" :disabled="!dirty || saving" @click="save()">
               {{ saving ? "Saving…" : "Save" }}
             </button>
-            <button class="ovl-close-btn" title="Close (Esc)" @click="emit('close')" v-html="iconSvgFor('x')"></button>
+            <button class="ovl-close-btn" title="Close (Esc)" @click="requestClose" v-html="iconSvgFor('x')"></button>
           </div>
         </div>
 
@@ -953,6 +971,20 @@ onUnmounted(() => {
                 <button class="ovl-counters-btn" title="Increase" @click="bumpCounter(name, 1)">+</button>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="closeConfirmOpen" class="ovl-close-confirm-backdrop" @mousedown.self="closeConfirmOpen = false">
+        <div class="ovl-close-confirm">
+          <div class="ovl-close-confirm-title">Close without saving?</div>
+          <div class="ovl-close-confirm-body">You have unsaved changes. Save them before closing, or discard them?</div>
+          <div class="ovl-close-confirm-actions">
+            <button class="ovl-btn-cancel" @click="closeConfirmOpen = false">Cancel</button>
+            <button class="ovl-btn-delete" @click="discardAndClose">Discard</button>
+            <button class="ovl-btn-save" :disabled="saving" @click="saveAndClose">
+              {{ saving ? "Saving…" : "Save & close" }}
+            </button>
           </div>
         </div>
       </div>
@@ -1493,6 +1525,44 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 8px;
   align-items: flex-start;
+}
+
+.ovl-close-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ovl-close-confirm {
+  width: 320px;
+  background: #16161a;
+  border: 1px solid #2a2a30;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+  padding: 18px;
+}
+
+.ovl-close-confirm-title {
+  color: #e0e0e0;
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.ovl-close-confirm-body {
+  color: #888;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.ovl-close-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 </style>
