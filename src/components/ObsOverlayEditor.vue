@@ -61,6 +61,22 @@ const dirty = ref(false);
 const previewValues = ref<Record<string, string>>({});
 const snapEnabled = ref(true);
 
+// vvv "saved X ago" - ticks so the label stays fresh without re-saving vvv
+const lastSavedAt = ref<number | null>(null);
+const clockNow = ref(Date.now());
+let clockTimer: ReturnType<typeof setInterval> | null = null;
+const lastSavedLabel = computed(() => {
+  if (!lastSavedAt.value) return "";
+  const secs = Math.max(0, Math.round((clockNow.value - lastSavedAt.value) / 1000));
+  if (secs < 5) return "saved just now";
+  if (secs < 60) return `saved ${secs}s ago`;
+  const mins = Math.round(secs / 60);
+  if (mins < 60) return `saved ${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  return `saved ${hours}h ago`;
+});
+// ^^^ "saved X ago" ^^^
+
 // >>> editor-only backdrop - never rendered live, just lets you eyeball contrast or
 // >>> compare against the real scene (only offered while the overlay is hidden there)
 const stageBackdrop = ref<"checker" | "white" | "black" | "scene">("checker");
@@ -230,6 +246,7 @@ async function loadElements() {
       dirty.value = false;
       historyPast.value = [];
       historyFuture.value = [];
+      lastSavedAt.value = d.overlay?.updated_at || null;
     }
   } catch { }
   fetchPreviewValues();
@@ -606,6 +623,7 @@ async function save(opts: { silent?: boolean } = {}) {
       },
     );
     if (res.ok) {
+      lastSavedAt.value = Date.now();
       if (opts.silent) {
         // >>> live update - don't reload from the server mid-edit, that'd wipe undo history
         savedIds.value = new Set(pendingElements.value.map((e) => e.id));
@@ -659,11 +677,15 @@ async function onLivePreview(updates: Array<{ id: string; patch: Partial<Overlay
   });
   livePreviewSaving = true;
   try {
-    await fetch(`${API}/overlay/${props.channel}/${currentOverlayId.value}/elements/bulk`, {
-      method: "PUT",
-      headers: { ...props.authHeaders, "Content-Type": "application/json" },
-      body: JSON.stringify({ elements: merged.map(toWireElement), deletedIds: [] }),
-    });
+    const res = await fetch(
+      `${API}/overlay/${props.channel}/${currentOverlayId.value}/elements/bulk`,
+      {
+        method: "PUT",
+        headers: { ...props.authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ elements: merged.map(toWireElement), deletedIds: [] }),
+      },
+    );
+    if (res.ok) lastSavedAt.value = Date.now();
   } catch { }
   livePreviewSaving = false;
 }
@@ -724,9 +746,11 @@ onMounted(() => {
   // >>> capture phase - canvas item clicks stopPropagation(), bubble phase would never see them
   window.addEventListener("mousedown", onWindowMousedownForMenu, true);
   previewTimer = setInterval(fetchPreviewValues, 5000);
+  clockTimer = setInterval(() => (clockNow.value = Date.now()), 1000);
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeydown);
+  if (clockTimer) clearInterval(clockTimer);
   window.removeEventListener("mousedown", onWindowMousedownForMenu, true);
   if (previewTimer) clearInterval(previewTimer);
   if (liveUpdateTimer) clearTimeout(liveUpdateTimer);
@@ -790,10 +814,11 @@ onUnmounted(() => {
         <div class="ovl-activate-bar">
           <span class="ovl-activate-dot" :class="{ on: overlayVisible }"></span>
           <span class="ovl-activate-status">
-            <template v-if="overlayAdded">{{ overlayVisible ? "Live in OBS - " : "Added, hidden - " }}{{
+            <template v-if="overlayAdded">{{ overlayVisible ? "Visible in OBS - " : "Added, hidden - " }}{{
               activateScene }}</template>
             <template v-else-if="occupantOverlay">“{{ occupantOverlay.name }}” is on this scene</template>
             <template v-else>Not added to {{ activateScene || "a scene" }}</template>
+            <span v-if="lastSavedLabel" class="ovl-activate-saved">{{ lastSavedLabel }}</span>
           </span>
           <span v-if="currentOverlay && currentOverlay.scenes.length > 1" class="ovl-activate-count">
             on {{ currentOverlay.scenes.length }} scenes
@@ -1013,6 +1038,13 @@ onUnmounted(() => {
   color: #888;
   font-size: 12px;
   margin-right: auto;
+}
+
+.ovl-activate-saved {
+  margin-left: 8px;
+  color: #666;
+  opacity: 0.6;
+  font-size: 10px;
 }
 
 .ovl-activate-select {
