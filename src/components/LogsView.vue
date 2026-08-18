@@ -3395,11 +3395,6 @@ function paintNameStyle(paint: {
               <div>{{ t("logs.col.user") }}</div>
               <div>{{ t("logs.col.msg") }}</div>
             </div>
-            <div v-if="!isMobileView && !loading" class="day-jump-bar">
-              <button class="day-jump-btn" @click="jumpOneDayUp">
-                <span v-html="iconSvg('arrow-up')"></span> jump to {{ jumpTargetDayLabel || "..." }}
-              </button>
-            </div>
             <div v-if="loading" class="logs-skeleton-table">
               <div class="logs-skeleton-row" v-for="i in 16" :key="i">
                 <div class="ep-skeleton-block logs-skeleton-time"></div>
@@ -3413,6 +3408,11 @@ function paintNameStyle(paint: {
                 {{ viewportDayLabel }}
               </div>
               <div class="logs-tbody" ref="scrollerRef">
+                <div v-if="!isMobileView && !loading" class="day-jump-pill-row">
+                  <button class="day-jump-btn" @click="jumpOneDayUp">
+                    <span v-html="iconSvg('arrow-up')"></span> jump to {{ jumpTargetDayLabel || "..." }}
+                  </button>
+                </div>
                 <div v-if="loadingMore" class="top-loader">
                   <span class="spinner" v-html="iconSvg('refresh-cw')"></span> {{ t("logs.load_older") }}
                 </div>
@@ -3999,28 +3999,31 @@ function paintNameStyle(paint: {
   width: 55%;
 }
 
-.day-jump-bar {
+.day-jump-pill-row {
   position: sticky;
-  top: 0;
+  top: 8px;
+  height: 0;
   z-index: 4;
-  background: #101015;
-  border-bottom: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
 }
 
 .day-jump-btn {
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  width: 100%;
-  height: 100%;
-  padding: 10px 0;
-  background: #6f2bff14;
-  border: 0;
-  color: #555;
+  gap: 5px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #6f2bff44;
+  background: rgba(20, 14, 34, 0.85);
+  backdrop-filter: blur(6px);
+  color: #b9a6ff;
   font-size: 11px;
   font-weight: 600;
   cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
   transition:
     color 0.15s,
     border-color 0.15s,
@@ -4033,8 +4036,9 @@ function paintNameStyle(paint: {
 }
 
 .day-jump-btn:hover {
-  color: #d2d2df;
-  background: rgba(152, 101, 255, 0.473);
+  color: #fff;
+  border-color: #6f2bff;
+  background: rgba(111, 43, 255, 0.35);
 }
 
 .logs-tbody-wrap {
