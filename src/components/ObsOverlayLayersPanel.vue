@@ -12,6 +12,8 @@ const emit = defineEmits<{
   "toggle-lock": [id: string];
   "toggle-visible": [id: string];
   "update-elements": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
+  "hide-all": [];
+  "show-all": [];
   delete: [id: string];
   group: [];
   ungroup: [];
@@ -27,6 +29,8 @@ const canUngroup = computed(() =>
     (id) => props.elements.find((e) => e.id === id)?.group_id,
   ),
 );
+const canHideAll = computed(() => props.elements.some((e) => e.visible));
+const canShowAll = computed(() => props.elements.some((e) => !e.visible));
 
 function onRowClick(id: string, e: MouseEvent) {
   emit("select", id, e.shiftKey || e.ctrlKey || e.metaKey);
@@ -65,6 +69,14 @@ function onDrop(i: number) {
         layers
       </span>
       <div class="ovl-layers-group-actions">
+        <button class="ovl-layers-mini-btn" :disabled="!canHideAll" title="Hide every element"
+          @click.stop="emit('hide-all')">
+          hide all
+        </button>
+        <button class="ovl-layers-mini-btn" :disabled="!canShowAll" title="Show every element"
+          @click.stop="emit('show-all')">
+          show all
+        </button>
         <button class="ovl-layers-mini-btn" :disabled="!canGroup" title="Group selection"
           @click.stop="emit('group')">
           group

@@ -252,8 +252,8 @@ async function load() {
   await loadElements();
   if (!activateScene.value) {
     activateScene.value =
-      currentOverlay.value?.scenes[0]?.scene ||
       props.initialScene ||
+      currentOverlay.value?.scenes[0]?.scene ||
       props.currentScene ||
       props.scenes[0] ||
       "";
@@ -413,6 +413,17 @@ function toggleVisible(id: string) {
   if (!el) return;
   pushHistory();
   applyPatch(id, { visible: !el.visible });
+  save({ silent: true }); // <<< hide/show is expected to apply immediately, not wait for Save
+}
+function hideAllLayers() {
+  if (!pendingElements.value.some((e) => e.visible)) return;
+  updateElements(pendingElements.value.map((e) => ({ id: e.id, patch: { visible: false } })));
+  save({ silent: true });
+}
+function showAllLayers() {
+  if (!pendingElements.value.some((e) => !e.visible)) return;
+  updateElements(pendingElements.value.map((e) => ({ id: e.id, patch: { visible: true } })));
+  save({ silent: true });
 }
 
 function groupSelected() {
@@ -581,18 +592,54 @@ async function save(opts: { silent?: boolean } = {}) {
   saving.value = false;
 }
 
-// vvv live update - auto-save (debounced) on every change instead of only on Save click vvv
+// vvv live update - auto-save on every change instead of only on Save click vvv
 const liveUpdate = ref(false);
+// >>> throttle+trailing, not a pure debounce - continuous typing/dragging would otherwise
+// >>> keep resetting a debounce timer and never actually push until you stop entirely
+const LIVE_THROTTLE_MS = 800;
+let liveUpdateLastSaveAt = 0;
 let liveUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleLiveSave() {
+  if (!liveUpdate.value || !dirty.value) return;
+  const elapsed = Date.now() - liveUpdateLastSaveAt;
+  if (liveUpdateTimer) clearTimeout(liveUpdateTimer);
+  if (elapsed >= LIVE_THROTTLE_MS) {
+    liveUpdateLastSaveAt = Date.now();
+    save({ silent: true });
+  } else {
+    liveUpdateTimer = setTimeout(() => {
+      liveUpdateLastSaveAt = Date.now();
+      save({ silent: true });
+    }, LIVE_THROTTLE_MS - elapsed);
+  }
+}
+watch(pendingElements, scheduleLiveSave, { deep: true });
 watch(
-  pendingElements,
-  () => {
-    if (!liveUpdate.value || !dirty.value) return;
-    if (liveUpdateTimer) clearTimeout(liveUpdateTimer);
-    liveUpdateTimer = setTimeout(() => save({ silent: true }), 500);
+  () => !!props.obsReady && overlayVisible.value,
+  (ok) => {
+    if (!ok) liveUpdate.value = false;
   },
-  { deep: true },
 );
+
+// >>> mid-drag/resize/rotate - pushes the live position without touching pendingElements,
+// >>> so it never becomes an undo step and never fights the in-progress drag
+let livePreviewSaving = false;
+async function onLivePreview(updates: Array<{ id: string; patch: Partial<OverlayElement> }>) {
+  if (!liveUpdate.value || !currentOverlayId.value || livePreviewSaving) return;
+  const merged = pendingElements.value.map((e) => {
+    const u = updates.find((x) => x.id === e.id);
+    return u ? { ...e, ...u.patch } : e;
+  });
+  livePreviewSaving = true;
+  try {
+    await fetch(`${API}/overlay/${props.channel}/${currentOverlayId.value}/elements/bulk`, {
+      method: "PUT",
+      headers: { ...props.authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ elements: merged.map(toWireElement), deletedIds: [] }),
+    });
+  } catch { }
+  livePreviewSaving = false;
+}
 // ^^^ live update ^^^
 
 function discard() {
@@ -699,7 +746,8 @@ onUnmounted(() => {
             <button class="ovl-btn-cancel" :disabled="!historyFuture.length" @click="redo" title="Redo (Ctrl+Shift+Z)">
               <span v-html="iconSvgFor('corner-up-right')"></span>
             </button>
-            <button class="ovl-btn-cancel" :class="{ on: liveUpdate }" @click="liveUpdate = !liveUpdate"
+            <button v-if="obsReady && overlayVisible" class="ovl-btn-cancel" :class="{ on: liveUpdate }"
+              @click="liveUpdate = !liveUpdate"
               title="Auto-save every change as you make it, not just when you click Save">
               Live Update
             </button>
@@ -757,7 +805,7 @@ onUnmounted(() => {
               :base-width="baseWidth" :base-height="baseHeight" :backdrop="stageBackdrop"
               :scene-shot-url="sceneShotUrl" :preview-values="previewValues" :snap-enabled="snapEnabled"
               @select="onSelect" @update-element="updateElement" @update-elements="updateElements"
-              @delete-element="deleteOne" />
+              @delete-element="deleteOne" @live-preview="onLivePreview" />
           </div>
 
           <div class="ovl-props">
@@ -795,7 +843,8 @@ onUnmounted(() => {
 
             <ObsOverlayLayersPanel :elements="pendingElements" :selected-ids="selectedIds" @select="onSelect"
               @toggle-lock="toggleLock" @toggle-visible="toggleVisible" @update-elements="updateElements"
-              @delete="deleteOne" @group="groupSelected" @ungroup="ungroupSelected" />
+              @hide-all="hideAllLayers" @show-all="showAllLayers" @delete="deleteOne" @group="groupSelected"
+              @ungroup="ungroupSelected" />
           </div>
         </div>
       </div>

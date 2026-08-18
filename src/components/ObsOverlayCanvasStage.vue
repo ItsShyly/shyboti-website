@@ -17,7 +17,20 @@ const emit = defineEmits<{
   "update-element": [id: string, patch: Partial<OverlayElement>];
   "update-elements": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
   "delete-element": [id: string];
+  // >>> throttled, fired mid-drag/resize/rotate - live update mode pushes these without
+  // >>> touching undo history, so OBS can follow along before the mouse is released
+  "live-preview": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
 }>();
+
+// >>> shared throttle for all three live-preview emitters below
+const LIVE_PREVIEW_THROTTLE_MS = 700;
+let lastLivePreviewAt = 0;
+function emitLivePreview(updates: Array<{ id: string; patch: Partial<OverlayElement> }>) {
+  const now = Date.now();
+  if (now - lastLivePreviewAt < LIVE_PREVIEW_THROTTLE_MS) return;
+  lastLivePreviewAt = now;
+  emit("live-preview", updates);
+}
 
 const stageRef = ref<HTMLElement | null>(null);
 const stageStyle = computed(() => {
@@ -142,6 +155,9 @@ function onDragMove(e: MouseEvent) {
     preview[id] = { x: origin.x + appliedDx, y: origin.y + appliedDy };
   }
   dragPreview.value = preview;
+  emitLivePreview(
+    Object.entries(preview).map(([id, pos]) => ({ id, patch: pos })),
+  );
 }
 function onDragEnd() {
   window.removeEventListener("mousemove", onDragMove);
@@ -224,6 +240,7 @@ function onResizeMove(e: MouseEvent) {
     newH = Math.round(newH / GRID) * GRID;
   }
   resizePreview.value = { id: r.id, x: newX, y: newY, w: newW, h: newH };
+  emitLivePreview([{ id: r.id, patch: { x: newX, y: newY, w: newW, h: newH } }]);
 }
 function onResizeEnd() {
   window.removeEventListener("mousemove", onResizeMove);
@@ -262,6 +279,7 @@ function onRotateMove(e: MouseEvent) {
   if (!e.shiftKey) angle = Math.round(angle / 15) * 15; // <<< snap to 15deg, hold shift for free rotation
   angle = ((angle % 360) + 360) % 360;
   rotatePreview.value = { id: r.id, rotation: angle };
+  emitLivePreview([{ id: r.id, patch: { rotation: angle } }]);
 }
 function onRotateEnd() {
   window.removeEventListener("mousemove", onRotateMove);
