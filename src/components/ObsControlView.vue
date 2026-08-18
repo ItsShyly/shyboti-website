@@ -837,6 +837,36 @@ async function generateToken() {
   generatingToken.value = false;
 }
 
+function openAgentPairingPage() {
+  window.open("http://127.0.0.1:47115/", "_blank");
+}
+
+const checkingAgentUpdate = ref(false);
+const agentUpdateResult = ref("");
+async function checkAgentUpdate() {
+  if (!session.value || !isBroadcaster.value) return;
+  checkingAgentUpdate.value = true;
+  agentUpdateResult.value = "";
+  try {
+    const res = await fetch(`${API}/obs/${session.value.channel}/check-update`, {
+      method: "POST",
+      headers: authHeaders.value,
+    });
+    if (res.ok) {
+      const d = (await res.json()) as { ok: boolean; updated: boolean };
+      agentUpdateResult.value = d.updated
+        ? "updated - agent is restarting"
+        : "already up to date";
+    } else {
+      agentUpdateResult.value = "agent not reachable";
+    }
+  } catch {
+    agentUpdateResult.value = "agent not reachable";
+  }
+  checkingAgentUpdate.value = false;
+  setTimeout(() => (agentUpdateResult.value = ""), 5000);
+}
+
 const disconnectingAgent = ref(false);
 const disconnectConfirm = ref(false);
 async function disconnectAgent() {
@@ -2106,6 +2136,22 @@ watch(
             <div class="ep-field-hint">
               Only you (the broadcaster) can change this - moderators can see
               previews if they're on, but can't turn them on or off.
+            </div>
+          </div>
+
+          <div v-if="agentStatus?.paired" class="ep-field-group">
+            <label class="ep-field-label">Agent controls</label>
+            <div class="obs-dl-row">
+              <button class="ep-btn-cancel obs-dl-btn" @click="openAgentPairingPage">
+                Open agent pairing page
+              </button>
+              <button class="ep-btn-cancel obs-dl-btn" :disabled="checkingAgentUpdate" @click="checkAgentUpdate">
+                {{ checkingAgentUpdate ? "checking..." : "Check for agent update" }}
+              </button>
+            </div>
+            <div v-if="agentUpdateResult" class="ep-field-hint">{{ agentUpdateResult }}</div>
+            <div class="ep-field-hint">
+              The pairing page only opens if the agent is running on this PC.
             </div>
           </div>
 
