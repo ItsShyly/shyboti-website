@@ -89,6 +89,7 @@ const collapsed = reactive<Record<string, boolean>>({
   position: true,
   border: true,
   typography: true,
+  color: true,
 });
 function toggle(key: string) {
   collapsed[key] = !collapsed[key];
@@ -177,7 +178,30 @@ const alignOptions = [
           </select>
         </label>
         <label class="ovl-style-field">
-          Color
+          Padding
+          <input type="number" :value="element.style.padding ?? 0" @input="setStyle({ padding: num($event) })" />
+        </label>
+        <label class="ovl-style-field">
+          Alignment
+          <div class="ovl-style-align-grid">
+            <button v-for="opt in alignOptions" :key="opt.h + opt.v" class="ovl-style-align-btn" :class="{
+              active: (element.style.textAlign || 'left') === opt.h && (element.style.verticalAlign || 'top') === opt.v,
+            }" :title="`${opt.v} ${opt.h}`"
+              @click="setStyle({ textAlign: opt.h, verticalAlign: opt.v })">
+              <span class="ovl-style-align-dot"></span>
+            </button>
+          </div>
+        </label>
+      </template>
+
+      <!-- vvv color is a distinct concern from font shape - own section, auto-collapsed vvv -->
+      <button class="ovl-style-section-title" @click="toggle('color')">
+        <span v-html="iconSvgFor(collapsed.color ? 'chevron-right' : 'chevron-down')"></span>
+        color
+      </button>
+      <template v-if="!collapsed.color">
+        <label class="ovl-style-field">
+          Text color
           <input type="color" :value="element.style.color || '#ffffff'" @input="setStyle({ color: str($event) })" />
         </label>
         <label class="ovl-style-check">
@@ -203,21 +227,6 @@ const alignOptions = [
           Shadow color
           <input type="color" :value="element.style.shadowColor || '#000000'"
             @input="setStyle({ shadowColor: str($event) })" />
-        </label>
-        <label class="ovl-style-field">
-          Padding
-          <input type="number" :value="element.style.padding ?? 0" @input="setStyle({ padding: num($event) })" />
-        </label>
-        <label class="ovl-style-field">
-          Alignment
-          <div class="ovl-style-align-grid">
-            <button v-for="opt in alignOptions" :key="opt.h + opt.v" class="ovl-style-align-btn" :class="{
-              active: (element.style.textAlign || 'left') === opt.h && (element.style.verticalAlign || 'top') === opt.v,
-            }" :title="`${opt.v} ${opt.h}`"
-              @click="setStyle({ textAlign: opt.h, verticalAlign: opt.v })">
-              <span class="ovl-style-align-dot"></span>
-            </button>
-          </div>
         </label>
       </template>
     </template>
