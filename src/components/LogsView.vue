@@ -262,8 +262,10 @@ function readInputs() {
   channel.value =
     channelInputRef.value?.value.trim().toLowerCase().replace(/^#/, "") ||
     channel.value;
-  userFilter.value = userInputRef.value?.value.trim() || userFilter.value;
-  termFilter.value = termInputRef.value?.value.trim() || termFilter.value;
+  // >>> unlike channel, these are optional filters - clearing the field must clear
+  // >>> the search too, so no falling back to the previous value when it's empty
+  userFilter.value = userInputRef.value?.value.trim() ?? userFilter.value;
+  termFilter.value = termInputRef.value?.value.trim() ?? termFilter.value;
   dateFilter.value = dateFrom.value;
 }
 
