@@ -392,6 +392,15 @@ function commitEdit(el: OverlayElement) {
   editingId.value = null;
   if (text !== el.content) emit("update-element", el.id, { content: text });
 }
+// >>> live update while still typing - throttled push, doesn't touch pendingElements so
+// >>> the caret never gets fought by a re-render (only commitEdit does that, on blur)
+function onTextEditInput(el: OverlayElement) {
+  const node = stageRef.value?.querySelector(
+    `[data-edit-id="${el.id}"]`,
+  ) as HTMLElement | null;
+  if (!node) return;
+  emitLivePreview([{ id: el.id, patch: { content: node.textContent ?? "" } }]);
+}
 function displayText(el: OverlayElement) {
   if (el.type === "variable-text") {
     const resolved = props.previewValues?.[el.id];
@@ -469,7 +478,7 @@ defineExpose({ stageRef });
       <div v-else-if="el.type === 'shape'" class="ovl-item-shape" :style="shapeStyle(el)"></div>
       <div v-else class="ovl-item-text" :style="textStyle(el)" @dblclick.stop="startEdit(el)">
         <div v-if="editingId === el.id" class="ovl-item-text-edit" contenteditable="true" :data-edit-id="el.id"
-          @mousedown.stop @blur="commitEdit(el)"
+          @mousedown.stop @blur="commitEdit(el)" @input="onTextEditInput(el)"
           @keydown.enter.prevent="($event.target as HTMLElement).blur()"></div>
         <span v-else>{{ displayText(el) }}</span>
       </div>
