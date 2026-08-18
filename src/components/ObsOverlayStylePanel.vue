@@ -24,6 +24,36 @@ function setData(patch: Record<string, any>) {
 const num = (e: Event) => Number((e.target as HTMLInputElement).value) || 0;
 const str = (e: Event) => (e.target as HTMLInputElement).value;
 
+// vvv background = color swatch + opacity slider, composed into an rgba() string vvv
+function parseBackground(bg: string): { hex: string; alpha: number } {
+  const m = bg.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/i);
+  if (m) {
+    const r = Number(m[1]), g = Number(m[2]), b = Number(m[3]);
+    const a = m[4] !== undefined ? Number(m[4]) : 1;
+    const hex = "#" + [r, g, b].map((n) => n.toString(16).padStart(2, "0")).join("");
+    return { hex, alpha: Math.round(a * 100) };
+  }
+  if (/^#[0-9a-f]{6}$/i.test(bg)) return { hex: bg, alpha: 100 };
+  return { hex: "#000000", alpha: 0 };
+}
+function hexAlphaToRgba(hex: string, alphaPct: number): string {
+  const m = hex.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i);
+  if (!m) return "";
+  const r = parseInt(m[1]!, 16), g = parseInt(m[2]!, 16), b = parseInt(m[3]!, 16);
+  const a = Math.max(0, Math.min(100, alphaPct));
+  if (a <= 0) return "";
+  if (a >= 100) return `rgb(${r}, ${g}, ${b})`;
+  return `rgba(${r}, ${g}, ${b}, ${(a / 100).toFixed(2)})`;
+}
+const backgroundParsed = computed(() => parseBackground(props.element.style.background || ""));
+function setBackgroundHex(hex: string) {
+  setStyle({ background: hexAlphaToRgba(hex, backgroundParsed.value.alpha || 100) });
+}
+function setBackgroundAlpha(alphaPct: number) {
+  setStyle({ background: hexAlphaToRgba(backgroundParsed.value.hex, alphaPct) });
+}
+// ^^^ background ^^^
+
 // >>> aspect-lock keeps w/h ratio fixed while editing either field
 const aspectLocked = ref(false);
 const aspectRatio = computed(() =>
@@ -176,7 +206,7 @@ const alignOptions = [
         </label>
         <label class="ovl-style-field">
           Padding
-          <input type="number" :value="element.style.padding ?? 0" @change="setStyle({ padding: num($event) })" />
+          <input type="number" :value="element.style.padding ?? 0" @input="setStyle({ padding: num($event) })" />
         </label>
         <label class="ovl-style-field">
           Alignment
@@ -212,19 +242,24 @@ const alignOptions = [
       <template v-if="!collapsed.border">
         <label class="ovl-style-field">
           Background
-          <input type="text" :value="element.style.background || ''" placeholder="none, e.g. rgba(0,0,0,0.6)"
-            @change="setStyle({ background: str($event) })" />
+          <div class="ovl-style-bg-row">
+            <input type="color" :value="backgroundParsed.hex"
+              @input="setBackgroundHex(($event.target as HTMLInputElement).value)" />
+            <input type="range" min="0" max="100" :value="backgroundParsed.alpha" title="opacity"
+              @input="setBackgroundAlpha(Number(($event.target as HTMLInputElement).value))" />
+            <span class="ovl-style-bg-pct">{{ backgroundParsed.alpha }}%</span>
+          </div>
         </label>
         <div class="ovl-style-grid">
           <label class="ovl-style-num">
             Border w.
             <input type="number" :value="element.style.borderWidth ?? 0"
-              @change="setStyle({ borderWidth: num($event) })" />
+              @input="setStyle({ borderWidth: num($event) })" />
           </label>
           <label class="ovl-style-num">
             Radius
             <input type="number" :value="element.style.borderRadius ?? 0"
-              @change="setStyle({ borderRadius: num($event) })" />
+              @input="setStyle({ borderRadius: num($event) })" />
           </label>
         </div>
         <label class="ovl-style-field">
@@ -371,6 +406,46 @@ const alignOptions = [
   border: 1px solid #2a2a30;
   padding: 2px;
   cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.ovl-style-field input[type="color"]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.ovl-style-field input[type="color"]::-webkit-color-swatch {
+  border: none;
+  border-radius: 1px;
+}
+
+.ovl-style-field input[type="color"]::-moz-color-swatch {
+  border: none;
+}
+
+.ovl-style-bg-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ovl-style-bg-row input[type="color"] {
+  width: 32px;
+  flex-shrink: 0;
+}
+
+.ovl-style-bg-row input[type="range"] {
+  flex: 1;
+  accent-color: #6f2bff;
+  cursor: pointer;
+}
+
+.ovl-style-bg-pct {
+  flex-shrink: 0;
+  width: 30px;
+  text-align: right;
+  font-size: 10px;
+  color: #888;
 }
 
 .ovl-style-field input:focus,

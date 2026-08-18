@@ -10,6 +10,7 @@ const props = defineProps<{
   backdrop?: "checker" | "white" | "black" | "scene";
   sceneShotUrl?: string | null;
   previewValues?: Record<string, string>;
+  snapEnabled?: boolean;
 }>();
 const emit = defineEmits<{
   select: [id: string | null, additive: boolean];
@@ -39,6 +40,9 @@ function scale(): number {
   return el.getBoundingClientRect().width / props.baseWidth;
 }
 
+// >>> front of stack (highest z) rendered last, so it's visually on top - matches layers panel
+const sortedElements = computed(() => [...props.elements].sort((a, b) => a.z_index - b.z_index));
+
 function select(id: string | null, additive: boolean) {
   emit("select", id, additive);
 }
@@ -46,7 +50,7 @@ function select(id: string | null, additive: boolean) {
 // vvv snapping vvv
 const snapGuides = ref<{ x: number | null; y: number | null }>({ x: null, y: null });
 function snapValue(raw: { x: number; y: number; w: number; h: number }, selfId: string, disableSnap: boolean) {
-  if (disableSnap) {
+  if (disableSnap || props.snapEnabled === false) {
     snapGuides.value = { x: null, y: null };
     return raw;
   }
@@ -233,8 +237,82 @@ function onResizeEnd() {
 }
 // ^^^ corner resize ^^^
 
+// vvv rotate handle (photoshop-style) vvv
+const rotateState = ref<{ id: string } | null>(null);
+const rotatePreview = ref<{ id: string; rotation: number } | null>(null);
+function onRotateMouseDown(el: OverlayElement, e: MouseEvent) {
+  if (el.locked) return;
+  e.preventDefault();
+  e.stopPropagation();
+  rotateState.value = { id: el.id };
+  window.addEventListener("mousemove", onRotateMove);
+  window.addEventListener("mouseup", onRotateEnd);
+}
+function onRotateMove(e: MouseEvent) {
+  const r = rotateState.value;
+  const stageEl = stageRef.value;
+  if (!r || !stageEl) return;
+  const el = props.elements.find((x) => x.id === r.id);
+  if (!el) return;
+  const s = scale() || 1;
+  const rect = stageEl.getBoundingClientRect();
+  const centerX = rect.left + (el.x + el.w / 2) * s;
+  const centerY = rect.top + (el.y + el.h / 2) * s;
+  let angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI) + 90;
+  if (!e.shiftKey) angle = Math.round(angle / 15) * 15; // <<< snap to 15deg, hold shift for free rotation
+  angle = ((angle % 360) + 360) % 360;
+  rotatePreview.value = { id: r.id, rotation: angle };
+}
+function onRotateEnd() {
+  window.removeEventListener("mousemove", onRotateMove);
+  window.removeEventListener("mouseup", onRotateEnd);
+  const r = rotateState.value;
+  rotateState.value = null;
+  const preview = rotatePreview.value;
+  rotatePreview.value = null;
+  if (!r || !preview) return;
+  emit("update-element", r.id, { rotation: preview.rotation });
+}
+// ^^^ rotate handle ^^^
+
+// >>> canvas-space px (borders/font/radius) need to shrink with the display scale too,
+// >>> or they look proportionally huge next to a box that IS shrunk (mismatched vs real OBS 1:1)
+function shapeStyle(el: OverlayElement) {
+  const s = scale() || 1;
+  return {
+    background: el.style.background || "transparent",
+    border: el.style.borderWidth
+      ? `${el.style.borderWidth * s}px ${el.style.borderStyle || "solid"} ${el.style.borderColor || "#fff"}`
+      : "none",
+    borderRadius: (el.style.borderRadius || 0) * s + "px",
+  };
+}
+function textStyle(el: OverlayElement) {
+  const s = scale() || 1;
+  return {
+    fontFamily: el.style.fontFamily || "inherit",
+    fontSize: (el.style.fontSize || 32) * s + "px",
+    letterSpacing: (el.style.letterSpacing || 0) * s + "px",
+    color: el.style.color || "#fff",
+    textAlign: el.style.textAlign || "left",
+    fontWeight: el.style.fontWeight || "normal",
+    background: el.style.background || "transparent",
+    border: el.style.borderWidth
+      ? `${el.style.borderWidth * s}px ${el.style.borderStyle || "solid"} ${el.style.borderColor || "#fff"}`
+      : "none",
+    borderRadius: (el.style.borderRadius || 0) * s + "px",
+    padding: (el.style.padding || 0) * s + "px",
+    display: "flex",
+    alignItems:
+      el.style.verticalAlign === "middle" ? "center" : el.style.verticalAlign === "bottom" ? "flex-end" : "flex-start",
+    justifyContent:
+      el.style.textAlign === "center" ? "center" : el.style.textAlign === "right" ? "flex-end" : "flex-start",
+  };
+}
+
 function displayStyle(el: OverlayElement) {
   const s = scale();
+  const rotation = rotatePreview.value?.id === el.id ? rotatePreview.value.rotation : el.rotation;
   const dp = dragPreview.value[el.id];
   if (dp) {
     return {
@@ -242,7 +320,7 @@ function displayStyle(el: OverlayElement) {
       top: `${dp.y * s}px`,
       width: `${el.w * s}px`,
       height: `${el.h * s}px`,
-      transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+      transform: rotation ? `rotate(${rotation}deg)` : undefined,
     };
   }
   if (resizePreview.value?.id === el.id) {
@@ -259,7 +337,7 @@ function displayStyle(el: OverlayElement) {
     top: `${el.y * s}px`,
     width: `${el.w * s}px`,
     height: `${el.h * s}px`,
-    transform: el.rotation ? `rotate(${el.rotation}deg)` : undefined,
+    transform: rotation ? `rotate(${rotation}deg)` : undefined,
   };
 }
 
@@ -307,6 +385,9 @@ function displayText(el: OverlayElement) {
 
 // vvv right-click context menu vvv
 const contextMenu = ref<{ x: number; y: number; id: string } | null>(null);
+const contextMenuElement = computed(() =>
+  contextMenu.value ? props.elements.find((e) => e.id === contextMenu.value!.id) ?? null : null,
+);
 function onItemContextMenu(el: OverlayElement, e: MouseEvent) {
   e.preventDefault();
   e.stopPropagation();
@@ -317,12 +398,25 @@ function ctxDelete() {
   if (contextMenu.value) emit("delete-element", contextMenu.value.id);
   contextMenu.value = null;
 }
+// >>> video's own mixer - mute/volume live on the video element itself, no separate audio widget
+function ctxToggleMute() {
+  const el = contextMenuElement.value;
+  if (!el) return;
+  emit("update-element", el.id, { data: { ...el.data, muted: el.data.muted === false } });
+}
+function ctxSetVolume(v: number) {
+  const el = contextMenuElement.value;
+  if (!el) return;
+  emit("update-element", el.id, { data: { ...el.data, volume: v } });
+}
 function onWindowMousedown(e: MouseEvent) {
   if (!contextMenu.value) return;
   if (!(e.target as HTMLElement).closest(".ovl-ctx-menu")) contextMenu.value = null;
 }
-onMounted(() => window.addEventListener("mousedown", onWindowMousedown));
-onUnmounted(() => window.removeEventListener("mousedown", onWindowMousedown));
+// >>> capture phase - item mousedown handlers call stopPropagation(), which would
+// >>> otherwise stop this from ever seeing the click and closing the menu
+onMounted(() => window.addEventListener("mousedown", onWindowMousedown, true));
+onUnmounted(() => window.removeEventListener("mousedown", onWindowMousedown, true));
 // ^^^ context menu ^^^
 
 const guideStyleX = computed(() => {
@@ -343,7 +437,7 @@ defineExpose({ stageRef });
     <div v-if="guideStyleX" class="ovl-guide ovl-guide-v" :style="guideStyleX"></div>
     <div v-if="guideStyleY" class="ovl-guide ovl-guide-h" :style="guideStyleY"></div>
 
-    <div v-for="el in elements" :key="el.id" class="ovl-item" :class="{
+    <div v-for="el in sortedElements" :key="el.id" class="ovl-item" :class="{
       selected: selectedIds.includes(el.id),
       hidden_: !el.visible,
       locked: el.locked,
@@ -354,24 +448,8 @@ defineExpose({ stageRef });
       <div v-else-if="el.type === 'audio'" class="ovl-item-audio">
         {{ el.data.muted !== false ? "🔇" : "🔊" }}
       </div>
-      <div v-else-if="el.type === 'shape'" class="ovl-item-shape" :style="{
-        background: el.style.background || 'transparent',
-        border: el.style.borderWidth ? `${el.style.borderWidth}px ${el.style.borderStyle || 'solid'} ${el.style.borderColor || '#fff'}` : 'none',
-        borderRadius: (el.style.borderRadius || 0) + 'px',
-      }"></div>
-      <div v-else class="ovl-item-text" :style="{
-        fontFamily: el.style.fontFamily || 'inherit',
-        fontSize: (el.style.fontSize || 32) + 'px',
-        color: el.style.color || '#fff',
-        textAlign: el.style.textAlign || 'left',
-        fontWeight: el.style.fontWeight || 'normal',
-        background: el.style.background || 'transparent',
-        border: el.style.borderWidth ? `${el.style.borderWidth}px ${el.style.borderStyle || 'solid'} ${el.style.borderColor || '#fff'}` : 'none',
-        borderRadius: (el.style.borderRadius || 0) + 'px',
-        display: 'flex',
-        alignItems: el.style.verticalAlign === 'middle' ? 'center' : el.style.verticalAlign === 'bottom' ? 'flex-end' : 'flex-start',
-        justifyContent: el.style.textAlign === 'center' ? 'center' : el.style.textAlign === 'right' ? 'flex-end' : 'flex-start',
-      }" @dblclick.stop="startEdit(el)">
+      <div v-else-if="el.type === 'shape'" class="ovl-item-shape" :style="shapeStyle(el)"></div>
+      <div v-else class="ovl-item-text" :style="textStyle(el)" @dblclick.stop="startEdit(el)">
         <div v-if="editingId === el.id" class="ovl-item-text-edit" contenteditable="true" :data-edit-id="el.id"
           @mousedown.stop @blur="commitEdit(el)"
           @keydown.enter.prevent="($event.target as HTMLElement).blur()"></div>
@@ -383,12 +461,27 @@ defineExpose({ stageRef });
         <span class="ovl-handle tr" @mousedown="onHandleMouseDown(el, 'tr', $event)"></span>
         <span class="ovl-handle bl" @mousedown="onHandleMouseDown(el, 'bl', $event)"></span>
         <span class="ovl-handle br" @mousedown="onHandleMouseDown(el, 'br', $event)"></span>
+        <span class="ovl-rotate-handle" title="Drag to rotate (hold Shift for free angle)"
+          @mousedown="onRotateMouseDown(el, $event)">
+          <span class="ovl-rotate-stem"></span>
+          <span class="ovl-rotate-knob"></span>
+        </span>
       </template>
     </div>
 
     <div v-if="contextMenu" class="ovl-ctx-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
       @mousedown.stop>
-      <button @click="ctxDelete">Delete</button>
+      <template v-if="contextMenuElement?.type === 'video'">
+        <button @click="ctxToggleMute">{{ contextMenuElement.data.muted !== false ? "Unmute" : "Mute" }}</button>
+        <div class="ovl-ctx-volume">
+          <span>Vol</span>
+          <input type="range" min="0" max="100" :value="contextMenuElement.data.volume ?? 100"
+            @input="ctxSetVolume(Number(($event.target as HTMLInputElement).value))" />
+          <span>{{ contextMenuElement.data.volume ?? 100 }}%</span>
+        </div>
+        <div class="ovl-ctx-sep"></div>
+      </template>
+      <button class="danger" @click="ctxDelete">Delete</button>
     </div>
   </div>
 </template>
@@ -438,7 +531,6 @@ defineExpose({ stageRef });
   border: 1px solid transparent;
   cursor: move;
   transform-origin: 0 0;
-  overflow: hidden;
 }
 
 .ovl-item.hidden_ {
@@ -483,8 +575,7 @@ defineExpose({ stageRef });
 .ovl-item-text {
   width: 100%;
   height: 100%;
-  white-space: pre-wrap;
-  word-break: break-word;
+  white-space: pre;
   overflow: hidden;
   box-sizing: border-box;
 }
@@ -513,7 +604,7 @@ defineExpose({ stageRef });
   padding: 8px 12px;
   border: none;
   background: transparent;
-  color: #f14949;
+  color: #ccc;
   font-family: inherit;
   font-size: 12px;
   text-align: left;
@@ -521,7 +612,38 @@ defineExpose({ stageRef });
 }
 
 .ovl-ctx-menu button:hover {
+  background: #6f2bff18;
+  color: #e0e0e0;
+}
+
+.ovl-ctx-menu button.danger {
+  color: #f14949;
+}
+
+.ovl-ctx-menu button.danger:hover {
   background: #f1494915;
+  color: #f14949;
+}
+
+.ovl-ctx-sep {
+  height: 1px;
+  background: #2a2a30;
+  margin: 2px 0;
+}
+
+.ovl-ctx-volume {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: #888;
+}
+
+.ovl-ctx-volume input[type="range"] {
+  flex: 1;
+  accent-color: #6f2bff;
+  cursor: pointer;
 }
 
 .ovl-item-label {
@@ -568,5 +690,33 @@ defineExpose({ stageRef });
   bottom: -5px;
   right: -5px;
   cursor: nwse-resize;
+}
+
+.ovl-rotate-handle {
+  position: absolute;
+  top: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: grab;
+  z-index: 3;
+}
+
+.ovl-rotate-stem {
+  width: 1px;
+  height: 14px;
+  background: #f14949;
+}
+
+.ovl-rotate-knob {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f14949;
+  border: 1px solid #fff;
 }
 </style>

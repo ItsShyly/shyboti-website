@@ -96,6 +96,7 @@ export function defaultElement(
       w: 320,
       h: 180,
       content: "",
+      data: type === "video" ? { muted: true, volume: 100 } : {},
     };
   }
   if (type === "audio") {
@@ -152,18 +153,4 @@ export function shapeDefaultStyle(variant: ShapeVariant): OverlayElementStyle {
     borderRadius: 0,
     borderStyle: "solid",
   };
-}
-
-// >>> adding a video also creates a small paired audio-control element next to it
-export function defaultVideoWithAudio(
-  centerX: number,
-  centerY: number,
-): [OverlayElement, OverlayElement] {
-  const video = defaultElement("video", centerX, centerY);
-  const audio = defaultElement("audio", centerX, centerY);
-  audio.x = video.x + video.w + 12;
-  audio.y = video.y;
-  audio.data = { linkedVideoId: video.id, muted: true };
-  video.data = { linkedAudioId: audio.id };
-  return [video, audio];
 }

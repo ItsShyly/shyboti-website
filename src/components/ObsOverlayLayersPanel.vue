@@ -12,6 +12,7 @@ const emit = defineEmits<{
   "toggle-lock": [id: string];
   "toggle-visible": [id: string];
   "update-elements": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
+  delete: [id: string];
   group: [];
   ungroup: [];
 }>();
@@ -87,6 +88,8 @@ function onDrop(i: number) {
           :class="{ dim: !el.locked }"></button>
         <span class="ovl-layers-type">{{ el.type }}</span>
         <span class="ovl-layers-content">{{ el.content || '—' }}</span>
+        <button class="ovl-layers-icon-btn danger" title="Delete" @click.stop="emit('delete', el.id)"
+          v-html="iconSvgFor('trash')"></button>
       </div>
       <div v-if="!sorted.length" class="ovl-layers-empty">no elements yet</div>
     </div>
@@ -230,6 +233,10 @@ function onDrop(i: number) {
 
 .ovl-layers-icon-btn:hover {
   color: #9d6cff;
+}
+
+.ovl-layers-icon-btn.danger:hover {
+  color: #f14949;
 }
 
 .ovl-layers-type {

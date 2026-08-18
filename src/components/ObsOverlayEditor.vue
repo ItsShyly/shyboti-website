@@ -4,7 +4,6 @@ import { API } from "../api";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import {
   defaultElement,
-  defaultVideoWithAudio,
   shapeDefaultStyle,
   newElementId,
   type Overlay,
@@ -60,6 +59,7 @@ const savedIds = ref<Set<string>>(new Set());
 const selectedIds = ref<string[]>([]);
 const dirty = ref(false);
 const previewValues = ref<Record<string, string>>({});
+const snapEnabled = ref(true);
 
 // >>> editor-only backdrop - never rendered live, just lets you eyeball contrast or
 // >>> compare against the real scene (only offered while the overlay is hidden there)
@@ -74,7 +74,7 @@ async function loadSceneShot() {
     );
     if (res.ok) {
       const d = (await res.json()) as { imageData: string | null };
-      sceneShotUrl.value = d.imageData ? `data:image/jpeg;base64,${d.imageData}` : null;
+      sceneShotUrl.value = d.imageData || null; // <<< already a full data: URI
     }
   } catch { }
 }
@@ -353,15 +353,6 @@ function nextZ() {
 
 function addElement(type: OverlayElementType, variant?: ShapeVariant) {
   pushHistory();
-  if (type === "video") {
-    const [video, audio] = defaultVideoWithAudio(baseWidth.value / 2, baseHeight.value / 2);
-    video.z_index = nextZ();
-    audio.z_index = video.z_index + 1;
-    pendingElements.value = [...pendingElements.value, video, audio];
-    selectedIds.value = [video.id];
-    dirty.value = true;
-    return;
-  }
   const el = defaultElement(type, baseWidth.value / 2, baseHeight.value / 2);
   if (type === "shape" && variant) {
     el.data = { variant };
@@ -479,7 +470,7 @@ function duplicateSelected() {
 }
 // ^^^ copy/paste/duplicate ^^^
 
-// vvv add/remove/show/hide/hide-all/swap - immediate, not part of the staged/Save flow vvv
+// vvv add/remove/show/hide/swap - immediate, not part of the staged/Save flow vvv
 // >>> whichever OTHER overlay is currently attached to the picked scene, if any
 const occupantOverlay = computed(() =>
   overlays.value.find(
@@ -538,19 +529,6 @@ async function toggleVisibility() {
   busy.value = false;
   menuOpen.value = false;
 }
-async function hideAll() {
-  if (busy.value || !currentOverlay.value) return;
-  busy.value = true;
-  try {
-    const res = await fetch(`${API}/overlay/${props.channel}/${currentOverlay.value.id}/hide-all`, {
-      method: "POST",
-      headers: props.authHeaders,
-    });
-    if (res.ok) await loadOverlaysList();
-  } catch { }
-  busy.value = false;
-  menuOpen.value = false;
-}
 async function swapIn() {
   if (busy.value || !currentOverlay.value) return;
   busy.value = true;
@@ -565,7 +543,7 @@ async function swapIn() {
   busy.value = false;
   menuOpen.value = false;
 }
-// ^^^ add/remove/show/hide/hide-all/swap ^^^
+// ^^^ add/remove/show/hide/swap ^^^
 
 function insertVariableToken(token: string) {
   if (!selectedElement.value) return;
@@ -574,8 +552,8 @@ function insertVariableToken(token: string) {
   });
 }
 
-async function save() {
-  if (!currentOverlayId.value) return;
+async function save(opts: { silent?: boolean } = {}) {
+  if (!currentOverlayId.value || saving.value) return;
   saving.value = true;
   try {
     const res = await fetch(
@@ -590,11 +568,32 @@ async function save() {
       },
     );
     if (res.ok) {
-      await loadElements();
+      if (opts.silent) {
+        // >>> live update - don't reload from the server mid-edit, that'd wipe undo history
+        savedIds.value = new Set(pendingElements.value.map((e) => e.id));
+        deletedIds.value = [];
+        dirty.value = false;
+      } else {
+        await loadElements();
+      }
     }
   } catch { }
   saving.value = false;
 }
+
+// vvv live update - auto-save (debounced) on every change instead of only on Save click vvv
+const liveUpdate = ref(false);
+let liveUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+watch(
+  pendingElements,
+  () => {
+    if (!liveUpdate.value || !dirty.value) return;
+    if (liveUpdateTimer) clearTimeout(liveUpdateTimer);
+    liveUpdateTimer = setTimeout(() => save({ silent: true }), 500);
+  },
+  { deep: true },
+);
+// ^^^ live update ^^^
 
 function discard() {
   loadElements();
@@ -648,13 +647,15 @@ function onWindowMousedownForMenu(e: MouseEvent) {
 onMounted(() => {
   load();
   window.addEventListener("keydown", onKeydown);
-  window.addEventListener("mousedown", onWindowMousedownForMenu);
+  // >>> capture phase - canvas item clicks stopPropagation(), bubble phase would never see them
+  window.addEventListener("mousedown", onWindowMousedownForMenu, true);
   previewTimer = setInterval(fetchPreviewValues, 5000);
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeydown);
-  window.removeEventListener("mousedown", onWindowMousedownForMenu);
+  window.removeEventListener("mousedown", onWindowMousedownForMenu, true);
   if (previewTimer) clearInterval(previewTimer);
+  if (liveUpdateTimer) clearTimeout(liveUpdateTimer);
 });
 </script>
 
@@ -684,18 +685,26 @@ onUnmounted(() => {
             <div class="ovl-backdrop-swatches" title="Canvas backdrop (editor-only, never rendered live)">
               <button v-for="b in (['checker', 'white', 'black'] as const)" :key="b" class="ovl-backdrop-swatch"
                 :class="[b, { active: stageBackdrop === b }]" :title="b" @click="pickBackdrop(b)"></button>
-              <button v-if="obsReady && !overlayVisible" class="ovl-backdrop-swatch scene"
+              <button v-if="obsReady" class="ovl-backdrop-swatch scene"
                 :class="{ active: stageBackdrop === 'scene' }" title="preview the real scene behind the canvas"
                 @click="pickBackdrop('scene')" v-html="iconSvgFor('monitor')"></button>
             </div>
+            <button class="ovl-btn-cancel" :class="{ on: snapEnabled }" @click="snapEnabled = !snapEnabled"
+              :title="snapEnabled ? 'Snapping on - click to disable' : 'Snapping off - click to enable'">
+              <span v-html="iconSvgFor('maximize')"></span> Snap
+            </button>
             <button class="ovl-btn-cancel" :disabled="!historyPast.length" @click="undo" title="Undo (Ctrl+Z)">
               <span v-html="iconSvgFor('corner-up-left')"></span>
             </button>
             <button class="ovl-btn-cancel" :disabled="!historyFuture.length" @click="redo" title="Redo (Ctrl+Shift+Z)">
               <span v-html="iconSvgFor('corner-up-right')"></span>
             </button>
+            <button class="ovl-btn-cancel" :class="{ on: liveUpdate }" @click="liveUpdate = !liveUpdate"
+              title="Auto-save every change as you make it, not just when you click Save">
+              Live Update
+            </button>
             <button class="ovl-btn-cancel" :disabled="!dirty || saving" @click="discard">Discard</button>
-            <button class="ovl-btn-save" :disabled="!dirty || saving" @click="save">
+            <button class="ovl-btn-save" :disabled="!dirty || saving" @click="save()">
               {{ saving ? "Saving…" : "Save" }}
             </button>
             <button class="ovl-close-btn" title="Close (Esc)" @click="emit('close')" v-html="iconSvgFor('x')"></button>
@@ -734,7 +743,6 @@ onUnmounted(() => {
               <button v-if="obsReady" @click="toggleVisibility">
                 {{ overlayVisible ? "Hide overlay source" : "Show overlay source" }}
               </button>
-              <button v-if="obsReady" @click="hideAll">Make invisible (all scenes)</button>
               <button @click="removeFromScene">Remove from scene</button>
             </div>
           </div>
@@ -747,8 +755,9 @@ onUnmounted(() => {
             <div v-if="loading" class="ovl-loading">loading…</div>
             <ObsOverlayCanvasStage v-else :elements="pendingElements" :selected-ids="selectedIds"
               :base-width="baseWidth" :base-height="baseHeight" :backdrop="stageBackdrop"
-              :scene-shot-url="sceneShotUrl" :preview-values="previewValues" @select="onSelect"
-              @update-element="updateElement" @update-elements="updateElements" @delete-element="deleteOne" />
+              :scene-shot-url="sceneShotUrl" :preview-values="previewValues" :snap-enabled="snapEnabled"
+              @select="onSelect" @update-element="updateElement" @update-elements="updateElements"
+              @delete-element="deleteOne" />
           </div>
 
           <div class="ovl-props">
@@ -775,27 +784,6 @@ onUnmounted(() => {
 
               <ObsOverlayStylePanel :element="selectedElement!"
                 @update="(patch) => updateElement(selectedElement!.id, patch)" />
-
-              <div class="ovl-props-row">
-                <label class="ovl-props-check">
-                  <div class="ep-toggle-btn" :class="{ on: selectedElement.visible }"
-                    @click="updateElement(selectedElement.id, { visible: !selectedElement.visible })">
-                    <span class="ep-toggle-knob"></span>
-                  </div>
-                  visible
-                </label>
-                <label class="ovl-props-check">
-                  <div class="ep-toggle-btn" :class="{ on: selectedElement.locked }"
-                    @click="updateElement(selectedElement.id, { locked: !selectedElement.locked })">
-                    <span class="ep-toggle-knob"></span>
-                  </div>
-                  locked
-                </label>
-              </div>
-
-              <button class="ovl-btn-delete" @click="deleteSelected">
-                <span v-html="iconSvgFor('trash')"></span> Delete
-              </button>
             </template>
             <div v-else-if="selectedIds.length > 1" class="ovl-props-empty">
               {{ selectedIds.length }} elements selected.
@@ -807,7 +795,7 @@ onUnmounted(() => {
 
             <ObsOverlayLayersPanel :elements="pendingElements" :selected-ids="selectedIds" @select="onSelect"
               @toggle-lock="toggleLock" @toggle-visible="toggleVisible" @update-elements="updateElements"
-              @group="groupSelected" @ungroup="ungroupSelected" />
+              @delete="deleteOne" @group="groupSelected" @ungroup="ungroupSelected" />
           </div>
         </div>
       </div>
@@ -1138,6 +1126,12 @@ onUnmounted(() => {
   color: #e0e0e0;
 }
 
+.ovl-btn-cancel.on {
+  border-color: #6f2bff88;
+  color: #9d6cff;
+  background: #6f2bff15;
+}
+
 .ovl-btn-cancel:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -1240,20 +1234,6 @@ onUnmounted(() => {
 .ovl-props-textarea:focus,
 .ovl-props-input:focus {
   border-color: #6f2bff88;
-}
-
-.ovl-props-row {
-  display: flex;
-  gap: 12px;
-}
-
-.ovl-props-check {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: #ccc;
-  cursor: pointer;
 }
 
 .ovl-btn-delete {
