@@ -667,6 +667,40 @@ defineExpose({ stageRef });
 .ovl-ctx-volume input[type="range"] {
   flex: 1;
   accent-color: #6f2bff;
+  background: transparent;
+  -webkit-appearance: none;
+  height: 4px;
+  cursor: pointer;
+}
+
+.ovl-ctx-volume input[type="range"]::-webkit-slider-runnable-track {
+  background: #2a2a30;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.ovl-ctx-volume input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #9d6cff;
+  margin-top: -4px;
+  cursor: pointer;
+}
+
+.ovl-ctx-volume input[type="range"]::-moz-range-track {
+  background: #2a2a30;
+  height: 4px;
+  border-radius: 2px;
+}
+
+.ovl-ctx-volume input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #9d6cff;
+  border: none;
   cursor: pointer;
 }
 
