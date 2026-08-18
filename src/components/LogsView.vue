@@ -3979,9 +3979,11 @@ function paintNameStyle(paint: {
 .logs-skeleton-row:nth-child(3n+2) .logs-skeleton-msg {
   width: 40%;
 }
+
 .logs-skeleton-row:nth-child(3n+3) .logs-skeleton-msg {
   width: 75%;
 }
+
 .logs-skeleton-row:nth-child(4n) .logs-skeleton-user {
   width: 60px;
 }
@@ -3990,10 +3992,12 @@ function paintNameStyle(paint: {
   height: 9px;
   width: 70px;
 }
+
 .logs-skeleton-user {
   height: 10px;
   width: 90px;
 }
+
 .logs-skeleton-msg {
   height: 9px;
   width: 55%;
@@ -4015,7 +4019,7 @@ function paintNameStyle(paint: {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 5px 14px;
+  padding: 12px 14px;
   background: #7c3aed;
   color: #fff;
   border: none;
