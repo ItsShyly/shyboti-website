@@ -892,7 +892,7 @@ onUnmounted(() => {
               <button class="ovl-activate-btn" :disabled="busy || !activateScene" @click="addToScene">
                 {{ busy ? "…" : "Add to scene" }}
               </button>
-              <button class="ovl-activate-btn" :disabled="busy || !activateScene"
+              <button v-if="pendingElements.length" class="ovl-activate-btn" :disabled="busy || !activateScene"
                 title="Make an independent copy of this overlay and attach the copy to this scene"
                 @click="duplicateToScene">
                 Duplicate to this scene
