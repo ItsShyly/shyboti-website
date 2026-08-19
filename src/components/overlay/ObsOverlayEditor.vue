@@ -835,28 +835,24 @@ watch(
   },
 );
 
-// >>> mid-drag/resize/rotate - pushes the live position without touching pendingElements,
-// >>> so it never becomes an undo step and never fights the in-progress drag
-let livePreviewSaving = false;
+// >>> mid-drag/resize/rotate - ephemeral broadcast-only push, never touches pendingElements
+// or the DB, so it never becomes an undo step and never fights the in-progress drag. The
+// real value still lands via the normal Save/scheduleLiveSave path on drag-release.
+let livePreviewSending = false;
 async function onLivePreview(updates: Array<{ id: string; patch: Partial<OverlayElement> }>) {
-  if (!liveUpdate.value || !currentOverlayId.value || livePreviewSaving) return;
-  const merged = pendingElements.value.map((e) => {
-    const u = updates.find((x) => x.id === e.id);
-    return u ? { ...e, ...u.patch } : e;
-  });
-  livePreviewSaving = true;
+  if (!liveUpdate.value || !currentOverlayId.value || livePreviewSending) return;
+  livePreviewSending = true;
   try {
-    const res = await fetch(
-      `${API}/overlay/${props.channel}/${currentOverlayId.value}/elements/bulk`,
+    await fetch(
+      `${API}/overlay/${props.channel}/${currentOverlayId.value}/live-patch`,
       {
-        method: "PUT",
+        method: "POST",
         headers: { ...props.authHeaders, "Content-Type": "application/json" },
-        body: JSON.stringify({ elements: merged.map(toWireElement), deletedIds: [] }),
+        body: JSON.stringify({ updates }),
       },
     );
-    if (res.ok) lastSavedAt.value = Date.now();
   } catch { }
-  livePreviewSaving = false;
+  livePreviewSending = false;
 }
 // ^^^ live update ^^^
 

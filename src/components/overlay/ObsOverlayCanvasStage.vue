@@ -45,7 +45,7 @@ const emit = defineEmits<{
 }>();
 
 // >>> shared throttle for all three live-preview emitters below
-const LIVE_PREVIEW_THROTTLE_MS = 700;
+const LIVE_PREVIEW_THROTTLE_MS = 50;
 let lastLivePreviewAt = 0;
 function emitLivePreview(updates: Array<{ id: string; patch: Partial<OverlayElement> }>) {
   const now = Date.now();
