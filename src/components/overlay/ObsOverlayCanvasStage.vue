@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
-import { iconSvg as iconSvgFor } from "../composables/icons";
-import type { OverlayElement } from "../composables/overlayTypes";
+import { iconSvg as iconSvgFor } from "../../composables/icons";
+import type { OverlayElement } from "../../composables/overlay/overlayTypes";
 import {
   computeCountdown,
   countdownDisplayText,
@@ -10,7 +10,7 @@ import {
   setCurrentSeconds,
   toggleRunningData,
   type CountdownLikeType,
-} from "../composables/overlayCountdown";
+} from "../../composables/overlay/overlayCountdown";
 
 // >>> custom corner-brackets icon (100x100, filled) - doesn't fit the shared 24x24 stroke
 // >>> icon set's wrapper, so it's kept local instead of forced into icons.ts

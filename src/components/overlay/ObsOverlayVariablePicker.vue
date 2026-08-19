@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { API } from "../api";
+import { API } from "../../api";
 
 const props = defineProps<{
   channel: string;

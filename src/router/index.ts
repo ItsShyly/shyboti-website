@@ -65,7 +65,7 @@ const router = createRouter({
     },
     {
       path: "/obs-overlays",
-      component: lazy(() => import("../components/ObsOverlaysView.vue")),
+      component: lazy(() => import("../components/overlay/ObsOverlaysView.vue")),
     },
     {
       path: "/notes",

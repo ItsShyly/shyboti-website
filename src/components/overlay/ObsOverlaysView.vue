@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
-import { useAuth } from "../auth";
-import { API } from "../api";
-import { iconSvg as iconSvgFor } from "../composables/icons";
-import type { Overlay } from "../composables/overlayTypes";
+import { useAuth } from "../../auth";
+import { API } from "../../api";
+import { iconSvg as iconSvgFor } from "../../composables/icons";
+import type { Overlay } from "../../composables/overlay/overlayTypes";
 import ObsOverlayEditor from "./ObsOverlayEditor.vue";
 
 const { session } = useAuth();

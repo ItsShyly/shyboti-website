@@ -9,7 +9,7 @@ import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
-import ObsOverlayEditor from "./ObsOverlayEditor.vue";
+import ObsOverlayEditor from "./overlay/ObsOverlayEditor.vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session, channelRole } = useAuth();

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
-import { API } from "../api";
-import { iconSvg as iconSvgFor } from "../composables/icons";
+import { API } from "../../api";
+import { iconSvg as iconSvgFor } from "../../composables/icons";
 import {
   defaultElement,
   shapeDefaultStyle,
@@ -10,7 +10,7 @@ import {
   type OverlayElement,
   type OverlayElementType,
   type ShapeVariant,
-} from "../composables/overlayTypes";
+} from "../../composables/overlay/overlayTypes";
 import {
   computeCountdown,
   formatDuration,
@@ -18,7 +18,7 @@ import {
   setCurrentSeconds,
   toggleRunningData,
   type CountdownLikeType,
-} from "../composables/overlayCountdown";
+} from "../../composables/overlay/overlayCountdown";
 import ObsOverlayCanvasStage from "./ObsOverlayCanvasStage.vue";
 import ObsOverlayElementGallery from "./ObsOverlayElementGallery.vue";
 import ObsOverlayVariablePicker from "./ObsOverlayVariablePicker.vue";

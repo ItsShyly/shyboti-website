@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import { iconSvg as iconSvgFor } from "../composables/icons";
-import type { OverlayElementType, ShapeVariant } from "../composables/overlayTypes";
+import { iconSvg as iconSvgFor } from "../../composables/icons";
+import type { OverlayElementType, ShapeVariant } from "../../composables/overlay/overlayTypes";
 
 const emit = defineEmits<{
   add: [type: OverlayElementType, variant?: ShapeVariant];

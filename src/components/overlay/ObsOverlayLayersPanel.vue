@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
-import { iconSvg as iconSvgFor } from "../composables/icons";
-import type { OverlayElement } from "../composables/overlayTypes";
+import { iconSvg as iconSvgFor } from "../../composables/icons";
+import type { OverlayElement } from "../../composables/overlay/overlayTypes";
 
 const props = defineProps<{
   elements: OverlayElement[];
