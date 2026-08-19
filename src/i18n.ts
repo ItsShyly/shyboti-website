@@ -772,6 +772,26 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.hle": "Higher or Lower Emotes game.",
     "cmddesc.wstm": "Who Sent This - guess who wrote a random chat message.",
     "cmddesc.bans": "Look up active bans for a user across tracked channels.",
+    "cmddesc.modcheck":
+      "List the channel's moderators, or look up another channel's (mods only).",
+    "cmddesc.mc": "Alias for +modcheck.",
+    "cmddesc.vips": "List the channel's VIPs.",
+    "cmddesc.shoutout": "Gives another streamer a shoutout (mods only).",
+    "cmddesc.title": "Shows or sets the stream title (setting is mods only).",
+    "cmddesc.game": "Shows or sets the stream category (setting is mods only).",
+    "cmddesc.clip": "Creates a clip and posts the link.",
+    "cmddesc.poll": "Starts a native Twitch poll (mods only).",
+    "cmddesc.endpoll": "Ends the currently active poll (mods only).",
+    "cmddesc.prediction": "Starts a native Twitch prediction (mods only).",
+    "cmddesc.endprediction":
+      "Resolves or cancels the active prediction (mods only).",
+    "cmddesc.followage":
+      "Shows how long you (or someone else) have followed.",
+    "cmddesc.uptime": "Shows how long the channel has been live.",
+    "cmddesc.schedule": "Shows the next scheduled stream.",
+    "cmddesc.subage":
+      "Shows how long you (or someone else) have been subscribed.",
+    "cmddesc.pick": "Draws random chatters as winners.",
 
     // vvv Features page vvv
     "feat.obs.title": "OBS Widgets",
@@ -1616,6 +1636,26 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.wstm":
       "Wer hat das geschrieben - errate, wer eine zufällige Nachricht verfasst hat.",
     "cmddesc.bans": "Zeigt aktive Bans eines Nutzers über verfolgte Channels.",
+    "cmddesc.modcheck":
+      "Listet die Moderatoren des Channels, oder schaut die eines anderen Channels nach (nur Mods).",
+    "cmddesc.mc": "Alias für +modcheck.",
+    "cmddesc.vips": "Listet die VIPs des Channels.",
+    "cmddesc.shoutout": "Gibt einem anderen Streamer einen Shoutout (nur Mods).",
+    "cmddesc.title": "Zeigt oder setzt den Stream-Titel (Setzen nur für Mods).",
+    "cmddesc.game": "Zeigt oder setzt die Stream-Kategorie (Setzen nur für Mods).",
+    "cmddesc.clip": "Erstellt einen Clip und postet den Link.",
+    "cmddesc.poll": "Startet eine native Twitch-Umfrage (nur Mods).",
+    "cmddesc.endpoll": "Beendet die aktive Umfrage (nur Mods).",
+    "cmddesc.prediction": "Startet eine native Twitch-Prediction (nur Mods).",
+    "cmddesc.endprediction":
+      "Löst die aktive Prediction auf oder bricht sie ab (nur Mods).",
+    "cmddesc.followage":
+      "Zeigt, wie lange du (oder jemand anderes) schon folgst.",
+    "cmddesc.uptime": "Zeigt, wie lange der Channel schon live ist.",
+    "cmddesc.schedule": "Zeigt den nächsten geplanten Stream.",
+    "cmddesc.subage":
+      "Zeigt, wie lange du (oder jemand anderes) schon abonniert bist.",
+    "cmddesc.pick": "Wählt zufällige Chatter als Gewinner aus.",
 
     // vvv OBS Widgets page vvv
     "obs.title": "OBS Browser-Quellen",
