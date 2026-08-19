@@ -42,6 +42,9 @@ const emit = defineEmits<{
   // >>> throttled, fired mid-drag/resize/rotate - live update mode pushes these without
   // >>> touching undo history, so OBS can follow along before the mouse is released
   "live-preview": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
+  // >>> throttled, fired on every canvas mousemove regardless of live-cursor state - the
+  // >>> parent decides whether to actually broadcast it
+  "cursor-move": [x: number, y: number];
 }>();
 
 // >>> shared throttle for all three live-preview emitters below
@@ -52,6 +55,16 @@ function emitLivePreview(updates: Array<{ id: string; patch: Partial<OverlayElem
   if (now - lastLivePreviewAt < LIVE_PREVIEW_THROTTLE_MS) return;
   lastLivePreviewAt = now;
   emit("live-preview", updates);
+}
+
+const CURSOR_MOVE_THROTTLE_MS = 50;
+let lastCursorMoveAt = 0;
+function onStageMouseMove(e: MouseEvent) {
+  const now = Date.now();
+  if (now - lastCursorMoveAt < CURSOR_MOVE_THROTTLE_MS) return;
+  lastCursorMoveAt = now;
+  const p = stageCanvasPoint(e);
+  if (p) emit("cursor-move", p.x, p.y);
 }
 
 const stageRef = ref<HTMLElement | null>(null);
@@ -1027,7 +1040,7 @@ defineExpose({ stageRef });
 </script>
 
 <template>
-  <div ref="viewportRef" class="ovl-stage-viewport" @wheel="onWheel">
+  <div ref="viewportRef" class="ovl-stage-viewport" @wheel="onWheel" @mousemove="onStageMouseMove">
   <div ref="stageRef" class="ovl-stage" :style="[stageStyle, zoomStyle]" @mousedown="onStageMouseDown"
     @contextmenu.prevent>
     <div v-if="backdrop === 'scene' && sceneShotUrl" class="ovl-scene-backdrop" :style="sceneBackdropStyle"></div>

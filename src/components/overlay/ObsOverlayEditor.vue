@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onUnmounted } from "vue";
 import { API } from "../../api";
+import { useAuth } from "../../auth";
 import { iconSvg as iconSvgFor } from "../../composables/icons";
 import {
   defaultElement,
@@ -40,6 +41,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: [];
 }>();
+
+const { session } = useAuth();
 
 const loading = ref(true);
 const saving = ref(false);
@@ -856,6 +859,42 @@ async function onLivePreview(updates: Array<{ id: string; patch: Partial<Overlay
 }
 // ^^^ live update ^^^
 
+// vvv live cursor share - per-user opt-in, broadcast onto the live output vvv
+const liveCursor = ref(false);
+// >>> one random color per session, not per toggle - stays consistent while editing
+const myCursorColor = `hsl(${Math.floor(Math.random() * 360)}, 75%, 60%)`;
+let cursorSending = false;
+function onCursorMove(x: number, y: number) {
+  if (!liveCursor.value || !currentOverlayId.value || cursorSending) return;
+  cursorSending = true;
+  fetch(`${API}/overlay/${props.channel}/${currentOverlayId.value}/live-cursor`, {
+    method: "POST",
+    headers: { ...props.authHeaders, "Content-Type": "application/json" },
+    body: JSON.stringify({ x, y, color: myCursorColor }),
+  })
+    .catch(() => { })
+    .finally(() => (cursorSending = false));
+}
+function sendCursorLeave() {
+  if (!currentOverlayId.value) return;
+  fetch(`${API}/overlay/${props.channel}/${currentOverlayId.value}/live-cursor-leave`, {
+    method: "POST",
+    headers: props.authHeaders,
+  }).catch(() => { });
+}
+function toggleLiveCursor() {
+  if (!liveUpdate.value) return;
+  liveCursor.value = !liveCursor.value;
+  if (!liveCursor.value) sendCursorLeave();
+}
+watch(liveUpdate, (on) => {
+  if (!on && liveCursor.value) {
+    liveCursor.value = false;
+    sendCursorLeave();
+  }
+});
+// ^^^ live cursor share ^^^
+
 function discard() {
   loadElements();
   selectedIds.value = [];
@@ -953,6 +992,7 @@ onUnmounted(() => {
   window.removeEventListener("mousedown", onWindowMousedownForMenu, true);
   if (previewTimer) clearInterval(previewTimer);
   if (liveUpdateTimer) clearTimeout(liveUpdateTimer);
+  if (liveCursor.value) sendCursorLeave();
 });
 </script>
 
@@ -1000,6 +1040,11 @@ onUnmounted(() => {
               @click="liveUpdate = !liveUpdate"
               title="Auto-save every change as you make it, not just when you click Save">
               Live Update
+            </button>
+            <button v-if="obsReady && overlayVisible" class="ovl-btn-cancel ovl-btn-icon-only"
+              :class="{ on: liveCursor }" :disabled="!liveUpdate" @click="toggleLiveCursor"
+              :title="liveUpdate ? 'Show your cursor + name live on stream' : 'Turn on Live Update first'">
+              <span v-html="iconSvgFor('mouse-pointer')"></span>
             </button>
             <button class="ovl-btn-cancel" :disabled="!dirty || saving" @click="discard">Discard</button>
             <button class="ovl-btn-save" :disabled="!dirty || saving" @click="save()">
@@ -1065,7 +1110,8 @@ onUnmounted(() => {
               :scene-shot-url="sceneShotUrl" :preview-values="previewValues" :snap-enabled="snapEnabled"
               @select="onSelect" @select-many="onSelectMany" @update-element="updateElement"
               @update-elements="updateElements" @delete-element="deleteOne" @delete-selected="deleteSelected"
-              @duplicate-element="duplicateSelected" @live-preview="onLivePreview" />
+              @duplicate-element="duplicateSelected" @live-preview="onLivePreview"
+              @cursor-move="onCursorMove" />
           </div>
 
           <div class="ovl-props">
@@ -1560,6 +1606,15 @@ onUnmounted(() => {
 .ovl-btn-cancel:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.ovl-btn-icon-only {
+  padding: 0 8px;
+}
+
+.ovl-btn-icon-only svg {
+  width: 14px;
+  height: 14px;
 }
 
 .ovl-close-btn {
