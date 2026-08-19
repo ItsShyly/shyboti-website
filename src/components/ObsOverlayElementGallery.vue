@@ -39,21 +39,12 @@ const shortcuts: { keys: string; desc: string }[] = [
     keys: "Right-click element",
     desc: "Context menu - lock, opacity, duplicate, delete, start/stop, video mute/volume",
   },
-  {
-    keys: "Right-click on multi-selection",
-    desc: "Context menu's Delete/opacity/lock apply to the whole selection",
-  },
-  { keys: "Double-click text", desc: "Edit text inline on the canvas" },
-  { keys: "Double-click countdown/countup", desc: "Type in a new current time - it keeps running underneath" },
   { keys: "Drag corner handle", desc: "Resize (hold Alt to ignore snapping)" },
   { keys: "Ctrl or Alt + drag corner handle", desc: "Also scale font-size with the box" },
-  { keys: "Select 2+ elements, drag corner", desc: "Group-resize together, keeping relative spacing" },
-  { keys: "Drag rotate handle", desc: "Rotate, snaps to 15° (hold Shift for free angle)" },
   { keys: "Alt while dragging/resizing", desc: "Temporarily disable snapping" },
   { keys: "Mouse wheel over canvas", desc: "Zoom in/out" },
   { keys: "Ctrl + / Ctrl -", desc: "Zoom in/out" },
   { keys: "Right-click or middle-click drag", desc: "Pan the canvas when zoomed in" },
-  { keys: "Drag the minimap's red rectangle", desc: "Pan by dragging the viewport indicator" },
 ];
 </script>
 
@@ -213,9 +204,10 @@ const shortcuts: { keys: string; desc: string }[] = [
 
 .ovl-help-row {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 7px 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
   border-bottom: 1px solid #1a1a1e;
 }
 
@@ -225,13 +217,24 @@ const shortcuts: { keys: string; desc: string }[] = [
 
 .ovl-help-key {
   flex-shrink: 0;
-  width: 190px;
+  min-width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 9px;
   font-size: 11px;
-  color: #ccc;
+  color: #e0e0e0;
   font-family: "Consolas", "Fira Mono", monospace;
+  background: #1c1c22;
+  border: 1px solid #2e2e36;
+  border-bottom: 2px solid #333340;
+  border-radius: 5px;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
 
 .ovl-help-desc {
+  flex: 1;
+  min-width: 160px;
   font-size: 12px;
   color: #888;
 }
