@@ -20,9 +20,33 @@ const entries: { type: OverlayElementType; variant?: ShapeVariant; label: string
 ];
 
 const helpOpen = ref(false);
+
+// >>> mouse icon with the referenced button filled in the site's accent purple - built by
+// >>> hand like RESET_ZOOM_ICON in ObsOverlayCanvasStage.vue, doesn't fit the shared 24x24
+// >>> stroke icon set. No <clipPath>/ids - this gets injected via v-html potentially several
+// >>> times on the same page, and duplicate SVG ids across instances can misrender.
+const MOUSE_PURPLE = "#9d6cff";
+const MOUSE_GRAY = "#666";
+function mouseIcon(button: "left" | "right" | "middle"): string {
+  const leftFill = button === "left" ? MOUSE_PURPLE : "none";
+  const rightFill = button === "right" ? MOUSE_PURPLE : "none";
+  const wheelFill = button === "middle" ? MOUSE_PURPLE : MOUSE_GRAY;
+  return `<svg viewBox="0 0 24 34" width="1em" height="1.4em" fill="none" stroke="${MOUSE_GRAY}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="5" y="3" width="6.5" height="9.5" fill="${leftFill}" stroke="none" />
+    <rect x="12.5" y="3" width="6.5" height="9.5" fill="${rightFill}" stroke="none" />
+    <rect x="4" y="2" width="16" height="30" rx="8" />
+    <line x1="12" y1="3" x2="12" y2="13" />
+    <line x1="4" y1="13" x2="20" y2="13" />
+    <rect x="11" y="5" width="2" height="6" rx="1" fill="${wheelFill}" stroke="none" />
+  </svg>`;
+}
+const MOUSE_LEFT = mouseIcon("left");
+const MOUSE_RIGHT = mouseIcon("right");
+const MOUSE_MIDDLE = mouseIcon("middle");
+
 // >>> each row's key column is built from parts - {k} renders as a bracket/keycap chip,
-// >>> {t} renders as plain connecting text (e.g. "+", "while resizing")
-interface KeyPart { k?: string; t?: string }
+// >>> {svg} renders a raw icon (e.g. a mouse-button symbol), {t} is plain connecting text
+interface KeyPart { k?: string; svg?: string; t?: string }
 interface Shortcut { parts: KeyPart[]; desc: string }
 const shortcuts: Shortcut[] = [
   { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "S" }], desc: "Save" },
@@ -36,15 +60,15 @@ const shortcuts: Shortcut[] = [
   { parts: [{ k: "Delete" }, { t: "/" }, { k: "Backspace" }], desc: "Delete selected" },
   { parts: [{ k: "Escape" }], desc: "Close the editor" },
   {
-    parts: [{ k: "Shift" }, { t: "/" }, { k: "Ctrl" }, { t: "+" }, { k: "Click" }],
+    parts: [{ k: "Shift" }, { t: "/" }, { k: "Ctrl" }, { t: "+" }, { svg: MOUSE_LEFT }],
     desc: "Add/remove from selection",
   },
   {
-    parts: [{ k: "Left-click" }, { t: "+ drag in canvas" }],
+    parts: [{ svg: MOUSE_LEFT }, { t: "+ drag in canvas" }],
     desc: "multi-select elements",
   },
   {
-    parts: [{ k: "Right-click" }, { t: " element" }],
+    parts: [{ svg: MOUSE_RIGHT }, { t: " element" }],
     desc: "Context menu",
   },
   {
@@ -58,7 +82,7 @@ const shortcuts: Shortcut[] = [
     desc: "Zoom in/out",
   },
   {
-    parts: [{ k: "Right-click" }, { t: "/" }, { k: "middle-click" }, { t: " drag" }],
+    parts: [{ svg: MOUSE_RIGHT }, { t: "/" }, { svg: MOUSE_MIDDLE }, { t: " drag" }],
     desc: "Pan the canvas when zoomed in",
   },
 ];
@@ -91,6 +115,7 @@ const shortcuts: Shortcut[] = [
             <span class="ovl-help-key">
               <template v-for="(p, pi) in s.parts" :key="pi">
                 <span v-if="p.k" class="ovl-key-chip">{{ p.k }}</span>
+                <span v-else-if="p.svg" class="ovl-key-icon" v-html="p.svg"></span>
                 <span v-else class="ovl-key-text">{{ p.t }}</span>
               </template>
             </span>
@@ -256,6 +281,17 @@ const shortcuts: Shortcut[] = [
   border-bottom: 2px solid #333340;
   border-radius: 4px;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.ovl-key-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ovl-key-icon svg {
+  width: 15px;
+  height: auto;
 }
 
 .ovl-key-text {
