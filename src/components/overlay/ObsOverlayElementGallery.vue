@@ -29,42 +29,36 @@ const shortcuts: Shortcut[] = [
   { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "Z" }], desc: "Undo" },
   { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "Shift" }, { t: "+" }, { k: "Z" }], desc: "Redo" },
   {
-    parts: [{ k: "Ctrl" }, { t: "+" }, { k: "C" }, { t: " / " }, { k: "Ctrl" }, { t: "+" }, { k: "V" }],
-    desc: "Copy / paste selected",
-  },
-  {
-    parts: [{ k: "Ctrl" }, { t: "+" }, { k: "V" }, { t: " (nothing copied in-app)" }],
-    desc: "Pastes an image or text from the system clipboard as a new element (e.g. paste an image copied from Google)",
+    parts: [{ k: "Ctrl" }, { t: "+" }, { k: "C" }, { t: "/" }, { k: "Ctrl" }, { t: "+" }, { k: "V" }],
+    desc: "Copy / paste selected or clipboard",
   },
   { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "D" }], desc: "Duplicate selected" },
-  { parts: [{ k: "Delete" }, { t: " / " }, { k: "Backspace" }], desc: "Delete selected" },
+  { parts: [{ k: "Delete" }, { t: "/" }, { k: "Backspace" }], desc: "Delete selected" },
   { parts: [{ k: "Escape" }], desc: "Close the editor" },
-  { parts: [{ k: "Click" }], desc: "Select an element" },
   {
     parts: [{ k: "Shift" }, { t: "/" }, { k: "Ctrl" }, { t: "+" }, { k: "Click" }],
-    desc: "Add or remove from selection",
+    desc: "Add/remove from selection",
   },
   {
-    parts: [{ k: "Left-click" }, { t: " + drag (empty canvas)" }],
-    desc: "Marquee-select multiple elements",
+    parts: [{ k: "Left-click" }, { t: "+ drag in canvas" }],
+    desc: "multi-select elements",
   },
   {
     parts: [{ k: "Right-click" }, { t: " element" }],
-    desc: "Context menu - lock, opacity, duplicate, delete, start/stop, video mute/volume",
+    desc: "Context menu",
   },
-  { parts: [{ t: "Drag corner handle" }], desc: "Resize (hold Alt to ignore snapping)" },
   {
-    parts: [{ k: "Ctrl" }, { t: " or " }, { k: "Alt" }, { t: " + drag corner handle" }],
+    parts: [{ k: "Ctrl" }, { t: " or " }, { k: "Alt" }, { t: "+ while resizing" }],
     desc: "Also scale font-size with the box",
   },
-  { parts: [{ k: "Alt" }, { t: " while dragging/resizing" }], desc: "Temporarily disable snapping" },
+  { parts: [{ k: "Alt" }, { t: "+ dragging" }], desc: "Temporarily disable snapping" },
   { parts: [{ k: "Mouse wheel" }, { t: " over canvas" }], desc: "Zoom in/out" },
   {
-    parts: [{ k: "Ctrl" }, { t: " + " }, { k: "+" }, { t: " / " }, { k: "Ctrl" }, { t: " + " }, { k: "-" }],
+    parts: [{ k: "Ctrl" }, { t: "+" }, { k: "+" }, { t: "/" }, { k: "Ctrl" }, { t: "+" }, { k: "-" }],
     desc: "Zoom in/out",
   },
   {
-    parts: [{ k: "Right-click" }, { t: " or " }, { k: "middle-click" }, { t: " drag" }],
+    parts: [{ k: "Right-click" }, { t: "/" }, { k: "middle-click" }, { t: " drag" }],
     desc: "Pan the canvas when zoomed in",
   },
 ];
