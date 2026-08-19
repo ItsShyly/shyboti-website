@@ -1618,6 +1618,15 @@ async function forceAllPreviews() {
   forcePreviewLoading.value = false;
 }
 
+// >>> Ctrl+S saves staged edit-mode changes, even while focused in a field -
+// >>> overrides the browser's save-page, matches the overlay editor's own Ctrl+S
+function onKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+    e.preventDefault();
+    if (editMode.value && hasPending.value && !locked.value) saveChanges();
+  }
+}
+
 // vvv lifecycle vvv
 let categoryPollTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
@@ -1631,12 +1640,14 @@ onMounted(() => {
   }, 5000);
   // >>> Twitch's own category could change without us clicking anything here
   categoryPollTimer = setInterval(loadCategoryHistory, 30000);
+  window.addEventListener("keydown", onKeydown);
 });
 onUnmounted(() => {
   requestGen.value++; // <<< defensive - covers any unmount path besides router nav
   if (pollTimer) clearInterval(pollTimer);
   if (shotTimer) clearInterval(shotTimer);
   if (categoryPollTimer) clearInterval(categoryPollTimer);
+  window.removeEventListener("keydown", onKeydown);
 });
 // >>> leaving the page entirely (sidebar, browser back, etc.) - lock instantly,
 // >>> before the route even finishes changing
