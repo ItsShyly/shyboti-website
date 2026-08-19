@@ -121,6 +121,27 @@ const selectedElement = computed(() =>
 function isCountdownLike(type: string): type is CountdownLikeType {
   return type === "countdown" || type === "countup";
 }
+
+// vvv alignment - lives at the top of the panel, not tucked in the style panel's typography
+// vvv collapsible, since it's used on nearly every text-like element vvv
+function isTextLikeType(type: string): boolean {
+  return ["text", "variable-text", "countdown", "countup"].includes(type);
+}
+const alignOptions = [
+  { h: "left", v: "top" },
+  { h: "center", v: "top" },
+  { h: "right", v: "top" },
+  { h: "left", v: "middle" },
+  { h: "center", v: "middle" },
+  { h: "right", v: "middle" },
+  { h: "left", v: "bottom" },
+  { h: "center", v: "bottom" },
+  { h: "right", v: "bottom" },
+] as const;
+function setAlign(el: OverlayElement, h: string, v: string) {
+  updateElement(el.id, { style: { ...el.style, textAlign: h as any, verticalAlign: v as any } });
+}
+// ^^^ alignment ^^^
 function canToggleRunning(el: OverlayElement): boolean {
   if (el.type === "countup") return true;
   return el.type === "countdown" && (el.data.mode || "duration") !== "target";
@@ -1016,6 +1037,18 @@ onUnmounted(() => {
                   :auth-headers="authHeaders" @insert="insertVariableToken" />
               </template>
 
+              <!-- >>> always visible, not tucked in a collapsible - alignment is used constantly -->
+              <label v-if="isTextLikeType(selectedElement.type)" class="ovl-props-label ovl-align-label">
+                Alignment
+                <div class="ovl-align-grid">
+                  <button v-for="opt in alignOptions" :key="opt.h + opt.v" class="ovl-align-btn" :class="{
+                    active: (selectedElement.style.textAlign || 'left') === opt.h && (selectedElement.style.verticalAlign || 'top') === opt.v,
+                  }" :title="`${opt.v} ${opt.h}`" @click="setAlign(selectedElement, opt.h, opt.v)">
+                    <span class="ovl-align-dot"></span>
+                  </button>
+                </div>
+              </label>
+
               <ObsOverlayStylePanel :element="selectedElement!"
                 @update="(patch) => updateElement(selectedElement!.id, patch)" />
             </template>
@@ -1560,6 +1593,50 @@ onUnmounted(() => {
   color: #666;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.ovl-align-label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ovl-align-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  width: 84px;
+}
+
+.ovl-align-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #2a2a30;
+  background: #111217;
+  cursor: pointer;
+}
+
+.ovl-align-btn:hover {
+  border-color: #6f2bff88;
+}
+
+.ovl-align-btn.active {
+  border-color: #6f2bff;
+  background: #6f2bff22;
+}
+
+.ovl-align-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #666;
+}
+
+.ovl-align-btn.active .ovl-align-dot {
+  background: #9d6cff;
 }
 
 .ovl-props-textarea,

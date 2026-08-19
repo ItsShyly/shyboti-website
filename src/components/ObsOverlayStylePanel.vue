@@ -135,18 +135,6 @@ const collapsed = reactive<Record<string, boolean>>({
 function toggle(key: string) {
   collapsed[key] = !collapsed[key];
 }
-
-const alignOptions = [
-  { h: "left", v: "top" },
-  { h: "center", v: "top" },
-  { h: "right", v: "top" },
-  { h: "left", v: "middle" },
-  { h: "center", v: "middle" },
-  { h: "right", v: "middle" },
-  { h: "left", v: "bottom" },
-  { h: "center", v: "bottom" },
-  { h: "right", v: "bottom" },
-] as const;
 </script>
 
 <template>
@@ -221,17 +209,6 @@ const alignOptions = [
         <label class="ovl-style-field">
           Padding
           <input type="number" :value="element.style.padding ?? 0" @input="setStyle({ padding: num($event) })" />
-        </label>
-        <label class="ovl-style-field">
-          Alignment
-          <div class="ovl-style-align-grid">
-            <button v-for="opt in alignOptions" :key="opt.h + opt.v" class="ovl-style-align-btn" :class="{
-              active: (element.style.textAlign || 'left') === opt.h && (element.style.verticalAlign || 'top') === opt.v,
-            }" :title="`${opt.v} ${opt.h}`"
-              @click="setStyle({ textAlign: opt.h, verticalAlign: opt.v })">
-              <span class="ovl-style-align-dot"></span>
-            </button>
-          </div>
         </label>
       </template>
 
@@ -459,44 +436,6 @@ const alignOptions = [
 .ovl-style-section-title:first-child,
 .ovl-style-section-title-static:first-child {
   margin-top: 0;
-}
-
-.ovl-style-align-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
-  width: 84px;
-}
-
-.ovl-style-align-btn {
-  width: 26px;
-  height: 26px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #2a2a30;
-  background: #111217;
-  cursor: pointer;
-}
-
-.ovl-style-align-btn:hover {
-  border-color: #6f2bff88;
-}
-
-.ovl-style-align-btn.active {
-  border-color: #6f2bff;
-  background: #6f2bff22;
-}
-
-.ovl-style-align-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #666;
-}
-
-.ovl-style-align-btn.active .ovl-style-align-dot {
-  background: #9d6cff;
 }
 
 .ovl-style-field,

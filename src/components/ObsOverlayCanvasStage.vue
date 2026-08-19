@@ -1061,10 +1061,14 @@ defineExpose({ stageRef });
       </div>
       <span class="ovl-item-label">{{ el.type }}</span>
       <template v-if="selectedIds.length === 1 && el.id === selectedIds[0] && !el.locked">
-        <span class="ovl-handle tl" @mousedown="onHandleMouseDown(el, 'tl', $event)"></span>
-        <span class="ovl-handle tr" @mousedown="onHandleMouseDown(el, 'tr', $event)"></span>
-        <span class="ovl-handle bl" @mousedown="onHandleMouseDown(el, 'bl', $event)"></span>
-        <span class="ovl-handle br" @mousedown="onHandleMouseDown(el, 'br', $event)"></span>
+        <span class="ovl-handle tl" title="Drag to resize (hold Ctrl or Alt to also scale font-size)"
+          @mousedown="onHandleMouseDown(el, 'tl', $event)"></span>
+        <span class="ovl-handle tr" title="Drag to resize (hold Ctrl or Alt to also scale font-size)"
+          @mousedown="onHandleMouseDown(el, 'tr', $event)"></span>
+        <span class="ovl-handle bl" title="Drag to resize (hold Ctrl or Alt to also scale font-size)"
+          @mousedown="onHandleMouseDown(el, 'bl', $event)"></span>
+        <span class="ovl-handle br" title="Drag to resize (hold Ctrl or Alt to also scale font-size)"
+          @mousedown="onHandleMouseDown(el, 'br', $event)"></span>
         <span class="ovl-rotate-handle" title="Drag to rotate (hold Shift for free angle)"
           @mousedown="onRotateMouseDown(el, $event)">
           <span class="ovl-rotate-stem"></span>
@@ -1074,10 +1078,14 @@ defineExpose({ stageRef });
     </div>
 
     <div v-if="selectionBounds" class="ovl-group-box" :style="groupBoxStyle">
-      <span class="ovl-handle tl" @mousedown="onGroupHandleMouseDown('tl', $event)"></span>
-      <span class="ovl-handle tr" @mousedown="onGroupHandleMouseDown('tr', $event)"></span>
-      <span class="ovl-handle bl" @mousedown="onGroupHandleMouseDown('bl', $event)"></span>
-      <span class="ovl-handle br" @mousedown="onGroupHandleMouseDown('br', $event)"></span>
+      <span class="ovl-handle tl" title="Drag to resize the group (hold Ctrl or Alt to also scale font-size)"
+        @mousedown="onGroupHandleMouseDown('tl', $event)"></span>
+      <span class="ovl-handle tr" title="Drag to resize the group (hold Ctrl or Alt to also scale font-size)"
+        @mousedown="onGroupHandleMouseDown('tr', $event)"></span>
+      <span class="ovl-handle bl" title="Drag to resize the group (hold Ctrl or Alt to also scale font-size)"
+        @mousedown="onGroupHandleMouseDown('bl', $event)"></span>
+      <span class="ovl-handle br" title="Drag to resize the group (hold Ctrl or Alt to also scale font-size)"
+        @mousedown="onGroupHandleMouseDown('br', $event)"></span>
     </div>
   </div>
 
