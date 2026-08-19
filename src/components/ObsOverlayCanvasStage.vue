@@ -459,73 +459,104 @@ function onDragEnd() {
 }
 // ^^^ drag-to-move ^^^
 
-// vvv corner resize (single-selection only) vvv
+// vvv corner resize - single element; hold Ctrl to also scale font-size with the box vvv
 type Corner = "tl" | "tr" | "bl" | "br";
+function cornerAnchor(box: { x: number; y: number; w: number; h: number }, corner: Corner) {
+  return corner === "tl"
+    ? { x: box.x + box.w, y: box.y + box.h }
+    : corner === "tr"
+      ? { x: box.x, y: box.y + box.h }
+      : corner === "bl"
+        ? { x: box.x + box.w, y: box.y }
+        : { x: box.x, y: box.y };
+}
+function resizeFromAnchor(anchorX: number, anchorY: number, corner: Corner, mouseX: number, mouseY: number) {
+  const MIN = 10;
+  let x: number, y: number, w: number, h: number;
+  if (corner === "tl") {
+    w = Math.max(MIN, anchorX - mouseX);
+    h = Math.max(MIN, anchorY - mouseY);
+    x = anchorX - w;
+    y = anchorY - h;
+  } else if (corner === "tr") {
+    w = Math.max(MIN, mouseX - anchorX);
+    h = Math.max(MIN, anchorY - mouseY);
+    x = anchorX;
+    y = anchorY - h;
+  } else if (corner === "bl") {
+    w = Math.max(MIN, anchorX - mouseX);
+    h = Math.max(MIN, mouseY - anchorY);
+    x = anchorX - w;
+    y = anchorY;
+  } else {
+    w = Math.max(MIN, mouseX - anchorX);
+    h = Math.max(MIN, mouseY - anchorY);
+    x = anchorX;
+    y = anchorY;
+  }
+  return { x, y, w, h };
+}
+function gridSnapSize(w: number, h: number, s: number, e: MouseEvent): { w: number; h: number } {
+  if (props.snapEnabled === false || e.altKey) return { w, h };
+  const gridW = Math.round(w / GRID) * GRID;
+  if (Math.abs((w - gridW) * s) < GRID_SNAP_PX) w = gridW;
+  const gridH = Math.round(h / GRID) * GRID;
+  if (Math.abs((h - gridH) * s) < GRID_SNAP_PX) h = gridH;
+  return { w, h };
+}
+
 const resizeState = ref<{
   id: string;
   corner: Corner;
   anchorX: number;
   anchorY: number;
+  startW: number;
+  startH: number;
+  startFontSize?: number;
 } | null>(null);
-const resizePreview = ref<{ id: string; x: number; y: number; w: number; h: number } | null>(null);
+const resizePreview = ref<{ id: string; x: number; y: number; w: number; h: number; fontSize?: number } | null>(null);
 
 function onHandleMouseDown(el: OverlayElement, corner: Corner, e: MouseEvent) {
   if (el.locked) return;
   e.preventDefault();
   e.stopPropagation();
-  const anchor =
-    corner === "tl"
-      ? { x: el.x + el.w, y: el.y + el.h }
-      : corner === "tr"
-        ? { x: el.x, y: el.y + el.h }
-        : corner === "bl"
-          ? { x: el.x + el.w, y: el.y }
-          : { x: el.x, y: el.y };
-  resizeState.value = { id: el.id, corner, anchorX: anchor.x, anchorY: anchor.y };
+  const anchor = cornerAnchor(el, corner);
+  resizeState.value = {
+    id: el.id,
+    corner,
+    anchorX: anchor.x,
+    anchorY: anchor.y,
+    startW: el.w,
+    startH: el.h,
+    startFontSize: el.style.fontSize,
+  };
   window.addEventListener("mousemove", onResizeMove);
   window.addEventListener("mouseup", onResizeEnd);
 }
 function onResizeMove(e: MouseEvent) {
   const r = resizeState.value;
-  if (!r) return;
-  const s = effScale() || 1;
   const stageEl = stageRef.value;
-  if (!stageEl) return;
+  if (!r || !stageEl) return;
+  const s = effScale() || 1;
   const rect = stageEl.getBoundingClientRect();
   const mouseX = (e.clientX - rect.left) / s;
   const mouseY = (e.clientY - rect.top) / s;
 
-  const MIN = 10;
-  let newX: number, newY: number, newW: number, newH: number;
-  if (r.corner === "tl") {
-    newW = Math.max(MIN, r.anchorX - mouseX);
-    newH = Math.max(MIN, r.anchorY - mouseY);
-    newX = r.anchorX - newW;
-    newY = r.anchorY - newH;
-  } else if (r.corner === "tr") {
-    newW = Math.max(MIN, mouseX - r.anchorX);
-    newH = Math.max(MIN, r.anchorY - mouseY);
-    newX = r.anchorX;
-    newY = r.anchorY - newH;
-  } else if (r.corner === "bl") {
-    newW = Math.max(MIN, r.anchorX - mouseX);
-    newH = Math.max(MIN, mouseY - r.anchorY);
-    newX = r.anchorX - newW;
-    newY = r.anchorY;
-  } else {
-    newW = Math.max(MIN, mouseX - r.anchorX);
-    newH = Math.max(MIN, mouseY - r.anchorY);
-    newX = r.anchorX;
-    newY = r.anchorY;
+  let { x: newX, y: newY, w: newW, h: newH } = resizeFromAnchor(r.anchorX, r.anchorY, r.corner, mouseX, mouseY);
+  ({ w: newW, h: newH } = gridSnapSize(newW, newH, s, e));
+
+  const preview: typeof resizePreview.value = { id: r.id, x: newX, y: newY, w: newW, h: newH };
+  if ((e.ctrlKey || e.metaKey) && r.startFontSize) {
+    preview.fontSize = Math.max(4, Math.round(r.startFontSize * ((newW / r.startW + newH / r.startH) / 2)));
   }
-  if (props.snapEnabled !== false && !e.altKey) {
-    const gridW = Math.round(newW / GRID) * GRID;
-    if (Math.abs((newW - gridW) * s) < GRID_SNAP_PX) newW = gridW;
-    const gridH = Math.round(newH / GRID) * GRID;
-    if (Math.abs((newH - gridH) * s) < GRID_SNAP_PX) newH = gridH;
+  resizePreview.value = preview;
+
+  const patch: Partial<OverlayElement> = { x: newX, y: newY, w: newW, h: newH };
+  if (preview.fontSize !== undefined) {
+    const el = props.elements.find((e2) => e2.id === r.id);
+    patch.style = { ...(el?.style ?? {}), fontSize: preview.fontSize };
   }
-  resizePreview.value = { id: r.id, x: newX, y: newY, w: newW, h: newH };
-  emitLivePreview([{ id: r.id, patch: { x: newX, y: newY, w: newW, h: newH } }]);
+  emitLivePreview([{ id: r.id, patch }]);
 }
 function onResizeEnd() {
   window.removeEventListener("mousemove", onResizeMove);
@@ -535,9 +566,127 @@ function onResizeEnd() {
   const preview = resizePreview.value;
   resizePreview.value = null;
   if (!r || !preview) return;
-  emit("update-element", r.id, { x: preview.x, y: preview.y, w: preview.w, h: preview.h });
+  const patch: Partial<OverlayElement> = { x: preview.x, y: preview.y, w: preview.w, h: preview.h };
+  if (preview.fontSize !== undefined) {
+    const el = props.elements.find((e) => e.id === r.id);
+    patch.style = { ...(el?.style ?? {}), fontSize: preview.fontSize };
+  }
+  emit("update-element", r.id, patch);
 }
 // ^^^ corner resize ^^^
+
+// vvv group resize (2+ selected) - one bounding-box transform, every member's x/y/w/h scales
+// vvv relative to that box so relative spacing/position (e.g. text inside a background) holds.
+// vvv same Ctrl-to-scale-font-size rule as single-element resize vvv
+interface GroupResizeMember {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  fontSize?: number;
+}
+const selectionBounds = computed(() => {
+  if (props.selectedIds.length < 2) return null;
+  const sel = props.elements.filter((e) => props.selectedIds.includes(e.id));
+  if (!sel.length) return null;
+  const x1 = Math.min(...sel.map((e) => e.x));
+  const y1 = Math.min(...sel.map((e) => e.y));
+  const x2 = Math.max(...sel.map((e) => e.x + e.w));
+  const y2 = Math.max(...sel.map((e) => e.y + e.h));
+  return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 };
+});
+const groupResizeState = ref<{
+  corner: Corner;
+  anchorX: number;
+  anchorY: number;
+  startBox: { x: number; y: number; w: number; h: number };
+  members: GroupResizeMember[];
+} | null>(null);
+const groupResizePreview = ref<Record<string, { x: number; y: number; w: number; h: number; fontSize?: number }>>({});
+const groupResizeLiveBox = ref<{ x: number; y: number; w: number; h: number } | null>(null);
+
+function onGroupHandleMouseDown(corner: Corner, e: MouseEvent) {
+  const box = selectionBounds.value;
+  if (!box) return;
+  const members = props.elements.filter((el) => props.selectedIds.includes(el.id) && !el.locked);
+  if (!members.length) return;
+  e.preventDefault();
+  e.stopPropagation();
+  const anchor = cornerAnchor(box, corner);
+  groupResizeState.value = {
+    corner,
+    anchorX: anchor.x,
+    anchorY: anchor.y,
+    startBox: { ...box },
+    members: members.map((el) => ({ id: el.id, x: el.x, y: el.y, w: el.w, h: el.h, fontSize: el.style.fontSize })),
+  };
+  window.addEventListener("mousemove", onGroupResizeMove);
+  window.addEventListener("mouseup", onGroupResizeEnd);
+}
+function onGroupResizeMove(e: MouseEvent) {
+  const r = groupResizeState.value;
+  const stageEl = stageRef.value;
+  if (!r || !stageEl) return;
+  const s = effScale() || 1;
+  const rect = stageEl.getBoundingClientRect();
+  const mouseX = (e.clientX - rect.left) / s;
+  const mouseY = (e.clientY - rect.top) / s;
+
+  let { x: boxX, y: boxY, w: boxW, h: boxH } = resizeFromAnchor(r.anchorX, r.anchorY, r.corner, mouseX, mouseY);
+  ({ w: boxW, h: boxH } = gridSnapSize(boxW, boxH, s, e));
+  groupResizeLiveBox.value = { x: boxX, y: boxY, w: boxW, h: boxH };
+
+  const sx = boxW / r.startBox.w;
+  const sy = boxH / r.startBox.h;
+  const scaleFont = e.ctrlKey || e.metaKey;
+  const preview: Record<string, { x: number; y: number; w: number; h: number; fontSize?: number }> = {};
+  for (const m of r.members) {
+    const entry: { x: number; y: number; w: number; h: number; fontSize?: number } = {
+      x: boxX + (m.x - r.startBox.x) * sx,
+      y: boxY + (m.y - r.startBox.y) * sy,
+      w: Math.max(4, m.w * sx),
+      h: Math.max(4, m.h * sy),
+    };
+    if (scaleFont && m.fontSize) entry.fontSize = Math.max(4, Math.round(m.fontSize * ((sx + sy) / 2)));
+    preview[m.id] = entry;
+  }
+  groupResizePreview.value = preview;
+  emitLivePreview(
+    Object.entries(preview).map(([id, p]) => {
+      const patch: Partial<OverlayElement> = { x: p.x, y: p.y, w: p.w, h: p.h };
+      if (p.fontSize !== undefined) {
+        const el = props.elements.find((e2) => e2.id === id);
+        patch.style = { ...(el?.style ?? {}), fontSize: p.fontSize };
+      }
+      return { id, patch };
+    }),
+  );
+}
+function onGroupResizeEnd() {
+  window.removeEventListener("mousemove", onGroupResizeMove);
+  window.removeEventListener("mouseup", onGroupResizeEnd);
+  const preview = groupResizePreview.value;
+  groupResizeState.value = null;
+  groupResizePreview.value = {};
+  groupResizeLiveBox.value = null;
+  const updates = Object.entries(preview).map(([id, p]) => {
+    const patch: Partial<OverlayElement> = { x: p.x, y: p.y, w: p.w, h: p.h };
+    if (p.fontSize !== undefined) {
+      const el = props.elements.find((e2) => e2.id === id);
+      patch.style = { ...(el?.style ?? {}), fontSize: p.fontSize };
+    }
+    return { id, patch };
+  });
+  if (updates.length) emit("update-elements", updates);
+}
+const groupBoxStyle = computed(() => {
+  const box = groupResizeLiveBox.value || selectionBounds.value;
+  if (!box) return {};
+  const s = scale();
+  return { left: `${box.x * s}px`, top: `${box.y * s}px`, width: `${box.w * s}px`, height: `${box.h * s}px` };
+});
+// ^^^ group resize ^^^
 
 // vvv rotate handle (photoshop-style) vvv
 const rotateState = ref<{ id: string } | null>(null);
@@ -592,9 +741,15 @@ function shapeStyle(el: OverlayElement) {
 }
 function textStyle(el: OverlayElement) {
   const s = scale() || 1;
+  // >>> Ctrl-held resize (single or group) live-scales font-size - read from whichever
+  // >>> preview is active so the text visibly grows with the box during the drag
+  const liveFontSize =
+    resizePreview.value?.id === el.id && resizePreview.value.fontSize !== undefined
+      ? resizePreview.value.fontSize
+      : (groupResizePreview.value[el.id]?.fontSize ?? el.style.fontSize);
   return {
     fontFamily: el.style.fontFamily || "inherit",
-    fontSize: (el.style.fontSize || 32) * s + "px",
+    fontSize: (liveFontSize || 32) * s + "px",
     letterSpacing: (el.style.letterSpacing || 0) * s + "px",
     color: el.style.color || "#fff",
     textAlign: el.style.textAlign || "left",
@@ -678,6 +833,17 @@ function displayStyle(el: OverlayElement) {
       top: `${p.y * s}px`,
       width: `${p.w * s}px`,
       height: `${p.h * s}px`,
+      opacity,
+    };
+  }
+  const gp = groupResizePreview.value[el.id];
+  if (gp) {
+    return {
+      left: `${gp.x * s}px`,
+      top: `${gp.y * s}px`,
+      width: `${gp.w * s}px`,
+      height: `${gp.h * s}px`,
+      transform: rotation ? `rotate(${rotation}deg)` : undefined,
       opacity,
     };
   }
@@ -855,6 +1021,13 @@ defineExpose({ stageRef });
           <span class="ovl-rotate-knob"></span>
         </span>
       </template>
+    </div>
+
+    <div v-if="selectionBounds" class="ovl-group-box" :style="groupBoxStyle">
+      <span class="ovl-handle tl" @mousedown="onGroupHandleMouseDown('tl', $event)"></span>
+      <span class="ovl-handle tr" @mousedown="onGroupHandleMouseDown('tr', $event)"></span>
+      <span class="ovl-handle bl" @mousedown="onGroupHandleMouseDown('bl', $event)"></span>
+      <span class="ovl-handle br" @mousedown="onGroupHandleMouseDown('br', $event)"></span>
     </div>
   </div>
 
@@ -1119,6 +1292,17 @@ defineExpose({ stageRef });
   background: #f14949;
   border: 1px solid #fff;
   z-index: 2;
+}
+
+.ovl-group-box {
+  position: absolute;
+  border: 1px dashed #9d6cff;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.ovl-group-box .ovl-handle {
+  pointer-events: auto;
 }
 
 .ovl-handle.tl {

@@ -34,6 +34,8 @@ const shortcuts: { keys: string; desc: string }[] = [
   { keys: "Right-click on multi-selection", desc: "Context menu's Delete/opacity apply to the whole selection" },
   { keys: "Double-click text", desc: "Edit text inline on the canvas" },
   { keys: "Drag corner handle", desc: "Resize (hold Alt to ignore snapping)" },
+  { keys: "Ctrl + drag corner handle", desc: "Also scale font-size with the box" },
+  { keys: "Select 2+ elements, drag corner", desc: "Group-resize together, keeping relative spacing" },
   { keys: "Drag rotate handle", desc: "Rotate, snaps to 15° (hold Shift for free angle)" },
   { keys: "Alt while dragging/resizing", desc: "Temporarily disable snapping" },
   { keys: "Mouse wheel over canvas", desc: "Zoom in/out" },
