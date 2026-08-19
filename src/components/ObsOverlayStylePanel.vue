@@ -139,40 +139,6 @@ function toggle(key: string) {
 
 <template>
   <div class="ovl-style-panel">
-    <!-- vvv transform - applies to every element, auto-collapsed vvv -->
-    <button class="ovl-style-section-title" @click="toggle('position')">
-      <span v-html="iconSvgFor(collapsed.position ? 'chevron-right' : 'chevron-down')"></span>
-      position &amp; size
-    </button>
-    <div v-if="!collapsed.position" class="ovl-style-grid">
-      <label class="ovl-style-num">
-        X
-        <input type="number" :value="Math.round(element.x)" @change="set({ x: num($event) })" />
-      </label>
-      <label class="ovl-style-num">
-        Y
-        <input type="number" :value="Math.round(element.y)" @change="set({ y: num($event) })" />
-      </label>
-      <label class="ovl-style-num">
-        W
-        <input type="number" :value="Math.round(element.w)" @change="setW(num($event))" />
-      </label>
-      <label class="ovl-style-num">
-        H
-        <input type="number" :value="Math.round(element.h)" @change="setH(num($event))" />
-      </label>
-      <label class="ovl-style-num">
-        Rotation
-        <input type="number" :value="Math.round(element.rotation)" @change="set({ rotation: num($event) })" />
-      </label>
-      <label class="ovl-style-check">
-        <div class="ep-toggle-btn" :class="{ on: aspectLocked }" @click="aspectLocked = !aspectLocked">
-          <span class="ep-toggle-knob"></span>
-        </div>
-        lock aspect
-      </label>
-    </div>
-
     <!-- vvv typography + box alignment - text/variable-text only, auto-collapsed vvv -->
     <template v-if="isTextLike">
       <button class="ovl-style-section-title" @click="toggle('typography')">
@@ -391,6 +357,41 @@ function toggle(key: string) {
         muted
       </label>
     </template>
+
+    <!-- vvv transform - applies to every element, auto-collapsed, kept last since it's about
+    the box's geometry, not the element's content, and was confused for text size up top vvv -->
+    <button class="ovl-style-section-title" @click="toggle('position')">
+      <span v-html="iconSvgFor(collapsed.position ? 'chevron-right' : 'chevron-down')"></span>
+      transform
+    </button>
+    <div v-if="!collapsed.position" class="ovl-style-grid">
+      <label class="ovl-style-num">
+        X
+        <input type="number" :value="Math.round(element.x)" @change="set({ x: num($event) })" />
+      </label>
+      <label class="ovl-style-num">
+        Y
+        <input type="number" :value="Math.round(element.y)" @change="set({ y: num($event) })" />
+      </label>
+      <label class="ovl-style-num">
+        W
+        <input type="number" :value="Math.round(element.w)" @change="setW(num($event))" />
+      </label>
+      <label class="ovl-style-num">
+        H
+        <input type="number" :value="Math.round(element.h)" @change="setH(num($event))" />
+      </label>
+      <label class="ovl-style-num">
+        Rotation
+        <input type="number" :value="Math.round(element.rotation)" @change="set({ rotation: num($event) })" />
+      </label>
+      <label class="ovl-style-check">
+        <div class="ep-toggle-btn" :class="{ on: aspectLocked }" @click="aspectLocked = !aspectLocked">
+          <span class="ep-toggle-knob"></span>
+        </div>
+        lock aspect
+      </label>
+    </div>
   </div>
 </template>
 
