@@ -583,6 +583,53 @@ function closeOverlayEditor() {
   overlayEditorOpen.value = false;
 }
 
+// >>> the overlay's own OBS input is always named this way (see agentPackage.ts/apiServer.ts's
+// >>> add-to-scene route), lets the sources list recognize it without fetching overlay state
+const OVERLAY_SOURCE_PREFIX = "ShyBoti Overlay - ";
+const hasOverlaySource = computed(() =>
+  (sources.value as any[]).some((s) => s.sourceName?.startsWith(OVERLAY_SOURCE_PREFIX)),
+);
+function onSourceRowDblClick(src: any) {
+  if (selectedScene.value && String(src.sourceName || "").startsWith(OVERLAY_SOURCE_PREFIX)) {
+    openOverlayEditor(selectedScene.value);
+  }
+}
+// >>> one-step add: reuse the channel's existing overlay if it has one (matches the editor's
+// >>> own "first overlay" fallback), otherwise create one - either way, attach it here
+const addingOverlay = ref(false);
+async function quickAddOverlay() {
+  if (!session.value || !selectedScene.value || addingOverlay.value) return;
+  addingOverlay.value = true;
+  try {
+    const listRes = await fetch(`${API}/overlays/${session.value.channel}`, {
+      headers: authHeaders.value,
+    });
+    let overlayId: string | null = null;
+    if (listRes.ok) {
+      const d = (await listRes.json()) as { overlays: { id: string }[] };
+      overlayId = d.overlays[0]?.id ?? null;
+    }
+    if (!overlayId) {
+      const createRes = await fetch(`${API}/overlays/${session.value.channel}`, {
+        method: "POST",
+        headers: authHeaders.value,
+      });
+      if (createRes.ok) {
+        const d = (await createRes.json()) as { overlay: { id: string } };
+        overlayId = d.overlay.id;
+      }
+    }
+    if (!overlayId) return;
+    await fetch(`${API}/overlay/${session.value.channel}/${overlayId}/add-to-scene`, {
+      method: "POST",
+      headers: { ...authHeaders.value, "Content-Type": "application/json" },
+      body: JSON.stringify({ scene: selectedScene.value }),
+    });
+    await loadSources(selectedScene.value, { silent: true });
+  } catch { }
+  addingOverlay.value = false;
+}
+
 function onToggleVisible(src: any) {
   if (locked.value) return;
   if (!editMode.value) {
@@ -1882,6 +1929,9 @@ watch(
                 <span v-if="selectedScene" class="ep-field-hint">{{
                   selectedScene
                   }}</span></label>
+              <button v-if="selectedScene && !hasOverlaySource" class="obs-add-source-btn"
+                title="Add the ShyBoti overlay to this scene" :disabled="addingOverlay" @click="quickAddOverlay"
+                v-html="iconSvgFor('plus')"></button>
               <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
                 @click="openAddSource" v-html="iconSvgFor('plus')"></button>
             </div>
@@ -1897,7 +1947,8 @@ watch(
               </template>
               <div v-for="(src, i) in sources as any[]" :key="src.sceneItemId" class="obs-source-row"
                 :class="{ pending: isSourcePending(src), dragging: dragSourceIndex === i }" draggable="true"
-                @dragstart="onSourceDragStart(i)" @dragover.prevent @drop="onSourceDrop(i)">
+                @dragstart="onSourceDragStart(i)" @dragover.prevent @drop="onSourceDrop(i)"
+                @dblclick="onSourceRowDblClick(src)">
                 <span class="obs-drag-handle" title="Drag to reorder" v-html="iconSvgFor('grip')"></span>
                 <span class="obs-source-name">{{ src.sourceName }}</span>
                 <span v-if="isSourcePending(src)" class="pending-tag">pending</span>
