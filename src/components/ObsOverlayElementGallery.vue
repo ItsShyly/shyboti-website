@@ -25,6 +25,10 @@ const shortcuts: { keys: string; desc: string }[] = [
   { keys: "Ctrl+Z", desc: "Undo" },
   { keys: "Ctrl+Shift+Z", desc: "Redo" },
   { keys: "Ctrl+C / Ctrl+V", desc: "Copy / paste selected" },
+  {
+    keys: "Ctrl+V (nothing copied in-app)",
+    desc: "Pastes an image or text from the system clipboard as a new element (e.g. paste an image copied from Google)",
+  },
   { keys: "Ctrl+D", desc: "Duplicate selected" },
   { keys: "Delete / Backspace", desc: "Delete selected" },
   { keys: "Escape", desc: "Close the editor" },

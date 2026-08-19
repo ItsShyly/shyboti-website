@@ -599,6 +599,63 @@ function pasteFrom(source: OverlayElement[]) {
 function pasteClipboard() {
   pasteFrom(clipboard.value);
 }
+
+// vvv Ctrl+V from the OS clipboard - paste an image (e.g. copied off Google Images) or
+// vvv plain text directly as a new element; falls back to the internal element clipboard
+// vvv above when there's nothing image/text-shaped on the system clipboard vvv
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+async function pasteImageBlob(blob: Blob) {
+  try {
+    const dataUrl = await blobToDataUrl(blob);
+    const res = await fetch(`${API}/images/upload-base64`, {
+      method: "POST",
+      headers: { ...props.authHeaders, "Content-Type": "application/json" },
+      body: JSON.stringify({ data: dataUrl, filename: "pasted-image.png" }),
+    });
+    if (!res.ok) return;
+    const d = (await res.json()) as { url: string };
+    addElement("image");
+    if (selectedElement.value) updateElement(selectedElement.value.id, { content: d.url });
+  } catch { }
+}
+function pasteTextAsElement(text: string) {
+  addElement("text");
+  if (selectedElement.value) updateElement(selectedElement.value.id, { content: text });
+}
+async function pasteFromSystemClipboard() {
+  // >>> an explicit in-app Ctrl+C this session wins - otherwise the OS clipboard almost
+  // >>> always has SOMETHING (stale text from anywhere) that would silently shadow it
+  if (clipboard.value.length) {
+    pasteClipboard();
+    return;
+  }
+  try {
+    const items = await navigator.clipboard.read();
+    for (const item of items) {
+      const imageType = item.types.find((ty) => ty.startsWith("image/"));
+      if (imageType) {
+        await pasteImageBlob(await item.getType(imageType));
+        return;
+      }
+    }
+    const text = (await navigator.clipboard.readText()).trim();
+    if (text) {
+      pasteTextAsElement(text);
+      return;
+    }
+  } catch {
+    // >>> API unavailable/denied (or nothing readable) - nothing to fall back to here,
+    // >>> the in-app clipboard was already checked above
+  }
+}
+// ^^^ system clipboard paste ^^^
 function duplicateSelected() {
   const sel = pendingElements.value.filter((e) => selectedIds.value.includes(e.id));
   pasteFrom(sel);
@@ -856,7 +913,7 @@ function onKeydown(e: KeyboardEvent) {
     copySelected();
   } else if (mod && e.key.toLowerCase() === "v") {
     e.preventDefault();
-    pasteClipboard();
+    pasteFromSystemClipboard();
   } else if (mod && e.key.toLowerCase() === "d") {
     e.preventDefault();
     duplicateSelected();
