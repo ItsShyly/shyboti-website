@@ -783,6 +783,9 @@ async function save(opts: { silent?: boolean } = {}) {
   if (!currentOverlayId.value || saving.value) return;
   saving.value = true;
   try {
+    // >>> a live-drag's final position was already pushed via the forced live-preview call
+    // >>> on release - refreshing the browser source here would just flash it for no reason
+    const skipRefresh = !!opts.silent && Date.now() - lastLivePreviewAt < 1500;
     const res = await fetch(
       `${API}/overlay/${props.channel}/${currentOverlayId.value}/elements/bulk`,
       {
@@ -791,6 +794,7 @@ async function save(opts: { silent?: boolean } = {}) {
         body: JSON.stringify({
           elements: pendingElements.value.map(toWireElement),
           deletedIds: deletedIds.value,
+          skipRefresh,
         }),
       },
     );
@@ -842,7 +846,11 @@ watch(
 // or the DB, so it never becomes an undo step and never fights the in-progress drag. The
 // real value still lands via the normal Save/scheduleLiveSave path on drag-release.
 let livePreviewSending = false;
+// >>> read by save() to decide whether the trailing DB write can skip its browser-source
+// >>> refresh - a recent live-preview means the visual state is already correct
+let lastLivePreviewAt = 0;
 async function onLivePreview(updates: Array<{ id: string; patch: Partial<OverlayElement> }>) {
+  lastLivePreviewAt = Date.now();
   if (!liveUpdate.value || !currentOverlayId.value || livePreviewSending) return;
   livePreviewSending = true;
   try {

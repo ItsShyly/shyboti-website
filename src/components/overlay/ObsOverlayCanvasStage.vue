@@ -56,6 +56,12 @@ function emitLivePreview(updates: Array<{ id: string; patch: Partial<OverlayElem
   lastLivePreviewAt = now;
   emit("live-preview", updates);
 }
+// >>> bypasses the throttle - used once on drag/resize/rotate release so the live browser
+// >>> source has the exact final value before the trailing DB save skips its refresh
+function emitLivePreviewForce(updates: Array<{ id: string; patch: Partial<OverlayElement> }>) {
+  lastLivePreviewAt = Date.now();
+  emit("live-preview", updates);
+}
 
 const CURSOR_MOVE_THROTTLE_MS = 50;
 let lastCursorMoveAt = 0;
@@ -477,7 +483,10 @@ function onDragEnd() {
     id,
     patch: { x: pos.x, y: pos.y },
   }));
-  if (updates.length) emit("update-elements", updates);
+  if (updates.length) {
+    emitLivePreviewForce(updates);
+    emit("update-elements", updates);
+  }
 }
 // ^^^ drag-to-move ^^^
 
@@ -593,6 +602,7 @@ function onResizeEnd() {
     const el = props.elements.find((e) => e.id === r.id);
     patch.style = { ...(el?.style ?? {}), fontSize: preview.fontSize };
   }
+  emitLivePreviewForce([{ id: r.id, patch }]);
   emit("update-element", r.id, patch);
 }
 // ^^^ corner resize ^^^
@@ -700,7 +710,10 @@ function onGroupResizeEnd() {
     }
     return { id, patch };
   });
-  if (updates.length) emit("update-elements", updates);
+  if (updates.length) {
+    emitLivePreviewForce(updates);
+    emit("update-elements", updates);
+  }
 }
 const groupBoxStyle = computed(() => {
   const box = groupResizeLiveBox.value || selectionBounds.value;
@@ -745,6 +758,7 @@ function onRotateEnd() {
   const preview = rotatePreview.value;
   rotatePreview.value = null;
   if (!r || !preview) return;
+  emitLivePreviewForce([{ id: r.id, patch: { rotation: preview.rotation } }]);
   emit("update-element", r.id, { rotation: preview.rotation });
 }
 // ^^^ rotate handle ^^^
