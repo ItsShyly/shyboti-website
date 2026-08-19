@@ -3,6 +3,15 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import type { OverlayElement } from "../composables/overlayTypes";
 
+// >>> custom corner-brackets icon (100x100, filled) - doesn't fit the shared 24x24 stroke
+// >>> icon set's wrapper, so it's kept local instead of forced into icons.ts
+const RESET_ZOOM_ICON = `<svg viewBox="0 0 100 100" width="1em" height="1em" fill="currentColor">
+  <path d="M 10,25 H 25 V 10 H 40 V 40 H 10 Z" />
+  <path d="M 60,10 H 75 V 25 H 90 V 40 H 60 Z" />
+  <path d="M 10,60 H 40 V 90 H 25 V 75 H 10 Z" />
+  <path d="M 60,60 H 90 V 75 H 75 V 90 H 60 Z" />
+</svg>`;
+
 const props = defineProps<{
   elements: OverlayElement[];
   selectedIds: string[];
@@ -46,8 +55,10 @@ const sceneBackdropStyle = computed(() =>
     ? { backgroundImage: `url(${props.sceneShotUrl})` }
     : {},
 );
-const GRID = 10; // <<< canvas units
-const SNAP_PX = 8; // <<< screen-px proximity to trigger element-edge snap
+const GRID = 20; // <<< canvas units - coarse, lowest-priority snap source
+const SNAP_PX = 6; // <<< screen-px proximity for real guides (elements + canvas) - a light
+// <<< magnet you can drag out of, not a lock, per Photoshop/Figma's smart-guide feel
+const GRID_SNAP_PX = 4; // <<< tighter than SNAP_PX - grid never outcompetes a real guide
 
 // >>> layout (unzoomed) scale - offsetWidth ignores the zoom CSS transform, since children
 // >>> are positioned in the stage's own local space and get magnified by that transform too
@@ -98,7 +109,6 @@ function resetZoom() {
   panY.value = 0;
 }
 function onWheel(e: WheelEvent) {
-  if (!e.ctrlKey) return; // otherwise let the page scroll normally
   e.preventDefault();
   setZoom(zoomLevel.value * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
 }
@@ -160,6 +170,37 @@ function onPanEnd(e: MouseEvent) {
 }
 // ^^^ pan-drag ^^^
 
+// vvv drag the minimap's red rectangle to pan - inverse of minimapViewportStyle's math vvv
+const minimapDragState = ref<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null);
+function onMinimapRectMouseDown(e: MouseEvent) {
+  e.preventDefault();
+  e.stopPropagation();
+  minimapDragState.value = {
+    startX: e.clientX,
+    startY: e.clientY,
+    startPanX: panX.value,
+    startPanY: panY.value,
+  };
+  window.addEventListener("mousemove", onMinimapRectMove);
+  window.addEventListener("mouseup", onMinimapRectEnd);
+}
+function onMinimapRectMove(e: MouseEvent) {
+  const d = minimapDragState.value;
+  const el = stageRef.value;
+  if (!d || !el) return;
+  // >>> 1 minimap px represents (naturalWidth*zoom/MINIMAP_W) real content px - drag moves
+  // >>> the window that direction, so pan moves the opposite way
+  const factor = (el.offsetWidth * zoomLevel.value) / MINIMAP_W;
+  panX.value = clampPan(d.startPanX - (e.clientX - d.startX) * factor, "x");
+  panY.value = clampPan(d.startPanY - (e.clientY - d.startY) * factor, "y");
+}
+function onMinimapRectEnd() {
+  window.removeEventListener("mousemove", onMinimapRectMove);
+  window.removeEventListener("mouseup", onMinimapRectEnd);
+  minimapDragState.value = null;
+}
+// ^^^ minimap rect drag ^^^
+
 // vvv minimap - only shown while zoomed, shows the full canvas + a red viewport rectangle vvv
 const MINIMAP_W = 160;
 const minimapInnerStyle = computed(() => ({
@@ -213,8 +254,24 @@ function select(id: string | null, additive: boolean) {
   emit("select", id, additive);
 }
 
-// vvv snapping vvv
+// vvv snapping - Photoshop/Figma-style: every candidate line (other elements' edges+center,
+// vvv the canvas's own edges+center, then grid as a last resort) competes on screen-px distance,
+// vvv closest one under the threshold wins per axis - not "whichever was checked last" vvv
 const snapGuides = ref<{ x: number | null; y: number | null }>({ x: null, y: null });
+function closestSnap(
+  myPoints: number[],
+  targets: number[],
+  s: number,
+): { my: number; target: number; dist: number } | null {
+  let best: { my: number; target: number; dist: number } | null = null;
+  for (const my of myPoints) {
+    for (const target of targets) {
+      const dist = Math.abs(my - target) * s;
+      if (dist < SNAP_PX && (!best || dist < best.dist)) best = { my, target, dist };
+    }
+  }
+  return best;
+}
 function snapValue(raw: { x: number; y: number; w: number; h: number }, selfId: string, disableSnap: boolean) {
   if (disableSnap || props.snapEnabled === false) {
     snapGuides.value = { x: null, y: null };
@@ -222,44 +279,41 @@ function snapValue(raw: { x: number; y: number; w: number; h: number }, selfId: 
   }
   let { x, y, w, h } = raw;
   const s = effScale() || 1;
+
+  const others = props.elements.filter((e) => e.id !== selfId && e.visible);
+  const targetsX = [0, props.baseWidth / 2, props.baseWidth];
+  const targetsY = [0, props.baseHeight / 2, props.baseHeight];
+  for (const other of others) {
+    targetsX.push(other.x, other.x + other.w / 2, other.x + other.w);
+    targetsY.push(other.y, other.y + other.h / 2, other.y + other.h);
+  }
+
   let snappedX: number | null = null;
   let snappedY: number | null = null;
 
-  const others = props.elements.filter((e) => e.id !== selfId && e.visible);
-  const myEdgesX = [x, x + w / 2, x + w];
-  const myEdgesY = [y, y + h / 2, y + h];
-  for (const other of others) {
-    const oEdgesX = [other.x, other.x + other.w / 2, other.x + other.w];
-    const oEdgesY = [other.y, other.y + other.h / 2, other.y + other.h];
-    for (const mx of myEdgesX) {
-      for (const ox of oEdgesX) {
-        if (Math.abs((mx - ox) * s) < SNAP_PX) {
-          x += ox - mx;
-          snappedX = ox;
-        }
-      }
-    }
-    for (const my of myEdgesY) {
-      for (const oy of oEdgesY) {
-        if (Math.abs((my - oy) * s) < SNAP_PX) {
-          y += oy - my;
-          snappedY = oy;
-        }
-      }
-    }
+  const bestX = closestSnap([x, x + w / 2, x + w], targetsX, s);
+  if (bestX) {
+    x += bestX.target - bestX.my;
+    snappedX = bestX.target;
   }
-  // >>> grid is a magnet with a pull radius too, not an unconditional round - a Photoshop-style
-  // >>> snap you can drag your way out of, otherwise fine positioning (e.g. exact centering) is impossible
+  const bestY = closestSnap([y, y + h / 2, y + h], targetsY, s);
+  if (bestY) {
+    y += bestY.target - bestY.my;
+    snappedY = bestY.target;
+  }
+
+  // >>> grid is a coarser, lower-priority fallback - only when no real guide matched, and with
+  // >>> its own tighter threshold so it never outcompetes an element/canvas guide
   if (snappedX === null) {
     const gridX = Math.round(x / GRID) * GRID;
-    if (Math.abs((x - gridX) * s) < SNAP_PX) {
+    if (Math.abs((x - gridX) * s) < GRID_SNAP_PX) {
       x = gridX;
       snappedX = gridX;
     }
   }
   if (snappedY === null) {
     const gridY = Math.round(y / GRID) * GRID;
-    if (Math.abs((y - gridY) * s) < SNAP_PX) {
+    if (Math.abs((y - gridY) * s) < GRID_SNAP_PX) {
       y = gridY;
       snappedY = gridY;
     }
@@ -404,9 +458,9 @@ function onResizeMove(e: MouseEvent) {
   }
   if (props.snapEnabled !== false && !e.altKey) {
     const gridW = Math.round(newW / GRID) * GRID;
-    if (Math.abs((newW - gridW) * s) < SNAP_PX) newW = gridW;
+    if (Math.abs((newW - gridW) * s) < GRID_SNAP_PX) newW = gridW;
     const gridH = Math.round(newH / GRID) * GRID;
-    if (Math.abs((newH - gridH) * s) < SNAP_PX) newH = gridH;
+    if (Math.abs((newH - gridH) * s) < GRID_SNAP_PX) newH = gridH;
   }
   resizePreview.value = { id: r.id, x: newX, y: newY, w: newW, h: newH };
   emitLivePreview([{ id: r.id, patch: { x: newX, y: newY, w: newW, h: newH } }]);
@@ -688,9 +742,9 @@ defineExpose({ stageRef });
   <div v-if="zoomLevel > 1" class="ovl-minimap">
     <div class="ovl-minimap-inner" :style="minimapInnerStyle">
       <div v-for="el in sortedElements" :key="'mm' + el.id" class="ovl-minimap-el" :style="minimapElStyle(el)"></div>
-      <div class="ovl-minimap-viewport" :style="minimapViewportStyle()"></div>
+      <div class="ovl-minimap-viewport" :style="minimapViewportStyle()" @mousedown="onMinimapRectMouseDown"></div>
     </div>
-    <button class="ovl-minimap-reset" title="Reset zoom" @click="resetZoom" v-html="iconSvgFor('refresh-cw')"></button>
+    <button class="ovl-minimap-reset" title="Reset zoom" @click="resetZoom" v-html="RESET_ZOOM_ICON"></button>
   </div>
   </div>
 </template>
@@ -996,7 +1050,11 @@ defineExpose({ stageRef });
   position: absolute;
   border: 1.5px solid #f14949;
   background: #f1494915;
-  pointer-events: none;
+  cursor: grab;
+}
+
+.ovl-minimap-viewport:active {
+  cursor: grabbing;
 }
 
 .ovl-minimap-reset {
