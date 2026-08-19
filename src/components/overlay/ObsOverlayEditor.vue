@@ -920,6 +920,18 @@ function onKeydown(e: KeyboardEvent) {
   } else if (e.key === "Delete" || e.key === "Backspace") {
     e.preventDefault();
     deleteSelected();
+  } else if (!mod && e.key === "1") {
+    e.preventDefault();
+    pickBackdrop("checker");
+  } else if (!mod && e.key === "2") {
+    e.preventDefault();
+    pickBackdrop("white");
+  } else if (!mod && e.key === "3") {
+    e.preventDefault();
+    pickBackdrop("black");
+  } else if (!mod && e.key === "4" && props.obsReady) {
+    e.preventDefault();
+    pickBackdrop("scene");
   }
 }
 let previewTimer: ReturnType<typeof setInterval> | null = null;

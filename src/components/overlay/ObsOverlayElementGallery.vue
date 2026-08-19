@@ -60,19 +60,19 @@ const shortcuts: Shortcut[] = [
   { parts: [{ k: "Delete" }, { t: "/" }, { k: "Backspace" }], desc: "Delete selected" },
   { parts: [{ k: "Escape" }], desc: "Close the editor" },
   {
-    parts: [{ k: "Shift" }, { t: "/" }, { k: "Ctrl" }, { t: "+" }, { svg: MOUSE_LEFT }],
+    parts: [{ k: "Shift" }, { t: "+" }, { svg: MOUSE_LEFT }, { t: "/" }, { k: "Ctrl" }, { t: "+" }, { svg: MOUSE_LEFT }],
     desc: "Add/remove from selection",
   },
   {
-    parts: [{ svg: MOUSE_LEFT }, { t: "+ drag in canvas" }],
+    parts: [{ svg: MOUSE_LEFT }, { t: " + drag in canvas" }],
     desc: "multi-select elements",
   },
   {
-    parts: [{ svg: MOUSE_RIGHT }, { t: " element" }],
+    parts: [{ svg: MOUSE_RIGHT }, { t: " on an element" }],
     desc: "Context menu",
   },
   {
-    parts: [{ k: "Ctrl" }, { t: " or " }, { k: "Alt" }, { t: "+ while resizing" }],
+    parts: [{ k: "Ctrl" }, { t: "/" }, { k: "Alt" }, { t: "while resizing" }],
     desc: "Also scale font-size with the box",
   },
   { parts: [{ k: "Alt" }, { t: "+ dragging" }], desc: "Temporarily disable snapping" },
@@ -84,6 +84,10 @@ const shortcuts: Shortcut[] = [
   {
     parts: [{ svg: MOUSE_RIGHT }, { t: "/" }, { svg: MOUSE_MIDDLE }, { t: " drag" }],
     desc: "Pan the canvas when zoomed in",
+  },
+  {
+    parts: [{ k: "1" }, { t: "/" }, { k: "2" }, { t: "/" }, { k: "3" }, { t: "/" }, { k: "4" }],
+    desc: "Switch canvas backdrop (checker/white/black/scene screenshot)",
   },
 ];
 </script>
