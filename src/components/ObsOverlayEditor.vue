@@ -134,9 +134,10 @@ function countdownTimeFieldValue(el: OverlayElement): string {
   if (countdownFieldFocused.value === el.id) return countdownDraft.value;
   return formatDuration(computeCountdown(el.type as CountdownLikeType, el.data || {}).seconds);
 }
-function onCountdownFieldFocus(el: OverlayElement) {
+function onCountdownFieldFocus(el: OverlayElement, e: FocusEvent) {
   countdownFieldFocused.value = el.id;
   countdownDraft.value = formatDuration(computeCountdown(el.type as CountdownLikeType, el.data || {}).seconds);
+  (e.target as HTMLInputElement).select(); // <<< select-all so typing replaces it, doesn't append
 }
 function commitCountdownTimeField(el: OverlayElement, e: FocusEvent) {
   countdownFieldFocused.value = null;
@@ -988,7 +989,7 @@ onUnmounted(() => {
 
               <div v-if="isCountdownLike(selectedElement.type)" class="ovl-props-countdown-top">
                 <input class="ovl-props-time-input" type="text" :value="countdownTimeFieldValue(selectedElement)"
-                  @focus="onCountdownFieldFocus(selectedElement)"
+                  @focus="onCountdownFieldFocus(selectedElement, $event)"
                   @input="countdownDraft = ($event.target as HTMLInputElement).value"
                   @blur="commitCountdownTimeField(selectedElement, $event)"
                   @keydown.enter="($event.target as HTMLInputElement).blur()" />

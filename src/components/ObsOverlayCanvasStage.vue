@@ -808,9 +808,10 @@ function startCountdownEdit(el: OverlayElement) {
     if (!node) return;
     node.textContent = countdownEditDraft.value;
     node.focus();
+    // >>> select the whole prefilled value (not collapsed at the end) - it's a time field,
+    // >>> so typing should replace it outright, not append onto the old digits
     const range = document.createRange();
     range.selectNodeContents(node);
-    range.collapse(false);
     const sel = window.getSelection();
     sel?.removeAllRanges();
     sel?.addRange(range);
