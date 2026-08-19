@@ -594,41 +594,6 @@ function onSourceRowDblClick(src: any) {
     openOverlayEditor(selectedScene.value);
   }
 }
-// >>> one-step add: reuse the channel's existing overlay if it has one (matches the editor's
-// >>> own "first overlay" fallback), otherwise create one - either way, attach it here
-const addingOverlay = ref(false);
-async function quickAddOverlay() {
-  if (!session.value || !selectedScene.value || addingOverlay.value) return;
-  addingOverlay.value = true;
-  try {
-    const listRes = await fetch(`${API}/overlays/${session.value.channel}`, {
-      headers: authHeaders.value,
-    });
-    let overlayId: string | null = null;
-    if (listRes.ok) {
-      const d = (await listRes.json()) as { overlays: { id: string }[] };
-      overlayId = d.overlays[0]?.id ?? null;
-    }
-    if (!overlayId) {
-      const createRes = await fetch(`${API}/overlays/${session.value.channel}`, {
-        method: "POST",
-        headers: authHeaders.value,
-      });
-      if (createRes.ok) {
-        const d = (await createRes.json()) as { overlay: { id: string } };
-        overlayId = d.overlay.id;
-      }
-    }
-    if (!overlayId) return;
-    await fetch(`${API}/overlay/${session.value.channel}/${overlayId}/add-to-scene`, {
-      method: "POST",
-      headers: { ...authHeaders.value, "Content-Type": "application/json" },
-      body: JSON.stringify({ scene: selectedScene.value }),
-    });
-    await loadSources(selectedScene.value, { silent: true });
-  } catch { }
-  addingOverlay.value = false;
-}
 
 function onToggleVisible(src: any) {
   if (locked.value) return;
@@ -1494,7 +1459,7 @@ interface ObsWidget {
 }
 const showAddSource = ref(false);
 const addSourceOverlay = useOverlayClose();
-const addSourceMode = ref<"url" | "widget">("url");
+const addSourceMode = ref<"url" | "widget" | "overlay">("url");
 const addSourceName = ref("");
 const addSourceUrl = ref("");
 const addSourceWidgetId = ref("");
@@ -1514,6 +1479,23 @@ async function loadWidgetsForAddSource() {
   } catch { }
 }
 
+// vvv overlay tab - only offered when this scene doesn't already have one; lets you pick
+// vvv an existing overlay (shared across scenes) or create a new one vvv
+interface OverlayChoice { id: string; name: string }
+const overlaysForPicker = ref<OverlayChoice[]>([]);
+const selectedOverlayChoice = ref<string>("new");
+async function loadOverlaysForPicker() {
+  if (!session.value) return;
+  try {
+    const res = await fetch(`${API}/overlays/${session.value.channel}`, {
+      headers: authHeaders.value,
+    });
+    if (res.ok)
+      overlaysForPicker.value = ((await res.json()) as { overlays: OverlayChoice[] }).overlays ?? [];
+  } catch { }
+}
+// ^^^ overlay tab ^^^
+
 function openAddSource() {
   if (!selectedScene.value) return;
   addSourceMode.value = "url";
@@ -1523,8 +1505,10 @@ function openAddSource() {
   addSourceWidth.value = 1920;
   addSourceHeight.value = 1080;
   addSourceError.value = "";
+  selectedOverlayChoice.value = "new";
   showAddSource.value = true;
   loadWidgetsForAddSource();
+  if (!hasOverlaySource.value) loadOverlaysForPicker();
 }
 
 function pickAddSourceWidget(id: string) {
@@ -1559,6 +1543,47 @@ async function createSourceNow(
 
 async function submitAddSource() {
   if (!session.value || !selectedScene.value) return;
+
+  if (addSourceMode.value === "overlay") {
+    addSourceSaving.value = true;
+    addSourceError.value = "";
+    try {
+      let overlayId = selectedOverlayChoice.value;
+      if (overlayId === "new") {
+        const createRes = await fetch(`${API}/overlays/${session.value.channel}`, {
+          method: "POST",
+          headers: authHeaders.value,
+        });
+        if (!createRes.ok) {
+          addSourceError.value = "Could not create the overlay";
+          addSourceSaving.value = false;
+          return;
+        }
+        const d = (await createRes.json()) as { overlay: { id: string } };
+        overlayId = d.overlay.id;
+      }
+      const res = await fetch(
+        `${API}/overlay/${session.value.channel}/${overlayId}/add-to-scene`,
+        {
+          method: "POST",
+          headers: { ...authHeaders.value, "Content-Type": "application/json" },
+          body: JSON.stringify({ scene: selectedScene.value }),
+        },
+      );
+      if (res.ok) {
+        await loadSources(selectedScene.value, { silent: true });
+        showAddSource.value = false;
+      } else {
+        const d = await res.json().catch(() => ({}) as any);
+        addSourceError.value = d.error ?? "Could not add the overlay";
+      }
+    } catch {
+      addSourceError.value = "Could not add the overlay";
+    }
+    addSourceSaving.value = false;
+    return;
+  }
+
   const name = addSourceName.value.trim();
   const url =
     addSourceMode.value === "widget"
@@ -1929,9 +1954,6 @@ watch(
                 <span v-if="selectedScene" class="ep-field-hint">{{
                   selectedScene
                   }}</span></label>
-              <button v-if="selectedScene && !hasOverlaySource" class="obs-add-source-btn"
-                title="Add the ShyBoti overlay to this scene" :disabled="addingOverlay" @click="quickAddOverlay"
-                v-html="iconSvgFor('plus')"></button>
               <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
                 @click="openAddSource" v-html="iconSvgFor('plus')"></button>
             </div>
@@ -2328,45 +2350,69 @@ watch(
             <button class="ep-tab" :class="{ active: addSourceMode === 'widget' }" @click="addSourceMode = 'widget'">
               ShyBoti widget
             </button>
+            <button v-if="!hasOverlaySource" class="ep-tab" :class="{ active: addSourceMode === 'overlay' }"
+              @click="addSourceMode = 'overlay'">
+              Overlay
+            </button>
           </div>
 
-          <div class="ep-field-group">
-            <label class="ep-field-label">Name</label>
-            <input v-model="addSourceName" type="text" class="ep-field-input" placeholder="Source name" />
-          </div>
-
-          <div v-if="addSourceMode === 'url'" class="ep-field-group">
-            <label class="ep-field-label">URL</label>
-            <input v-model="addSourceUrl" type="text" class="ep-field-input" placeholder="https://..." />
-          </div>
-          <div v-else class="ep-field-group">
-            <label class="ep-field-label">Widget</label>
-            <select v-model="addSourceWidgetId" class="ep-field-select"
-              @change="pickAddSourceWidget(addSourceWidgetId)">
-              <option value="" disabled>Pick a widget...</option>
-              <option v-for="w in widgets" :key="w.id" :value="w.id">{{ w.name }}</option>
-            </select>
-            <div v-if="!widgets.length" class="ep-field-hint">
-              No OBS widgets yet - create one on the OBS Widgets page first.
+          <template v-if="addSourceMode === 'overlay'">
+            <div class="ep-field-group">
+              <label class="ep-field-label">Overlay</label>
+              <select v-model="selectedOverlayChoice" class="ep-field-select">
+                <option value="new">Create a new overlay</option>
+                <option v-for="o in overlaysForPicker" :key="o.id" :value="o.id">{{ o.name }}</option>
+              </select>
+              <div class="ep-field-hint">
+                An existing overlay's content is shared across every scene it's added to.
+              </div>
             </div>
-          </div>
 
-          <div class="ep-row-2">
-            <div class="ep-field-group ep-sm">
-              <label class="ep-field-label">Width</label>
-              <input v-model.number="addSourceWidth" type="number" min="1" class="ep-field-input" />
+            <div v-if="addSourceError" class="ep-toast error">{{ addSourceError }}</div>
+
+            <button class="ep-btn-save" :disabled="addSourceSaving" @click="submitAddSource">
+              {{ addSourceSaving ? "adding..." : "add overlay" }}
+            </button>
+          </template>
+          <template v-else>
+            <div class="ep-field-group">
+              <label class="ep-field-label">Name</label>
+              <input v-model="addSourceName" type="text" class="ep-field-input" placeholder="Source name" />
             </div>
-            <div class="ep-field-group ep-sm">
-              <label class="ep-field-label">Height</label>
-              <input v-model.number="addSourceHeight" type="number" min="1" class="ep-field-input" />
+
+            <div v-if="addSourceMode === 'url'" class="ep-field-group">
+              <label class="ep-field-label">URL</label>
+              <input v-model="addSourceUrl" type="text" class="ep-field-input" placeholder="https://..." />
             </div>
-          </div>
+            <div v-else class="ep-field-group">
+              <label class="ep-field-label">Widget</label>
+              <select v-model="addSourceWidgetId" class="ep-field-select"
+                @change="pickAddSourceWidget(addSourceWidgetId)">
+                <option value="" disabled>Pick a widget...</option>
+                <option v-for="w in widgets" :key="w.id" :value="w.id">{{ w.name }}</option>
+              </select>
+              <div v-if="!widgets.length" class="ep-field-hint">
+                No OBS widgets yet - create one on the OBS Widgets page first.
+              </div>
+            </div>
 
-          <div v-if="addSourceError" class="ep-toast error">{{ addSourceError }}</div>
+            <div class="ep-row-2">
+              <div class="ep-field-group ep-sm">
+                <label class="ep-field-label">Width</label>
+                <input v-model.number="addSourceWidth" type="number" min="1" class="ep-field-input" />
+              </div>
+              <div class="ep-field-group ep-sm">
+                <label class="ep-field-label">Height</label>
+                <input v-model.number="addSourceHeight" type="number" min="1" class="ep-field-input" />
+              </div>
+            </div>
 
-          <button class="ep-btn-save" :disabled="addSourceSaving" @click="submitAddSource">
-            {{ addSourceSaving ? "adding..." : editMode ? "stage source (added on Save)" : "add source" }}
-          </button>
+            <div v-if="addSourceError" class="ep-toast error">{{ addSourceError }}</div>
+
+            <button class="ep-btn-save" :disabled="addSourceSaving" @click="submitAddSource">
+              {{ addSourceSaving ? "adding..." : editMode ? "stage source (added on Save)" : "add source" }}
+            </button>
+          </template>
         </div>
       </div>
     </div>
