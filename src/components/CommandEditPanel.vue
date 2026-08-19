@@ -167,6 +167,7 @@ async function load() {
           }
         userParams.value = userParams.value.map(p => ({ ...p, value: ex ? ((ex as any)[p.key] ?? '') : '' }))
       }
+      await loadAliases()
     }
   } catch { }
   loading.value = false
@@ -944,13 +945,12 @@ function removeArgVariant(i: number) {
             </div>
           </details>
 
-          <!-- >>> built-ins only -->
-          <details v-if="isBuiltIn" class="ep-field-group desc-details" open>
+          <!-- >>> aliases - available for both built-in and custom commands -->
+          <details class="ep-field-group desc-details" open>
             <summary class="ep-field-label desc-summary">
               {{ t('edit.aliases') }} <span class="ep-field-hint">{{ t('edit.aliases_hint') }}</span>
             </summary>
             <div class="desc-body">
-              <div class="arg-descs-title">{{ t('edit.aliases') }}</div>
               <div v-if="!builtinChannelAliases.length && !builtinGlobalAliases.length" class="arg-descs-empty">
                 {{ t('edit.aliases_empty') }}
               </div>
@@ -972,8 +972,15 @@ function removeArgVariant(i: number) {
                 </button>
               </div>
               <div v-if="aliasError" class="alias-error">{{ aliasError }}</div>
+            </div>
+          </details>
 
-              <div class="arg-descs-title flags-title">{{ t('edit.flags') }}</div>
+          <!-- >>> built-ins only -->
+          <details v-if="isBuiltIn" class="ep-field-group desc-details" open>
+            <summary class="ep-field-label desc-summary">
+              {{ t('edit.flags') }}
+            </summary>
+            <div class="desc-body">
               <div v-if="!builtinFlags.length" class="arg-descs-empty">{{ t('edit.flags_empty') }}</div>
               <div v-else class="flags-list">
                 <div v-for="f in builtinFlags" :key="f.flag" class="flags-row">
