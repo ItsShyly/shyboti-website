@@ -68,7 +68,7 @@ const shortcuts: { keys: string; desc: string }[] = [
 
     <button class="ovl-gallery-item ovl-gallery-help" @click="helpOpen = true">
       <span class="ovl-gallery-icon" v-html="iconSvgFor('info')"></span>
-      Help
+      Shortcuts
     </button>
   </div>
 
