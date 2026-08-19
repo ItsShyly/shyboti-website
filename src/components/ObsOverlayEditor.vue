@@ -529,6 +529,11 @@ function duplicateSelected() {
   const sel = pendingElements.value.filter((e) => selectedIds.value.includes(e.id));
   pasteFrom(sel);
 }
+// >>> layers-panel row action - duplicates that one layer regardless of current selection
+function duplicateLayer(id: string) {
+  const el = pendingElements.value.find((e) => e.id === id);
+  if (el) pasteFrom([el]);
+}
 // ^^^ copy/paste/duplicate ^^^
 
 // vvv add/remove/show/hide/swap - immediate, not part of the staged/Save flow vvv
@@ -920,7 +925,7 @@ onUnmounted(() => {
               :base-width="baseWidth" :base-height="baseHeight" :backdrop="stageBackdrop"
               :scene-shot-url="sceneShotUrl" :preview-values="previewValues" :snap-enabled="snapEnabled"
               @select="onSelect" @update-element="updateElement" @update-elements="updateElements"
-              @delete-element="deleteOne" @live-preview="onLivePreview" />
+              @delete-element="deleteOne" @duplicate-element="duplicateSelected" @live-preview="onLivePreview" />
           </div>
 
           <div class="ovl-props">
@@ -958,8 +963,8 @@ onUnmounted(() => {
 
             <ObsOverlayLayersPanel :elements="pendingElements" :selected-ids="selectedIds" @select="onSelect"
               @toggle-lock="toggleLock" @toggle-visible="toggleVisible" @update-elements="updateElements"
-              @hide-all="hideAllLayers" @show-all="showAllLayers" @delete="deleteOne" @group="groupSelected"
-              @ungroup="ungroupSelected" />
+              @hide-all="hideAllLayers" @show-all="showAllLayers" @delete="deleteOne"
+              @duplicate="duplicateLayer" @group="groupSelected" @ungroup="ungroupSelected" />
 
             <div v-if="usedCounterNames.length" class="ovl-counters">
               <div class="ovl-counters-title">counters</div>

@@ -302,18 +302,24 @@ const alignOptions = [
             <span class="ovl-style-bg-pct">{{ backgroundParsed.alpha }}%</span>
           </div>
         </label>
-        <div class="ovl-style-grid">
-          <label class="ovl-style-num">
-            Border w.
-            <input type="number" :value="element.style.borderWidth ?? 0"
+        <label class="ovl-style-field">
+          Border w.
+          <div class="ovl-style-bg-row">
+            <input type="number" min="0" max="40" :value="element.style.borderWidth ?? 0"
               @input="setStyle({ borderWidth: num($event) })" />
-          </label>
-          <label class="ovl-style-num">
-            Radius
-            <input type="number" :value="element.style.borderRadius ?? 0"
+            <input type="range" min="0" max="40" :value="element.style.borderWidth ?? 0"
+              @input="setStyle({ borderWidth: num($event) })" />
+          </div>
+        </label>
+        <label class="ovl-style-field">
+          Radius
+          <div class="ovl-style-bg-row">
+            <input type="number" min="0" max="200" :value="element.style.borderRadius ?? 0"
               @input="setStyle({ borderRadius: num($event) })" />
-          </label>
-        </div>
+            <input type="range" min="0" max="200" :value="element.style.borderRadius ?? 0"
+              @input="setStyle({ borderRadius: num($event) })" />
+          </div>
+        </label>
         <label class="ovl-style-field">
           Border color
           <div class="ovl-style-bg-row">
@@ -489,6 +495,11 @@ const alignOptions = [
 
 .ovl-style-bg-row input[type="color"] {
   width: 32px;
+  flex-shrink: 0;
+}
+
+.ovl-style-bg-row input[type="number"] {
+  width: 48px;
   flex-shrink: 0;
 }
 

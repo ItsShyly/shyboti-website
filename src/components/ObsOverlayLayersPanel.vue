@@ -15,6 +15,7 @@ const emit = defineEmits<{
   "hide-all": [];
   "show-all": [];
   delete: [id: string];
+  duplicate: [id: string];
   group: [];
   ungroup: [];
 }>();
@@ -69,13 +70,11 @@ function onDrop(i: number) {
         layers
       </span>
       <div class="ovl-layers-group-actions">
-        <button class="ovl-layers-mini-btn" :disabled="!canHideAll" title="Hide every element"
-          @click.stop="emit('hide-all')">
-          hide all
+        <button class="ovl-layers-mini-btn icon-only" :disabled="!canHideAll" title="Hide every element"
+          @click.stop="emit('hide-all')" v-html="iconSvgFor('eye-off')">
         </button>
-        <button class="ovl-layers-mini-btn" :disabled="!canShowAll" title="Show every element"
-          @click.stop="emit('show-all')">
-          show all
+        <button class="ovl-layers-mini-btn icon-only" :disabled="!canShowAll" title="Show every element"
+          @click.stop="emit('show-all')" v-html="iconSvgFor('eye')">
         </button>
         <button class="ovl-layers-mini-btn" :disabled="!canGroup" title="Group selection"
           @click.stop="emit('group')">
@@ -100,6 +99,8 @@ function onDrop(i: number) {
           :class="{ dim: !el.locked }"></button>
         <span class="ovl-layers-type">{{ el.type }}</span>
         <span class="ovl-layers-content">{{ el.content || '—' }}</span>
+        <button class="ovl-layers-icon-btn" title="Duplicate" @click.stop="emit('duplicate', el.id)"
+          v-html="iconSvgFor('copy')"></button>
         <button class="ovl-layers-icon-btn danger" title="Delete" @click.stop="emit('delete', el.id)"
           v-html="iconSvgFor('trash')"></button>
       </div>
@@ -174,6 +175,19 @@ function onDrop(i: number) {
 .ovl-layers-mini-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+.ovl-layers-mini-btn.icon-only {
+  width: 20px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ovl-layers-mini-btn.icon-only svg {
+  width: 11px;
+  height: 11px;
 }
 
 .ovl-layers-list {

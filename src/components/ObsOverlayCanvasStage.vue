@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { iconSvg as iconSvgFor } from "../composables/icons";
 import type { OverlayElement } from "../composables/overlayTypes";
 
 const props = defineProps<{
@@ -17,6 +18,7 @@ const emit = defineEmits<{
   "update-element": [id: string, patch: Partial<OverlayElement>];
   "update-elements": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
   "delete-element": [id: string];
+  "duplicate-element": [id: string];
   // >>> throttled, fired mid-drag/resize/rotate - live update mode pushes these without
   // >>> touching undo history, so OBS can follow along before the mouse is released
   "live-preview": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
@@ -47,11 +49,158 @@ const sceneBackdropStyle = computed(() =>
 const GRID = 10; // <<< canvas units
 const SNAP_PX = 8; // <<< screen-px proximity to trigger element-edge snap
 
+// >>> layout (unzoomed) scale - offsetWidth ignores the zoom CSS transform, since children
+// >>> are positioned in the stage's own local space and get magnified by that transform too
 function scale(): number {
   const el = stageRef.value;
   if (!el || !props.baseWidth) return 1;
-  return el.getBoundingClientRect().width / props.baseWidth;
+  return el.offsetWidth / props.baseWidth;
 }
+// >>> true on-screen px-per-canvas-unit, for converting real mouse coordinates
+function effScale(): number {
+  return scale() * zoomLevel.value;
+}
+
+// vvv zoom & pan vvv
+const viewportRef = ref<HTMLElement | null>(null);
+const zoomLevel = ref(1);
+const panX = ref(0);
+const panY = ref(0);
+const ZOOM_MIN = 1;
+const ZOOM_MAX = 6;
+const zoomStyle = computed(() => ({
+  transform: `translate(${panX.value}px, ${panY.value}px) scale(${zoomLevel.value})`,
+  transformOrigin: "center center",
+}));
+function clampPan(v: number, axis: "x" | "y"): number {
+  const el = stageRef.value;
+  const vp = viewportRef.value;
+  if (!el || !vp) return v;
+  const natural = axis === "x" ? el.offsetWidth : el.offsetHeight;
+  const vpSize = axis === "x" ? vp.clientWidth : vp.clientHeight;
+  const max = Math.max(0, (natural * zoomLevel.value - vpSize) / 2);
+  return Math.max(-max, Math.min(max, v));
+}
+function setZoom(z: number) {
+  zoomLevel.value = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z));
+  if (zoomLevel.value <= 1) {
+    zoomLevel.value = 1;
+    panX.value = 0;
+    panY.value = 0;
+  } else {
+    panX.value = clampPan(panX.value, "x");
+    panY.value = clampPan(panY.value, "y");
+  }
+}
+function resetZoom() {
+  zoomLevel.value = 1;
+  panX.value = 0;
+  panY.value = 0;
+}
+function onWheel(e: WheelEvent) {
+  if (!e.ctrlKey) return; // otherwise let the page scroll normally
+  e.preventDefault();
+  setZoom(zoomLevel.value * (e.deltaY < 0 ? 1.15 : 1 / 1.15));
+}
+function onZoomKeydown(e: KeyboardEvent) {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  if (e.key === "+" || e.key === "=") {
+    e.preventDefault();
+    setZoom(zoomLevel.value * 1.25);
+  } else if (e.key === "-" || e.key === "_") {
+    e.preventDefault();
+    setZoom(zoomLevel.value / 1.25);
+  }
+}
+onMounted(() => window.addEventListener("keydown", onZoomKeydown));
+onUnmounted(() => window.removeEventListener("keydown", onZoomKeydown));
+
+// vvv pan-drag - any mouse button, only once zoomed in; a plain unmoved left-click still deselects vvv
+const panState = ref<{
+  startX: number;
+  startY: number;
+  startPanX: number;
+  startPanY: number;
+  moved: boolean;
+  button: number;
+} | null>(null);
+function onStageMouseDown(e: MouseEvent) {
+  if (e.target !== stageRef.value) return; // items own their own mousedown (they stopPropagation)
+  if (e.button === 1) e.preventDefault(); // stop middle-click autoscroll
+  if (zoomLevel.value <= 1) {
+    if (e.button === 0) select(null, false);
+    return;
+  }
+  panState.value = {
+    startX: e.clientX,
+    startY: e.clientY,
+    startPanX: panX.value,
+    startPanY: panY.value,
+    moved: false,
+    button: e.button,
+  };
+  window.addEventListener("mousemove", onPanMove);
+  window.addEventListener("mouseup", onPanEnd);
+}
+function onPanMove(e: MouseEvent) {
+  const p = panState.value;
+  if (!p) return;
+  const dx = e.clientX - p.startX;
+  const dy = e.clientY - p.startY;
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) p.moved = true;
+  panX.value = clampPan(p.startPanX + dx, "x");
+  panY.value = clampPan(p.startPanY + dy, "y");
+}
+function onPanEnd(e: MouseEvent) {
+  window.removeEventListener("mousemove", onPanMove);
+  window.removeEventListener("mouseup", onPanEnd);
+  const p = panState.value;
+  panState.value = null;
+  if (p && !p.moved && p.button === 0) select(null, false);
+}
+// ^^^ pan-drag ^^^
+
+// vvv minimap - only shown while zoomed, shows the full canvas + a red viewport rectangle vvv
+const MINIMAP_W = 160;
+const minimapInnerStyle = computed(() => ({
+  width: `${MINIMAP_W}px`,
+  height: `${(MINIMAP_W * props.baseHeight) / (props.baseWidth || 1)}px`,
+}));
+function minimapElStyle(el: OverlayElement) {
+  const s = MINIMAP_W / (props.baseWidth || 1);
+  return {
+    left: `${el.x * s}px`,
+    top: `${el.y * s}px`,
+    width: `${Math.max(1, el.w * s)}px`,
+    height: `${Math.max(1, el.h * s)}px`,
+  };
+}
+function minimapViewportStyle() {
+  const stageEl = stageRef.value;
+  const vp = viewportRef.value;
+  if (!stageEl || !vp || !props.baseWidth) return {};
+  const stageRect = stageEl.getBoundingClientRect();
+  const vpRect = vp.getBoundingClientRect();
+  const es = effScale();
+  if (!es) return {};
+  const left = (vpRect.left - stageRect.left) / es;
+  const top = (vpRect.top - stageRect.top) / es;
+  const w = vpRect.width / es;
+  const h = vpRect.height / es;
+  const mmScale = MINIMAP_W / props.baseWidth;
+  const clampedLeft = Math.max(0, Math.min(props.baseWidth, left));
+  const clampedTop = Math.max(0, Math.min(props.baseHeight, top));
+  const clampedW = Math.max(0, Math.min(props.baseWidth - clampedLeft, w - (clampedLeft - left)));
+  const clampedH = Math.max(0, Math.min(props.baseHeight - clampedTop, h - (clampedTop - top)));
+  return {
+    left: `${clampedLeft * mmScale}px`,
+    top: `${clampedTop * mmScale}px`,
+    width: `${clampedW * mmScale}px`,
+    height: `${clampedH * mmScale}px`,
+  };
+}
+// ^^^ minimap ^^^
+// ^^^ zoom & pan ^^^
 
 // >>> front of stack (highest z) rendered last, so it's visually on top - matches layers panel.
 // >>> hidden elements are skipped entirely here (matches the real OBS output), not just dimmed -
@@ -72,7 +221,7 @@ function snapValue(raw: { x: number; y: number; w: number; h: number }, selfId: 
     return raw;
   }
   let { x, y, w, h } = raw;
-  const s = scale() || 1;
+  const s = effScale() || 1;
   let snappedX: number | null = null;
   let snappedY: number | null = null;
 
@@ -99,9 +248,23 @@ function snapValue(raw: { x: number; y: number; w: number; h: number }, selfId: 
       }
     }
   }
+  // >>> grid is a magnet with a pull radius too, not an unconditional round - a Photoshop-style
+  // >>> snap you can drag your way out of, otherwise fine positioning (e.g. exact centering) is impossible
+  if (snappedX === null) {
+    const gridX = Math.round(x / GRID) * GRID;
+    if (Math.abs((x - gridX) * s) < SNAP_PX) {
+      x = gridX;
+      snappedX = gridX;
+    }
+  }
+  if (snappedY === null) {
+    const gridY = Math.round(y / GRID) * GRID;
+    if (Math.abs((y - gridY) * s) < SNAP_PX) {
+      y = gridY;
+      snappedY = gridY;
+    }
+  }
   snapGuides.value = { x: snappedX, y: snappedY };
-  if (snappedX === null) x = Math.round(x / GRID) * GRID;
-  if (snappedY === null) y = Math.round(y / GRID) * GRID;
   return { x, y, w, h };
 }
 // ^^^ snapping ^^^
@@ -139,7 +302,7 @@ function onItemMouseDown(el: OverlayElement, e: MouseEvent) {
 function onDragMove(e: MouseEvent) {
   const d = dragState.value;
   if (!d) return;
-  const s = scale() || 1;
+  const s = effScale() || 1;
   const dx = (e.clientX - d.startMouseX) / s;
   const dy = (e.clientY - d.startMouseY) / s;
   const primary = props.elements.find((el) => el.id === d.id);
@@ -209,7 +372,7 @@ function onHandleMouseDown(el: OverlayElement, corner: Corner, e: MouseEvent) {
 function onResizeMove(e: MouseEvent) {
   const r = resizeState.value;
   if (!r) return;
-  const s = scale() || 1;
+  const s = effScale() || 1;
   const stageEl = stageRef.value;
   if (!stageEl) return;
   const rect = stageEl.getBoundingClientRect();
@@ -239,9 +402,11 @@ function onResizeMove(e: MouseEvent) {
     newX = r.anchorX;
     newY = r.anchorY;
   }
-  if (!e.altKey) {
-    newW = Math.round(newW / GRID) * GRID;
-    newH = Math.round(newH / GRID) * GRID;
+  if (props.snapEnabled !== false && !e.altKey) {
+    const gridW = Math.round(newW / GRID) * GRID;
+    if (Math.abs((newW - gridW) * s) < SNAP_PX) newW = gridW;
+    const gridH = Math.round(newH / GRID) * GRID;
+    if (Math.abs((newH - gridH) * s) < SNAP_PX) newH = gridH;
   }
   resizePreview.value = { id: r.id, x: newX, y: newY, w: newW, h: newH };
   emitLivePreview([{ id: r.id, patch: { x: newX, y: newY, w: newW, h: newH } }]);
@@ -275,7 +440,7 @@ function onRotateMove(e: MouseEvent) {
   if (!r || !stageEl) return;
   const el = props.elements.find((x) => x.id === r.id);
   if (!el) return;
-  const s = scale() || 1;
+  const s = effScale() || 1;
   const rect = stageEl.getBoundingClientRect();
   const centerX = rect.left + (el.x + el.w / 2) * s;
   const centerY = rect.top + (el.y + el.h / 2) * s;
@@ -363,10 +528,6 @@ function displayStyle(el: OverlayElement) {
   };
 }
 
-function onStageClick(e: MouseEvent) {
-  if (e.target === stageRef.value) select(null, false);
-}
-
 // vvv double-click to edit text content directly on the canvas vvv
 const editingId = ref<string | null>(null);
 function startEdit(el: OverlayElement) {
@@ -429,6 +590,10 @@ function ctxDelete() {
   if (contextMenu.value) emit("delete-element", contextMenu.value.id);
   contextMenu.value = null;
 }
+function ctxDuplicate() {
+  if (contextMenu.value) emit("duplicate-element", contextMenu.value.id);
+  contextMenu.value = null;
+}
 // >>> video's own mixer - mute/volume live on the video element itself, no separate audio widget
 function ctxToggleMute() {
   const el = contextMenuElement.value;
@@ -463,7 +628,9 @@ defineExpose({ stageRef });
 </script>
 
 <template>
-  <div ref="stageRef" class="ovl-stage" :style="stageStyle" @mousedown="onStageClick">
+  <div ref="viewportRef" class="ovl-stage-viewport" @wheel="onWheel">
+  <div ref="stageRef" class="ovl-stage" :style="[stageStyle, zoomStyle]" @mousedown="onStageMouseDown"
+    @contextmenu.prevent>
     <div v-if="backdrop === 'scene' && sceneShotUrl" class="ovl-scene-backdrop" :style="sceneBackdropStyle"></div>
     <div v-if="guideStyleX" class="ovl-guide ovl-guide-v" :style="guideStyleX"></div>
     <div v-if="guideStyleY" class="ovl-guide ovl-guide-h" :style="guideStyleY"></div>
@@ -498,25 +665,47 @@ defineExpose({ stageRef });
         </span>
       </template>
     </div>
+  </div>
 
-    <div v-if="contextMenu" class="ovl-ctx-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
-      @mousedown.stop>
-      <template v-if="contextMenuElement?.type === 'video'">
-        <button @click="ctxToggleMute">{{ contextMenuElement.data.muted !== false ? "Unmute" : "Mute" }}</button>
-        <div class="ovl-ctx-volume">
-          <span>Vol</span>
-          <input type="range" min="0" max="100" :value="contextMenuElement.data.volume ?? 100"
-            @input="ctxSetVolume(Number(($event.target as HTMLInputElement).value))" />
-          <span>{{ contextMenuElement.data.volume ?? 100 }}%</span>
-        </div>
-        <div class="ovl-ctx-sep"></div>
-      </template>
-      <button class="danger" @click="ctxDelete">Delete</button>
+  <!-- sibling of the transformed stage - a transformed ancestor becomes the containing
+       block for position:fixed descendants, which would misplace this -->
+  <div v-if="contextMenu" class="ovl-ctx-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
+    @mousedown.stop>
+    <template v-if="contextMenuElement?.type === 'video'">
+      <button @click="ctxToggleMute">{{ contextMenuElement.data.muted !== false ? "Unmute" : "Mute" }}</button>
+      <div class="ovl-ctx-volume">
+        <span>Vol</span>
+        <input type="range" min="0" max="100" :value="contextMenuElement.data.volume ?? 100"
+          @input="ctxSetVolume(Number(($event.target as HTMLInputElement).value))" />
+        <span>{{ contextMenuElement.data.volume ?? 100 }}%</span>
+      </div>
+      <div class="ovl-ctx-sep"></div>
+    </template>
+    <button @click="ctxDuplicate">Duplicate</button>
+    <button class="danger" @click="ctxDelete">Delete</button>
+  </div>
+
+  <div v-if="zoomLevel > 1" class="ovl-minimap">
+    <div class="ovl-minimap-inner" :style="minimapInnerStyle">
+      <div v-for="el in sortedElements" :key="'mm' + el.id" class="ovl-minimap-el" :style="minimapElStyle(el)"></div>
+      <div class="ovl-minimap-viewport" :style="minimapViewportStyle()"></div>
     </div>
+    <button class="ovl-minimap-reset" title="Reset zoom" @click="resetZoom" v-html="iconSvgFor('refresh-cw')"></button>
+  </div>
   </div>
 </template>
 
 <style scoped>
+.ovl-stage-viewport {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
 .ovl-stage {
   position: relative;
   width: 100%;
@@ -776,5 +965,60 @@ defineExpose({ stageRef });
   border-radius: 50%;
   background: #f14949;
   border: 1px solid #fff;
+}
+
+.ovl-minimap {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  z-index: 10;
+}
+
+.ovl-minimap-inner {
+  position: relative;
+  background: #0d0d10cc;
+  border: 1px solid #2a2a30;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.ovl-minimap-el {
+  position: absolute;
+  background: #6f2bff88;
+  border: 1px solid #9d6cffaa;
+  pointer-events: none;
+}
+
+.ovl-minimap-viewport {
+  position: absolute;
+  border: 1.5px solid #f14949;
+  background: #f1494915;
+  pointer-events: none;
+}
+
+.ovl-minimap-reset {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a1e;
+  border: 1px solid #2a2a30;
+  color: #ccc;
+  cursor: pointer;
+}
+
+.ovl-minimap-reset:hover {
+  border-color: #6f2bff88;
+  color: #9d6cff;
+}
+
+.ovl-minimap-reset svg {
+  width: 12px;
+  height: 12px;
 }
 </style>
