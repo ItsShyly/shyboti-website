@@ -2,6 +2,15 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import type { OverlayElement } from "../composables/overlayTypes";
+import {
+  computeCountdown,
+  countdownDisplayText,
+  formatDuration,
+  parseDuration,
+  setCurrentSeconds,
+  toggleRunningData,
+  type CountdownLikeType,
+} from "../composables/overlayCountdown";
 
 // >>> custom corner-brackets icon (100x100, filled) - doesn't fit the shared 24x24 stroke
 // >>> icon set's wrapper, so it's kept local instead of forced into icons.ts
@@ -546,7 +555,7 @@ function onResizeMove(e: MouseEvent) {
   ({ w: newW, h: newH } = gridSnapSize(newW, newH, s, e));
 
   const preview: typeof resizePreview.value = { id: r.id, x: newX, y: newY, w: newW, h: newH };
-  if ((e.ctrlKey || e.metaKey) && r.startFontSize) {
+  if ((e.ctrlKey || e.metaKey || e.altKey) && r.startFontSize) {
     preview.fontSize = Math.max(4, Math.round(r.startFontSize * ((newW / r.startW + newH / r.startH) / 2)));
   }
   resizePreview.value = preview;
@@ -639,7 +648,7 @@ function onGroupResizeMove(e: MouseEvent) {
 
   const sx = boxW / r.startBox.w;
   const sy = boxH / r.startBox.h;
-  const scaleFont = e.ctrlKey || e.metaKey;
+  const scaleFont = e.ctrlKey || e.metaKey || e.altKey;
   const preview: Record<string, { x: number; y: number; w: number; h: number; fontSize?: number }> = {};
   for (const m of r.members) {
     const entry: { x: number; y: number; w: number; h: number; fontSize?: number } = {
@@ -768,48 +777,59 @@ function textStyle(el: OverlayElement) {
   };
 }
 
-// vvv countdown - ticks locally in the editor for preview, no server round-trip needed since
-// vvv it's pure math off a target/duration; the live render page ticks the same way itself vvv
+// vvv countdown/countup - ticks locally in the editor for preview, no server round-trip needed
+// vvv since it's pure math off accumulated/running state; the live render page ticks itself too vvv
 const countdownTick = ref(0);
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => (countdownTimer = setInterval(() => countdownTick.value++, 1000)));
 onUnmounted(() => {
   if (countdownTimer) clearInterval(countdownTimer);
 });
-const editorLoadedAt = Date.now(); // <<< anchor for duration-mode preview
-function formatCountdown(template: string, totalSec: number): string {
-  const clamped = Math.max(0, Math.floor(totalSec));
-  const d = Math.floor(clamped / 86400);
-  const h = Math.floor((clamped % 86400) / 3600);
-  const m = Math.floor((clamped % 3600) / 60);
-  const s = clamped % 60;
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (template || "{hh}:{mm}:{ss}")
-    .replace(/\{dd\}/g, pad(d))
-    .replace(/\{d\}/g, String(d))
-    .replace(/\{hh\}/g, pad(h))
-    .replace(/\{h\}/g, String(h))
-    .replace(/\{mm\}/g, pad(m))
-    .replace(/\{m\}/g, String(m))
-    .replace(/\{ss\}/g, pad(s))
-    .replace(/\{s\}/g, String(s));
+function isCountdownLike(type: string): type is CountdownLikeType {
+  return type === "countdown" || type === "countup";
 }
-function countdownDisplay(el: OverlayElement): string {
+function countdownCanvasText(el: OverlayElement): string {
   countdownTick.value; // <<< reactive dependency - re-renders this cell every tick
-  const data = el.data || {};
-  let secondsLeft: number;
-  if ((data.mode || "duration") === "target" && data.targetIso) {
-    const target = new Date(data.targetIso).getTime();
-    secondsLeft = isNaN(target) ? 0 : (target - Date.now()) / 1000;
-  } else {
-    const dur = Math.max(0, Number(data.durationSec) || 0);
-    if (!dur) secondsLeft = 0;
-    else if (data.repeat === false) secondsLeft = Math.max(0, dur - (Date.now() - editorLoadedAt) / 1000);
-    else secondsLeft = dur - ((Date.now() - editorLoadedAt) / 1000) % dur;
-  }
-  return formatCountdown(el.content, secondsLeft);
+  if (countdownEditId.value === el.id) return countdownEditDraft.value; // <<< frozen while editing
+  return countdownDisplayText(el.type as CountdownLikeType, el.data || {});
 }
-// ^^^ countdown ^^^
+
+// vvv double-click a countdown/countup to type in a new current value directly - the clock
+// vvv keeps running underneath, only the DISPLAYED value freezes until commit vvv
+const countdownEditId = ref<string | null>(null);
+const countdownEditDraft = ref("");
+function startCountdownEdit(el: OverlayElement) {
+  if (el.locked) return;
+  countdownEditId.value = el.id;
+  const { seconds } = computeCountdown(el.type as CountdownLikeType, el.data || {});
+  countdownEditDraft.value = formatDuration(seconds);
+  nextTick(() => {
+    const node = stageRef.value?.querySelector(`[data-cd-edit-id="${el.id}"]`) as HTMLElement | null;
+    if (!node) return;
+    node.textContent = countdownEditDraft.value;
+    node.focus();
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    range.collapse(false);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  });
+}
+function commitCountdownEdit(el: OverlayElement) {
+  if (countdownEditId.value !== el.id) return;
+  const node = stageRef.value?.querySelector(`[data-cd-edit-id="${el.id}"]`) as HTMLElement | null;
+  const text = node?.textContent ?? countdownEditDraft.value;
+  countdownEditId.value = null;
+  const seconds = parseDuration(text);
+  if (seconds !== null) {
+    emit("update-element", el.id, {
+      data: setCurrentSeconds(el.type as CountdownLikeType, el.data || {}, seconds),
+    });
+  }
+}
+// ^^^ double-click edit ^^^
+// ^^^ countdown/countup ^^^
 
 function displayStyle(el: OverlayElement) {
   const s = scale();
@@ -958,6 +978,31 @@ function ctxSetOpacity(v: number) {
       .map((e) => ({ id: e.id, patch: { style: { ...e.style, opacity: v } } })),
   );
 }
+// >>> countdown-duration or countup only - target-mode countdown always ticks toward the date
+function ctxCanToggleRunning(el: OverlayElement | null): boolean {
+  if (!el) return false;
+  if (el.type === "countup") return true;
+  return el.type === "countdown" && (el.data.mode || "duration") !== "target";
+}
+function ctxToggleRunning() {
+  const el = contextMenuElement.value;
+  if (!el) return;
+  emit("update-element", el.id, { data: toggleRunningData(el.data || {}) });
+}
+// >>> lock also applies to the whole multi-selection, same rule as delete/duplicate/opacity
+function ctxToggleLock() {
+  const cm = contextMenu.value;
+  if (!cm) return;
+  const el = props.elements.find((e) => e.id === cm.id);
+  if (!el) return;
+  const newLocked = !el.locked;
+  const ids = props.selectedIds.length > 1 && props.selectedIds.includes(cm.id) ? props.selectedIds : [cm.id];
+  if (ids.length === 1) {
+    emit("update-element", cm.id, { locked: newLocked });
+    return;
+  }
+  emit("update-elements", ids.map((id) => ({ id, patch: { locked: newLocked } })));
+}
 function onWindowMousedown(e: MouseEvent) {
   if (!contextMenu.value) return;
   if (!(e.target as HTMLElement).closest(".ovl-ctx-menu")) contextMenu.value = null;
@@ -1000,8 +1045,12 @@ defineExpose({ stageRef });
         {{ el.data.muted !== false ? "🔇" : "🔊" }}
       </div>
       <div v-else-if="el.type === 'shape'" class="ovl-item-shape" :style="shapeStyle(el)"></div>
-      <div v-else-if="el.type === 'countdown'" class="ovl-item-text" :style="textStyle(el)">
-        {{ countdownDisplay(el) }}
+      <div v-else-if="isCountdownLike(el.type)" class="ovl-item-text" :style="textStyle(el)"
+        @dblclick.stop="startCountdownEdit(el)">
+        <div v-if="countdownEditId === el.id" class="ovl-item-text-edit" contenteditable="true"
+          :data-cd-edit-id="el.id" @mousedown.stop @blur="commitCountdownEdit(el)"
+          @keydown.enter.prevent="($event.target as HTMLElement).blur()"></div>
+        <span v-else>{{ countdownCanvasText(el) }}</span>
       </div>
       <div v-else class="ovl-item-text" :style="textStyle(el)" @dblclick.stop="startEdit(el)">
         <div v-if="editingId === el.id" class="ovl-item-text-edit" contenteditable="true" :data-edit-id="el.id"
@@ -1045,6 +1094,13 @@ defineExpose({ stageRef });
       </div>
       <div class="ovl-ctx-sep"></div>
     </template>
+    <template v-if="ctxCanToggleRunning(contextMenuElement)">
+      <button @click="ctxToggleRunning">
+        {{ contextMenuElement?.data.running !== false ? "Stop" : "Start" }}
+      </button>
+      <div class="ovl-ctx-sep"></div>
+    </template>
+    <button @click="ctxToggleLock">{{ contextMenuElement?.locked ? "Unlock" : "Lock" }}</button>
     <div class="ovl-ctx-volume">
       <span>Opac</span>
       <input type="range" min="0" max="100" :value="contextMenuElement?.style.opacity ?? 100"

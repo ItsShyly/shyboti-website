@@ -11,6 +11,14 @@ import {
   type OverlayElementType,
   type ShapeVariant,
 } from "../composables/overlayTypes";
+import {
+  computeCountdown,
+  formatDuration,
+  parseDuration,
+  setCurrentSeconds,
+  toggleRunningData,
+  type CountdownLikeType,
+} from "../composables/overlayCountdown";
 import ObsOverlayCanvasStage from "./ObsOverlayCanvasStage.vue";
 import ObsOverlayElementGallery from "./ObsOverlayElementGallery.vue";
 import ObsOverlayVariablePicker from "./ObsOverlayVariablePicker.vue";
@@ -107,6 +115,40 @@ const selectedElement = computed(() =>
     ? pendingElements.value.find((e) => e.id === selectedIds.value[0]) ?? null
     : null,
 );
+
+// vvv countdown/countup - the top-of-panel time field + start/stop, ticked by clockNow (same
+// vvv 1s timer already driving "saved X ago") vvv
+function isCountdownLike(type: string): type is CountdownLikeType {
+  return type === "countdown" || type === "countup";
+}
+function canToggleRunning(el: OverlayElement): boolean {
+  if (el.type === "countup") return true;
+  return el.type === "countdown" && (el.data.mode || "duration") !== "target";
+}
+const countdownFieldFocused = ref<string | null>(null);
+const countdownDraft = ref("");
+// >>> live while unfocused, frozen at whatever the user's typed once they click in - avoids
+// >>> the field fighting their edit every second (same caret-fighting concern noted elsewhere)
+function countdownTimeFieldValue(el: OverlayElement): string {
+  clockNow.value; // <<< reactive dependency, keeps this ticking while unfocused
+  if (countdownFieldFocused.value === el.id) return countdownDraft.value;
+  return formatDuration(computeCountdown(el.type as CountdownLikeType, el.data || {}).seconds);
+}
+function onCountdownFieldFocus(el: OverlayElement) {
+  countdownFieldFocused.value = el.id;
+  countdownDraft.value = formatDuration(computeCountdown(el.type as CountdownLikeType, el.data || {}).seconds);
+}
+function commitCountdownTimeField(el: OverlayElement, e: FocusEvent) {
+  countdownFieldFocused.value = null;
+  const text = (e.target as HTMLInputElement).value;
+  const seconds = parseDuration(text);
+  if (seconds === null) return;
+  updateElement(el.id, { data: setCurrentSeconds(el.type as CountdownLikeType, el.data || {}, seconds) });
+}
+function toggleElementRunning(el: OverlayElement) {
+  updateElement(el.id, { data: toggleRunningData(el.data || {}) });
+}
+// ^^^ countdown/countup ^^^
 
 // vvv history (undo/redo) vvv
 const historyPast = ref<OverlayElement[][]>([]);
@@ -944,7 +986,19 @@ onUnmounted(() => {
               <div class="ovl-props-title">properties</div>
               <div class="ovl-props-type">{{ selectedElement.type }}</div>
 
-              <template v-if="!['shape', 'audio', 'countdown'].includes(selectedElement.type)">
+              <div v-if="isCountdownLike(selectedElement.type)" class="ovl-props-countdown-top">
+                <input class="ovl-props-time-input" type="text" :value="countdownTimeFieldValue(selectedElement)"
+                  @focus="onCountdownFieldFocus(selectedElement)"
+                  @input="countdownDraft = ($event.target as HTMLInputElement).value"
+                  @blur="commitCountdownTimeField(selectedElement, $event)"
+                  @keydown.enter="($event.target as HTMLInputElement).blur()" />
+                <button v-if="canToggleRunning(selectedElement)" class="ep-btn-cancel"
+                  @click="toggleElementRunning(selectedElement)">
+                  {{ selectedElement.data.running !== false ? "Stop" : "Start" }}
+                </button>
+              </div>
+
+              <template v-if="!['shape', 'audio', 'countdown', 'countup'].includes(selectedElement.type)">
                 <label class="ovl-props-label">
                   {{ selectedElement.type === "image" || selectedElement.type === "video" ? "Media URL" : "Content" }}
                 </label>
@@ -1476,6 +1530,28 @@ onUnmounted(() => {
   color: #9d6cff;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+}
+
+.ovl-props-countdown-top {
+  display: flex;
+  gap: 6px;
+}
+
+.ovl-props-time-input {
+  flex: 1;
+  min-width: 0;
+  background: #111217;
+  border: 1px solid #2a2a30;
+  color: #e0e0e0;
+  font-family: "Consolas", "Fira Mono", monospace;
+  font-size: 14px;
+  text-align: center;
+  padding: 6px 8px;
+  outline: none;
+}
+
+.ovl-props-time-input:focus {
+  border-color: #6f2bff88;
 }
 
 .ovl-props-label {

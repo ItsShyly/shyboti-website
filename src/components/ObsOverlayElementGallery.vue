@@ -13,6 +13,7 @@ const entries: { type: OverlayElementType; variant?: ShapeVariant; label: string
   { type: "image", label: "Image", icon: "image" },
   { type: "video", label: "Video", icon: "film" },
   { type: "countdown", label: "Countdown", icon: "clock" },
+  { type: "countup", label: "Countup", icon: "arrow-up" },
   { type: "shape", variant: "border", label: "Border", icon: "maximize" },
   { type: "shape", variant: "background-box", label: "Background box", icon: "monitor" },
   { type: "shape", variant: "frame", label: "Frame", icon: "maximize" },
@@ -30,11 +31,18 @@ const shortcuts: { keys: string; desc: string }[] = [
   { keys: "Click", desc: "Select an element" },
   { keys: "Shift/Ctrl+click", desc: "Add or remove from selection" },
   { keys: "Left-click + drag (empty canvas)", desc: "Marquee-select multiple elements" },
-  { keys: "Right-click element", desc: "Context menu - opacity, duplicate, delete, video mute/volume" },
-  { keys: "Right-click on multi-selection", desc: "Context menu's Delete/opacity apply to the whole selection" },
+  {
+    keys: "Right-click element",
+    desc: "Context menu - lock, opacity, duplicate, delete, start/stop, video mute/volume",
+  },
+  {
+    keys: "Right-click on multi-selection",
+    desc: "Context menu's Delete/opacity/lock apply to the whole selection",
+  },
   { keys: "Double-click text", desc: "Edit text inline on the canvas" },
+  { keys: "Double-click countdown/countup", desc: "Type in a new current time - it keeps running underneath" },
   { keys: "Drag corner handle", desc: "Resize (hold Alt to ignore snapping)" },
-  { keys: "Ctrl + drag corner handle", desc: "Also scale font-size with the box" },
+  { keys: "Ctrl or Alt + drag corner handle", desc: "Also scale font-size with the box" },
   { keys: "Select 2+ elements, drag corner", desc: "Group-resize together, keeping relative spacing" },
   { keys: "Drag rotate handle", desc: "Rotate, snaps to 15° (hold Shift for free angle)" },
   { keys: "Alt while dragging/resizing", desc: "Temporarily disable snapping" },
@@ -42,7 +50,6 @@ const shortcuts: { keys: string; desc: string }[] = [
   { keys: "Ctrl + / Ctrl -", desc: "Zoom in/out" },
   { keys: "Right-click or middle-click drag", desc: "Pan the canvas when zoomed in" },
   { keys: "Drag the minimap's red rectangle", desc: "Pan by dragging the viewport indicator" },
-  { keys: "Countdown format tokens", desc: "{d} {h} {m} {s}, or zero-padded {dd} {hh} {mm} {ss}" },
 ];
 </script>
 
@@ -193,6 +200,11 @@ const shortcuts: { keys: string; desc: string }[] = [
 .ovl-help-list {
   overflow-y: auto;
   padding: 8px 16px 16px;
+  scrollbar-width: none;
+}
+
+.ovl-help-list::-webkit-scrollbar {
+  display: none;
 }
 
 .ovl-help-row {

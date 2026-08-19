@@ -93,11 +93,8 @@ function setH(v: number) {
 }
 
 // >>> countdown renders as styled text too - reuses typography/text-styling/border sections
-const isTextLike = computed(
-  () =>
-    props.element.type === "text" ||
-    props.element.type === "variable-text" ||
-    props.element.type === "countdown",
+const isTextLike = computed(() =>
+  ["text", "variable-text", "countdown", "countup"].includes(props.element.type),
 );
 const isShape = computed(() => props.element.type === "shape");
 const isVideo = computed(() => props.element.type === "video");
@@ -294,19 +291,14 @@ const alignOptions = [
       </template>
     </template>
 
-    <!-- vvv countdown - format template + target/duration mode, auto-collapsed vvv -->
+    <!-- vvv countdown - target/duration mode, auto-collapsed. The current time itself is set
+    from the properties panel above or by double-clicking the element on the canvas, not here vvv -->
     <template v-if="isCountdown">
       <button class="ovl-style-section-title" @click="toggle('countdown')">
         <span v-html="iconSvgFor(collapsed.countdown ? 'chevron-right' : 'chevron-down')"></span>
         countdown
       </button>
       <template v-if="!collapsed.countdown">
-        <label class="ovl-style-field">
-          Format
-          <input type="text" :value="element.content" placeholder="{hh}:{mm}:{ss}"
-            @change="set({ content: str($event) })" />
-          <span class="ovl-style-hint">{d} {h} {m} {s}, or padded {dd} {hh} {mm} {ss}</span>
-        </label>
         <label class="ovl-style-field">
           Mode
           <select :value="element.data.mode || 'duration'" @change="setData({ mode: str($event) })">
@@ -330,8 +322,14 @@ const alignOptions = [
         </template>
         <label v-else class="ovl-style-field">
           Target date &amp; time
-          <input type="datetime-local" :value="isoToLocalInput(element.data.targetIso || '')"
+          <input type="datetime-local" class="ovl-style-datetime"
+            :value="isoToLocalInput(element.data.targetIso || '')"
             @change="setData({ targetIso: localInputToIso(($event.target as HTMLInputElement).value) })" />
+        </label>
+        <label class="ovl-style-field">
+          Text when done
+          <input type="text" :value="element.data.doneText || ''" placeholder="leave empty for 00:00"
+            @change="setData({ doneText: str($event) })" />
         </label>
       </template>
     </template>
@@ -608,6 +606,26 @@ const alignOptions = [
 .ovl-style-hint {
   font-size: 9px;
   color: #555;
+}
+
+.ovl-style-datetime {
+  color-scheme: dark;
+}
+
+.ovl-style-datetime::-webkit-calendar-picker-indicator {
+  filter: invert(0.6);
+  cursor: pointer;
+}
+
+.ovl-style-datetime::-webkit-datetime-edit-fields-wrapper,
+.ovl-style-datetime::-webkit-datetime-edit-text,
+.ovl-style-datetime::-webkit-datetime-edit-year-field,
+.ovl-style-datetime::-webkit-datetime-edit-month-field,
+.ovl-style-datetime::-webkit-datetime-edit-day-field,
+.ovl-style-datetime::-webkit-datetime-edit-hour-field,
+.ovl-style-datetime::-webkit-datetime-edit-minute-field,
+.ovl-style-datetime::-webkit-datetime-edit-ampm-field {
+  color: #e0e0e0;
 }
 
 .ovl-style-bg-pct {

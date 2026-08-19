@@ -5,7 +5,8 @@ export type OverlayElementType =
   | "video"
   | "audio"
   | "shape"
-  | "countdown";
+  | "countdown"
+  | "countup";
 
 export type ShapeVariant = "border" | "background-box" | "frame";
 
@@ -118,8 +119,29 @@ export function defaultElement(
       y: centerY - 30,
       w: 220,
       h: 60,
-      content: "{hh}:{mm}:{ss}",
-      data: { mode: "duration", durationSec: 300, repeat: true, targetIso: "" },
+      content: "",
+      data: {
+        mode: "duration",
+        durationSec: 300,
+        repeat: true,
+        targetIso: "",
+        doneText: "",
+        running: true,
+        accumulatedSec: 0,
+        runningSinceMs: Date.now(),
+      },
+      style: { fontSize: 32, color: "#ffffff", textAlign: "center", verticalAlign: "middle" },
+    };
+  }
+  if (type === "countup") {
+    return {
+      ...base,
+      x: centerX - 110,
+      y: centerY - 30,
+      w: 220,
+      h: 60,
+      content: "",
+      data: { running: true, accumulatedSec: 0, runningSinceMs: Date.now() },
       style: { fontSize: 32, color: "#ffffff", textAlign: "center", verticalAlign: "middle" },
     };
   }
