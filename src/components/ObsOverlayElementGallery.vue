@@ -20,31 +20,53 @@ const entries: { type: OverlayElementType; variant?: ShapeVariant; label: string
 ];
 
 const helpOpen = ref(false);
-const shortcuts: { keys: string; desc: string }[] = [
-  { keys: "Ctrl+S", desc: "Save" },
-  { keys: "Ctrl+Z", desc: "Undo" },
-  { keys: "Ctrl+Shift+Z", desc: "Redo" },
-  { keys: "Ctrl+C / Ctrl+V", desc: "Copy / paste selected" },
+// >>> each row's key column is built from parts - {k} renders as a bracket/keycap chip,
+// >>> {t} renders as plain connecting text (e.g. "+", "while resizing")
+interface KeyPart { k?: string; t?: string }
+interface Shortcut { parts: KeyPart[]; desc: string }
+const shortcuts: Shortcut[] = [
+  { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "S" }], desc: "Save" },
+  { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "Z" }], desc: "Undo" },
+  { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "Shift" }, { t: "+" }, { k: "Z" }], desc: "Redo" },
   {
-    keys: "Ctrl+V (nothing copied in-app)",
+    parts: [{ k: "Ctrl" }, { t: "+" }, { k: "C" }, { t: " / " }, { k: "Ctrl" }, { t: "+" }, { k: "V" }],
+    desc: "Copy / paste selected",
+  },
+  {
+    parts: [{ k: "Ctrl" }, { t: "+" }, { k: "V" }, { t: " (nothing copied in-app)" }],
     desc: "Pastes an image or text from the system clipboard as a new element (e.g. paste an image copied from Google)",
   },
-  { keys: "Ctrl+D", desc: "Duplicate selected" },
-  { keys: "Delete / Backspace", desc: "Delete selected" },
-  { keys: "Escape", desc: "Close the editor" },
-  { keys: "Click", desc: "Select an element" },
-  { keys: "Shift/Ctrl+click", desc: "Add or remove from selection" },
-  { keys: "Left-click + drag (empty canvas)", desc: "Marquee-select multiple elements" },
+  { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "D" }], desc: "Duplicate selected" },
+  { parts: [{ k: "Delete" }, { t: " / " }, { k: "Backspace" }], desc: "Delete selected" },
+  { parts: [{ k: "Escape" }], desc: "Close the editor" },
+  { parts: [{ k: "Click" }], desc: "Select an element" },
   {
-    keys: "Right-click element",
+    parts: [{ k: "Shift" }, { t: "/" }, { k: "Ctrl" }, { t: "+" }, { k: "Click" }],
+    desc: "Add or remove from selection",
+  },
+  {
+    parts: [{ k: "Left-click" }, { t: " + drag (empty canvas)" }],
+    desc: "Marquee-select multiple elements",
+  },
+  {
+    parts: [{ k: "Right-click" }, { t: " element" }],
     desc: "Context menu - lock, opacity, duplicate, delete, start/stop, video mute/volume",
   },
-  { keys: "Drag corner handle", desc: "Resize (hold Alt to ignore snapping)" },
-  { keys: "Ctrl or Alt + drag corner handle", desc: "Also scale font-size with the box" },
-  { keys: "Alt while dragging/resizing", desc: "Temporarily disable snapping" },
-  { keys: "Mouse wheel over canvas", desc: "Zoom in/out" },
-  { keys: "Ctrl + / Ctrl -", desc: "Zoom in/out" },
-  { keys: "Right-click or middle-click drag", desc: "Pan the canvas when zoomed in" },
+  { parts: [{ t: "Drag corner handle" }], desc: "Resize (hold Alt to ignore snapping)" },
+  {
+    parts: [{ k: "Ctrl" }, { t: " or " }, { k: "Alt" }, { t: " + drag corner handle" }],
+    desc: "Also scale font-size with the box",
+  },
+  { parts: [{ k: "Alt" }, { t: " while dragging/resizing" }], desc: "Temporarily disable snapping" },
+  { parts: [{ k: "Mouse wheel" }, { t: " over canvas" }], desc: "Zoom in/out" },
+  {
+    parts: [{ k: "Ctrl" }, { t: " + " }, { k: "+" }, { t: " / " }, { k: "Ctrl" }, { t: " + " }, { k: "-" }],
+    desc: "Zoom in/out",
+  },
+  {
+    parts: [{ k: "Right-click" }, { t: " or " }, { k: "middle-click" }, { t: " drag" }],
+    desc: "Pan the canvas when zoomed in",
+  },
 ];
 </script>
 
@@ -72,7 +94,12 @@ const shortcuts: { keys: string; desc: string }[] = [
         </div>
         <div class="ovl-help-list">
           <div v-for="s in shortcuts" :key="s.desc" class="ovl-help-row">
-            <span class="ovl-help-key">{{ s.keys }}</span>
+            <span class="ovl-help-key">
+              <template v-for="(p, pi) in s.parts" :key="pi">
+                <span v-if="p.k" class="ovl-key-chip">{{ p.k }}</span>
+                <span v-else class="ovl-key-text">{{ p.t }}</span>
+              </template>
+            </span>
             <span class="ovl-help-desc">{{ s.desc }}</span>
           </div>
         </div>
@@ -204,9 +231,8 @@ const shortcuts: { keys: string; desc: string }[] = [
 
 .ovl-help-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
+  align-items: baseline;
+  gap: 12px;
   padding: 8px 0;
   border-bottom: 1px solid #1a1a1e;
 }
@@ -217,24 +243,34 @@ const shortcuts: { keys: string; desc: string }[] = [
 
 .ovl-help-key {
   flex-shrink: 0;
-  min-width: 28px;
+  width: 190px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+.ovl-key-chip {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 5px 9px;
-  font-size: 11px;
+  padding: 2px 6px;
+  font-size: 10px;
   color: #e0e0e0;
   font-family: "Consolas", "Fira Mono", monospace;
   background: #1c1c22;
   border: 1px solid #2e2e36;
   border-bottom: 2px solid #333340;
-  border-radius: 5px;
+  border-radius: 4px;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.4);
 }
 
+.ovl-key-text {
+  font-size: 11px;
+  color: #666;
+  white-space: pre;
+}
+
 .ovl-help-desc {
-  flex: 1;
-  min-width: 160px;
   font-size: 12px;
   color: #888;
 }
