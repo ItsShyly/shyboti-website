@@ -435,6 +435,16 @@ function onSelect(id: string | null, additive: boolean) {
     selectedIds.value = [id];
   }
 }
+// >>> marquee-select result - additive adds to the current selection, otherwise replaces it
+function onSelectMany(ids: string[], additive: boolean) {
+  if (!additive) {
+    selectedIds.value = ids;
+    return;
+  }
+  const set = new Set(selectedIds.value);
+  for (const id of ids) set.add(id);
+  selectedIds.value = [...set];
+}
 
 function deleteSelected() {
   if (!selectedIds.value.length) return;
@@ -924,8 +934,9 @@ onUnmounted(() => {
             <ObsOverlayCanvasStage v-else :elements="pendingElements" :selected-ids="selectedIds"
               :base-width="baseWidth" :base-height="baseHeight" :backdrop="stageBackdrop"
               :scene-shot-url="sceneShotUrl" :preview-values="previewValues" :snap-enabled="snapEnabled"
-              @select="onSelect" @update-element="updateElement" @update-elements="updateElements"
-              @delete-element="deleteOne" @duplicate-element="duplicateSelected" @live-preview="onLivePreview" />
+              @select="onSelect" @select-many="onSelectMany" @update-element="updateElement"
+              @update-elements="updateElements" @delete-element="deleteOne" @delete-selected="deleteSelected"
+              @duplicate-element="duplicateSelected" @live-preview="onLivePreview" />
           </div>
 
           <div class="ovl-props">

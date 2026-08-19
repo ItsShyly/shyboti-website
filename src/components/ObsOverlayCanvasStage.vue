@@ -24,9 +24,11 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{
   select: [id: string | null, additive: boolean];
+  "select-many": [ids: string[], additive: boolean];
   "update-element": [id: string, patch: Partial<OverlayElement>];
   "update-elements": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
   "delete-element": [id: string];
+  "delete-selected": [];
   "duplicate-element": [id: string];
   // >>> throttled, fired mid-drag/resize/rotate - live update mode pushes these without
   // >>> touching undo history, so OBS can follow along before the mouse is released
@@ -125,29 +127,25 @@ function onZoomKeydown(e: KeyboardEvent) {
 onMounted(() => window.addEventListener("keydown", onZoomKeydown));
 onUnmounted(() => window.removeEventListener("keydown", onZoomKeydown));
 
-// vvv pan-drag - any mouse button, only once zoomed in; a plain unmoved left-click still deselects vvv
+// vvv pan-drag - right or middle button only; left click is reserved for marquee-select vvv
 const panState = ref<{
   startX: number;
   startY: number;
   startPanX: number;
   startPanY: number;
-  moved: boolean;
-  button: number;
 } | null>(null);
 function onStageMouseDown(e: MouseEvent) {
   if (e.target !== stageRef.value) return; // items own their own mousedown (they stopPropagation)
-  if (e.button === 1) e.preventDefault(); // stop middle-click autoscroll
-  if (zoomLevel.value <= 1) {
-    if (e.button === 0) select(null, false);
+  if (e.button === 0) {
+    startMarquee(e);
     return;
   }
+  if (e.button === 1) e.preventDefault(); // stop middle-click autoscroll
   panState.value = {
     startX: e.clientX,
     startY: e.clientY,
     startPanX: panX.value,
     startPanY: panY.value,
-    moved: false,
-    button: e.button,
   };
   window.addEventListener("mousemove", onPanMove);
   window.addEventListener("mouseup", onPanEnd);
@@ -157,18 +155,82 @@ function onPanMove(e: MouseEvent) {
   if (!p) return;
   const dx = e.clientX - p.startX;
   const dy = e.clientY - p.startY;
-  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) p.moved = true;
   panX.value = clampPan(p.startPanX + dx, "x");
   panY.value = clampPan(p.startPanY + dy, "y");
 }
-function onPanEnd(e: MouseEvent) {
+function onPanEnd() {
   window.removeEventListener("mousemove", onPanMove);
   window.removeEventListener("mouseup", onPanEnd);
-  const p = panState.value;
   panState.value = null;
-  if (p && !p.moved && p.button === 0) select(null, false);
 }
 // ^^^ pan-drag ^^^
+
+// vvv left-click drag on empty canvas - marquee/rectangle multiselect vvv
+const marqueeState = ref<{ startX: number; startY: number; additive: boolean } | null>(null);
+const marqueeCurrent = ref<{ x: number; y: number } | null>(null);
+function stageCanvasPoint(e: MouseEvent): { x: number; y: number } | null {
+  const stageEl = stageRef.value;
+  if (!stageEl) return null;
+  const rect = stageEl.getBoundingClientRect();
+  const s = effScale() || 1;
+  return { x: (e.clientX - rect.left) / s, y: (e.clientY - rect.top) / s };
+}
+function startMarquee(e: MouseEvent) {
+  const p = stageCanvasPoint(e);
+  if (!p) return;
+  marqueeState.value = { startX: p.x, startY: p.y, additive: e.shiftKey || e.ctrlKey || e.metaKey };
+  marqueeCurrent.value = p;
+  window.addEventListener("mousemove", onMarqueeMove);
+  window.addEventListener("mouseup", onMarqueeEnd);
+}
+function onMarqueeMove(e: MouseEvent) {
+  if (!marqueeState.value) return;
+  marqueeCurrent.value = stageCanvasPoint(e);
+}
+function onMarqueeEnd() {
+  window.removeEventListener("mousemove", onMarqueeMove);
+  window.removeEventListener("mouseup", onMarqueeEnd);
+  const m = marqueeState.value;
+  const cur = marqueeCurrent.value;
+  marqueeState.value = null;
+  marqueeCurrent.value = null;
+  if (!m || !cur) return;
+
+  const x1 = Math.min(m.startX, cur.x);
+  const x2 = Math.max(m.startX, cur.x);
+  const y1 = Math.min(m.startY, cur.y);
+  const y2 = Math.max(m.startY, cur.y);
+  // >>> too small to be a drag - treat like a plain click (deselect, unless additive)
+  if (x2 - x1 < 3 && y2 - y1 < 3) {
+    if (!m.additive) select(null, false);
+    return;
+  }
+  const hitIds = props.elements
+    .filter((el) => el.visible && el.x < x2 && el.x + el.w > x1 && el.y < y2 && el.y + el.h > y1)
+    .map((el) => el.id);
+  if (!hitIds.length) {
+    if (!m.additive) select(null, false);
+    return;
+  }
+  emit("select-many", hitIds, m.additive);
+}
+const marqueeStyle = computed(() => {
+  const m = marqueeState.value;
+  const cur = marqueeCurrent.value;
+  if (!m || !cur) return null;
+  const s = scale() || 1;
+  const x1 = Math.min(m.startX, cur.x);
+  const x2 = Math.max(m.startX, cur.x);
+  const y1 = Math.min(m.startY, cur.y);
+  const y2 = Math.max(m.startY, cur.y);
+  return {
+    left: `${x1 * s}px`,
+    top: `${y1 * s}px`,
+    width: `${(x2 - x1) * s}px`,
+    height: `${(y2 - y1) * s}px`,
+  };
+});
+// ^^^ marquee-select ^^^
 
 // vvv drag the minimap's red rectangle to pan - inverse of minimapViewportStyle's math vvv
 const minimapDragState = ref<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null);
@@ -641,8 +703,13 @@ function onItemContextMenu(el: OverlayElement, e: MouseEvent) {
   contextMenu.value = { x: e.clientX, y: e.clientY, id: el.id };
 }
 function ctxDelete() {
-  if (contextMenu.value) emit("delete-element", contextMenu.value.id);
+  const cm = contextMenu.value;
   contextMenu.value = null;
+  if (!cm) return;
+  // >>> right-clicking a member of an existing multi-selection deletes the whole selection,
+  // >>> not just the one under the cursor
+  if (props.selectedIds.length > 1 && props.selectedIds.includes(cm.id)) emit("delete-selected");
+  else emit("delete-element", cm.id);
 }
 function ctxDuplicate() {
   if (contextMenu.value) emit("duplicate-element", contextMenu.value.id);
@@ -688,6 +755,7 @@ defineExpose({ stageRef });
     <div v-if="backdrop === 'scene' && sceneShotUrl" class="ovl-scene-backdrop" :style="sceneBackdropStyle"></div>
     <div v-if="guideStyleX" class="ovl-guide ovl-guide-v" :style="guideStyleX"></div>
     <div v-if="guideStyleY" class="ovl-guide ovl-guide-h" :style="guideStyleY"></div>
+    <div v-if="marqueeStyle" class="ovl-marquee" :style="marqueeStyle"></div>
 
     <div v-for="el in sortedElements" :key="el.id" class="ovl-item" :class="{
       selected: selectedIds.includes(el.id),
@@ -788,6 +856,14 @@ defineExpose({ stageRef });
   left: 0;
   right: 0;
   height: 1px;
+}
+
+.ovl-marquee {
+  position: absolute;
+  border: 1px solid #6f2bff;
+  background: #6f2bff15;
+  z-index: 4;
+  pointer-events: none;
 }
 
 .ovl-scene-backdrop {
