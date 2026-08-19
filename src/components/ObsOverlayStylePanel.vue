@@ -92,13 +92,32 @@ function setH(v: number) {
   else set({ h: v });
 }
 
+// >>> countdown renders as styled text too - reuses typography/text-styling/border sections
 const isTextLike = computed(
-  () => props.element.type === "text" || props.element.type === "variable-text",
+  () =>
+    props.element.type === "text" ||
+    props.element.type === "variable-text" ||
+    props.element.type === "countdown",
 );
 const isShape = computed(() => props.element.type === "shape");
 const isVideo = computed(() => props.element.type === "video");
 const isAudio = computed(() => props.element.type === "audio");
 const isImage = computed(() => props.element.type === "image");
+const isCountdown = computed(() => props.element.type === "countdown");
+
+// >>> datetime-local wants local "YYYY-MM-DDTHH:mm", stored as ISO
+function isoToLocalInput(iso: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function localInputToIso(v: string): string {
+  if (!v) return "";
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? "" : d.toISOString();
+}
 
 const shapeVariant = computed<ShapeVariant>(
   () => props.element.data.variant ?? "border",
@@ -114,6 +133,7 @@ const collapsed = reactive<Record<string, boolean>>({
   border: true,
   typography: true,
   color: true,
+  countdown: true,
 });
 function toggle(key: string) {
   collapsed[key] = !collapsed[key];
@@ -270,6 +290,48 @@ const alignOptions = [
               @input="setSolidColorAlpha('shadowColor', '#000000', Number(($event.target as HTMLInputElement).value))" />
             <span class="ovl-style-bg-pct">{{ parseSolidColor(element.style.shadowColor, '#000000').alpha }}%</span>
           </div>
+        </label>
+      </template>
+    </template>
+
+    <!-- vvv countdown - format template + target/duration mode, auto-collapsed vvv -->
+    <template v-if="isCountdown">
+      <button class="ovl-style-section-title" @click="toggle('countdown')">
+        <span v-html="iconSvgFor(collapsed.countdown ? 'chevron-right' : 'chevron-down')"></span>
+        countdown
+      </button>
+      <template v-if="!collapsed.countdown">
+        <label class="ovl-style-field">
+          Format
+          <input type="text" :value="element.content" placeholder="{hh}:{mm}:{ss}"
+            @change="set({ content: str($event) })" />
+          <span class="ovl-style-hint">{d} {h} {m} {s}, or padded {dd} {hh} {mm} {ss}</span>
+        </label>
+        <label class="ovl-style-field">
+          Mode
+          <select :value="element.data.mode || 'duration'" @change="setData({ mode: str($event) })">
+            <option value="duration">Duration</option>
+            <option value="target">Target date/time</option>
+          </select>
+        </label>
+        <template v-if="(element.data.mode || 'duration') === 'duration'">
+          <label class="ovl-style-num">
+            Minutes
+            <input type="number" min="0" step="0.5" :value="(element.data.durationSec ?? 300) / 60"
+              @change="setData({ durationSec: Math.max(0, num($event) * 60) })" />
+          </label>
+          <label class="ovl-style-check">
+            <div class="ep-toggle-btn" :class="{ on: element.data.repeat !== false }"
+              @click="setData({ repeat: element.data.repeat === false })">
+              <span class="ep-toggle-knob"></span>
+            </div>
+            repeat when it reaches zero
+          </label>
+        </template>
+        <label v-else class="ovl-style-field">
+          Target date &amp; time
+          <input type="datetime-local" :value="isoToLocalInput(element.data.targetIso || '')"
+            @change="setData({ targetIso: localInputToIso(($event.target as HTMLInputElement).value) })" />
         </label>
       </template>
     </template>
@@ -541,6 +603,11 @@ const alignOptions = [
   background: #9d6cff;
   border: none;
   cursor: pointer;
+}
+
+.ovl-style-hint {
+  font-size: 9px;
+  color: #555;
 }
 
 .ovl-style-bg-pct {

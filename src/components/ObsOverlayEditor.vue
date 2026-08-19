@@ -944,7 +944,7 @@ onUnmounted(() => {
               <div class="ovl-props-title">properties</div>
               <div class="ovl-props-type">{{ selectedElement.type }}</div>
 
-              <template v-if="!['shape', 'audio'].includes(selectedElement.type)">
+              <template v-if="!['shape', 'audio', 'countdown'].includes(selectedElement.type)">
                 <label class="ovl-props-label">
                   {{ selectedElement.type === "image" || selectedElement.type === "video" ? "Media URL" : "Content" }}
                 </label>

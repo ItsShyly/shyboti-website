@@ -4,7 +4,8 @@ export type OverlayElementType =
   | "image"
   | "video"
   | "audio"
-  | "shape";
+  | "shape"
+  | "countdown";
 
 export type ShapeVariant = "border" | "background-box" | "frame";
 
@@ -26,6 +27,7 @@ export interface OverlayElementStyle {
   borderWidth?: number;
   borderRadius?: number;
   borderStyle?: "solid" | "dashed" | "dotted";
+  opacity?: number; // <<< 0-100, whole-element - set from the canvas right-click menu
 }
 
 export interface OverlayElement {
@@ -107,6 +109,18 @@ export function defaultElement(
       w: 40,
       h: 40,
       content: "",
+    };
+  }
+  if (type === "countdown") {
+    return {
+      ...base,
+      x: centerX - 110,
+      y: centerY - 30,
+      w: 220,
+      h: 60,
+      content: "{hh}:{mm}:{ss}",
+      data: { mode: "duration", durationSec: 300, repeat: true, targetIso: "" },
+      style: { fontSize: 32, color: "#ffffff", textAlign: "center", verticalAlign: "middle" },
     };
   }
   if (type === "shape") {

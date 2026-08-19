@@ -12,6 +12,7 @@ const entries: { type: OverlayElementType; variant?: ShapeVariant; label: string
   { type: "variable-text", label: "Variable", icon: "refresh-cw" },
   { type: "image", label: "Image", icon: "image" },
   { type: "video", label: "Video", icon: "film" },
+  { type: "countdown", label: "Countdown", icon: "clock" },
   { type: "shape", variant: "border", label: "Border", icon: "maximize" },
   { type: "shape", variant: "background-box", label: "Background box", icon: "monitor" },
   { type: "shape", variant: "frame", label: "Frame", icon: "maximize" },
@@ -29,8 +30,8 @@ const shortcuts: { keys: string; desc: string }[] = [
   { keys: "Click", desc: "Select an element" },
   { keys: "Shift/Ctrl+click", desc: "Add or remove from selection" },
   { keys: "Left-click + drag (empty canvas)", desc: "Marquee-select multiple elements" },
-  { keys: "Right-click element", desc: "Context menu - duplicate, delete, video mute/volume" },
-  { keys: "Right-click on multi-selection", desc: "Context menu's Delete removes the whole selection" },
+  { keys: "Right-click element", desc: "Context menu - opacity, duplicate, delete, video mute/volume" },
+  { keys: "Right-click on multi-selection", desc: "Context menu's Delete/opacity apply to the whole selection" },
   { keys: "Double-click text", desc: "Edit text inline on the canvas" },
   { keys: "Drag corner handle", desc: "Resize (hold Alt to ignore snapping)" },
   { keys: "Drag rotate handle", desc: "Rotate, snaps to 15° (hold Shift for free angle)" },
@@ -39,6 +40,7 @@ const shortcuts: { keys: string; desc: string }[] = [
   { keys: "Ctrl + / Ctrl -", desc: "Zoom in/out" },
   { keys: "Right-click or middle-click drag", desc: "Pan the canvas when zoomed in" },
   { keys: "Drag the minimap's red rectangle", desc: "Pan by dragging the viewport indicator" },
+  { keys: "Countdown format tokens", desc: "{d} {h} {m} {s}, or zero-padded {dd} {hh} {mm} {ss}" },
 ];
 </script>
 

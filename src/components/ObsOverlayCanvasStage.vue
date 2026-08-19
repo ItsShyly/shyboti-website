@@ -613,9 +613,53 @@ function textStyle(el: OverlayElement) {
   };
 }
 
+// vvv countdown - ticks locally in the editor for preview, no server round-trip needed since
+// vvv it's pure math off a target/duration; the live render page ticks the same way itself vvv
+const countdownTick = ref(0);
+let countdownTimer: ReturnType<typeof setInterval> | null = null;
+onMounted(() => (countdownTimer = setInterval(() => countdownTick.value++, 1000)));
+onUnmounted(() => {
+  if (countdownTimer) clearInterval(countdownTimer);
+});
+const editorLoadedAt = Date.now(); // <<< anchor for duration-mode preview
+function formatCountdown(template: string, totalSec: number): string {
+  const clamped = Math.max(0, Math.floor(totalSec));
+  const d = Math.floor(clamped / 86400);
+  const h = Math.floor((clamped % 86400) / 3600);
+  const m = Math.floor((clamped % 3600) / 60);
+  const s = clamped % 60;
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (template || "{hh}:{mm}:{ss}")
+    .replace(/\{dd\}/g, pad(d))
+    .replace(/\{d\}/g, String(d))
+    .replace(/\{hh\}/g, pad(h))
+    .replace(/\{h\}/g, String(h))
+    .replace(/\{mm\}/g, pad(m))
+    .replace(/\{m\}/g, String(m))
+    .replace(/\{ss\}/g, pad(s))
+    .replace(/\{s\}/g, String(s));
+}
+function countdownDisplay(el: OverlayElement): string {
+  countdownTick.value; // <<< reactive dependency - re-renders this cell every tick
+  const data = el.data || {};
+  let secondsLeft: number;
+  if ((data.mode || "duration") === "target" && data.targetIso) {
+    const target = new Date(data.targetIso).getTime();
+    secondsLeft = isNaN(target) ? 0 : (target - Date.now()) / 1000;
+  } else {
+    const dur = Math.max(0, Number(data.durationSec) || 0);
+    if (!dur) secondsLeft = 0;
+    else if (data.repeat === false) secondsLeft = Math.max(0, dur - (Date.now() - editorLoadedAt) / 1000);
+    else secondsLeft = dur - ((Date.now() - editorLoadedAt) / 1000) % dur;
+  }
+  return formatCountdown(el.content, secondsLeft);
+}
+// ^^^ countdown ^^^
+
 function displayStyle(el: OverlayElement) {
   const s = scale();
   const rotation = rotatePreview.value?.id === el.id ? rotatePreview.value.rotation : el.rotation;
+  const opacity = el.style.opacity !== undefined ? Math.max(0, Math.min(100, el.style.opacity)) / 100 : undefined;
   const dp = dragPreview.value[el.id];
   if (dp) {
     return {
@@ -624,6 +668,7 @@ function displayStyle(el: OverlayElement) {
       width: `${el.w * s}px`,
       height: `${el.h * s}px`,
       transform: rotation ? `rotate(${rotation}deg)` : undefined,
+      opacity,
     };
   }
   if (resizePreview.value?.id === el.id) {
@@ -633,6 +678,7 @@ function displayStyle(el: OverlayElement) {
       top: `${p.y * s}px`,
       width: `${p.w * s}px`,
       height: `${p.h * s}px`,
+      opacity,
     };
   }
   return {
@@ -641,6 +687,7 @@ function displayStyle(el: OverlayElement) {
     width: `${el.w * s}px`,
     height: `${el.h * s}px`,
     transform: rotation ? `rotate(${rotation}deg)` : undefined,
+    opacity,
   };
 }
 
@@ -726,6 +773,25 @@ function ctxSetVolume(v: number) {
   if (!el) return;
   emit("update-element", el.id, { data: { ...el.data, volume: v } });
 }
+// >>> applies to the whole multi-selection when the right-clicked element is part of one,
+// >>> same rule as ctxDelete/ctxDuplicate
+function ctxSetOpacity(v: number) {
+  const cm = contextMenu.value;
+  if (!cm) return;
+  const ids = props.selectedIds.length > 1 && props.selectedIds.includes(cm.id) ? props.selectedIds : [cm.id];
+  if (ids.length === 1) {
+    const el = props.elements.find((e) => e.id === ids[0]);
+    if (el) emit("update-element", el.id, { style: { ...el.style, opacity: v } });
+    return;
+  }
+  emit(
+    "update-elements",
+    ids
+      .map((id) => props.elements.find((e) => e.id === id))
+      .filter((e): e is OverlayElement => !!e)
+      .map((e) => ({ id: e.id, patch: { style: { ...e.style, opacity: v } } })),
+  );
+}
 function onWindowMousedown(e: MouseEvent) {
   if (!contextMenu.value) return;
   if (!(e.target as HTMLElement).closest(".ovl-ctx-menu")) contextMenu.value = null;
@@ -768,6 +834,9 @@ defineExpose({ stageRef });
         {{ el.data.muted !== false ? "🔇" : "🔊" }}
       </div>
       <div v-else-if="el.type === 'shape'" class="ovl-item-shape" :style="shapeStyle(el)"></div>
+      <div v-else-if="el.type === 'countdown'" class="ovl-item-text" :style="textStyle(el)">
+        {{ countdownDisplay(el) }}
+      </div>
       <div v-else class="ovl-item-text" :style="textStyle(el)" @dblclick.stop="startEdit(el)">
         <div v-if="editingId === el.id" class="ovl-item-text-edit" contenteditable="true" :data-edit-id="el.id"
           @mousedown.stop @blur="commitEdit(el)" @input="onTextEditInput(el)"
@@ -803,6 +872,13 @@ defineExpose({ stageRef });
       </div>
       <div class="ovl-ctx-sep"></div>
     </template>
+    <div class="ovl-ctx-volume">
+      <span>Opac</span>
+      <input type="range" min="0" max="100" :value="contextMenuElement?.style.opacity ?? 100"
+        @input="ctxSetOpacity(Number(($event.target as HTMLInputElement).value))" />
+      <span>{{ contextMenuElement?.style.opacity ?? 100 }}%</span>
+    </div>
+    <div class="ovl-ctx-sep"></div>
     <button @click="ctxDuplicate">Duplicate</button>
     <button class="danger" @click="ctxDelete">Delete</button>
   </div>
