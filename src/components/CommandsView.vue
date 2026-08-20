@@ -1468,6 +1468,14 @@ onUnmounted(() => {
           <div class="extras-section">
             <div class="extras-section-title">{{ t("cmd.extras.section") }}</div>
             <div class="extras-row">
+              <div class="ep-switch" :class="{
+                on: mentionEnabled && has7tvSet,
+                disabled: !isBroadcaster || !has7tvSet,
+              }" @click="
+                isBroadcaster &&
+                has7tvSet &&
+                ((mentionEnabled = !mentionEnabled), saveExtras())
+                "><span class="ep-switch-knob"></span></div>
               <div class="extras-info">
                 <div class="extras-label">
                   {{ t("cmd.extras.mention_label") }}
@@ -1476,16 +1484,6 @@ onUnmounted(() => {
                 <div v-if="!has7tvSet" class="extras-gate-note">
                   {{ t("cmd.extras.mention_needs_7tv") }}
                 </div>
-              </div>
-              <div class="extras-toggle" :class="{
-                on: mentionEnabled && has7tvSet,
-                disabled: !isBroadcaster || !has7tvSet,
-              }" @click="
-                isBroadcaster &&
-                has7tvSet &&
-                ((mentionEnabled = !mentionEnabled), saveExtras())
-                ">
-                <div class="extras-toggle-knob"></div>
               </div>
             </div>
           </div>
@@ -2195,42 +2193,6 @@ onUnmounted(() => {
   font-size: 11px;
   color: #555;
   line-height: 1.5;
-}
-
-.extras-toggle {
-  width: 42px;
-  height: 22px;
-  background: #111217;
-  cursor: pointer;
-  position: relative;
-  transition: background 0.2s;
-  flex-shrink: 0;
-}
-
-.extras-toggle.on {
-  background: #6f2bff;
-}
-
-.extras-toggle.disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.extras-toggle-knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 16px;
-  height: 16px;
-  background: #555;
-  transition:
-    transform 0.2s,
-    background 0.2s;
-}
-
-.extras-toggle.on .extras-toggle-knob {
-  transform: translateX(20px);
-  background: #fff;
 }
 
 .extras-readonly-note {
