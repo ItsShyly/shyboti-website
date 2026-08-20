@@ -4291,7 +4291,9 @@ function paintNameStyle(paint: {
 
 .top-loader {
   position: sticky;
-  top: 0;
+  /* >>> clears the opaque .pinned-day-header (~26px) sitting above the list, plus a gap -
+  same offset as .day-jump-pill-row, otherwise the header's higher z-index hides this entirely */
+  top: 34px;
   z-index: 4;
   text-align: center;
   font-size: 11px;
