@@ -1296,17 +1296,15 @@ function onScroll() {
     rafScrollPending = false;
     const body = getBody();
     if (!body) return;
-    // >>> mobile's dynamic viewport (address bar show/hide while scrolling) changes
-    // >>> clientHeight mid-gesture - when that happens the browser also re-clamps scrollTop
-    // >>> toward 0 on its own, which looks exactly like "user scrolled to top" with no real
-    // >>> intent behind it. Skip the near-top/near-bottom triggers on that tick and wait for
-    // >>> the next one, once the viewport size has actually settled.
+
     const viewportChanged = body.clientHeight !== lastKnownClientHeight;
     lastKnownClientHeight = body.clientHeight;
     const distFromBottom =
       body.scrollHeight - body.clientHeight - body.scrollTop;
     isNearBottom.value = distFromBottom < 200;
-    if (!viewportChanged) {
+
+    const hasOverflow = body.scrollHeight > body.clientHeight + 20;
+    if (!viewportChanged && hasOverflow) {
       const olderReady = !loadingMore.value && !noMore.value;
       if (olderReady && body.scrollTop < 120) loadOlder();
       if (!loadingNewer.value && !noNewer.value && distFromBottom < 120)
@@ -1778,10 +1776,11 @@ async function autoFillIfShort() {
   const body = getBody();
   if (!body) return;
   let safety = 0;
+
   while (
     body.scrollHeight <= body.clientHeight + 20 &&
     !noMore.value &&
-    safety++ < 10
+    safety++ < 40
   ) {
     await loadOlder();
     await nextTick();
@@ -4301,7 +4300,7 @@ function paintNameStyle(paint: {
 .top-loader {
   position: sticky;
   top: 10px;
-  z-index: 4;
+  z-index: 6;
   text-align: center;
   font-size: 11px;
   color: #9d6cff;
@@ -4371,6 +4370,7 @@ function paintNameStyle(paint: {
   border-bottom: 1px solid #1a1a1e;
   transition: background 0.1s;
   position: relative;
+  z-index: 0;
 }
 
 .log-row-outer:hover {
