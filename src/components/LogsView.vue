@@ -4299,7 +4299,7 @@ function paintNameStyle(paint: {
 
 .top-loader {
   position: sticky;
-  top: 10px;
+  top: 0;
   z-index: 6;
   text-align: center;
   font-size: 11px;
