@@ -450,6 +450,7 @@ const MINIMUM_MOD = new Set([
   "ban",
   "timeout",
   "delete",
+  "prefix",
 ]);
 const MINIMUM_BC = new Set(["pm2", "refresh", "join", "leave"]);
 
