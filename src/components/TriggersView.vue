@@ -212,7 +212,8 @@ async function saveTrigger() {
   if (!session.value) return;
   const missing: string[] = [];
   if (!editTrigger.value.name?.trim()) missing.push(t("trigger.field.name"));
-  if (!editTrigger.value.response?.trim()) missing.push(t("trigger.field.response"));
+  if (!editTrigger.value.response?.trim() && editTrigger.value.action_type !== "shoutout")
+    missing.push(t("trigger.field.response"));
   if (missing.length) {
     error.value = t("edit.missing_fields") + missing.join(", ");
     return;
@@ -656,11 +657,14 @@ defineExpose({
                     : t("trigger.field.value")
                 }}
                 <span class="ep-field-hint">{{
-                  t("trigger.field.resp_hint")
+                  editTrigger.action_type === "shoutout"
+                    ? "Optional - who to shout out. Leave blank to shout out whoever/whatever triggered this (the raider, for raids)."
+                    : t("trigger.field.resp_hint")
                   }}</span>
               </label>
               <div ref="editorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
-                data-placeholder="$user.mention just triggered this! PogChamp" @input="onEditorInput"></div>
+                :data-placeholder="editTrigger.action_type === 'shoutout' ? 'leave blank for the raider, or e.g. $user.name' : '$user.mention just triggered this! PogChamp'"
+                @input="onEditorInput"></div>
               <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
             </div>
 
