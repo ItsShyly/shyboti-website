@@ -222,6 +222,16 @@ function updateElements(updates: Array<{ id: string; patch: Partial<OverlayEleme
   for (const u of updates) applyPatch(u.id, u.patch);
 }
 
+// >>> a live-drag patch from another editing user - applied straight to the local model
+// >>> (skips pushHistory/dirty) so it never enters undo history and never lights up Save
+function applyRemotePatch(id: string, patch: Record<string, unknown>) {
+  const idx = pendingElements.value.findIndex((e) => e.id === id);
+  if (idx === -1) return;
+  pendingElements.value = pendingElements.value.map((e, i) =>
+    i === idx ? { ...e, ...patch } as OverlayElement : e,
+  );
+}
+
 function toWireElement(el: OverlayElement) {
   return {
     id: el.id,
@@ -841,6 +851,13 @@ watch(
     if (!ok) liveUpdate.value = false;
   },
 );
+// >>> force one non-silent save on turn-on - guarantees the live browser source has actually
+// >>> reloaded (and so has the live-patch listener) before relying on the ephemeral SSE path
+async function toggleLiveUpdate() {
+  const turningOn = !liveUpdate.value;
+  liveUpdate.value = turningOn;
+  if (turningOn) await save();
+}
 
 // >>> mid-drag/resize/rotate - ephemeral broadcast-only push, never touches pendingElements
 // or the DB, so it never becomes an undo step and never fights the in-progress drag. The
@@ -903,6 +920,35 @@ watch(liveUpdate, (on) => {
 });
 // ^^^ live cursor share ^^^
 
+// vvv multi-editor sync - other open editor sessions on the same overlay vvv
+let editStream: EventSource | null = null;
+function connectEditStream() {
+  editStream?.close();
+  editStream = null;
+  if (!currentOverlayId.value) return;
+  editStream = new EventSource(`${API}/obs/overlay/${currentOverlayId.value}/live-stream`);
+  editStream.onmessage = (ev) => {
+    if (!ev.data) return;
+    let msg: any;
+    try {
+      msg = JSON.parse(ev.data);
+    } catch {
+      return;
+    }
+    if (!msg.by || msg.by === session.value?.login) return; // <<< ignore our own broadcasts
+    if (msg.updates) {
+      for (const u of msg.updates as Array<{ id: string; patch: Record<string, unknown> }>) {
+        applyRemotePatch(u.id, u.patch);
+      }
+    } else if (msg.saved) {
+      // >>> only auto-refetch when we have nothing unsaved of our own to lose
+      if (!dirty.value) loadElements();
+    }
+  };
+}
+watch(currentOverlayId, connectEditStream);
+// ^^^ multi-editor sync ^^^
+
 function discard() {
   loadElements();
   selectedIds.value = [];
@@ -945,7 +991,7 @@ function onKeydown(e: KeyboardEvent) {
     target.tagName === "SELECT" ||
     target.isContentEditable;
   if (isEditable) return;
-  if (mod && e.key.toLowerCase() === "z" && e.shiftKey) {
+  if (mod && e.key.toLowerCase() === "y") {
     e.preventDefault();
     redo();
   } else if (mod && e.key.toLowerCase() === "z") {
@@ -1001,6 +1047,7 @@ onUnmounted(() => {
   if (previewTimer) clearInterval(previewTimer);
   if (liveUpdateTimer) clearTimeout(liveUpdateTimer);
   if (liveCursor.value) sendCursorLeave();
+  editStream?.close();
 });
 </script>
 
@@ -1041,11 +1088,11 @@ onUnmounted(() => {
             <button class="ovl-btn-cancel" :disabled="!historyPast.length" @click="undo" title="Undo (Ctrl+Z)">
               <span v-html="iconSvgFor('corner-up-left')"></span>
             </button>
-            <button class="ovl-btn-cancel" :disabled="!historyFuture.length" @click="redo" title="Redo (Ctrl+Shift+Z)">
+            <button class="ovl-btn-cancel" :disabled="!historyFuture.length" @click="redo" title="Redo (Ctrl+Y)">
               <span v-html="iconSvgFor('corner-up-right')"></span>
             </button>
             <button v-if="obsReady && overlayVisible" class="ovl-btn-cancel" :class="{ on: liveUpdate }"
-              @click="liveUpdate = !liveUpdate"
+              @click="toggleLiveUpdate"
               title="Auto-save every change as you make it, not just when you click Save">
               Live Update
             </button>

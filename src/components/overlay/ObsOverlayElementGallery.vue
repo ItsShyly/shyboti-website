@@ -51,7 +51,7 @@ interface Shortcut { parts: KeyPart[]; desc: string }
 const shortcuts: Shortcut[] = [
   { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "S" }], desc: "Save" },
   { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "Z" }], desc: "Undo" },
-  { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "Shift" }, { t: "+" }, { k: "Z" }], desc: "Redo" },
+  { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "Y" }], desc: "Redo" },
   {
     parts: [{ k: "Ctrl" }, { t: "+" }, { k: "C" }, { t: "/" }, { k: "Ctrl" }, { t: "+" }, { k: "V" }],
     desc: "Copy / paste selected or clipboard",
