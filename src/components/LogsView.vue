@@ -4300,7 +4300,7 @@ function paintNameStyle(paint: {
 
 .top-loader {
   position: sticky;
-  top: 5px;
+  top: 10px;
   z-index: 4;
   text-align: center;
   font-size: 11px;
