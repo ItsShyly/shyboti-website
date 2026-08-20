@@ -992,7 +992,6 @@ async function loadOlder() {
         return loadOlder();
       }
     } catch { }
-    loadingMore.value = false;
   } else {
     if (!cursorDate) {
       noMore.value = true;
@@ -1026,12 +1025,15 @@ async function loadOlder() {
         return loadOlder();
       }
     } catch { }
-    loadingMore.value = false;
   }
-  // >>> guard: keep scrollTop past the trigger threshold so mobile doesn't immediately re-fire loadOlder
+  // >>> guard: keep scrollTop past the trigger threshold so mobile doesn't immediately re-fire
+  // >>> loadOlder - loadingMore MUST stay true until after this correction lands, or a scroll
+  // >>> event landing in the gap (constant during mobile momentum scrolling) re-enters loadOlder
+  // >>> while scrollTop is still < 120, causing an infinite reload loop that eats all scrolling
   await nextTick();
   const body = getBody();
   if (body && body.scrollTop < 180) body.scrollTop = 180;
+  loadingMore.value = false;
 }
 
 async function loadNewer() {
