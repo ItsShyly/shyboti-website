@@ -4090,6 +4090,7 @@ function paintNameStyle(paint: {
   flex-shrink: 0;
   justify-items: center;
   position: relative;
+  z-index: 7;
 }
 
 .logs-thead> :nth-child(3) {
@@ -4305,8 +4306,6 @@ function paintNameStyle(paint: {
   font-size: 11px;
   color: #9d6cff;
   padding: 8px 12px;
-  background: #0e0e12;
-  border-bottom: 1px solid #1e1e24;
 }
 
 .top-loader.no-more {
