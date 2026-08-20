@@ -34,6 +34,8 @@ const saveError = ref('')
 const deleting = ref(false)
 const deleteConfirm = ref(false)
 const activeTab = ref<'response' | 'args' | 'behavior'>('response')
+const dirty = ref(false)
+const closeConfirmOpen = ref(false)
 
 const form = ref<CustomCommand>({
   name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
@@ -201,7 +203,11 @@ async function load() {
     setNormalEditorContent(nel, src)
   }
   updatePreview()
+  // >>> loading populates form itself, doesn't count as an edit
+  dirty.value = false
 }
+// >>> anything that changes what save() would persist (userParams syncs into form already)
+watch(form, () => { dirty.value = true }, { deep: true })
 
 // vvv validation vvv
 interface ValidationError {
@@ -268,8 +274,39 @@ function updateLineNumbers(text: string) {
   lineCount.value = (text.match(/\n/g) || []).length + 1
 }
 
-watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; saveError.value = ''; activeTab.value = 'response' } })
+watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; saveError.value = ''; activeTab.value = 'response'; closeConfirmOpen.value = false } })
 onMounted(() => { if (props.open) load() })
+
+// vvv close confirm + shortcuts vvv
+function requestClose() {
+  if (dirty.value) closeConfirmOpen.value = true
+  else emit('close')
+}
+async function saveAndClose() {
+  closeConfirmOpen.value = false
+  await save()
+  if (!saveError.value) emit('close')
+}
+function discardAndClose() {
+  closeConfirmOpen.value = false
+  emit('close')
+}
+function onKeydown(e: KeyboardEvent) {
+  if (!props.open) return
+  const mod = e.ctrlKey || e.metaKey
+  if (mod && e.key.toLowerCase() === 's') {
+    e.preventDefault()
+    save()
+    return
+  }
+  if (e.key === 'Escape') {
+    if (closeConfirmOpen.value) closeConfirmOpen.value = false
+    else requestClose()
+  }
+}
+onMounted(() => window.addEventListener('keydown', onKeydown))
+onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+// ^^^ close confirm + shortcuts ^^^
 // >>> unlocks aliases right after the first save of a new command, no full reload
 watch(() => props.cmdName, (name, old) => { if (name && !old && props.open) loadAliases() })
 
@@ -315,7 +352,7 @@ async function save() {
       })
     }
 
-    saved.value = true; setTimeout(() => { saved.value = false }, 2000); emit('saved', targetName)
+    saved.value = true; dirty.value = false; setTimeout(() => { saved.value = false }, 2000); emit('saved', targetName)
   } catch { }
   saving.value = false
 }
@@ -634,7 +671,7 @@ function onNormalKeydown(e: KeyboardEvent) {
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="ep-overlay" v-bind="overlay.handlers(() => emit('close'))">
+    <div v-if="open" class="ep-overlay" v-bind="overlay.handlers(requestClose)">
       <div class="ep-panel">
 
         <div class="ep-panel-header">
@@ -646,7 +683,7 @@ function onNormalKeydown(e: KeyboardEvent) {
             </div>
             <div class="ep-panel-sub">Rule builder for #{{ channel }}</div>
           </div>
-          <button class="ep-panel-close" @click="emit('close')" v-html="iconSvgFor('x')"></button>
+          <button class="ep-panel-close" title="Close (Esc)" @click="requestClose" v-html="iconSvgFor('x')"></button>
         </div>
 
         <div v-if="loading" class="ep-panel-loading">{{ t('edit.saving').replace('…', '…') || 'Loading…' }}</div>
@@ -694,8 +731,6 @@ function onNormalKeydown(e: KeyboardEvent) {
               <div class="normal-hint">{{ t('edit.tab_complete') }} &nbsp;·&nbsp; <code>$</code></div>
             </div>
 
-            <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
-
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t('edit.description') }}</label>
               <div v-if="isBuiltIn" class="desc-readonly">{{ form.description || '-' }}</div>
@@ -703,7 +738,9 @@ function onNormalKeydown(e: KeyboardEvent) {
                 maxlength="120" />
             </div>
 
-            <details class="ep-field-group preview-details" open>
+            <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
+
+            <details class="ep-field-group preview-details">
               <summary class="preview-summary">
                 {{ t('edit.preview') }} <span class="preview-note">{{ t('edit.preview_note') }}</span>
               </summary>
@@ -750,6 +787,13 @@ function onNormalKeydown(e: KeyboardEvent) {
                 {{ t('edit.aliases_save_first') }}
               </div>
               <template v-else>
+                <div class="alias-add-row">
+                  <input v-model="newAliasName" class="ep-field-input alias-add-input" :placeholder="t('edit.aliases_placeholder')"
+                    @keydown.enter="addAlias" />
+                  <button class="arg-add-btn" type="button" :disabled="aliasSaving || !newAliasName.trim()" @click="addAlias">
+                    {{ t('edit.aliases_add') }}
+                  </button>
+                </div>
                 <div v-if="!builtinChannelAliases.length && !builtinGlobalAliases.length" class="arg-descs-empty">
                   {{ t('edit.aliases_empty') }}
                 </div>
@@ -762,13 +806,6 @@ function onNormalKeydown(e: KeyboardEvent) {
                     {{ prefix || '+' }}{{ a }}
                     <button class="alias-chip-remove" type="button" :disabled="aliasSaving" @click="removeAlias(a)" v-html="iconSvgFor('x')"></button>
                   </span>
-                </div>
-                <div class="alias-add-row">
-                  <input v-model="newAliasName" class="ep-field-input alias-add-input" :placeholder="t('edit.aliases_placeholder')"
-                    @keydown.enter="addAlias" />
-                  <button class="arg-add-btn" type="button" :disabled="aliasSaving || !newAliasName.trim()" @click="addAlias">
-                    {{ t('edit.aliases_add') }}
-                  </button>
                 </div>
                 <div v-if="aliasError" class="alias-error">{{ aliasError }}</div>
               </template>
@@ -835,7 +872,7 @@ function onNormalKeydown(e: KeyboardEvent) {
           </button>
           <div v-else></div>
           <div class="ep-footer-right">
-            <button class="ep-btn-cancel" @click="emit('close')">{{ t('edit.cancel') }}</button>
+            <button class="ep-btn-cancel" @click="requestClose">{{ t('edit.cancel') }}</button>
             <button class="ep-btn-save" :disabled="saving" @click="save">
               <template v-if="saved"><span v-html="iconSvgFor('check')"></span> {{ t('edit.saved') }}</template>
               <template v-else-if="saving">{{ t('edit.saving') }}</template>
@@ -844,6 +881,20 @@ function onNormalKeydown(e: KeyboardEvent) {
           </div>
         </div>
 
+      </div>
+
+      <div v-if="closeConfirmOpen" class="ep-close-confirm-backdrop" @mousedown.self="closeConfirmOpen = false">
+        <div class="ep-close-confirm">
+          <div class="ep-close-confirm-title">{{ t('edit.close_confirm_title') }}</div>
+          <div class="ep-close-confirm-body">{{ t('edit.close_confirm_body') }}</div>
+          <div class="ep-close-confirm-actions">
+            <button class="ep-btn-cancel" @click="closeConfirmOpen = false">{{ t('edit.cancel') }}</button>
+            <button class="ep-btn-delete" @click="discardAndClose">{{ t('edit.discard') }}</button>
+            <button class="ep-btn-save" :disabled="saving" @click="saveAndClose">
+              {{ saving ? t('edit.saving') : t('edit.save_and_close') }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </Teleport>
@@ -887,7 +938,6 @@ function onNormalKeydown(e: KeyboardEvent) {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 8px;
 }
 
 .alias-chip {
@@ -927,6 +977,7 @@ function onNormalKeydown(e: KeyboardEvent) {
 .alias-add-row {
   display: flex;
   gap: 6px;
+  margin-bottom: 8px;
 }
 
 .alias-add-input {
@@ -1179,7 +1230,8 @@ function onNormalKeydown(e: KeyboardEvent) {
 
 .mock-role-row {
   display: flex;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px 10px;
 }
 
 .mock-check-label {
@@ -1195,6 +1247,45 @@ function onNormalKeydown(e: KeyboardEvent) {
   width: 13px;
   height: 13px;
   accent-color: #9d6cff;
+}
+
+/* >>> unsaved-changes close confirmation */
+.ep-close-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2100;
+  background: rgba(0, 0, 0, .6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ep-close-confirm {
+  width: 320px;
+  background: #16161a;
+  border: 1px solid #2a2a30;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, .7);
+  padding: 18px;
+}
+
+.ep-close-confirm-title {
+  color: #e0e0e0;
+  font-weight: 700;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.ep-close-confirm-body {
+  color: #888;
+  font-size: 12px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.ep-close-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 </style>
