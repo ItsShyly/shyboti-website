@@ -452,6 +452,7 @@ const MINIMUM_MOD = new Set([
   "delete",
   "prefix",
   "setgame",
+  "settitle",
 ]);
 const MINIMUM_BC = new Set(["pm2", "refresh", "join", "leave"]);
 
