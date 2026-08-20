@@ -97,6 +97,20 @@ const router = createRouter({
   ],
 });
 
+// >>> a redeploy renames chunk hashes - an already-open tab's dynamic
+// >>> import() then 404s (server falls back to index.html, wrong MIME type).
+// >>> only fix is a hard reload to pick up the new build, once per failure
+// >>> so a genuinely broken deploy doesn't reload-loop forever
+function reloadOnStaleChunk(err: unknown) {
+  const msg = String((err as any)?.message ?? err ?? "");
+  if (!/dynamically imported module|fetch dynamically|preload/i.test(msg)) return;
+  if (sessionStorage.getItem("chunk_reload_done")) return;
+  sessionStorage.setItem("chunk_reload_done", "1");
+  window.location.reload();
+}
+router.onError(reloadOnStaleChunk);
+window.addEventListener("vite:preloadError", (e) => reloadOnStaleChunk((e as any).payload));
+
 router.beforeEach((to) => {
   const { session, adminMode } = useAuth();
   const viewingOtherChannel =
@@ -114,5 +128,7 @@ router.beforeEach((to) => {
   }
   return true;
 });
+// >>> a real success means the reload (if any) worked - re-arm the guard
+router.afterEach(() => sessionStorage.removeItem("chunk_reload_done"));
 
 export default router;
