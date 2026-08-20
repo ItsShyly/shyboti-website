@@ -757,6 +757,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.create": "Quickly create commands, timers, triggers, or filters.",
     "cmddesc.delete": "Deletes the message you replied to.",
     "cmddesc.timeout": "Times out a user for a set duration. Alias: +to.",
+    "cmddesc.vanish": "Times yourself out for 1s to delete your last message. Alias: +v.",
     "cmddesc.ban": "Bans a user from the channel.",
     "cmddesc.git": "Owner-only: show recent commits or switch branch.",
     "cmddesc.refresh": "Refresh the 7TV emote cache for this channel.",
@@ -1620,6 +1621,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.delete": "Löscht die Nachricht, auf die du geantwortet hast.",
     "cmddesc.timeout":
       "Sperrt einen Nutzer für eine bestimmte Zeit. Alias: +to.",
+    "cmddesc.vanish":
+      "Sperrt dich selbst für 1s, um deine letzte Nachricht zu löschen. Alias: +v.",
     "cmddesc.ban": "Bannt einen Nutzer aus dem Channel.",
     "cmddesc.git": "Nur Owner: zeigt letzte Commits oder wechselt den Branch.",
     "cmddesc.refresh": "Aktualisiert den 7TV-Emote-Cache für diesen Channel.",
