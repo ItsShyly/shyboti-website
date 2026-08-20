@@ -268,204 +268,6 @@ function updateLineNumbers(text: string) {
   lineCount.value = (text.match(/\n/g) || []).length + 1
 }
 
-// vvv arg variant system vvv
-function scanArgNums(src: string): { positional: Set<number>; hasGeneric: boolean } {
-  const positional = new Set<number>()
-  for (const m of src.matchAll(/\$(?:args\.)?(\d+)\b/g)) {
-    const n = parseInt(m[1] || '')
-    if (!isNaN(n) && n > 0) positional.add(n)
-  }
-  const hasGeneric = /\$(?:args|query)\b|\{args\}/i.test(src) && positional.size === 0
-  return { positional, hasGeneric }
-}
-
-// >>> parses a clause like $1 = test
-function parseCondClause(clause: string): { argNum: number; value: string } | null {
-  clause = clause.trim()
-  let m = clause.match(/^\$(?:args\.)?(\d+)\s*=\s*(.+)$/)
-  if (m) {
-    const n = parseInt(m[1] ?? '0')
-    const v = (m[2] ?? '').trim()
-    return n && v ? { argNum: n, value: v } : null
-  }
-  m = clause.match(/^(.+?)\s*=\s*\$(?:args\.)?(\d+)\s*$/)
-  if (m) {
-    const v = (m[1] ?? '').trim()
-    const n = parseInt(m[2] ?? '0')
-    return n && v ? { argNum: n, value: v } : null
-  }
-  return null
-}
-
-// >>> one $if block, maybe with && compound conditions
-interface VariantEntry {
-  constraints: Map<number, string>  // <<< argNum -> value, e.g. 1->"test", 2->"$channel.name"
-  condStr: string                   // <<< raw condition string for reconstruction
-  maxArg: number                    // <<< highest arg number in condition or body
-  bodyHasArgs: Set<number>          // <<< $N refs found inside the $if body
-}
-
-// >>> extracts all $if blocks plus bare $N refs
-function extractVariants(src: string): { variants: VariantEntry[]; bareArgs: Set<number> } {
-  const variants: VariantEntry[] = []
-  const usedInIf = new Set<number>()
-  const bareArgs = new Set<number>()
-
-  let pos = 0
-  while (pos < src.length) {
-    const ifStart = src.indexOf('$if(', pos)
-    if (ifStart === -1) break
-
-    let depth = 0, condEnd = -1
-    for (let i = ifStart + 4; i < src.length; i++) {
-      const ch = src[i]
-      if (ch === '(') depth++
-      else if (ch === ')') {
-        if (depth === 0) { condEnd = i; break }
-        depth--
-      }
-    }
-    if (condEnd === -1) { pos = ifStart + 4; continue }
-
-    const condStr = src.slice(ifStart + 4, condEnd).trim()
-    const afterCond = src.slice(condEnd + 1)
-    const braceRel = afterCond.match(/^\s*\{/)
-    let endIdx: number
-    let bodyStart: number
-    let bodyEnd: number
-
-    if (braceRel) {
-      const braceStart = condEnd + 1 + afterCond.indexOf('{')
-      let bdepth = 0, bEnd = -1
-      for (let k = braceStart; k < src.length; k++) {
-        if (src[k] === '{') bdepth++
-        else if (src[k] === '}') { bdepth--; if (bdepth === 0) { bEnd = k; break } }
-      }
-      if (bEnd === -1) { pos = condEnd + 1; continue }
-      bodyStart = braceStart + 1
-      bodyEnd = bEnd
-      endIdx = bEnd
-    } else {
-      const legacyEnd = src.indexOf('$end', condEnd + 1)
-      if (legacyEnd === -1) { pos = condEnd + 1; continue }
-      bodyStart = condEnd + 1
-      bodyEnd = legacyEnd
-      endIdx = legacyEnd + 3
-    }
-
-    const clauses = condStr.split(/\s*&&?\s*/)
-    const constraints = new Map<number, string>()
-    for (const clause of clauses) {
-      const parsed = parseCondClause(clause)
-      if (parsed) {
-        constraints.set(parsed.argNum, parsed.value)
-        usedInIf.add(parsed.argNum)
-      }
-    }
-
-    const blockBody = src.slice(bodyStart, bodyEnd)
-    const bodyArgs = new Set<number>()
-    for (const m of blockBody.matchAll(/\$(?:args\.)?(\d+)\b/g)) {
-      const n = parseInt(m[1] || '')
-      if (!isNaN(n) && n > 0) bodyArgs.add(n)
-    }
-
-    let maxArg = 0
-    for (const n of constraints.keys()) maxArg = Math.max(maxArg, n)
-    for (const n of bodyArgs) maxArg = Math.max(maxArg, n)
-
-    variants.push({ constraints, condStr, maxArg, bodyHasArgs: bodyArgs })
-    pos = endIdx + 1
-  }
-
-  const withoutIfs = src
-    .replace(/\$if\([^)]*\)\s*\{[^}]*\}/g, '')
-    .replace(/\$if\([^)]+\)[\s\S]*?\$end/g, '')
-  for (const m of withoutIfs.matchAll(/\$(?:args\.)?(\d+)\b/g)) {
-    const n = parseInt(m[1] || '')
-    if (!isNaN(n) && n > 0 && !usedInIf.has(n)) bareArgs.add(n)
-  }
-
-  return { variants, bareArgs }
-}
-
-function buildArgDescs(
-  src: string,
-  existing: { usage: string; desc: string }[]
-): { usage: string; desc: string }[] {
-  const { positional, hasGeneric } = scanArgNums(src)
-  if (positional.size === 0 && !hasGeneric) return []
-  if (hasGeneric) {
-    const prev = existing.find(e => e.usage === '<args>' || e.usage === '<$args>')
-    return [{ usage: '<args>', desc: prev?.desc ?? '' }]
-  }
-
-  const { variants, bareArgs } = extractVariants(src)
-  const result: { usage: string; desc: string }[] = []
-
-  for (const v of variants) {
-    if (v.constraints.size === 0 && v.bodyHasArgs.size === 0) continue
-    const maxArg = v.maxArg
-    const parts: string[] = []
-    for (let n = 1; n <= maxArg; n++) {
-      const val = v.constraints.get(n)
-      if (val !== undefined) {
-        parts.push(val.startsWith('$') ? `<${val}>` : val)
-      } else {
-        parts.push('<word>')
-      }
-    }
-    const usage = parts.join(' ')
-    const prev = existing.find(e => e.usage === usage)
-    result.push({ usage, desc: prev?.desc ?? '' })
-  }
-
-  for (const n of [...bareArgs].sort((a, b) => a - b)) {
-    const usage = '<word>'
-    const prev = existing.find(e => e.usage === usage || e.usage === `${n}` || e.usage === `<arg${n}>`)
-    if (!result.some(r => r.usage === usage)) {
-      result.push({ usage, desc: prev?.desc ?? '' })
-    }
-  }
-
-  return result
-}
-
-function removeAllIfBlocksForArg(src: string, argNum: number): string {
-  let result = src
-  let safety = 0
-  while (safety++ < 20) {
-    const ifPat = new RegExp(`\\$if\\(\\s*\\$(?:args\\.)?${argNum}\\s*(?:=[^)]*)?\\)`)
-    const m = ifPat.exec(result)
-    if (!m) break
-    const start = m.index
-    const afterCond = result.slice(start + m[0].length)
-    const braceM = afterCond.match(/^\s*\{/)
-    if (braceM) {
-      const braceStart = start + m[0].length + afterCond.indexOf('{')
-      let bdepth = 0, bEnd = -1
-      for (let k = braceStart; k < result.length; k++) {
-        if (result[k] === '{') bdepth++
-        else if (result[k] === '}') { bdepth--; if (bdepth === 0) { bEnd = k; break } }
-      }
-      if (bEnd === -1) { result = result.slice(0, start) + result.slice(start + m[0].length); continue }
-      result = result.slice(0, start) + result.slice(bEnd + 1)
-    } else {
-      const endIdx = afterCond.indexOf('$end')
-      if (endIdx === -1) { result = result.slice(0, start) + result.slice(start + m[0].length) }
-      else { result = result.slice(0, start) + result.slice(start + m[0].length + endIdx + 4) }
-    }
-  }
-  return result.replace(/  +/g, ' ').trim()
-}
-
-function removeArgFromResponse(src: string, argNum: number): string {
-  let r = removeAllIfBlocksForArg(src, argNum)
-  r = r.replace(new RegExp(`\\$(?:args\\.)?${argNum}\\b`, 'g'), '')
-  return r.replace(/  +/g, ' ').trim()
-}
-// ^^^ arg variant system ^^^
-
 watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; saveError.value = ''; activeTab.value = 'response' } })
 onMounted(() => { if (props.open) load() })
 // >>> unlocks aliases right after the first save of a new command, no full reload
@@ -473,7 +275,6 @@ watch(() => props.cmdName, (name, old) => { if (name && !old && props.open) load
 
 watch(() => form.value.response, (src) => {
   if (props.isBuiltIn) return
-  form.value.arg_descs = buildArgDescs(src, form.value.arg_descs ?? [])
   validationErrors.value = validateScript(src)
   updateLineNumbers(src)
 }, { immediate: false })
@@ -828,34 +629,6 @@ function onNormalKeydown(e: KeyboardEvent) {
   }
 }
 
-function addArgVariant() {
-  const { positional } = scanArgNums(form.value.response || '')
-  const next = positional.size > 0 ? Math.max(...positional) + 1 : 1
-  const snippet = ' $' + next
-  form.value.response = (form.value.response || '').trimEnd() + snippet
-  const nel = normalEditorRef.value
-  if (nel) { nel.innerText = form.value.response; applyNormalHighlight(nel, form.value.response) }
-  updatePreview()
-}
-
-function removeArgVariant(i: number) {
-  const descs = form.value.arg_descs ?? []
-  const { positional } = scanArgNums(form.value.response || '')
-  const sorted = [...positional].sort((a, b) => a - b)
-  const argNum = sorted[i]
-  if (argNum) {
-    const cleaned = removeArgFromResponse(form.value.response || '', argNum)
-    form.value.response = cleaned
-    const nel = normalEditorRef.value
-    if (nel) { nel.innerText = cleaned; applyNormalHighlight(nel, cleaned) }
-    updatePreview()
-    form.value.arg_descs = buildArgDescs(cleaned, descs.filter((_, idx) => idx !== i))
-  } else {
-    const d = [...descs]
-    d.splice(i, 1)
-    form.value.arg_descs = d
-  }
-}
 // ^^^ editor ^^^
 </script>
 
@@ -883,10 +656,8 @@ function removeArgVariant(i: number) {
           <div class="ep-tabs">
             <button class="ep-tab" :class="{ active: activeTab === 'response' }"
               @click="activeTab = 'response'">{{ t('edit.tab_response') }}</button>
-            <button class="ep-tab" :class="{ active: activeTab === 'args' }" @click="activeTab = 'args'">
-              {{ t('edit.tab_args') }}
-              <span v-if="!isBuiltIn && form.arg_descs?.length">{{ form.arg_descs.length }}</span>
-            </button>
+            <button class="ep-tab" :class="{ active: activeTab === 'args' }"
+              @click="activeTab = 'args'">{{ t('edit.tab_args') }}</button>
             <button class="ep-tab" :class="{ active: activeTab === 'behavior' }"
               @click="activeTab = 'behavior'">{{ t('edit.tab_behavior') }}</button>
           </div>
@@ -961,30 +732,6 @@ function removeArgVariant(i: number) {
 
           <!-- vvv args tab vvv -->
           <template v-if="activeTab === 'args'">
-            <!-- >>> usage is auto-detected, only the description text is editable -->
-            <div v-if="!isBuiltIn" class="ep-field-group">
-              <div class="arg-descs-header">
-                <span class="ep-field-label">{{ t('edit.arg_usage') }} <span class="ep-field-hint">auto-detected - describe what
-                    each does</span></span>
-                <button class="arg-add-btn" @click="addArgVariant" type="button">+ Arg</button>
-              </div>
-              <div v-if="!form.arg_descs?.length" class="arg-descs-empty">
-                No variants detected. Use <code class="hint-code">$if($1 = value)</code>, <code
-                  class="hint-code">$1</code>, <code class="hint-code">$args</code> in the response.
-              </div>
-              <div class="arg-descs-list">
-                <div v-for="(v, i) in form.arg_descs" :key="i" class="arg-desc-row">
-                  <span class="arg-desc-prefix">{{ prefix || '+' }}{{ form.name }}</span>
-                  <span class="arg-usage-display">{{ form.arg_descs[i]?.usage || '<value>' }}</span>
-                  <input :value="form.arg_descs[i]?.desc ?? ''" class="ep-field-input arg-desc-input"
-                    placeholder="What this variant does…"
-                    @change="(e) => { if (form.arg_descs[i]) form.arg_descs[i].desc = (e.target as HTMLInputElement).value }" />
-                  <button class="arg-remove-btn" @click="removeArgVariant(i)" type="button"
-                    title="Remove this variant from the response" v-html="iconSvgFor('x')"></button>
-                </div>
-              </div>
-            </div>
-
             <!-- >>> built-ins only -->
             <div v-if="isBuiltIn" class="ep-field-group">
               <label class="ep-field-label">{{ t('edit.flags') }}</label>
@@ -1113,24 +860,6 @@ function removeArgVariant(i: number) {
   font-style: italic;
 }
 
-.hint-code {
-  font-family: 'Consolas', 'Fira Mono', monospace;
-  color: #4ec9b0;
-  font-style: normal;
-  font-size: 10px;
-  background: rgba(78, 201, 176, .1);
-  padding: 1px 4px;
-  border-radius: 2px;
-}
-
-/* >>> arg variants editor */
-.arg-descs-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-
 .arg-add-btn {
   height: 24px;
   padding: 0 10px;
@@ -1152,65 +881,6 @@ function removeArgVariant(i: number) {
   color: #444;
   font-style: italic;
   padding: 6px 0;
-}
-
-.arg-descs-list {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.arg-desc-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.arg-desc-prefix {
-  font-family: 'Consolas', 'Fira Mono', monospace;
-  font-size: 12px;
-  color: #9d6cff;
-  font-weight: 700;
-  flex-shrink: 0;
-  white-space: nowrap;
-}
-
-.arg-usage-display {
-  width: 160px;
-  flex-shrink: 0;
-  font-family: 'Consolas', 'Fira Mono', monospace;
-  font-size: 12px;
-  color: #e5c07b;
-  background: #111217;
-  border: 1px solid #222;
-  padding: 7px 10px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  cursor: default;
-}
-
-.arg-desc-input {
-  flex: 1;
-  min-width: 0;
-}
-
-.arg-remove-btn {
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  border: 1px solid #f1494933;
-  background: transparent;
-  color: #f14949;
-  font-size: 11px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.arg-remove-btn:hover {
-  background: #f1494911;
 }
 
 /* >>> built-in aliases + flags */
@@ -1327,8 +997,8 @@ function removeArgVariant(i: number) {
 }
 
 .builtin-prefix-hint {
-  font-size: 10px;
-  color: #383838;
+  font-size: 11px;
+  color: #555;
 }
 
 /* >>> line numbers + editor side by side, one border */
@@ -1432,14 +1102,14 @@ function removeArgVariant(i: number) {
 }
 
 .validation-pill.body_missing {
-  color: #4ec9b0;
-  background: rgba(78, 201, 176, .10);
-  border: 1px solid rgba(78, 201, 176, .3);
+  color: #ffd569;
+  background: rgba(255, 213, 105, .10);
+  border: 1px solid rgba(255, 213, 105, .3);
 }
 
 .normal-hint {
-  font-size: 10px;
-  color: #383838;
+  font-size: 11px;
+  color: #555;
 }
 
 .normal-hint code {
@@ -1468,8 +1138,8 @@ function removeArgVariant(i: number) {
 }
 
 .preview-note {
-  font-size: 9px;
-  color: #333;
+  font-size: 11px;
+  color: #555;
   font-weight: 400;
   text-transform: none;
   letter-spacing: 0;
@@ -1485,9 +1155,9 @@ function removeArgVariant(i: number) {
 .preview-output {
   font-family: 'Consolas', 'Fira Mono', monospace;
   font-size: 13px;
-  color: #4ec9b0;
-  background: rgba(78, 201, 176, .06);
-  border: 1px solid rgba(78, 201, 176, .15);
+  color: #ffd569;
+  background: rgba(255, 213, 105, .06);
+  border: 1px solid rgba(255, 213, 105, .15);
   padding: 8px 12px;
   min-height: 32px;
   word-break: break-all;
@@ -1501,7 +1171,7 @@ function removeArgVariant(i: number) {
 }
 
 .mock-ctx-grid label {
-  font-size: 10px;
+  font-size: 11px;
   color: #555;
   font-family: 'Consolas', 'Fira Mono', monospace;
 }
@@ -1518,8 +1188,8 @@ function removeArgVariant(i: number) {
 }
 
 .mock-role-hint {
-  font-size: 10px;
-  color: #444;
+  font-size: 11px;
+  color: #555;
   text-transform: uppercase;
   letter-spacing: .04em;
   font-weight: 600;
@@ -1535,7 +1205,9 @@ function removeArgVariant(i: number) {
 }
 
 .mock-check-label input {
-  accent-color: #6f2bff;
+  width: 13px;
+  height: 13px;
+  accent-color: #9d6cff;
 }
 
 </style>

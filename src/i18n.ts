@@ -180,9 +180,8 @@ const translations: Record<Locale, Record<string, string>> = {
 
     // vvv Command Edit Panel vvv
     "edit.tab_response": "Response",
-    "edit.tab_args": "Args",
+    "edit.tab_args": "Aliases",
     "edit.tab_behavior": "Behavior",
-    "edit.arg_usage": "Argument usage",
     "edit.status": "Status",
     "edit.enabled": "Enabled",
     "edit.disabled": "Disabled",
@@ -1049,9 +1048,8 @@ const translations: Record<Locale, Record<string, string>> = {
 
     // vvv Command Edit Panel vvv
     "edit.tab_response": "Response",
-    "edit.tab_args": "Args",
+    "edit.tab_args": "Aliase",
     "edit.tab_behavior": "Verhalten",
-    "edit.arg_usage": "Argument-Nutzung",
     "edit.status": "Status",
     "edit.enabled": "Aktiviert",
     "edit.disabled": "Deaktiviert",
