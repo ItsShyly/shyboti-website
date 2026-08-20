@@ -106,11 +106,6 @@ const EVENT_TYPES = [
     hint: "When a specific command is triggered",
   },
   {
-    value: "join",
-    label: "User joins",
-    hint: "When a viewer joins the channel",
-  },
-  {
     value: "follow",
     label: "Follow",
     hint: "New follower (requires EventSub)",
