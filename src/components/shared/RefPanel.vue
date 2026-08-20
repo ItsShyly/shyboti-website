@@ -113,6 +113,21 @@ const filteredGroups = computed(() => {
   max-height: 280px;
   overflow-y: auto;
   scrollbar-width: thin;
+  scrollbar-color: #333 transparent;
+}
+.ep-ref-groups::-webkit-scrollbar {
+  width: 8px;
+}
+.ep-ref-groups::-webkit-scrollbar-track {
+  background: transparent;
+}
+.ep-ref-groups::-webkit-scrollbar-thumb {
+  background: #333;
+  border: 2px solid #1a1a1e;
+  border-radius: 4px;
+}
+.ep-ref-groups::-webkit-scrollbar-thumb:hover {
+  background: #444;
 }
 .ep-ref-group {
   border-bottom: 1px solid #1e1e22;
