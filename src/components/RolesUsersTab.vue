@@ -72,7 +72,7 @@ const EMPTY_PERMS: Perms = {
   obs_force_preview: false,
 };
 
-// >>> mod/VIP defaults for the copy-defaults shortcut - one-time snapshot, not a live link
+// >>> one-time snapshot, not a live link
 const modDefaults = ref<Perms>({ ...EMPTY_PERMS });
 const vipDefaults = ref<Perms>({ ...EMPTY_PERMS });
 
@@ -87,7 +87,6 @@ const expandedUser = ref<string | null>(null);
 const userSaving = ref<string | null>(null);
 const deleteConfirm = ref<string | null>(null);
 
-// >>> Add-user form
 const newUsername = ref("");
 const newPerms = ref<Perms>({ ...EMPTY_PERMS });
 const adding = ref(false);
@@ -226,7 +225,6 @@ watch(
 
 <template>
   <div class="users-tab">
-    <!-- Add user -->
     <div class="section">
       <div class="section-title">{{ t("roles.add_user") }}</div>
       <p class="section-sub">{{ t("roles.users_sub") }}</p>
@@ -261,7 +259,6 @@ watch(
       </div>
     </div>
 
-    <!-- Existing users -->
     <div class="section">
       <div class="section-title">{{ t("roles.users_title") }}</div>
 

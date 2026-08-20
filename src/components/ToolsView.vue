@@ -10,7 +10,7 @@ const router = useRouter();
 const { session, adminMode } = useAuth();
 const { t } = useI18n();
 
-// >>> hidden in admin mode on someone else's channel - OBS Control is broadcaster-only space
+// >>> obs control is broadcaster-only, hidden for admins
 const hideAdminRestricted = computed(
   () =>
     !!session.value &&
@@ -18,7 +18,7 @@ const hideAdminRestricted = computed(
     session.value.login !== session.value.channel,
 );
 
-// >>> Variables & Counters
+// vvv variables & counters vvv
 interface Counter {
   name: string;
   value: number;
@@ -51,6 +51,7 @@ const editingVal = ref("");
 const addingType = ref("");
 const addForm = ref({ name: "", value: "", username: "" });
 const varSaving = ref(false);
+// ^^^ variables & counters ^^^
 
 const totalCount = computed(
   () =>
@@ -481,6 +482,7 @@ async function addEntry() {
       </div>
     </div>
   </Teleport>
+  <!-- ^^^ variables & counters modal ^^^ -->
 </template>
 
 <style scoped>

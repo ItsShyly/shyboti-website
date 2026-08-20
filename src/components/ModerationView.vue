@@ -12,7 +12,7 @@ const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
 
 const canView = computed(() => channelRole.value?.permissions.moderation_view ?? false);
-// >>> default true so real users don't see a false "needs bot" flash before channelRole loads
+// >>> avoids a false needs-bot flash before load
 const botPresent = computed(() => channelRole.value?.botPresent ?? true);
 const canManage = computed(
   () => (channelRole.value?.permissions.moderation_manage ?? false) && botPresent.value,
@@ -37,7 +37,7 @@ const success = ref("");
 
 function showSuccess(msg: string) { success.value = msg; setTimeout(() => (success.value = ""), 3000) }
 
-// >>> Spam helpers
+// >>> spam helpers
 const SPAM_TYPES = computed(() => [
   { value: "caps", label: t("mod.spam.caps"), hint: t("mod.spam.caps_hint") },
   { value: "links", label: t("mod.spam.links"), hint: t("mod.spam.links_hint") },
@@ -92,7 +92,7 @@ function actionLabel(action: string) {
         : t("mod.action.ban");
 }
 
-// >>> groups are just a shared reason - action/duration always come from the item itself
+// >>> group only supplies a reason, not action/duration
 interface ModGroup { id: number; name: string }
 const GROUP_PATH: Record<Tab, string> = { blocked: "blocked-terms", spam: "spam-filters", nukes: "nukes" };
 const modGroups: Record<Tab, ModGroup[]> = reactive({ blocked: [], spam: [], nukes: [] });
@@ -120,7 +120,7 @@ function membersOf(tab: Tab, groupId: number) {
 function ungroupedOf(tab: Tab) {
   return itemsOf(tab).filter((i) => !i.group_id);
 }
-// >>> trailing "ungrouped" bucket lets every row template use one v-for regardless of grouping
+// >>> ungrouped bucket keeps one v-for for all rows
 function sectionsOf(tab: Tab): { group: ModGroup | null; items: any[] }[] {
   return [
     ...modGroups[tab].map((g) => ({ group: g, items: membersOf(tab, g.id) })),
@@ -148,7 +148,7 @@ async function removeFromGroup(tab: Tab, id: number) {
   await putGroupId(tab, id, null);
 }
 
-// >>> Group create panel - create-only, no editing after the fact
+// >>> create-only, no editing existing groups
 const groupPanelOpen = ref(false);
 const groupPanelTab = ref<Tab>("blocked");
 const gName = ref("");
@@ -188,7 +188,7 @@ async function deleteGroup(tab: Tab, id: number) {
   } catch { error.value = t("mod.error.remove") }
 }
 
-// >>> Drag a row onto a group header (or the ungrouped zone) to move it
+// >>> drag row onto group header to move it
 const draggingId = ref<number | null>(null);
 function onDragStart(id: number) {
   draggingId.value = id;
@@ -200,12 +200,12 @@ async function assignGroup(tab: Tab, groupId: number | null) {
   const item = itemsOf(tab).find((i) => i.id === id);
   if (!item || item.group_id === groupId) return;
   item.group_id = groupId;
-  // >>> joining a group overwrites the item's own reason with the group's
+  // >>> group join clears the item's own reason
   if (groupId != null) item.reason = "";
   await putGroupId(tab, id, groupId);
 }
 
-// >>> Share - copy a blocked term/spam filter/nuke/group to another channel
+// >>> copies a term/filter/nuke/group to another channel
 const shareOpen = ref(false);
 const shareKind = ref<Tab | "group">("blocked");
 const shareGroupTab = ref<Tab>("blocked");
@@ -254,13 +254,13 @@ async function doShare() {
 }
 
 
-// >>> Edit panel state
+// >>> edit panel state
 const overlay = useOverlayClose();
 const editOpen = ref(false);
 const editTab = ref<Tab>("blocked");
 const isNew = ref(true);
 
-// >>> item's own Reason field is meaningless once it's in a group
+// >>> reason field is ignored once grouped
 const fGroupId = ref<number | null>(null);
 const fGroupName = computed(() =>
   fGroupId.value == null
@@ -268,17 +268,17 @@ const fGroupName = computed(() =>
     : (modGroups[editTab.value].find((g) => g.id === fGroupId.value)?.name ?? null),
 );
 
-// >>>  blocked term form
+// >>> blocked term form
 const fTerm = ref("");
 const fTermAction = ref<"delete" | "timeout" | "ban" | "automod">("delete");
 const fTermDur = ref(300);
-// >>> no manual toggle anymore - "/pattern/flags" syntax in the term itself is the signal
+// >>> regex detected from /pattern/flags syntax
 const fTermIsRegex = computed(() => looksLikeRegex(fTerm.value));
 const fTermReason = ref("");
 const fTermId = ref<number | null>(null);
 const fTermInputEl = ref<HTMLInputElement | null>(null);
 
-// >>>  spam filter form
+// >>> spam filter form
 const fSpamType = ref("caps");
 const fSpamThreshold = ref(70);
 const fSpamMinLetters = ref(0);
@@ -289,14 +289,14 @@ const fSpamDur = ref(300);
 const fSpamReason = ref("");
 const fSpamId = ref<number | null>(null);
 
-// >>>  nuke form
+// >>> nuke form
 const fNukeTrigger = ref("");
 const fNukeLabel = ref("");
 const fNukeDur = ref(600);
 const fNukeLookback = ref(30);
 const fNukeStay = ref(false);
 const fNukeMatchExact = ref(false);
-// >>> no manual toggle anymore - "/pattern/flags" syntax in the trigger itself is the signal
+// >>> regex detected from /pattern/flags syntax
 const fNukeIsRegex = computed(() => looksLikeRegex(fNukeTrigger.value));
 const fNukeExpiry = ref(false);
 const fNukeExpiryMins = ref(60);
@@ -305,7 +305,7 @@ const fNukeReason = ref("");
 const fNukeId = ref<number | null>(null);
 const fNukeTriggerInputEl = ref<HTMLInputElement | null>(null);
 
-// >>> Regex Reference click-to-insert - works on a plain <input>, not contenteditable
+// >>> works on plain input, not contenteditable
 function insertRegexToken(
   el: HTMLInputElement | null,
   valueRef: { value: string },
@@ -331,7 +331,7 @@ function insertIntoNukeTrigger(token: string) {
   insertRegexToken(fNukeTriggerInputEl.value, fNukeTrigger, token);
 }
 
-// >>> legacy rows (old toggle UI) stored a bare pattern with is_regex=1
+// >>> old rows stored bare pattern with is_regex=1
 function normalizeTermForEdit(raw: string, isRegexFlag: number): string {
   if (!isRegexFlag || looksLikeRegex(raw)) return raw;
   return `/${raw}/i`;
@@ -391,7 +391,7 @@ function openEditNuke(n: NukeConfig) {
 }
 
 
-// >>>  API calls
+// >>> api calls
 async function load() {
   if (!session.value) return;
   loading.value = true; error.value = "";
@@ -417,7 +417,7 @@ async function savePanel() {
     const h = { Authorization: `Bearer ${session.value.token}`, "Content-Type": "application/json" };
     const ch = session.value.channel;
 
-    // >>> once an item is in a group, its own reason is meaningless (group.name wins) - clear it on save
+    // >>> clears reason on save if grouped
     const reasonUnlessGrouped = (r: string) => (fGroupId.value != null ? "" : r.trim());
 
     if (editTab.value === "blocked") {
@@ -430,7 +430,7 @@ async function savePanel() {
         const data = await res.json();
         blockedTerms.value.push(data.item);
       } else {
-        // >>> backend has no PATCH for blocked terms, so delete+recreate is the pattern
+        // >>> no PATCH endpoint, so delete+recreate instead
         await fetch(`${API}/moderation/${ch}/blocked-terms/${fTermId.value}`, { method: "DELETE", headers: h });
         const res = await fetch(`${API}/moderation/${ch}/blocked-terms`, {
           method: "POST", headers: h,
@@ -465,8 +465,7 @@ async function savePanel() {
         const data = await res.json();
         spamFilters.value.push(data.item);
       } else {
-        // >>> backend has no PATCH for spam filters, so delete+recreate is the pattern -
-        // >>> that loses group_id, so restore it with a follow-up call when grouped
+        // >>> no PATCH, delete+recreate then restore group_id
         await fetch(`${API}/moderation/${ch}/spam-filters/${fSpamId.value}`, { method: "DELETE", headers: h });
         const res = await fetch(`${API}/moderation/${ch}/spam-filters`, { method: "POST", headers: h, body: JSON.stringify(body) });
         if (!res.ok) throw new Error();
@@ -634,7 +633,7 @@ const saveDisabled = computed(() => {
   return false;
 });
 
-// >>> Sync/Import - one config per tab (blocked terms/spam filters/nukes sync independently)
+// >>> separate sync config per tab
 interface ModSyncConf { sync_from: string; is_active: number; last_synced: number }
 interface ModSyncState { conf: ModSyncConf | null; open: boolean; from: string; saving: boolean; running: boolean; msg: string }
 function freshModSync(): ModSyncState { return { conf: null, open: false, from: "", saving: false, running: false, msg: "" } }
@@ -701,7 +700,7 @@ async function runModSync(tab: Tab) {
   modSync[tab].running = false;
 }
 
-// >>> SSE
+// >>> sse
 const reloading = ref(false);
 async function reload() { reloading.value = true; await load(); reloading.value = false }
 
@@ -892,6 +891,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         </template>
       </template>
     </template>
+    <!-- ^^^ blocked terms list ^^^ -->
 
     <!-- vvv spam filters list vvv -->
     <template v-else-if="activeTab === 'spam'">
@@ -947,6 +947,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         </template>
       </template>
     </template>
+    <!-- ^^^ spam filters list ^^^ -->
 
     <!-- vvv nukes list vvv -->
     <template v-else-if="activeTab === 'nukes'">
@@ -1031,8 +1032,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         </template>
       </template>
     </template>
+    <!-- ^^^ nukes list ^^^ -->
   </div>
-
 
   <!-- vvv edit panel vvv -->
   <Teleport to="body">
@@ -1096,6 +1097,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <input v-model="fTermReason" class="ep-field-input" />
             </div>
           </template>
+          <!-- ^^^ blocked term form ^^^ -->
 
           <!-- vvv spam filter form vvv -->
           <template v-if="editTab === 'spam'">
@@ -1185,6 +1187,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <input v-model="fSpamReason" class="ep-field-input" />
             </div>
           </template>
+          <!-- ^^^ spam filter form ^^^ -->
 
           <!-- vvv nuke form vvv -->
           <template v-if="editTab === 'nukes'">
@@ -1265,6 +1268,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <input v-model.number="fNukeExpiryMins" type="number" min="1" class="ep-field-input" />
             </div>
           </template>
+          <!-- ^^^ nuke form ^^^ -->
 
         </div>
 
@@ -1285,6 +1289,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       </div>
     </div>
   </Teleport>
+  <!-- ^^^ edit panel ^^^ -->
 
   <!-- vvv group panel vvv -->
   <Teleport to="body">
@@ -1321,6 +1326,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       </div>
     </div>
   </Teleport>
+  <!-- ^^^ group panel ^^^ -->
 
   <!-- vvv share modal vvv -->
   <Teleport to="body">
@@ -1347,6 +1353,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       </div>
     </div>
   </Teleport>
+  <!-- ^^^ share modal ^^^ -->
 </template>
 
 <style scoped>
@@ -1365,7 +1372,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   font-weight: 600
 }
 
-/* Groups */
+/* >>> groups */
 .mod-section {
   display: flex;
   flex-direction: column;
@@ -1417,7 +1424,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   margin-left: 20px;
 }
 
-/* list rows */
+/* >>> list rows */
 .mod-item-row {
   gap: 10px
 }
@@ -1504,7 +1511,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   color: #888
 }
 
-/* badges */
+/* >>> badges */
 .item-badge {
   font-size: 9px;
   font-weight: 700;
@@ -1543,7 +1550,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   gap: 4px
 }
 
-/* nuke list row specifics */
+/* >>> nuke row bits */
 .lookback-wrap {
   display: flex;
   align-items: center;
@@ -1640,7 +1647,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   }
 }
 
-/* panel */
+/* >>> panel */
 .ep-panel-tab-label {
   color: #9d6cff;
   font-size: 13px;
@@ -1648,7 +1655,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   margin-left: 6px;
 }
 
-/* toggles in the panel */
+/* >>> panel toggles */
 .toggle-row-group {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// >>> agent-relay model (token-based, no port/password) - settings panel is a teleport overlay
+// >>> agent-relay model, token-based, no port/password
 
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter, onBeforeRouteLeave } from "vue-router";
@@ -38,7 +38,7 @@ interface AgentStatus {
   streaming: boolean;
   screenshots: boolean;
   hidden_scenes: string[];
-  // >>> broadcaster-only - backend omits these for non-broadcasters
+  // >>> broadcaster-only, backend omits for others
   enabled?: boolean;
   screenshot_interval_sec?: number;
 }
@@ -73,7 +73,7 @@ interface ArgCommand {
   command: string;
   access: AccessLevel;
 }
-// >>> bitrate rules run agent-side, no chat command - see agent/src/rules.js
+// >>> runs agent-side, see agent/src/rules.js
 interface ObsRule {
   id: string;
   condition: "below" | "above";
@@ -278,7 +278,7 @@ async function saveSettings() {
   settingsSaving.value = false;
 }
 
-// >>> scene filter panel - obs_edit, not broadcaster-only - which scenes show in "others" + get screenshotted
+// >>> scene filter, obs_edit not broadcaster-only
 const showFilter = ref(false);
 const filterOverlay = useOverlayClose();
 const filterSaving = ref(false);
@@ -337,7 +337,7 @@ async function refreshScreenshot(sceneName: string, isLive: boolean) {
       };
       if (d.imageData)
         sceneShots.value = { ...sceneShots.value, [sceneName]: d.imageData };
-      // >>> only overwrite the stat panel when this call actually carried real numbers
+      // >>> only overwrite stats when real numbers arrive
       if (isLive && (typeof d.cpuMs === "number" || typeof d.kb === "number")) {
         liveShotStats.value = {
           cpuMs:
@@ -352,7 +352,7 @@ async function refreshScreenshot(sceneName: string, isLive: boolean) {
 async function refreshAllShots() {
   if (!agentConnected.value || !obsConnected.value || !agentStatus.value?.screenshots || previewsPaused.value)
     return;
-  // >>> sequential, live scene first - hidden scenes skip unless they're the live one
+  // >>> live scene first, hidden scenes skip otherwise
   const live = scenes.value.find((s) => s.sceneName === currentScene.value);
   const rest = scenes.value.filter(
     (s) => s.sceneName !== currentScene.value && !hiddenScenes.value.has(s.sceneName),
@@ -376,10 +376,11 @@ function restartShotLoop() {
 }
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+// ^^^ state ^^^
 
 // vvv navigation safety switch vvv
 const requestGen = ref(0);
-// >>> true the instant we're leaving (channel switch or route nav) 
+// >>> true the instant we start leaving
 const locked = ref(false);
 
 function lockForNavigation() {
@@ -392,7 +393,7 @@ function lockForNavigation() {
 }
 // ^^^ navigation safety switch ^^^
 
-// vvv live/edit mode + staged (unsaved) changes vvv
+// vvv live/edit mode + staged changes vvv
 const editMode = ref(true); // <<< default: edit mode, nothing applies until Save
 const pendingSceneName = ref<string | null>(null);
 interface SourceTransform {
@@ -427,7 +428,7 @@ function sourceEditKey(scene: string, sceneItemId: number): string {
 function getPendingEdit(src: any, scene: string = selectedScene.value): PendingSourceEdit | undefined {
   return pendingSourceEdits.value[sourceEditKey(scene, src.sceneItemId)];
 }
-// >>> creates the entry (with a baseline snapshot) on first edit, reuses it after 
+// >>> creates baseline snapshot on first edit only
 function stageSourceEdit(
   src: any,
   patch: Partial<Pick<PendingSourceEdit, "visible" | "muted" | "volumePercent" | "sceneItemIndex" | "transform">>,
@@ -481,7 +482,7 @@ const pendingCategory = ref<{ id: string; name: string; boxArt: string } | null>
   null,
 );
 
-// >>> not-yet-created browser sources staged in edit mode - no real sceneItemId until Save
+// >>> staged browser sources, no id until save
 interface PendingCreate {
   id: string; // <<< client-side only, for :key / removal
   scene: string;
@@ -550,27 +551,21 @@ function onSceneClick(name: string) {
     switchScene(name);
     return;
   }
-  // >>> edit mode: clicking a card just browses its sources/mixer for editing -
-  // >>> it does NOT stage a live scene switch, so you can hide sources on any
-  // >>> scene without also queuing up a switch to it on Save
+  // >>> clicking browses only, doesn't stage a scene switch
   selectedScene.value = name;
   loadSources(name);
 }
 
-// >>> explicit "switch to this scene on Save" action, separate from browsing
+// >>> explicit switch-on-save, separate from browsing
 function stageSceneSwitch(name: string) {
   if (locked.value || !editMode.value) return;
   pendingSceneName.value = pendingSceneName.value === name ? null : name;
 }
 
-// >>> fullscreen scene layout editor (drag-move / corner-resize sources)
-// >>> the overlay is one editor for the whole channel now, not per-scene - the
-// >>> pen just opens it; which scene/source it activates over is chosen in M4
+// >>> one editor for the whole channel, not per-scene
 const overlayEditorOpen = ref(false);
 const overlayEditorScene = ref("");
-// >>> only the editor being open pauses previews - it has its own local canvas, no
-// >>> point double-polling OBS screenshots behind it. Never gated on overlay-active,
-// >>> since a live overlay is the NORMAL state while streaming, not a reason to stop.
+// >>> only the editor open pauses previews, not overlay-active
 const previewsPaused = computed(() => overlayEditorOpen.value);
 watch(previewsPaused, (paused) => {
   if (!paused) restartShotLoop();
@@ -583,8 +578,7 @@ function closeOverlayEditor() {
   overlayEditorOpen.value = false;
 }
 
-// >>> the overlay's own OBS input is always named this way (see agentPackage.ts/apiServer.ts's
-// >>> add-to-scene route), lets the sources list recognize it without fetching overlay state
+// >>> fixed name lets sources list spot it without a fetch
 const OVERLAY_SOURCE_PREFIX = "ShyBoti Overlay - ";
 const hasOverlaySource = computed(() =>
   (sources.value as any[]).some((s) => s.sourceName?.startsWith(OVERLAY_SOURCE_PREFIX)),
@@ -642,7 +636,7 @@ function setMode(next: boolean) {
   if (locked.value || next === editMode.value) return;
   if (next === false && hasPending.value) discardChanges(); // <<< live mode has no staging concept
   editMode.value = next;
-  // >>> live mode always tracks the actual live scene - snap back in case edit mode was left browsing a different (non-live) scene
+  // >>> live mode snaps back to the actual live scene
   if (next === false && currentScene.value && currentScene.value !== selectedScene.value) {
     selectedScene.value = currentScene.value;
     loadSources(currentScene.value);
@@ -738,17 +732,14 @@ const agentConnected = computed(() => agentStatus.value?.connected ?? false);
 const obsConnected = computed(() => agentStatus.value?.obs_connected ?? false);
 const currentScene = computed(() => agentStatus.value?.current_scene ?? "");
 const hiddenScenes = computed(() => new Set(agentStatus.value?.hidden_scenes ?? []));
-// >>> filtered-out scenes stay hidden here even while live - the live row above
-// >>> renders liveScene separately regardless of the filter, so they still show
-// >>> up while live and drop out again once they're not
+// >>> hidden filter doesn't apply to the live scene row
 const nonLiveScenes = computed(() =>
   scenes.value.filter(
     (s) => s.sceneName !== currentScene.value && !hiddenScenes.value.has(s.sceneName),
   ),
 );
 
-// >>> keep selectedScene glued to what's actually live - but only in live mode,
-// >>> since edit mode lets you browse/edit a different scene's sources on purpose
+// >>> only live mode follows the actual live scene
 watch(currentScene, (name) => {
   if (!name || editMode.value) return;
   selectedScene.value = name;
@@ -830,6 +821,7 @@ async function poll() {
     }
   } catch { }
 }
+// ^^^ load ^^^
 
 // vvv token vvv
 async function generateToken() {
@@ -955,8 +947,7 @@ async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
     return [];
   }
 }
-// >>> just adds it to the strip - does NOT switch the live category. It won't
-// >>> get an .active border since it isn't actually live; click it later to switch.
+// >>> adds to strip only, doesn't switch live category
 async function onAddCategorySelect(item: TypeaheadItem) {
   showAddCategory.value = false;
   addCategoryQuery.value = "";
@@ -983,7 +974,7 @@ async function onAddCategorySelect(item: TypeaheadItem) {
         box_art_url: item.iconUrl ?? "",
       }),
     });
-    // >>> item.iconUrl is the low-res search thumbnail (instant paint above)
+    // >>> low-res thumbnail for instant paint
     await loadCategoryHistory();
   } catch { }
 }
@@ -1035,6 +1026,7 @@ async function removeCategory(categoryId: string) {
     );
   } catch { }
 }
+// ^^^ recent categories ^^^
 
 async function copyToken() {
   if (!token.value) return;
@@ -1061,7 +1053,7 @@ async function refreshScenes() {
       };
       if (gen !== requestGen.value) return;
       scenes.value = d.scenes;
-      // >>> sync live scene from response, not cached status, so page shows correct scene on load
+      // >>> syncs live scene from response, not cache
       if (d.currentScene && agentStatus.value)
         agentStatus.value.current_scene = d.currentScene;
       if (!selectedScene.value)
@@ -1069,7 +1061,7 @@ async function refreshScenes() {
           d.currentScene || scenes.value[0]?.sceneName || "";
       if (selectedScene.value) await loadSources(selectedScene.value);
       restartShotLoop();
-      // >>> preload all source names so isTargetMissing works across scenes
+      // >>> preloads source names for target-missing checks
       for (const s of scenes.value) prefetchSourceNames(s.sceneName);
     }
   } catch { }
@@ -1107,11 +1099,10 @@ async function switchScene(name: string) {
     });
   } catch { }
 }
+// ^^^ scenes ^^^
 
 // vvv sources vvv
-// >>> silent=true skips the loading flag entirely - used for background refreshes
-// >>> (poll loop, post-action re-syncs) so the list doesn't flash/re-skeleton every
-// >>> few seconds when nothing the user did actually changed
+// >>> silent mode skips loading flag for background refreshes
 async function loadSources(sceneName: string, opts: { silent?: boolean } = {}) {
   if (!session.value) return;
   const gen = requestGen.value;
@@ -1127,8 +1118,7 @@ async function loadSources(sceneName: string, opts: { silent?: boolean } = {}) {
       const rawSources = ((await res.json()) as any).sources ?? [];
       if (gen !== requestGen.value) return;
 
-      // >>> OBS-websocket's own array order came out backwards vs what OBS's Sources
-      // >>> panel shows - reverse it instead of re-deriving from sceneItemIndex directly
+      // >>> obs-websocket order is backwards, just reverse it
       sources.value = rawSources
         .map((s: any) => ({ ...s, visible: s.sceneItemEnabled }))
         .reverse();
@@ -1148,7 +1138,7 @@ async function onSourceDrop(targetIndex: number) {
   if (fromIndex === null || fromIndex === targetIndex || !session.value || !selectedScene.value)
     return;
   const list = [...(sources.value as any[])];
-  // >>> use the REAL sceneItemIndex that already sits at the drop slot 
+  // >>> uses the real index already at the drop slot
   const targetRealIndex = list[targetIndex]!.sceneItemIndex;
   const [moved] = list.splice(fromIndex, 1);
   list.splice(targetIndex, 0, moved);
@@ -1242,13 +1232,14 @@ async function setSourceMute(src: { sceneItemId: number; sourceName: string }, t
 function toggleSourceMute(src: SourceInfo & { muted?: boolean }) {
   return setSourceMute(src, !(src.muted ?? false));
 }
+// ^^^ sources ^^^
 
 // vvv bindings vvv
 async function saveBindings() {
   if (!session.value) return;
   bindingsSaving.value = true;
   try {
-    // >>> drop blank cmd names so clearing field disables command, not saves empty
+    // >>> blank cmd name disables, not saves empty
     const cleanedArgCommands: Record<string, ArgCommand> = {};
     for (const [action, entry] of Object.entries(argCommands.value)) {
       if (entry?.command && entry.command.trim()) {
@@ -1274,6 +1265,7 @@ async function saveBindings() {
   } catch { }
   bindingsSaving.value = false;
 }
+// ^^^ bindings ^^^
 
 // vvv command builder vvv
 // >>> unified command model for the table
@@ -1451,6 +1443,7 @@ function cycleUnifiedAccess(item: UnifiedCommand) {
   }
   saveBindings();
 }
+// ^^^ command builder ^^^
 
 // vvv add browser source vvv
 interface ObsWidget {
@@ -1479,8 +1472,7 @@ async function loadWidgetsForAddSource() {
   } catch { }
 }
 
-// vvv overlay tab - only offered when this scene doesn't already have one; lets you pick
-// vvv an existing overlay (shared across scenes) or create a new one vvv
+// vvv overlay tab vvv
 interface OverlayChoice { id: string; name: string }
 const overlaysForPicker = ref<OverlayChoice[]>([]);
 const selectedOverlayChoice = ref<string>("new");
@@ -1596,7 +1588,7 @@ async function submitAddSource() {
     return;
   }
 
-  // >>> edit mode: stage it - no real sceneItemId until Save actually creates it
+  // >>> edit mode stages it, no id until save
   if (editMode.value) {
     pendingCreates.value = [
       ...pendingCreates.value,
@@ -1645,7 +1637,7 @@ function volumeToDb(percent: number | undefined): string {
   return (20 * Math.log10(mul)).toFixed(1);
 }
 
-// >>> local slider override so the poll loop doesn't snap it back
+// >>> local override so polling doesn't snap back
 const sliderOverride = ref<Record<number, number>>({});
 
 function onVolumeInput(src: any, percent: number) {
@@ -1674,6 +1666,7 @@ async function setSourceVolume(src: { sourceName: string }, percent: number) {
   } catch { }
   if (selectedScene.value) await loadSources(selectedScene.value, { silent: true });
 }
+// ^^^ audio mixer ^^^
 
 // vvv force all previews button vvv
 const forcePreviewLoading = ref(false);
@@ -1690,14 +1683,14 @@ async function forceAllPreviews() {
   forcePreviewLoading.value = false;
 }
 
-// >>> Ctrl+S saves staged edit-mode changes, even while focused in a field -
-// >>> overrides the browser's save-page, matches the overlay editor's own Ctrl+S
+// >>> ctrl+s saves staged changes, overrides browser save
 function onKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
     e.preventDefault();
     if (editMode.value && hasPending.value && !locked.value) saveChanges();
   }
 }
+// ^^^ force all previews button ^^^
 
 // vvv lifecycle vvv
 let categoryPollTimer: ReturnType<typeof setInterval> | null = null;
@@ -1710,7 +1703,7 @@ onMounted(() => {
     if (agentConnected.value && obsConnected.value && scenes.value.length === 0)
       refreshScenes();
   }, 5000);
-  // >>> Twitch's own category could change without us clicking anything here
+  // >>> category can change without us clicking anything
   categoryPollTimer = setInterval(loadCategoryHistory, 30000);
   window.addEventListener("keydown", onKeydown);
 });
@@ -1721,15 +1714,12 @@ onUnmounted(() => {
   if (categoryPollTimer) clearInterval(categoryPollTimer);
   window.removeEventListener("keydown", onKeydown);
 });
-// >>> leaving the page entirely (sidebar, browser back, etc.) - lock instantly,
-// >>> before the route even finishes changing
+// >>> locks instantly before the route finishes changing
 onBeforeRouteLeave(() => {
   lockForNavigation();
 });
 
-// >>> switching channel is NOT a route change, so it needs its own instant lock +
-// >>> a hard reset of anything visible so the old channel's scenes/sources/category
-// >>> can't linger on screen while the new channel's data is still in flight
+// >>> channel switch isn't a route change, hard reset needed
 watch(
   () => session.value?.channel,
   () => {
@@ -1749,6 +1739,7 @@ watch(
     load();
   },
 );
+// ^^^ lifecycle ^^^
 </script>
 
 <template>
@@ -1838,7 +1829,7 @@ watch(
         </div>
       </template>
 
-      <!-- >>> setup prompt til agent+obs connect - full instructions live in the gear panel -->
+      <!-- >>> setup prompt, full instructions live in gear panel -->
       <template v-else-if="!agentConnected || !obsConnected">
         <div class="obs-setup-card obs-setup-compact">
           <template v-if="isBroadcaster">
@@ -1875,10 +1866,7 @@ watch(
           <div class="ep-field-label obs-section-label">
           </div>
           <div class="obs-scenes">
-            <!-- >>> keyed off currentScene (a plain string, known as soon as agentStatus loads)
-            not liveScene (which needed the separate /scenes fetch to also finish and contain
-            a matching entry) - that extra async hop was why this row would vanish then pop
-            back in, jumping the whole layout -->
+            <!-- >>> avoids a layout jump from an extra async fetch -->
             <div class="obs-scenes-live-row" v-if="currentScene">
               <div class="obs-live-scene-wrap">
                 <div class="obs-scene-card obs-scene-card-live active"
@@ -1944,7 +1932,7 @@ watch(
         :scenes="scenes.map((s) => s.sceneName)" :current-scene="currentScene" :initial-scene="overlayEditorScene"
         :obs-ready="agentConnected && obsConnected" @close="closeOverlayEditor" />
 
-      <!-- >>> builder still works even if obs itself isn't connected -->
+      <!-- >>> builder still works even if obs isn't connected -->
       <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"
         :class="{ 'obs-boxes-single': !(agentConnected && obsConnected) }">
         <template v-if="agentConnected && obsConnected">
@@ -1958,9 +1946,7 @@ watch(
                 @click="openAddSource" v-html="iconSvgFor('plus')"></button>
             </div>
             <div class="obs-source-list">
-              <!-- >>> only shown while there's genuinely nothing to display yet - background
-              (poll/post-action) refreshes are silent and never touch sourcesLoading, so this
-              can't flash over rows that are already on screen -->
+              <!-- >>> background refreshes stay silent, no flash over rows -->
               <template v-if="sourcesLoading && !sources.length">
                 <div class="obs-source-row" v-for="i in 4" :key="i">
                   <div class="ep-skeleton-block" style="height:10px;width:40%;"></div>
@@ -2418,7 +2404,7 @@ watch(
     </div>
   </Teleport>
 
-  <!-- >>> site-wide, sits right under the navbar regardless of which sidebar tab is open -->
+  <!-- >>> site-wide, sits under navbar regardless of tab -->
   <Teleport to="body">
     <div v-if="!editMode" class="obs-live-mode-banner">
       <span class="dot"></span>Live mode is on — scene, source and category changes apply to your stream instantly
@@ -2440,15 +2426,14 @@ watch(
 </template>
 
 <style scoped>
-/* Page chrome (was a modal panel before, now a routed page like ObsView) */
+/* >>> page chrome, now a routed page not a modal */
 .obsconn-page {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-/* >>> grid (not flex space-between) so the mode-bar is centered on the whole header's
-   width, not just "whatever's left" between two unequally-sized siblings */
+/* >>> grid centers on full width, not leftover space */
 .obsconn-header {
   position: relative;
   display: grid;
@@ -2561,7 +2546,7 @@ watch(
   width: min(420px, 92vw);
 }
 
-/* Status bar */
+/* >>> status bar */
 .obs-status-bar {
   display: flex;
   align-items: center;
@@ -2644,7 +2629,7 @@ watch(
   }
 }
 
-/* Setup card */
+/* >>> setup card */
 .cmd-usecase-arg {
   color: rgb(from #e5c07b r g b / 80%);
 }
@@ -2837,7 +2822,7 @@ watch(
   color: #9d6cff;
 }
 
-/* Scenes - live scene big & centered above, the rest small & centered below */
+/* >>> live scene big & centered, rest small below */
 .obs-scenes {
   display: flex;
   flex-direction: column;
@@ -2852,8 +2837,7 @@ watch(
   width: 100%;
 }
 
-/* >>> sizes exactly to the live scene card (stats is positioned out of flow
-   inside it), so centering the row centers the card, not the card+stats pair */
+/* >>> sized to match the card, ignores stats overlay */
 .obs-live-scene-wrap {
   position: relative;
 }
@@ -2985,7 +2969,7 @@ watch(
   font-style: italic;
 }
 
-/* Sources */
+/* >>> sources */
 .obs-source-list {
   display: flex;
   flex-direction: column;
@@ -3090,7 +3074,7 @@ watch(
   color: #aaa;
 }
 
-/* Bindings */
+/* >>> bindings */
 .obs-bind-list {
   display: flex;
   flex-direction: column;
@@ -3135,7 +3119,7 @@ watch(
   flex-shrink: 0;
 }
 
-/* Settings panel: toggles + generic arg commands */
+/* >>> settings panel, toggles + arg commands */
 .obs-toggle-row {
   display: flex;
   align-items: center;
@@ -3243,7 +3227,7 @@ watch(
   font-family: "Consolas", "Fira Mono", monospace;
 }
 
-/* center content, boxes end up different heights side by side */
+/* >>> centers boxes of different heights side by side */
 .ep-field-group {
   justify-content: center;
 }
@@ -3252,7 +3236,7 @@ watch(
   justify-content: flex-start;
 }
 
-/* loading spinner, avoids flashing "not set up" on first load */
+/* >>> avoids flashing not-set-up on first load */
 .obs-loading {
   display: flex;
   align-items: center;
@@ -3273,7 +3257,7 @@ watch(
   }
 }
 
-/* Sources | Audio mixer | Command builder */
+/* >>> sources | audio mixer | command builder */
 .obs-boxes-row {
   display: flex;
   flex-wrap: wrap;
@@ -3427,7 +3411,7 @@ watch(
   color: #f14949;
 }
 
-/* Access-level cycle button - matches CommandsView.vue's access-btn */
+/* >>> access-level button, matches CommandsView's access-btn */
 .access-btn {
   height: 28px;
   min-width: 70px;
@@ -3494,7 +3478,7 @@ watch(
   font-size: 9px;
 }
 
-/* Audio mixer */
+/* >>> audio mixer */
 .obs-mixer-list {
   display: flex;
   flex-direction: column;
@@ -3525,7 +3509,7 @@ watch(
 .obs-mixer-slider {
   flex: 1;
   accent-color: #9d6cff;
-  /* Remove browser default white track background */
+  /* >>> removes default white track background */
   background: transparent;
   -webkit-appearance: none;
   height: 4px;
@@ -3571,7 +3555,7 @@ watch(
   flex-shrink: 0;
 }
 
-/* Command builder - single-row form matching the reference demo */
+/* >>> command builder, single-row form */
 .obs-label-row {
   display: flex;
   align-items: flex-end;
@@ -3600,7 +3584,7 @@ watch(
   white-space: nowrap;
 }
 
-/* builder chat command name header */
+/* >>> builder chat command name header */
 .obs-cmd-name-row {
   display: flex;
   align-items: center;
@@ -3655,7 +3639,7 @@ watch(
   flex-shrink: 0;
 }
 
-/* obs builder */
+/* >>> obs builder */
 .obs-action-select {
   width: 140px;
   max-width: 140px;
@@ -3934,15 +3918,13 @@ watch(
     box-sizing: border-box;
   }
 
-  /* scoped to the builder form only, not the small per-row access button
-     inside the results table */
+  /* >>> scoped to the builder form, not per-row buttons */
   .obs-label-row .access-btn,
   .obs-add-btn {
     width: 100%;
   }
 
-  /* results table: let it scroll sideways instead of truncating every
-     cell down to a couple of characters */
+  /* >>> scrolls sideways instead of truncating cells */
   .obs-table-wrap {
     overflow-x: auto;
   }
@@ -3960,8 +3942,7 @@ watch(
   }
 }
 
-/* Bitrate/preview stats - in-flow (not absolute) so it reserves its own space instead
-   of floating over whatever renders below the header (was landing on top of .mode-bar) */
+/* >>> in-flow so it reserves space, was overlapping mode-bar */
 .obs-live-stats {
   display: flex;
   flex-direction: row;
@@ -4001,7 +3982,7 @@ watch(
   color: #f14949;
 }
 
-/* Command builder / Rule builder tab switch */
+/* >>> command/rule builder tab switch */
 .obs-builder-tabs {
   display: flex;
   gap: 2px;
@@ -4034,7 +4015,7 @@ watch(
   color: #888;
 }
 
-/* small toggle for the rule table's on column */
+/* >>> small toggle for the rule table's on column */
 .obs-toggle-sm {
   width: 26px;
   height: 15px;
@@ -4049,9 +4030,8 @@ watch(
   transform: translateX(11px);
 }
 
-/* ==================== live/edit mode + staged changes ==================== */
-/* >>> lives in the header row now (alongside the title and the gear/stats cluster),
-   not a full-width block anymore - sizes to its own content instead of stretching */
+/* vvv live/edit mode + staged changes vvv */
+/* >>> lives in the header row, sized to content not stretched */
 .mode-bar {
   display: flex;
   align-items: center;
@@ -4133,7 +4113,7 @@ watch(
   font-weight: 600;
 }
 
-/* >>> instant safety-switch lock  */
+/* >>> instant safety-switch lock */
 .obs-locked {
   opacity: 0.5;
   pointer-events: none;
@@ -4163,7 +4143,7 @@ watch(
   background: #e5c07b0d;
 }
 
-/* >>> "switch to this scene on Save" - separate from clicking the card (which just browses) */
+/* >>> switch-on-save, separate from clicking the card */
 .obs-scene-stage-btn {
   position: absolute;
   top: 5px;
@@ -4214,7 +4194,7 @@ watch(
   border-color: #e5c07b;
 }
 
-/* site-wide live-mode banner, Teleported under the navbar */
+/* >>> site-wide live-mode banner, teleported under navbar */
 .obs-live-mode-banner {
   position: fixed;
   top: 52px;
@@ -4261,7 +4241,7 @@ watch(
   }
 }
 
-/* floating save bar for staged edit-mode changes */
+/* >>> floating save bar for staged changes */
 .obs-save-bar {
   position: fixed;
   left: 200px;
@@ -4344,4 +4324,5 @@ watch(
     left: 0;
   }
 }
+/* ^^^ live/edit mode + staged changes ^^^ */
 </style>

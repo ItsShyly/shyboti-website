@@ -18,7 +18,7 @@ const listBase = computed(() => (isVip.value ? "vips" : "mods"));
 const rolesBase = computed(() => (isVip.value ? "vip-roles" : "roles"));
 const enabledField = computed(() => (isVip.value ? "vipsEnabled" : "modsEnabled"));
 
-// >>> Permission groups for the UI - labels pulled from i18n, same schema for every role tier
+// >>> same perm schema for both mod and vip
 const PERM_GROUPS = computed(() => [
   {
     label: t("perm.group.dashboard"),
@@ -140,7 +140,7 @@ const DEFAULT_MOD_PERMS: Omit<RolePermissions, "modsEnabled"> = {
   obs_force_preview: false,
 };
 
-// >>> VIPs default to no rights - mirrors apiServer.ts's DEFAULT_VIP_PERMS, keep in sync
+// >>> mirrors apiServer.ts defaults, keep in sync
 const DEFAULT_VIP_PERMS: Omit<RolePermissions, "modsEnabled"> = {
   ...Object.fromEntries(
     Object.keys(DEFAULT_MOD_PERMS).map((k) => [k, false]),
@@ -151,13 +151,13 @@ const DEFAULT_PERMS = computed(() =>
   isVip.value ? DEFAULT_VIP_PERMS : DEFAULT_MOD_PERMS,
 );
 
-// >>> VIPs default off (matches DB default), so the tab doesn't flash "on" before load() resolves
+// >>> starts off to avoid a flash before load
 const enabled = ref(!isVip.value);
 const globalPerms = ref<Omit<RolePermissions, "modsEnabled">>({
   ...DEFAULT_PERMS.value,
 });
 
-// >>> Individual override list (synced membership + per-user overrides)
+// >>> per-user permission overrides
 interface RoleEntry {
   username: string;
   blocked: boolean;
@@ -175,11 +175,10 @@ const filteredItems = computed(() => {
   return items.value.filter((i) => i.username.toLowerCase().includes(q));
 });
 
-// >>> VIP-only: OAuth scope status + manual sync
-const hasScope = ref(true); // >>> optimistic default so the warning doesn't flash before the check resolves
+// >>> vip-only oauth scope status
+const hasScope = ref(true); // >>> avoids warning flash before check resolves
 const syncing = ref(false);
 
-// >>> Save state
 const saving = ref(false);
 const saved = ref(false);
 const itemSaving = ref<string | null>(null);
@@ -189,7 +188,6 @@ function showSaved() {
   setTimeout(() => (saved.value = false), 2000);
 }
 
-// >>> Load
 async function load() {
   if (!session.value) return;
   try {
@@ -237,7 +235,6 @@ async function loadScopeStatus() {
   } catch { }
 }
 
-// >>> Save global
 async function save() {
   if (!session.value) return;
   saving.value = true;
@@ -270,7 +267,6 @@ async function syncNow() {
   syncing.value = false;
 }
 
-// >>> Per-item
 function toggleExpand(username: string) {
   expandedItem.value = expandedItem.value === username ? null : username;
 }
@@ -315,7 +311,7 @@ async function clearItemOverride(item: RoleEntry) {
   await saveItemOverride(item);
 }
 
-// >>> override matching global defaults exactly isn't real - drop to null so it keeps tracking global changes
+// >>> null override tracks global changes automatically
 function matchesGlobal(
   perms: Omit<RolePermissions, "modsEnabled">,
 ): boolean {
@@ -351,7 +347,6 @@ watch(() => session.value?.channel, reload);
   <div class="roles-group">
     <span v-if="saved" class="autosave-indicator"><span v-html="iconSvgFor('check')"></span> {{ t("roles.saved") }}</span>
 
-    <!-- Master enable/disable -->
     <div class="section">
       <div class="master-row">
         <div class="master-info">
@@ -369,7 +364,6 @@ watch(() => session.value?.channel, reload);
         </div>
       </div>
 
-      <!-- Permission grid - dimmed when disabled -->
       <div class="perm-grid" :class="{ dimmed: !enabled }">
         <div v-for="group in PERM_GROUPS" :key="group.label" class="perm-group">
           <div class="perm-group-label">{{ group.label }}</div>
@@ -394,13 +388,11 @@ watch(() => session.value?.channel, reload);
       </div>
     </div>
 
-    <!-- VIP scope re-auth warning -->
     <div v-if="isVip && !hasScope" class="scope-warning">
       {{ t("roles.scope_warning_pre") }}<ReauthLink>{{ t("roles.scope_warning_link") }}</ReauthLink>{{
         t("roles.scope_warning_post") }}
     </div>
 
-    <!-- Individual overrides -->
     <div class="section">
       <div class="section-title-row">
         <div>
@@ -442,7 +434,6 @@ watch(() => session.value?.channel, reload);
           blocked: item.blocked,
           overridden: !item.blocked && item.permissions !== null,
         }">
-          <!-- Header row -->
           <div class="mod-header" @click="toggleExpand(item.username)">
             <span class="mod-dot" :class="{
               blocked: item.blocked,
@@ -462,7 +453,6 @@ watch(() => session.value?.channel, reload);
             <span class="mod-chevron" v-html="iconSvgFor(expandedItem === item.username ? 'chevron-up' : 'chevron-down')"></span>
           </div>
 
-          <!-- Expanded permission overrides -->
           <div v-if="expandedItem === item.username && !item.blocked" class="mod-perms">
             <div class="mod-perms-header">
               <span class="mod-perms-sub">{{

@@ -10,7 +10,6 @@ const { session } = useAuth();
 const { t } = useI18n();
 const route = useRoute();
 
-// vvv view mode vvv
 const view = ref<"write" | "list">("write");
 
 // >>> ?list=1 in url switches straight to list view
@@ -38,6 +37,7 @@ const createError = ref("");
 const lastLink = ref("");
 const lastCopied = ref(false);
 const textareaRef = ref<HTMLTextAreaElement | null>(null);
+// ^^^ write state ^^^
 
 // vvv list state vvv
 interface SavedNote {
@@ -53,13 +53,13 @@ const deleteId = ref<string | null>(null);
 const recreateId = ref<string | null>(null); // <<< note being restored
 const recreateExpiry = ref<"1h" | "1d" | "7d" | "30d" | "forever">("7d");
 const recreating = ref<string | null>(null); // <<< id currently in-flight
+// ^^^ list state ^^^
 
-// vvv derived vvv
 const isGuest = computed(() => !session.value);
 const charCount = computed(() => noteText.value.length);
 const noteUrl = (id: string) => `https://n.shyboti.de/${id}`;
 
-// vvv expiry options, guests capped at 30d vvv
+// >>> guests can't pick forever
 const expiryOptions = computed(() => {
   const base = [
     { value: "1h", label: t("notes.expiry.1h") },
@@ -118,7 +118,6 @@ function newNote() {
   setTimeout(() => textareaRef.value?.focus(), 50);
 }
 
-// vvv list vvv
 async function loadList() {
   listLoad.value = true;
   try {
@@ -326,6 +325,7 @@ function switchView(v: "write" | "list") {
         </div>
       </div>
     </div>
+    <!-- ^^^ list view ^^^ -->
 
     <!-- vvv write view vvv -->
     <div v-else class="write-view">
@@ -404,6 +404,7 @@ function switchView(v: "write" | "list") {
         <div v-if="createError" class="create-error">{{ createError }}</div>
       </template>
     </div>
+    <!-- ^^^ write view ^^^ -->
   </div>
 </template>
 
@@ -415,7 +416,6 @@ function switchView(v: "write" | "list") {
   min-height: 0;
 }
 
-/* >>> Guest banner <<< */
 .guest-banner {
   display: flex;
   align-items: center;
@@ -433,7 +433,6 @@ function switchView(v: "write" | "list") {
   font-size: 13px;
 }
 
-/* >>> Write view <<< */
 .write-view {
   display: flex;
   flex-direction: column;
@@ -462,7 +461,6 @@ function switchView(v: "write" | "list") {
   border-color: #6f2bff33;
 }
 
-/* >>> Bottom bar <<< */
 .bottom-bar {
   display: flex;
   align-items: center;
@@ -570,7 +568,6 @@ function switchView(v: "write" | "list") {
   flex-shrink: 0;
 }
 
-/* >>> Result state <<< */
 .result-state {
   flex: 1;
   display: flex;
@@ -648,7 +645,6 @@ function switchView(v: "write" | "list") {
   border-color: #444;
 }
 
-/* >>> List view <<< */
 .list-view {
   display: flex;
   flex-direction: column;
@@ -794,7 +790,6 @@ function switchView(v: "write" | "list") {
   font-weight: 700;
 }
 
-/* Expired note styles */
 .note-item.is-expired {
   opacity: 0.7;
 }

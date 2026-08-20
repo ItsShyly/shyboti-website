@@ -18,7 +18,7 @@ export interface RolePermissions {
   commands_edit: boolean;
   commands_delete: boolean;
   commands_mod: boolean;
-  // vvv Automations (Timers + Triggers) vvv
+  // vvv Automations vvv
   automations_view: boolean;
   automations_toggle: boolean;
   automations_edit: boolean;
@@ -40,13 +40,13 @@ export interface ChannelRole {
 
 const session = ref<Session | null>(null);
 const availableChannels = ref<string[]>([]);
-// >>> channels only visible via admin mode, not a real role - drives red vs purple badge
+// >>> admin-only channels drive the red/purple badge
 const adminOnlyChannels = ref<string[]>([]);
-// >>> whether the bot is in the LOGGED-IN user's own channel specifically
+// >>> bot presence in the logged-in user's channel
 const ownChannelHasBot = ref(true);
 const channelRole = ref<ChannelRole | null>(null);
 
-// >>> Client-side toggle for whether an admin is currently "in" admin mode
+// >>> local toggle for admin mode state
 const adminMode = ref(
   typeof window !== "undefined" &&
     localStorage.getItem("shyboti_admin_mode") === "1",
@@ -195,7 +195,7 @@ export function useAuth() {
     if (!session.value?.isAdmin) return;
     adminMode.value = !adminMode.value;
     localStorage.setItem("shyboti_admin_mode", adminMode.value ? "1" : "0");
-    // >>> don't leave admin sitting with full access + no visible indication after toggling off
+    // >>> snap back to own channel when admin mode turns off
     if (!adminMode.value && session.value.channel !== session.value.login) {
       switchChannel(session.value.login);
     }

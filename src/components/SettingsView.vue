@@ -11,41 +11,36 @@ const { t } = useI18n();
 const router = useRouter();
 
 const isBroadcaster = ref(false);
-// default true so real users don't see Remove Bot flash away before channelRole loads
+// >>> avoids remove-bot flash before load
 const botPresent = computed(() => channelRole.value?.botPresent ?? true);
 
-// danger zone also unlocks in admin mode, so an admin can act on any channel
+// >>> admins can unlock danger zone too
 const dangerZoneUnlocked = computed(
   () => isBroadcaster.value || (!!session.value?.isAdmin && adminMode.value),
 );
 
-// Remove Bot only makes sense if there's a bot to remove
+// >>> only show remove-bot if bot is present
 const canRemoveBotCard = computed(
   () => dangerZoneUnlocked.value && botPresent.value,
 );
 
-// Prefix
 const prefix = ref("+");
 const prefixSaving = ref(false);
 const prefixSaved = ref(false);
 const prefixError = ref("");
 
-// Log opt-out
 const optedOut = ref(false);
 const optSaving = ref(false);
 const optMsg = ref("");
 
-// Vanish hide
 const vanishHide = ref(false);
 const vanishSaving = ref(false);
 const vanishMsg = ref("");
 
-// Name history opt-out
 const nameHistOptedOut = ref(false);
 const nameHistSaving = ref(false);
 const nameHistMsg = ref("");
 
-// 7TV
 interface EmoteSetInfo {
   setId: string | null;
   setName: string | null;
@@ -59,13 +54,11 @@ const emoteSetSuccess = ref("");
 const emoteInput7tv = ref("");
 const emoteInputId = ref("");
 
-// Remove bot
 const removeConfirm = ref(false);
 const removeRemoving = ref(false);
 const removeMsg = ref("");
 const removeError = ref("");
 
-// Hidden tips reset
 const tipsResetMsg = ref("");
 
 function resetAllHiddenInfos() {
@@ -294,7 +287,6 @@ async function doRemoveBot() {
   removeRemoving.value = false;
 }
 
-// Delete all data
 const deleteConfirmInput = ref("");
 const deleting = ref(false);
 const deleteError = ref("");
@@ -347,7 +339,6 @@ async function doDeleteAllData() {
     </header>
 
     <div class="settings-body">
-        <!-- Chat behavior (broadcaster only) -->
         <section v-if="isBroadcaster" class="settings-section">
           <h2 class="section-title">Chat behavior</h2>
           <div class="setting-list">
@@ -401,7 +392,6 @@ async function doDeleteAllData() {
           </div>
         </section>
 
-        <!-- Privacy -->
         <section class="settings-section">
           <h2 class="section-title">Privacy</h2>
           <div class="setting-list">
@@ -450,7 +440,6 @@ async function doDeleteAllData() {
           </div>
         </section>
 
-        <!-- Integrations (broadcaster only) -->
         <section v-if="isBroadcaster" class="settings-section">
           <h2 class="section-title">Integrations</h2>
           <div class="integration-panel">
@@ -525,7 +514,6 @@ async function doDeleteAllData() {
           </div>
         </section>
 
-        <!-- Interface -->
         <section class="settings-section">
           <h2 class="section-title">Interface</h2>
           <div class="setting-list">
@@ -547,7 +535,6 @@ async function doDeleteAllData() {
           </div>
         </section>
 
-        <!-- Danger zone -->
         <section v-if="canRemoveBotCard || dangerZoneUnlocked" class="settings-section danger-section">
           <h2 class="section-title danger-title">Danger zone</h2>
           <div class="danger-list">

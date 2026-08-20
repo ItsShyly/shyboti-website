@@ -1,4 +1,4 @@
-// >>> shared live-variables loader so every script editor can show/click-insert the same real counter/var names (used to be OBS-widgets-only)
+// >>> shared loader so editors show the same real vars
 
 import { ref } from "vue";
 import { API } from "../api";

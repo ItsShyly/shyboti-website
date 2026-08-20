@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// >>> local mode filters items client-side; remote mode debounces fetchItems()
+// >>> local mode filters client-side, remote mode debounces fetch
 import { ref, computed, watch, onMounted } from "vue";
 
 export interface TypeaheadItem {
@@ -98,7 +98,7 @@ function onFocus() {
   }
 }
 function onBlur() {
-  // >>> delay close so a dropdown click (mousedown) registers before blur
+  // >>> delay close so click registers before blur fires
   setTimeout(() => {
     open.value = false;
   }, 150);

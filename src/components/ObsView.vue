@@ -37,7 +37,7 @@ const saveSuccess = ref("");
 const editOpen = ref(false);
 const overlay = useOverlayClose();
 const isNew = ref(false);
-const editOrigName = ref(""); // <<< name before rename, so we know which row to PUT/DELETE
+const editOrigName = ref(""); // <<< old name, needed for the PUT/DELETE
 const contentInputEl = ref<HTMLInputElement | null>(null);
 const form = ref({
   name: "",
@@ -135,7 +135,7 @@ function openEdit(w: Widget) {
   editOpen.value = true;
 }
 
-// >>> Reference panel click-to-insert - inserts at the content input's cursor
+// >>> inserts at the content input's cursor
 function insertRefToken(token: string) {
   const el = contentInputEl.value;
   const cur = form.value.content;
@@ -179,7 +179,7 @@ async function previewContent() {
           ((await r2.json()) as { value: string }).value || "(empty)";
     }
   } catch { }
-  // >>> persists a real "___preview" row just to reuse the save endpoint for eval
+  // >>> reuses the real save endpoint for a throwaway eval
   try {
     await fetch(`${API}/obs-widgets/${session.value.channel}/___preview`, {
       method: "DELETE",
@@ -381,7 +381,6 @@ watch(() => session.value?.channel, load);
       </div>
     </div>
 
-    <!-- Edit panel -->
     <Teleport to="body">
       <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => (editOpen = false))">
         <div class="ep-panel">
@@ -400,7 +399,7 @@ watch(() => session.value?.channel, load);
           </div>
 
           <div class="ep-panel-body">
-            <!-- >>> new only - renames happen via the header title -->
+            <!-- >>> renames happen via the header title -->
             <div v-if="isNew" class="ep-field-group">
               <label class="ep-field-label">{{ t("obs.panel.name") }}
                 <span class="ep-field-hint">{{
@@ -418,7 +417,7 @@ watch(() => session.value?.channel, load);
                 placeholder="$counter.kills.get" />
             </div>
 
-            <!-- >>> click a row to insert into Content above -->
+            <!-- >>> click a row to insert into content above -->
             <RefPanel :title="t('obs.panel.ref')" @insert="insertRefToken" />
 
             <div class="preview-section">
@@ -544,7 +543,6 @@ watch(() => session.value?.channel, load);
             </div>
           </div>
 
-          <!-- >>> footer pinned outside scroll -->
           <div class="ep-panel-footer">
             <div v-if="saveError" class="save-error">{{ saveError }}</div>
             <div v-else></div>
@@ -653,7 +651,6 @@ watch(() => session.value?.channel, load);
   color: #f14949;
 }
 
-/* Preview */
 .preview-section {
   display: flex;
   flex-direction: column;
@@ -699,7 +696,6 @@ watch(() => session.value?.channel, load);
   word-break: break-word;
 }
 
-/* Refresh */
 .refresh-row {
   display: flex;
   align-items: center;
@@ -734,7 +730,6 @@ watch(() => session.value?.channel, load);
   flex-shrink: 0;
 }
 
-/* Style section */
 .style-section {
   display: flex;
   flex-direction: column;

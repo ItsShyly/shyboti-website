@@ -24,7 +24,7 @@ function setData(patch: Record<string, any>) {
 const num = (e: Event) => Number((e.target as HTMLInputElement).value) || 0;
 const str = (e: Event) => (e.target as HTMLInputElement).value;
 
-// vvv background = color swatch + opacity slider, composed into an rgba() string vvv
+// vvv background is color swatch plus opacity slider vvv
 function parseBackground(bg: string): { hex: string; alpha: number } {
   const m = bg.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/i);
   if (m) {
@@ -54,8 +54,7 @@ function setBackgroundAlpha(alphaPct: number) {
 }
 // ^^^ background ^^^
 
-// vvv solid colors (text/outline/shadow/border) = color swatch + opacity slider too -
-// vvv unlike background, alpha 0 must stay truly transparent, never fall back to opaque vvv
+// vvv solid colors need alpha 0 to stay truly transparent vvv
 type SolidColorKey = "color" | "strokeColor" | "shadowColor" | "borderColor";
 function parseSolidColor(value: string | undefined, fallbackHex: string): { hex: string; alpha: number } {
   if (!value) return { hex: fallbackHex, alpha: 100 };
@@ -78,7 +77,7 @@ function setSolidColorAlpha(key: SolidColorKey, fallbackHex: string, alphaPct: n
 }
 // ^^^ solid colors ^^^
 
-// >>> aspect-lock keeps w/h ratio fixed while editing either field
+// >>> aspect lock keeps w/h ratio fixed either way
 const aspectLocked = ref(false);
 const aspectRatio = computed(() =>
   props.element.h ? props.element.w / props.element.h : 1,
@@ -92,7 +91,7 @@ function setH(v: number) {
   else set({ h: v });
 }
 
-// >>> countdown renders as styled text too - reuses typography/text-styling/border sections
+// >>> countdown reuses typography and border sections too
 const isTextLike = computed(() =>
   ["text", "variable-text", "countdown", "countup"].includes(props.element.type),
 );
@@ -102,7 +101,7 @@ const isAudio = computed(() => props.element.type === "audio");
 const isImage = computed(() => props.element.type === "image");
 const isCountdown = computed(() => props.element.type === "countdown");
 
-// >>> datetime-local wants local "YYYY-MM-DDTHH:mm", stored as ISO
+// >>> input wants local time, storage is ISO
 function isoToLocalInput(iso: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -124,7 +123,7 @@ function setVariant(variant: ShapeVariant) {
   setStyle(shapeDefaultStyle(variant));
 }
 
-// >>> position&size + border&background start collapsed, everything else stays open
+// >>> position and border sections start collapsed
 const collapsed = reactive<Record<string, boolean>>({
   position: true,
   border: true,
@@ -139,7 +138,7 @@ function toggle(key: string) {
 
 <template>
   <div class="ovl-style-panel">
-    <!-- vvv typography + box alignment - text/variable-text only, auto-collapsed vvv -->
+    <!-- vvv typography, text elements only, auto-collapsed vvv -->
     <template v-if="isTextLike">
       <button class="ovl-style-section-title" @click="toggle('typography')">
         <span v-html="iconSvgFor(collapsed.typography ? 'chevron-right' : 'chevron-down')"></span>
@@ -178,7 +177,7 @@ function toggle(key: string) {
         </label>
       </template>
 
-      <!-- vvv color is a distinct concern from font shape - own section, auto-collapsed vvv -->
+      <!-- vvv text color, own section, auto-collapsed vvv -->
       <button class="ovl-style-section-title" @click="toggle('color')">
         <span v-html="iconSvgFor(collapsed.color ? 'chevron-right' : 'chevron-down')"></span>
         text styling
@@ -234,8 +233,7 @@ function toggle(key: string) {
       </template>
     </template>
 
-    <!-- vvv countdown - target/duration mode, auto-collapsed. The current time itself is set
-    from the properties panel above or by double-clicking the element on the canvas, not here vvv -->
+    <!-- vvv countdown target/duration, current time set elsewhere not here vvv -->
     <template v-if="isCountdown">
       <button class="ovl-style-section-title" @click="toggle('countdown')">
         <span v-html="iconSvgFor(collapsed.countdown ? 'chevron-right' : 'chevron-down')"></span>
@@ -288,7 +286,7 @@ function toggle(key: string) {
       </div>
     </template>
 
-    <!-- vvv border+background - shape/image/video/text, auto-collapsed vvv -->
+    <!-- vvv border and background, auto-collapsed vvv -->
     <template v-if="isShape || isImage || isVideo || isTextLike">
       <button class="ovl-style-section-title" @click="toggle('border')">
         <span v-html="iconSvgFor(collapsed.border ? 'chevron-right' : 'chevron-down')"></span>
@@ -346,7 +344,7 @@ function toggle(key: string) {
       </template>
     </template>
 
-    <!-- vvv audio - just the mute toggle for its linked video vvv -->
+    <!-- vvv audio, just the mute toggle vvv -->
     <template v-if="isAudio">
       <div class="ovl-style-section-title-static">audio</div>
       <label class="ovl-style-check">
@@ -358,8 +356,7 @@ function toggle(key: string) {
       </label>
     </template>
 
-    <!-- vvv transform - applies to every element, auto-collapsed, kept last since it's about
-    the box's geometry, not the element's content, and was confused for text size up top vvv -->
+    <!-- vvv transform kept last, was confused with text size up top vvv -->
     <button class="ovl-style-section-title" @click="toggle('position')">
       <span v-html="iconSvgFor(collapsed.position ? 'chevron-right' : 'chevron-down')"></span>
       transform

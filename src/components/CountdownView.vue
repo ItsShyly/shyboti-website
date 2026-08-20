@@ -50,7 +50,7 @@ const success = ref("");
 // vvv edit panel vvv
 const editOpen = ref(false);
 const isNew = ref(false);
-const editOrigName = ref(""); // <<< name before rename, so we know which row to delete
+const editOrigName = ref(""); // <<< old name, needed to delete on rename
 const overlay = useOverlayClose();
 const editCountdown = ref<Partial<Countdown> & { name: string }>({
   name: "",
@@ -67,13 +67,14 @@ const editCountdown = ref<Partial<Countdown> & { name: string }>({
 const startEditorRef = ref<HTMLDivElement | null>(null);
 const tickEditorRef = ref<HTMLDivElement | null>(null);
 const endEditorRef = ref<HTMLDivElement | null>(null);
-// >>> ref panel inserts into whichever message editor was last focused
+// >>> tracks last focused message editor
 const activeField = ref<"msg_start" | "msg_tick" | "msg_end">("msg_start");
 const FIELD_REFS = {
   msg_start: startEditorRef,
   msg_tick: tickEditorRef,
   msg_end: endEditorRef,
 };
+// ^^^ edit panel ^^^
 
 function showSuccess(msg: string) {
   success.value = msg;
@@ -104,7 +105,7 @@ let pollInterval: ReturnType<typeof setInterval> | null = null;
 onMounted(() => {
   tickInterval = setInterval(() => {
     tick.value++;
-    // >>> backend auto-idles a finished countdown, mirror that locally so ui updates without a reload
+    // >>> mirrors backend auto-idle, avoids a reload
     for (const cd of countdowns.value) {
       if (cd.status !== "running" || !cd.started_at) continue;
       const elapsed = Math.floor((Date.now() - cd.started_at) / 1000);
@@ -114,7 +115,7 @@ onMounted(() => {
       }
     }
   }, 1000);
-  // >>> poll too, so external triggers like $countdown.x.start show up here
+  // >>> polls too, catches external countdown triggers
   pollInterval = setInterval(load, 5000);
   load();
 });
@@ -123,6 +124,7 @@ onUnmounted(() => {
   if (pollInterval) clearInterval(pollInterval);
 });
 watch(() => session.value?.channel, load);
+// ^^^ tick ^^^
 
 async function load() {
   if (!session.value) return;
@@ -197,7 +199,7 @@ function onEditorInput(
   applyScriptHighlight(el);
 }
 
-// >>> inserts into whichever message editor was last focused
+// >>> inserts into last focused message editor
 function insertRefToken(token: string) {
   const el = FIELD_REFS[activeField.value].value;
   if (!el) return;
@@ -216,7 +218,7 @@ async function saveCountdown() {
   saving.value = editCountdown.value.name;
   error.value = "";
   try {
-    // >>> Build the body explicitly - exclude 'id' and non-DB fields
+    // >>> excludes id and non-db fields
     const body = {
       duration_sec: editCountdown.value.duration_sec ?? 60,
       msg_start: editCountdown.value.msg_start ?? "",
@@ -245,7 +247,7 @@ async function saveCountdown() {
         .catch(() => ({ error: `HTTP ${res.status}` }));
       throw new Error(errData.error ?? `Save failed (${res.status})`);
     }
-    // >>> renamed, old-named row is now a stale duplicate, delete it
+    // >>> renamed, delete the old duplicate row
     if (!isNew.value && editOrigName.value && editOrigName.value !== name) {
       await fetch(
         `${API}/countdowns/${session.value.channel}/${encodeURIComponent(editOrigName.value)}`,
@@ -285,7 +287,7 @@ async function deleteCountdown(name: string) {
   saving.value = null;
 }
 
-// >>> Share
+// vvv share vvv
 const shareOpen = ref(false);
 const shareCountdown = ref("");
 const shareTarget = ref("");
@@ -321,6 +323,7 @@ async function doShare() {
   }
   shareSaving.value = false;
 }
+// ^^^ share ^^^
 
 async function controlCountdown(
   name: string,
@@ -353,7 +356,7 @@ async function controlCountdown(
   } catch { }
 }
 
-// >>> Header (title/count/create) lives in AutomationsView.vue - expose what it needs
+// >>> header stuff lives in AutomationsView, exposed for it
 defineExpose({
   header: computed(() => ({
     count: countdowns.value.length,
@@ -521,7 +524,7 @@ defineExpose({
                 @input="onEditorInput(endEditorRef, 'msg_end')"></div>
             </div>
 
-            <!-- >>> inserts into whichever field was last focused -->
+            <!-- >>> targets last focused field -->
             <RefPanel :title="`${t('edit.var_ref')} · → ${activeField.replace('msg_', '')}`" context="countdown"
               @insert="insertRefToken" />
 
@@ -573,6 +576,7 @@ defineExpose({
         </div>
       </div>
     </Teleport>
+    <!-- ^^^ edit panel ^^^ -->
 
     <!-- vvv share modal vvv -->
     <Teleport to="body">
@@ -599,6 +603,7 @@ defineExpose({
         </div>
       </div>
     </Teleport>
+    <!-- ^^^ share modal ^^^ -->
   </div>
 </template>
 

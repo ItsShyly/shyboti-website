@@ -12,13 +12,13 @@ import { iconSvg as iconSvgFor } from "../composables/icons";
 export interface ObsRule {
   id: string;
   trigger_type?: "bitrate" | "category" | "scene";
-  // >>> bitrate trigger
+  // >>> bitrate fields
   condition?: "below" | "above";
   bitrate_kbps?: number;
-  // >>> category trigger
+  // >>> category fields
   category_id?: string;
   category_name?: string;
-  // >>> scene trigger
+  // >>> scene fields
   trigger_scene?: string;
 
   action: string;
@@ -33,9 +33,9 @@ export interface ObsRule {
 interface Props {
   open: boolean;
   channel: string;
-  // >>> pass the current rule list in so we can build the full array back on save
+  // >>> needed to rebuild the full array on save
   rules: ObsRule[];
-  // >>> which rule to open for editing (null = create new)
+  // >>> null means creating a new one
   editTarget: string | null;
   scenes: string[];
   sources: string[];
@@ -78,7 +78,7 @@ const RULE_ACTIONS = computed(() =>
 
 const isEdit = computed(() => !!props.editTarget);
 
-// >>> form state
+// >>> form fields
 const fTriggerType = ref<"bitrate" | "category" | "scene">("bitrate");
 const fCondition = ref<"below" | "above">("below");
 const fBitrate = ref(2500);
@@ -94,7 +94,6 @@ const fEnabled = ref(true);
 const fChatMsgEnabled = ref(false);
 const fChatMsg = ref("");
 
-// >>> default text for the chat message field
 function defaultChatMessage(action: string): string {
   if (action === "scene") return "Scene changed to $scene";
   if (action === "category") return "Category changed to $category";
@@ -103,12 +102,12 @@ function defaultChatMessage(action: string): string {
 function toggleChatMessage() {
   fChatMsgEnabled.value = !fChatMsgEnabled.value;
   if (fChatMsgEnabled.value && !fChatMsg.value.trim()) {
-    // >>> prefill only if turning on and field's still empty
+    // >>> only prefill if empty
     fChatMsg.value = defaultChatMessage(fAction.value);
   }
 }
 
-// >>> guards field watchers while populate() bulk-fills the form
+// >>> guards watchers while form is being bulk-filled
 let populating = false;
 
 watch(fAction, (a) => {
@@ -121,7 +120,7 @@ watch(fAction, (a) => {
   }
 });
 
-// >>> populate form when opening
+// >>> fill form on open
 watch(
   () => props.open,
   async (open) => {
@@ -164,16 +163,15 @@ watch(
         fChatMsg.value = r.chat_message ?? "";
       }
     }
-    // >>> flips off after Vue's next DOM patch
-    await nextTick();
+    await nextTick(); // <<< wait for the DOM patch before unguarding
     populating = false;
   },
 );
 
-// >>> Deliberately NOT a watch(fTriggerType, ...)
+// >>> not a watcher, only runs on manual click
 function selectTrigger(type: "bitrate" | "category" | "scene") {
   fTriggerType.value = type;
-  // >>> scene triggers usually exist to change the category
+  // >>> scene triggers usually just change category
   fAction.value = type === "scene" ? "category" : "scene";
   fTarget.value = "";
 }
@@ -218,7 +216,6 @@ async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
   }
 }
 
-// >>> save
 async function save() {
   if (!session.value) return;
   if (missingFields.value.length) {
@@ -273,7 +270,6 @@ async function save() {
   saving.value = false;
 }
 
-// >>> delete
 async function deleteRule() {
   if (!session.value || !isEdit.value) return;
   if (!deleteConfirm.value) {
@@ -301,7 +297,6 @@ async function deleteRule() {
   deleting.value = false;
 }
 
-// >>> validation
 const missingFields = computed(() => {
   const missing: string[] = [];
   if (fTriggerType.value === "bitrate" && (!fBitrate.value || fBitrate.value <= 0)) missing.push("Bitrate threshold");
@@ -327,7 +322,6 @@ const missingFields = computed(() => {
 
         <div class="ep-panel-body">
           <div v-if="error" class="ep-toast error">{{ error }}</div>
-          <!-- trigger type -->
           <div class="ep-field-group">
             <label class="ep-field-label">Trigger</label>
             <div class="obs-kind-tabs">
@@ -338,7 +332,6 @@ const missingFields = computed(() => {
             </div>
           </div>
 
-          <!-- bitrate trigger -->
           <template v-if="fTriggerType === 'bitrate'">
             <div class="ep-field-group">
               <label class="ep-field-label">Condition</label>
@@ -357,21 +350,18 @@ const missingFields = computed(() => {
             </div>
           </template>
 
-          <!-- category trigger -->
           <div v-else-if="fTriggerType === 'category'" class="ep-field-group">
             <label class="ep-field-label">Category</label>
             <TypeaheadInput v-model="fCategoryName" :fetch-items="fetchCategories" :min-chars="1"
               placeholder="Search a Twitch category..." @select="onCategorySelect" />
           </div>
 
-          <!-- scene trigger -->
           <div v-else class="ep-field-group">
             <label class="ep-field-label">Scene <span class="ep-field-hint">fires when OBS switches to
                 this</span></label>
             <TypeaheadInput v-model="fTriggerScene" :items="scenes" placeholder="Scene name" mono />
           </div>
 
-          <!-- action -->
           <div class="ep-field-group">
             <label class="ep-field-label">Action</label>
             <select v-model="fAction" class="ep-field-select">
@@ -379,14 +369,12 @@ const missingFields = computed(() => {
             </select>
           </div>
 
-          <!-- category action target -->
           <div v-if="fAction === 'category'" class="ep-field-group">
             <label class="ep-field-label">New category</label>
             <TypeaheadInput v-model="fTargetCategoryName" :fetch-items="fetchCategories" :min-chars="1"
               placeholder="Search a Twitch category..." @select="onTargetCategorySelect" />
           </div>
 
-          <!-- scene/source action target -->
           <div v-else class="ep-field-group">
             <label class="ep-field-label">
               {{ fAction === "scene" && fTriggerType === "scene" ? "Switch to scene" : fAction === "scene" ? "Scene" :
@@ -396,14 +384,12 @@ const missingFields = computed(() => {
               :placeholder="fAction === 'scene' ? 'Scene name' : 'Source name'" mono />
           </div>
 
-          <!-- volume value -->
           <div v-if="fAction === 'volume'" class="ep-field-group">
             <label class="ep-field-label">Volume <span class="ep-field-hint">0-100</span></label>
             <input v-model.number="fValue" type="number" min="0" max="100" class="ep-field-input"
               placeholder="e.g. 50" />
           </div>
 
-          <!-- chat message -->
           <div class="ep-field-group">
             <label class="ep-field-label">Chat message</label>
             <div class="obs-toggle-row">
@@ -416,7 +402,6 @@ const missingFields = computed(() => {
               placeholder="Scene changed to $scene"></textarea>
           </div>
 
-          <!-- enabled -->
           <div class="ep-field-group">
             <label class="ep-field-label">Enabled</label>
             <div class="obs-toggle-row">

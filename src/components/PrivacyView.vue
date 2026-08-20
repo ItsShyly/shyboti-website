@@ -156,6 +156,7 @@ const { locale } = useI18n();
           <p>Fragen? Kontaktiere mich: <strong>contact@shyboti.de</strong>.</p>
         </section>
       </template>
+      <!-- ^^^ german ^^^ -->
 
       <!-- vvv english vvv -->
       <template v-else>
@@ -306,6 +307,7 @@ const { locale } = useI18n();
           <p>Questions? Contact <strong>contact@shyboti.de</strong>.</p>
         </section>
       </template>
+      <!-- ^^^ english ^^^ -->
     </div>
   </div>
 </template>

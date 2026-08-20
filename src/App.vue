@@ -45,12 +45,12 @@ function shakeLogin() {
 const showChannelMenu = ref(false);
 const sidebarOpen = ref(false);
 
-// >>> purple accent on the navbar + channel switcher when switched
+// >>> purple = viewing another channel
 const viewingOtherChannel = computed(
   () => !!session.value && session.value.login !== session.value.channel,
 );
 
-// >>> red accent when admin mode is on + off your own channel - blanket warning, covers real mod/vip channels too
+// >>> red accent for admin mode on other channels
 const viewingAsAdmin = computed(
   () =>
     !!session.value &&
@@ -58,7 +58,7 @@ const viewingAsAdmin = computed(
     session.value.login !== session.value.channel,
 );
 
-// >>> admin-only channels stay hidden from the switcher until admin mode is on
+// >>> hide admin-only channels unless admin mode on
 const visibleChannels = computed(() =>
   adminMode.value
     ? availableChannels.value
@@ -113,7 +113,7 @@ const searchInputMobile = ref<HTMLInputElement | null>(null);
 const searchResults = ref<SearchResult[]>([]);
 
 // vvv logs in-page search scope vvv
-// >>> on /logs, search bar scopes to loaded messages; chip's x switches back to universal search
+// >>> logs page scopes search to loaded messages
 const {
   query: logsQuery,
   results: logsSearchResults,
@@ -147,7 +147,7 @@ watch(onLogsPage, (isLogs, wasLogs) => {
 function focusSearch() {
   const desktop = searchInputDesktop.value;
   const mobile = searchInputMobile.value;
-  // >>> desktop hidden on mobile via css, offsetParent tells us which is visible
+  // >>> offsetParent tells us which input is visible
   if (desktop && desktop.offsetParent !== null) {
     desktop.focus();
     desktop.select();
@@ -159,10 +159,8 @@ function focusSearch() {
 const searchIndex = ref(0);
 let searchDebounce: ReturnType<typeof setTimeout> | null = null;
 
-// >>> Static searchable items - always available
 function buildStaticIndex(): SearchResult[] {
   const items: SearchResult[] = [
-    // >>> Nav pages
     {
       label: "Dashboard",
       category: "Page",
@@ -238,7 +236,6 @@ function buildStaticIndex(): SearchResult[] {
       icon: "dot",
       action: () => router.push("/settings"),
     },
-    // >>> Sub-pages
     {
       label: "Images",
       category: "Uploads",
@@ -274,7 +271,6 @@ function buildStaticIndex(): SearchResult[] {
       action: () => router.push("/tools"),
       sub: "View and edit $counter and $var values",
     },
-    // >>> Settings sub-sections
     {
       label: "Command Prefix",
       category: "Settings",
@@ -296,7 +292,6 @@ function buildStaticIndex(): SearchResult[] {
       action: () => router.push("/settings"),
       sub: "Remove ShyBoti from your channel",
     },
-    // >>> Custom commands tab
     {
       label: "Custom Commands",
       category: "Commands",
@@ -319,24 +314,23 @@ function buildStaticIndex(): SearchResult[] {
     },
   ];
 
-  // >>> Uploads/Images/Notes are personal content, hide from search like the sidebar link/route
+  // >>> hide personal content from search too
   let result = items;
   if (viewingOtherChannel.value) {
     result = result.filter(
       (i) => !["Uploads", "Images", "Notes"].includes(i.label),
     );
   }
-  // >>> OBS Control is admin-mode-blocked on other channels - keep search in sync
+  // >>> keep search in sync with route block
   if (adminMode.value && viewingOtherChannel.value) {
     result = result.filter((i) => i.label !== "OBS Control");
   }
   return result;
 }
 
-// >>> nextActiveTab tells CommandsView which tab to open after nav
+// >>> picks the tab to open after nav
 const nextActiveTab = ref("");
 
-// >>> Dynamic search: fetch commands + timers from API
 let _dynamicCache: SearchResult[] | null = null;
 async function loadDynamic(): Promise<SearchResult[]> {
   if (_dynamicCache) return _dynamicCache;
@@ -416,7 +410,7 @@ async function loadDynamic(): Promise<SearchResult[]> {
         });
       }
     }
-    // >>> Also fetch custom commands
+    // >>> custom commands need a separate fetch
     const ccRes = await fetch(
       `${API}/custom-commands/${session.value.channel}`,
       { headers: { Authorization: `Bearer ${session.value.token}` } },
@@ -447,7 +441,7 @@ async function loadDynamic(): Promise<SearchResult[]> {
   return results;
 }
 
-// >>> Invalidate cache when channel changes
+// >>> reset cache on channel switch
 watch(
   () => session.value?.channel,
   () => {
@@ -487,7 +481,7 @@ async function runSearch(q: string) {
 
 function onSearchInput() {
   if (showLogsChip.value) {
-    // >>> scoped to logs, drives in-page search instead of the global index
+    // >>> logs mode skips the global search index
     logsQuery.value = searchQuery.value;
     searchOpen.value = true;
     searchResults.value = [];
@@ -582,7 +576,7 @@ function onSearchBlur() {
   }, 150);
 }
 
-// >>> Ctrl+F to focus search bar
+// >>> ctrl+f focuses search
 function onGlobalKeydown(e: KeyboardEvent) {
   if ((e.ctrlKey || e.metaKey) && e.key === "f") {
     // >>> don't steal focus if already typing somewhere
@@ -602,7 +596,6 @@ onUnmounted(() => {
   document.removeEventListener("keydown", onGlobalKeydown);
 });
 
-// >>> Group results by category for display
 const groupedResults = computed(() => {
   const groups: Record<string, SearchResult[]> = {};
   for (const r of searchResults.value) {
@@ -614,14 +607,12 @@ const groupedResults = computed(() => {
 
 const flatResults = computed(() => searchResults.value);
 
-// vvv rest of app vvv
-
 const showAddBanner = ref(false);
 const reAuthUrl = ref<string | null>(null);
 const toast = ref("");
 
 // vvv scope re-auth banner vvv
-// >>> whoever clicks the re-auth link authorizes as THEIR OWN account, not the broadcaster's
+// >>> re-auth link authorizes the clicker, not the broadcaster
 const missingScopes = ref<string[]>([]);
 const isOwnChannel = computed(
   () => !!session.value && session.value.login === session.value.channel,
@@ -652,7 +643,7 @@ watch(
 );
 // ^^^ scope re-auth banner ^^^
 
-// vvv bot's own re-auth banner (admin-only - not actionable by a regular broadcaster) vvv
+// vvv bot re-auth banner (admin only) vvv
 async function loadBotReauthStatus() {
   if (!session.value?.isAdmin) {
     reAuthUrl.value = null;
@@ -674,7 +665,7 @@ watch(
   () => session.value?.isAdmin,
   () => loadBotReauthStatus(),
 );
-// ^^^ bot's own re-auth banner ^^^
+// ^^^ bot re-auth banner ^^^
 function showToast(msg: string) {
   toast.value = msg;
   setTimeout(() => (toast.value = ""), 5000);
@@ -715,16 +706,16 @@ function addBot() {
   window.location.href = `${API}/auth/add`;
 }
 
+// >>> keepalive dodges a vue router crash bug
 const KEEP_ALIVE_ROUTES = ["LogsView", "AutomationsView"];
 
-// >>> provide nextActiveTab + searchOpenEdit for CommandsView
 provide("nextActiveTab", nextActiveTab);
 
-// >>> mainPanelRef, so SnippetOverlay knows what to capture
+// >>> shared so overlay knows what to capture
 const mainPanelRef = ref<HTMLElement | null>(null);
 provide("mainPanelRef", mainPanelRef);
 
-// >>> searchOpenEdit opens that command's edit panel in CommandsView
+// >>> opens a command's edit panel from search
 const searchOpenEdit = ref<{ name: string; builtIn: boolean } | null>(null);
 provide("searchOpenEdit", searchOpenEdit);
 
@@ -1123,7 +1114,7 @@ body.snippet-dragging * {
   user-select: none !important;
 }
 
-/* topbar */
+/* vvv topbar vvv */
 .topbar {
   height: 52px;
   flex-shrink: 0;
@@ -1146,8 +1137,7 @@ body.snippet-dragging * {
   background: #9d6cff;
 }
 
-/* >>> admin mode on a channel that isn't theirs - red instead of the
-   regular mod/VIP purple, a stronger "you can break things here" warning */
+/* >>> red overrides purple for admin-mode danger */
 .topbar.admin-channel::after {
   background: #f14949;
 }
@@ -1198,14 +1188,14 @@ body.snippet-dragging * {
   box-sizing: border-box;
 }
 
-/* >>> mod-only case (no channel switcher, just this label) */
+/* >>> shown when no channel switcher present */
 .logged-in-as.other-channel {
   z-index: 0;
   border-color: #9d6cff;
   background: #1e1e26;
 }
 
-/* >>> solid backdrop behind the badge, surrounding it and reaching down to the topbar's bottom line */
+/* >>> extends backdrop down to topbar edge */
 .logged-in-as.other-channel::after {
   content: "";
   position: absolute;
@@ -1244,7 +1234,7 @@ body.snippet-dragging * {
   text-overflow: ellipsis;
 }
 
-/* search bar */
+/* vvv search bar vvv */
 .search-wrap {
   position: absolute;
   left: 50%;
@@ -1322,7 +1312,7 @@ body.snippet-dragging * {
   color: #e0e0e0;
 }
 
-/* logs search chip */
+/* vvv logs search chip vvv */
 .search-wrap.has-chip .search-input {
   padding-left: 8px;
 }
@@ -1493,7 +1483,7 @@ body.snippet-dragging * {
   flex: 1;
 }
 
-/* channel switcher */
+/* vvv channel switcher vvv */
 .channel-switcher {
   position: relative;
 }
@@ -1536,7 +1526,7 @@ body.snippet-dragging * {
   color: #f14949;
 }
 
-/* >>> stacking context scoped to JUST the button, so channel-menu's z-index below stays unaffected */
+/* >>> isolates stacking so the menu z-index still works */
 .channel-btn-wrap {
   position: relative;
 }
@@ -1545,7 +1535,7 @@ body.snippet-dragging * {
   z-index: 0;
 }
 
-/* >>> solid backdrop behind the button, surrounding it and reaching down to the topbar's bottom line */
+/* >>> extends backdrop down to topbar edge */
 .channel-btn-wrap.other-channel::after {
   content: "";
   position: absolute;
@@ -1739,7 +1729,7 @@ body.snippet-dragging * {
   animation: shake 0.6s ease;
 }
 
-/* hamburger */
+/* vvv hamburger vvv */
 .hamburger {
   display: flex;
   flex-direction: column;
@@ -1778,7 +1768,7 @@ body.snippet-dragging * {
   background: #9d6cff;
 }
 
-/* banner */
+/* vvv banner vvv */
 .add-banner {
   background: #1a1025;
   border-bottom: 1px solid #6f2bff44;
@@ -1868,7 +1858,7 @@ body.snippet-dragging * {
   background: #f0cd8a;
 }
 
-/* body layout */
+/* vvv body layout vvv */
 .body {
   display: flex;
   flex: 1;
@@ -1884,7 +1874,7 @@ body.snippet-dragging * {
   z-index: 99;
 }
 
-/* sidebar */
+/* vvv sidebar vvv */
 .sidebar {
   width: 200px;
   flex-shrink: 0;
@@ -1995,10 +1985,10 @@ body.snippet-dragging * {
   background: #7f3fff;
 }
 
-/* Mobile search in sidebar */
+/* vvv mobile search in sidebar vvv */
 .sidebar-search {
   display: none;
-  /* shown via show-mobile */
+  /* >>> shown/hidden via responsive class */
   position: relative;
   margin: 8px 12px 4px;
   height: 36px;
@@ -2076,7 +2066,7 @@ body.snippet-dragging * {
   display: none;
 }
 
-/* Mobile sidebar header */
+/* vvv mobile sidebar header vvv */
 .sidebar-mobile-header {
   display: flex;
   align-items: center;
@@ -2107,7 +2097,7 @@ body.snippet-dragging * {
   border-color: #555;
 }
 
-/* main panel */
+/* vvv main panel vvv */
 .main-panel {
   flex: 1;
   background: #141418;
@@ -2149,7 +2139,7 @@ body.snippet-dragging * {
   color: #9d6cff;
 }
 
-/* responsive */
+/* vvv responsive vvv */
 .hide-mobile {}
 
 .show-mobile {

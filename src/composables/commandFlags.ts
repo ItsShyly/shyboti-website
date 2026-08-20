@@ -1,4 +1,4 @@
-// >>> static reference of -flag args per built-in command (mirrors backend lib/core/chatFlags.ts), for CommandEditPanel's Flags field - flags are hardcoded per command file, keep this in sync by hand
+// >>> mirrors backend flags, hardcoded, keep in sync by hand
 export interface FlagItem {
   flag: string;
   desc: string;

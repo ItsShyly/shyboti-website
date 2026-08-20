@@ -1,4 +1,4 @@
-// >>> single source of truth for the variable reference list across every script editor, avoids per-component copies drifting out of sync
+// >>> one shared list so every editor stays in sync
 export interface RefItem {
   token: string;
   desc: string;
@@ -484,7 +484,7 @@ export const REF_GROUPS: RefGroup[] = [
   },
 ];
 
-// >>> only: 'countdown' items only resolve inside that countdown's own msg_start/tick/end, so hide them elsewhere
+// >>> countdown-only items don't make sense outside countdown context
 export function getRefGroups(context?: "countdown"): RefGroup[] {
   return REF_GROUPS.map((g) => ({
     ...g,
@@ -492,7 +492,7 @@ export function getRefGroups(context?: "countdown"): RefGroup[] {
   })).filter((g) => g.items.length > 0);
 }
 
-// >>> styles the name/arg portion of a $token distinctly for display
+// >>> highlights the name/arg part of a token
 export function renderRefToken(token: string): string {
   let result = token;
   const namePrefixes = [

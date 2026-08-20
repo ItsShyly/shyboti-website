@@ -1,4 +1,4 @@
-// >>> shared caret-preserving highlight + insert logic for the plain contenteditable editors (triggers/timers/countdowns); CommandEditPanel keeps its own richer copy
+// >>> shared caret-safe highlighting for plain editors
 import { highlightScript } from "./scriptHighlight";
 
 export function getCaretOffset(el: HTMLElement): number {
@@ -45,19 +45,19 @@ export function setCaretOffset(el: HTMLElement, offset: number) {
   }
 }
 
-// >>> re-highlights el in place, keeps caret at its current offset
+// >>> re-highlights in place, keeps caret position
 export function applyScriptHighlight(el: HTMLElement) {
   const offset = getCaretOffset(el);
   el.innerHTML = highlightScript((el.innerText || "").replace(/\n$/, ""));
   setCaretOffset(el, offset);
 }
 
-// >>> setCaretOffset's addRange() steals focus in Chrome, even on first render - use this instead to populate content on panel open
+// >>> chrome steals focus via addRange, use this on panel open
 export function setEditorContent(el: HTMLElement, text: string) {
   el.innerHTML = highlightScript(text);
 }
 
-// >>> inserts token at caret (or at end if unfocused), re-highlights, returns new plain text
+// >>> falls back to inserting at the end if unfocused
 export function insertTokenAtCursor(el: HTMLElement, token: string): string {
   el.focus();
   const text = (el.innerText || "").replace(/\n$/, "");

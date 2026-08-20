@@ -5,13 +5,13 @@ import RouteLoading from "../components/shared/RouteLoading.vue";
 import { routeLoadSignal } from "../composables/routeLoadSignal";
 import { useAuth } from "../auth";
 
-// >>> Personal content (owned by the logged-in user, not scoped to whichever channel is currently selected)
+// >>> personal content, not tied to selected channel
 const OWN_CHANNEL_ONLY_PATHS = ["/uploads", "/images", "/notes"];
 
-// >>> Additionally off-limits specifically while admin-moded via admin mode
+// >>> blocked only when admin mode is on
 const ADMIN_MODE_BLOCKED_PATHS = ["/obs-control", "/obs-overlays"];
 
-// >>> defineAsyncComponent for navigation
+// >>> adds a spinner + fake delay for route loads
 function lazy(loader: () => Promise<any>) {
   return defineAsyncComponent({
     loader: async () => {

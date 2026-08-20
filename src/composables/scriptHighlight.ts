@@ -1,4 +1,4 @@
-// >>> syntax highlighter for the scripting language, returns HTML with sh-* span tokens
+// >>> syntax highlighter, spits out html with sh-* spans
 const CUSTOM_FAMILIES = [
   "$counter.",
   "$ucounter.",
@@ -215,6 +215,7 @@ export function highlightScript(src: string, ifLevel = 0): string {
       }
       continue;
     }
+    // ^^^ end $if block ^^^
 
     if (src.startsWith("$else", i) && !/\w/.test(src[i + 5] ?? "")) {
       out += `<span class="sh-if-kw" style="color:#569cd6">$else</span>`;
@@ -287,6 +288,7 @@ export function highlightScript(src: string, ifLevel = 0): string {
       i = j;
       continue;
     }
+    // ^^^ end $-token block ^^^
 
     if ("=!<>".includes(src[i]!)) {
       const two = src.slice(i, i + 2);
@@ -315,7 +317,7 @@ export function highlightScript(src: string, ifLevel = 0): string {
       continue;
     }
 
-    // >>> plain punctuation, parens outside $if aren't special-cased
+    // >>> plain punctuation, nothing fancy here
     out += esc(src[i]!);
     i++;
   }

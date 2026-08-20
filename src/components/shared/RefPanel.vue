@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// >>> shared ref panel: click-to-insert used to be OBS-only, now everywhere
+// >>> click-to-insert used to be OBS-only, now shared
 import { onMounted } from "vue";
 import {
   getRefGroups,
@@ -12,9 +12,9 @@ const props = withDefaults(
   defineProps<{
     title?: string;
     context?: "countdown";
-    // >>> override the script-variable groups entirely (e.g. Regex Reference)
+    // >>> override the variable groups entirely, e.g. regex
     groups?: RefGroup[];
-    // >>> "Your Variables" only makes sense for the scripting language, not e.g. regex
+    // >>> hide "your variables" outside scripting contexts
     showVars?: boolean;
   }>(),
   { title: "Variable Reference", showVars: true },

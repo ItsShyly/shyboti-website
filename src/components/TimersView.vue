@@ -25,7 +25,7 @@ import RefPanel from "./shared/RefPanel.vue";
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
 
-// >>> Open edit panel from global search
+// >>> opens edit panel from global search
 const searchOpenTimer = inject<Ref<string | null>>(
   "searchOpenTimer",
   ref(null),
@@ -73,7 +73,7 @@ const saving = ref<string | null>(null);
 const error = ref("");
 const success = ref("");
 
-// >>> Live clock for next-fire countdowns
+// >>> live clock for next-fire countdowns
 const now = ref(Date.now());
 let _clockInterval: ReturnType<typeof setInterval> | null = null;
 onUnmounted(() => {
@@ -106,7 +106,7 @@ const editTimer = ref<Partial<Timer> & { name: string }>({
   condition: "",
   is_active: 1,
 });
-const editOrigName = ref(""); // <<< name before rename, so we know which row to delete
+const editOrigName = ref(""); // <<< old name, needed to delete on rename
 const editorRef = ref<HTMLDivElement | null>(null);
 
 function showSuccess(msg: string) {
@@ -141,7 +141,7 @@ const creatingNew = ref(false);
 const newTimerInput = ref<HTMLInputElement | null>(null);
 
 function startCreate() {
-  // >>> Open the edit panel directly with a blank timer
+  // >>> opens edit panel with a blank timer
   const blank = {
     name: '',
     response: '',
@@ -176,7 +176,7 @@ function onEditorInput() {
   applyScriptHighlight(el);
 }
 
-// >>> Reference panel click-to-insert - inserts at the response editor's cursor
+// >>> inserts token at editor cursor
 function insertRefToken(token: string) {
   const el = editorRef.value;
   if (!el) return;
@@ -204,7 +204,7 @@ async function saveTimer() {
       body: JSON.stringify(editTimer.value),
     });
     if (!res.ok) throw new Error(await res.text());
-    // >>> renamed, old-named row is now a stale duplicate, delete it
+    // >>> renamed, delete the old duplicate row
     if (editOrigName.value && editOrigName.value !== name) {
       await fetch(
         `${API}/timers/${session.value.channel}/${editOrigName.value}`,
@@ -253,6 +253,7 @@ async function toggleActive(timer: Timer) {
   });
   timer.is_active = next;
 }
+// ^^^ edit panel ^^^
 
 // vvv share vvv
 const shareOpen = ref(false);
@@ -295,6 +296,7 @@ async function doShare() {
   }
   shareSaving.value = false;
 }
+// ^^^ share ^^^
 
 // vvv sync vvv
 const syncConf = ref<{
@@ -378,6 +380,7 @@ async function runSync() {
   }
   syncRunning.value = false;
 }
+// ^^^ sync ^^^
 
 onMounted(() => {
   load();
@@ -392,7 +395,7 @@ watch(
   },
 );
 
-// >>> Header (title/count/create) lives in AutomationsView.vue - expose what it needs
+// >>> header stuff lives in AutomationsView, exposed for it
 defineExpose({
   header: computed(() => ({
     count: timers.value.length,

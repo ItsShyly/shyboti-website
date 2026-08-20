@@ -168,7 +168,7 @@ function fixedRect() {
 </template>
 
 <style>
-/* Unscoped - Teleport children live outside the component tree */
+/* >>> unscoped, teleport children live outside the tree */
 .snippet-global-rect {
   position: fixed;
   pointer-events: none;

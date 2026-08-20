@@ -12,8 +12,7 @@ import {
   type CountdownLikeType,
 } from "../../composables/overlay/overlayCountdown";
 
-// >>> custom corner-brackets icon (100x100, filled) - doesn't fit the shared 24x24 stroke
-// >>> icon set's wrapper, so it's kept local instead of forced into icons.ts
+// >>> custom icon, doesn't fit the shared icon set
 const RESET_ZOOM_ICON = `<svg viewBox="0 0 100 100" width="1em" height="1em" fill="currentColor">
   <path d="M 10,25 H 25 V 10 H 40 V 40 H 10 Z" />
   <path d="M 60,10 H 75 V 25 H 90 V 40 H 60 Z" />
@@ -39,11 +38,9 @@ const emit = defineEmits<{
   "delete-element": [id: string];
   "delete-selected": [];
   "duplicate-element": [id: string];
-  // >>> throttled, fired mid-drag/resize/rotate - live update mode pushes these without
-  // >>> touching undo history, so OBS can follow along before the mouse is released
+  // >>> throttled live updates skip undo history
   "live-preview": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
-  // >>> throttled, fired on every canvas mousemove regardless of live-cursor state - the
-  // >>> parent decides whether to actually broadcast it
+  // >>> parent decides whether to actually broadcast this
   "cursor-move": [x: number, y: number];
 }>();
 
@@ -56,8 +53,7 @@ function emitLivePreview(updates: Array<{ id: string; patch: Partial<OverlayElem
   lastLivePreviewAt = now;
   emit("live-preview", updates);
 }
-// >>> bypasses the throttle - used once on drag/resize/rotate release so the live browser
-// >>> source has the exact final value before the trailing DB save skips its refresh
+// >>> bypasses throttle so the final drag value reaches OBS
 function emitLivePreviewForce(updates: Array<{ id: string; patch: Partial<OverlayElement> }>) {
   lastLivePreviewAt = Date.now();
   emit("live-preview", updates);
@@ -85,19 +81,17 @@ const sceneBackdropStyle = computed(() =>
     ? { backgroundImage: `url(${props.sceneShotUrl})` }
     : {},
 );
-const GRID = 20; // <<< canvas units - coarse, lowest-priority snap source
-const SNAP_PX = 6; // <<< screen-px proximity for real guides (elements + canvas) - a light
-// <<< magnet you can drag out of, not a lock, per Photoshop/Figma's smart-guide feel
-const GRID_SNAP_PX = 4; // <<< tighter than SNAP_PX - grid never outcompetes a real guide
+const GRID = 20; // <<< coarsest, lowest-priority snap source
+const SNAP_PX = 6; // <<< soft magnet snap distance, not a lock
+const GRID_SNAP_PX = 4; // <<< tighter, so grid never beats a real guide
 
-// >>> layout (unzoomed) scale - offsetWidth ignores the zoom CSS transform, since children
-// >>> are positioned in the stage's own local space and get magnified by that transform too
+// >>> unzoomed scale, offsetWidth ignores the zoom transform
 function scale(): number {
   const el = stageRef.value;
   if (!el || !props.baseWidth) return 1;
   return el.offsetWidth / props.baseWidth;
 }
-// >>> true on-screen px-per-canvas-unit, for converting real mouse coordinates
+// >>> real on-screen px per canvas unit
 function effScale(): number {
   return scale() * zoomLevel.value;
 }
@@ -155,7 +149,7 @@ function onZoomKeydown(e: KeyboardEvent) {
 onMounted(() => window.addEventListener("keydown", onZoomKeydown));
 onUnmounted(() => window.removeEventListener("keydown", onZoomKeydown));
 
-// vvv pan-drag - right or middle button only; left click is reserved for marquee-select vvv
+// vvv pan-drag, right/middle button only, left is marquee vvv
 const panState = ref<{
   startX: number;
   startY: number;
@@ -163,12 +157,12 @@ const panState = ref<{
   startPanY: number;
 } | null>(null);
 function onStageMouseDown(e: MouseEvent) {
-  if (e.target !== stageRef.value) return; // items own their own mousedown (they stopPropagation)
+  if (e.target !== stageRef.value) return; // <<< items handle their own mousedown
   if (e.button === 0) {
     startMarquee(e);
     return;
   }
-  if (e.button === 1) e.preventDefault(); // stop middle-click autoscroll
+  if (e.button === 1) e.preventDefault(); // <<< stop middle-click autoscroll
   panState.value = {
     startX: e.clientX,
     startY: e.clientY,
@@ -193,7 +187,7 @@ function onPanEnd() {
 }
 // ^^^ pan-drag ^^^
 
-// vvv left-click drag on empty canvas - marquee/rectangle multiselect vvv
+// vvv empty-canvas drag does marquee select vvv
 const marqueeState = ref<{ startX: number; startY: number; additive: boolean } | null>(null);
 const marqueeCurrent = ref<{ x: number; y: number } | null>(null);
 function stageCanvasPoint(e: MouseEvent): { x: number; y: number } | null {
@@ -228,7 +222,7 @@ function onMarqueeEnd() {
   const x2 = Math.max(m.startX, cur.x);
   const y1 = Math.min(m.startY, cur.y);
   const y2 = Math.max(m.startY, cur.y);
-  // >>> too small to be a drag - treat like a plain click (deselect, unless additive)
+  // >>> tiny drag counts as a click, not marquee
   if (x2 - x1 < 3 && y2 - y1 < 3) {
     if (!m.additive) select(null, false);
     return;
@@ -260,7 +254,7 @@ const marqueeStyle = computed(() => {
 });
 // ^^^ marquee-select ^^^
 
-// vvv drag the minimap's red rectangle to pan - inverse of minimapViewportStyle's math vvv
+// vvv minimap drag pans, reverse of its render math vvv
 const minimapDragState = ref<{ startX: number; startY: number; startPanX: number; startPanY: number } | null>(null);
 function onMinimapRectMouseDown(e: MouseEvent) {
   e.preventDefault();
@@ -278,8 +272,7 @@ function onMinimapRectMove(e: MouseEvent) {
   const d = minimapDragState.value;
   const el = stageRef.value;
   if (!d || !el) return;
-  // >>> 1 minimap px represents (naturalWidth*zoom/MINIMAP_W) real content px - drag moves
-  // >>> the window that direction, so pan moves the opposite way
+  // >>> pan moves opposite direction from the minimap drag
   const factor = (el.offsetWidth * zoomLevel.value) / MINIMAP_W;
   panX.value = clampPan(d.startPanX - (e.clientX - d.startX) * factor, "x");
   panY.value = clampPan(d.startPanY - (e.clientY - d.startY) * factor, "y");
@@ -291,7 +284,7 @@ function onMinimapRectEnd() {
 }
 // ^^^ minimap rect drag ^^^
 
-// vvv minimap - only shown while zoomed, shows the full canvas + a red viewport rectangle vvv
+// vvv minimap only shows while zoomed in vvv
 const MINIMAP_W = 160;
 const minimapInnerStyle = computed(() => ({
   width: `${MINIMAP_W}px`,
@@ -333,9 +326,7 @@ function minimapViewportStyle() {
 // ^^^ minimap ^^^
 // ^^^ zoom & pan ^^^
 
-// >>> front of stack (highest z) rendered last, so it's visually on top - matches layers panel.
-// >>> hidden elements are skipped entirely here (matches the real OBS output), not just dimmed -
-// >>> toggle them back on from the layers panel, which still lists them regardless
+// >>> hidden elements are skipped here, not just dimmed
 const sortedElements = computed(() =>
   [...props.elements].filter((e) => e.visible).sort((a, b) => a.z_index - b.z_index),
 );
@@ -344,9 +335,7 @@ function select(id: string | null, additive: boolean) {
   emit("select", id, additive);
 }
 
-// vvv snapping - Photoshop/Figma-style: every candidate line (other elements' edges+center,
-// vvv the canvas's own edges+center, then grid as a last resort) competes on screen-px distance,
-// vvv closest one under the threshold wins per axis - not "whichever was checked last" vvv
+// vvv snap picks closest guide, not whichever matched first vvv
 const snapGuides = ref<{ x: number | null; y: number | null }>({ x: null, y: null });
 function closestSnap(
   myPoints: number[],
@@ -392,8 +381,7 @@ function snapValue(raw: { x: number; y: number; w: number; h: number }, selfId: 
     snappedY = bestY.target;
   }
 
-  // >>> grid is a coarser, lower-priority fallback - only when no real guide matched, and with
-  // >>> its own tighter threshold so it never outcompetes an element/canvas guide
+  // >>> grid is fallback only when no real guide matched
   if (snappedX === null) {
     const gridX = Math.round(x / GRID) * GRID;
     if (Math.abs((x - gridX) * s) < GRID_SNAP_PX) {
@@ -490,7 +478,7 @@ function onDragEnd() {
 }
 // ^^^ drag-to-move ^^^
 
-// vvv corner resize - single element; hold Ctrl to also scale font-size with the box vvv
+// vvv corner resize, hold Ctrl to also scale font-size vvv
 type Corner = "tl" | "tr" | "bl" | "br";
 function cornerAnchor(box: { x: number; y: number; w: number; h: number }, corner: Corner) {
   return corner === "tl"
@@ -607,9 +595,7 @@ function onResizeEnd() {
 }
 // ^^^ corner resize ^^^
 
-// vvv group resize (2+ selected) - one bounding-box transform, every member's x/y/w/h scales
-// vvv relative to that box so relative spacing/position (e.g. text inside a background) holds.
-// vvv same Ctrl-to-scale-font-size rule as single-element resize vvv
+// vvv group resize scales members relative to shared box vvv
 interface GroupResizeMember {
   id: string;
   x: number;
@@ -745,7 +731,7 @@ function onRotateMove(e: MouseEvent) {
   const centerX = rect.left + (el.x + el.w / 2) * s;
   const centerY = rect.top + (el.y + el.h / 2) * s;
   let angle = Math.atan2(e.clientY - centerY, e.clientX - centerX) * (180 / Math.PI) + 90;
-  if (!e.shiftKey) angle = Math.round(angle / 15) * 15; // <<< snap to 15deg, hold shift for free rotation
+  if (!e.shiftKey) angle = Math.round(angle / 15) * 15; // <<< snap to 15deg, shift for free rotation
   angle = ((angle % 360) + 360) % 360;
   rotatePreview.value = { id: r.id, rotation: angle };
   emitLivePreview([{ id: r.id, patch: { rotation: angle } }]);
@@ -763,8 +749,7 @@ function onRotateEnd() {
 }
 // ^^^ rotate handle ^^^
 
-// >>> canvas-space px (borders/font/radius) need to shrink with the display scale too,
-// >>> or they look proportionally huge next to a box that IS shrunk (mismatched vs real OBS 1:1)
+// >>> border/font px must scale down with display too
 function shapeStyle(el: OverlayElement) {
   const s = scale() || 1;
   return {
@@ -777,8 +762,7 @@ function shapeStyle(el: OverlayElement) {
 }
 function textStyle(el: OverlayElement) {
   const s = scale() || 1;
-  // >>> Ctrl-held resize (single or group) live-scales font-size - read from whichever
-  // >>> preview is active so the text visibly grows with the box during the drag
+  // >>> read live font-size from whichever preview is active
   const liveFontSize =
     resizePreview.value?.id === el.id && resizePreview.value.fontSize !== undefined
       ? resizePreview.value.fontSize
@@ -804,8 +788,7 @@ function textStyle(el: OverlayElement) {
   };
 }
 
-// vvv countdown/countup - ticks locally in the editor for preview, no server round-trip needed
-// vvv since it's pure math off accumulated/running state; the live render page ticks itself too vvv
+// vvv countdown ticks locally, no server round-trip needed vvv
 const countdownTick = ref(0);
 let countdownTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(() => (countdownTimer = setInterval(() => countdownTick.value++, 1000)));
@@ -816,13 +799,12 @@ function isCountdownLike(type: string): type is CountdownLikeType {
   return type === "countdown" || type === "countup";
 }
 function countdownCanvasText(el: OverlayElement): string {
-  countdownTick.value; // <<< reactive dependency - re-renders this cell every tick
+  countdownTick.value; // <<< reactive dep, re-renders this cell every tick
   if (countdownEditId.value === el.id) return countdownEditDraft.value; // <<< frozen while editing
   return countdownDisplayText(el.type as CountdownLikeType, el.data || {});
 }
 
-// vvv double-click a countdown/countup to type in a new current value directly - the clock
-// vvv keeps running underneath, only the DISPLAYED value freezes until commit vvv
+// vvv double-click to type a value, only display freezes vvv
 const countdownEditId = ref<string | null>(null);
 const countdownEditDraft = ref("");
 function startCountdownEdit(el: OverlayElement) {
@@ -835,8 +817,7 @@ function startCountdownEdit(el: OverlayElement) {
     if (!node) return;
     node.textContent = countdownEditDraft.value;
     node.focus();
-    // >>> select the whole prefilled value (not collapsed at the end) - it's a time field,
-    // >>> so typing should replace it outright, not append onto the old digits
+    // >>> select whole value so typing replaces it
     const range = document.createRange();
     range.selectNodeContents(node);
     const sel = window.getSelection();
@@ -905,7 +886,7 @@ function displayStyle(el: OverlayElement) {
   };
 }
 
-// vvv double-click to edit text content directly on the canvas vvv
+// vvv double-click to edit text on canvas vvv
 const editingId = ref<string | null>(null);
 function startEdit(el: OverlayElement) {
   if (el.locked || (el.type !== "text" && el.type !== "variable-text")) return;
@@ -934,8 +915,7 @@ function commitEdit(el: OverlayElement) {
   editingId.value = null;
   if (text !== el.content) emit("update-element", el.id, { content: text });
 }
-// >>> live update while still typing - throttled push, doesn't touch pendingElements so
-// >>> the caret never gets fought by a re-render (only commitEdit does that, on blur)
+// >>> throttled push avoids fighting the caret with a re-render
 function onTextEditInput(el: OverlayElement) {
   const node = stageRef.value?.querySelector(
     `[data-edit-id="${el.id}"]`,
@@ -967,8 +947,7 @@ function ctxDelete() {
   const cm = contextMenu.value;
   contextMenu.value = null;
   if (!cm) return;
-  // >>> right-clicking a member of an existing multi-selection deletes the whole selection,
-  // >>> not just the one under the cursor
+  // >>> right-click on a multi-selection deletes the whole thing
   if (props.selectedIds.length > 1 && props.selectedIds.includes(cm.id)) emit("delete-selected");
   else emit("delete-element", cm.id);
 }
@@ -976,7 +955,7 @@ function ctxDuplicate() {
   if (contextMenu.value) emit("duplicate-element", contextMenu.value.id);
   contextMenu.value = null;
 }
-// >>> video's own mixer - mute/volume live on the video element itself, no separate audio widget
+// >>> video has its own mute/volume, no separate widget
 function ctxToggleMute() {
   const el = contextMenuElement.value;
   if (!el) return;
@@ -987,8 +966,7 @@ function ctxSetVolume(v: number) {
   if (!el) return;
   emit("update-element", el.id, { data: { ...el.data, volume: v } });
 }
-// >>> applies to the whole multi-selection when the right-clicked element is part of one,
-// >>> same rule as ctxDelete/ctxDuplicate
+// >>> applies to whole multi-selection too, same as delete
 function ctxSetOpacity(v: number) {
   const cm = contextMenu.value;
   if (!cm) return;
@@ -1006,7 +984,7 @@ function ctxSetOpacity(v: number) {
       .map((e) => ({ id: e.id, patch: { style: { ...e.style, opacity: v } } })),
   );
 }
-// >>> countdown-duration or countup only - target-mode countdown always ticks toward the date
+// >>> target-mode countdown can't toggle running
 function ctxCanToggleRunning(el: OverlayElement | null): boolean {
   if (!el) return false;
   if (el.type === "countup") return true;
@@ -1017,7 +995,7 @@ function ctxToggleRunning() {
   if (!el) return;
   emit("update-element", el.id, { data: toggleRunningData(el.data || {}) });
 }
-// >>> lock also applies to the whole multi-selection, same rule as delete/duplicate/opacity
+// >>> lock applies to whole multi-selection too
 function ctxToggleLock() {
   const cm = contextMenu.value;
   if (!cm) return;
@@ -1035,8 +1013,7 @@ function onWindowMousedown(e: MouseEvent) {
   if (!contextMenu.value) return;
   if (!(e.target as HTMLElement).closest(".ovl-ctx-menu")) contextMenu.value = null;
 }
-// >>> capture phase - item mousedown handlers call stopPropagation(), which would
-// >>> otherwise stop this from ever seeing the click and closing the menu
+// >>> capture phase, item handlers stop the bubble otherwise
 onMounted(() => window.addEventListener("mousedown", onWindowMousedown, true));
 onUnmounted(() => window.removeEventListener("mousedown", onWindowMousedown, true));
 // ^^^ context menu ^^^
@@ -1116,8 +1093,7 @@ defineExpose({ stageRef });
     </div>
   </div>
 
-  <!-- sibling of the transformed stage - a transformed ancestor becomes the containing
-       block for position:fixed descendants, which would misplace this -->
+  <!-- sibling of stage, fixed pos breaks under a transform -->
   <div v-if="contextMenu" class="ovl-ctx-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
     @mousedown.stop>
     <template v-if="contextMenuElement?.type === 'video'">

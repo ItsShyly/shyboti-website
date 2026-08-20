@@ -11,7 +11,6 @@ const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
 
-// vvv view mode vvv
 const view = ref<"upload" | "gallery">("upload");
 
 // vvv upload state vvv
@@ -21,6 +20,7 @@ const uploadError = ref("");
 const lastLink = ref("");
 const lastCopied = ref(false);
 const fileInputRef = ref<HTMLInputElement | null>(null);
+// ^^^ upload state ^^^
 
 // vvv gallery state vvv
 interface UploadedImage {
@@ -35,6 +35,7 @@ interface UploadedImage {
 const images = ref<UploadedImage[]>([]);
 const galleryLoad = ref(false);
 const deleteId = ref<string | null>(null);
+// ^^^ gallery state ^^^
 
 const isGuest = computed(() => !session.value);
 const imageUrl = (id: string) => `https://i.shyboti.de/${id}`;
@@ -65,8 +66,9 @@ async function uploadFromUrl() {
   }
   urlUploading.value = false;
 }
+// ^^^ upload from url ^^^
 
-// vvv crop state vvv
+// vvv crop vvv
 const cropOpen = ref(false);
 const cropCanvas = ref<HTMLCanvasElement | null>(null);
 const cropImg = ref<HTMLImageElement | null>(null);
@@ -178,6 +180,7 @@ async function applyCrop() {
     0.92,
   );
 }
+// ^^^ crop ^^^
 
 // >>> ?gallery=1 in query opens gallery directly
 onMounted(() => {
@@ -197,6 +200,7 @@ function onDragLeave(e: DragEvent) {
 function onDragOver(e: DragEvent) {
   e.preventDefault();
 }
+// ^^^ drag events ^^^
 
 function isAcceptedFile(f: File) {
   return f.type.startsWith("image/") || f.type.startsWith("video/");
@@ -216,7 +220,7 @@ function onFileInputChange(e: Event) {
   if (files.length) uploadFiles(files);
 }
 
-// >>> canvas compression: shrinks to maxMB at quality 0.82, skips gifs
+// >>> compresses via canvas, skips gifs
 async function compressImage(file: File, maxMB = 3): Promise<Blob> {
   const maxBytes = maxMB * 1024 * 1024;
   if (file.type === "image/gif" || file.size <= maxBytes) return file;
@@ -242,7 +246,7 @@ async function compressImage(file: File, maxMB = 3): Promise<Blob> {
       const ctx = canvas.getContext("2d")!;
       ctx.drawImage(img, 0, 0, width, height);
 
-      // >>> try jpeg at decreasing quality until under maxBytes
+      // >>> lowers jpeg quality until under the size limit
       let quality = 0.82;
       const tryEncode = () => {
         canvas.toBlob(
@@ -272,7 +276,7 @@ async function compressImage(file: File, maxMB = 3): Promise<Blob> {
   });
 }
 
-// >>> no in-browser video transcode (needs ffmpeg.wasm), videos over 50MB get rejected
+// >>> no video transcode, big videos get rejected
 async function prepareFile(file: File): Promise<Blob | null> {
   const MAX = 50 * 1024 * 1024;
   if (file.type.startsWith("video/")) {
@@ -359,6 +363,7 @@ async function copyLink(url: string) {
   lastCopied.value = true;
   setTimeout(() => (lastCopied.value = false), 1800);
 }
+// ^^^ upload ^^^
 
 // vvv gallery vvv
 async function loadGallery() {
@@ -409,6 +414,7 @@ function switchView(v: "upload" | "gallery") {
   view.value = v;
   if (v === "gallery") loadGallery();
 }
+// ^^^ gallery ^^^
 </script>
 
 <template>

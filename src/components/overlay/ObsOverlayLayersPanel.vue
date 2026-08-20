@@ -39,7 +39,7 @@ function onRowClick(id: string, e: MouseEvent) {
 
 const collapsed = ref(false);
 
-// vvv drag rows to reorder - drop reassigns z_index for the whole list vvv
+// vvv drag rows to reorder, drop rewrites stack order vvv
 const dragIndex = ref<number | null>(null);
 function onDragStart(i: number) {
   dragIndex.value = i;

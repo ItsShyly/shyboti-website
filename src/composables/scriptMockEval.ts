@@ -1,4 +1,4 @@
-// >>> client-side mock evaluator for the editor preview, uses fake/static values for Twitch-live vars
+// >>> mock evaluator for preview, fakes live twitch data
 export interface MockContext {
   user: string;
   channel: string;
@@ -37,7 +37,7 @@ export function resetMockState() {
   for (const k in mockLists) delete mockLists[k];
 }
 
-// >>> Seed mock state with real values from the API so preview shows actual counter/var values
+// >>> pulls real values in so preview isn't totally fake
 export function seedMockState(
   realCounters: Record<string, number>,
   realVars: Record<string, string>,
@@ -61,12 +61,12 @@ interface MockEnv {
 }
 
 // vvv condition evaluation vvv
-// >>> evalCondStr applies comparison/boolean ops after evalSrc has resolved $-vars
+// >>> handles and/or/not and comparisons after vars resolved
 
 function evalCondStr(s: string): string {
   const t = s.trim();
 
-  // >>> and/or: low precedence, left-to-right, split on first occurrence
+  // >>> and/or are low precedence, split left to right
   const orIdx = findLogicalOp(t, " or ");
   if (orIdx !== -1) {
     return String(
@@ -111,7 +111,7 @@ function evalCondStr(s: string): string {
   return t;
 }
 
-// >>> finds op outside parens, scans right-to-left to respect precedence
+// >>> finds op outside parens, scans right to left
 function findLogicalOp(s: string, op: string): number {
   let depth = 0;
   for (let i = s.length - op.length; i >= 0; i--) {
@@ -122,10 +122,11 @@ function findLogicalOp(s: string, op: string): number {
   }
   return -1;
 }
+// ^^^ end condition evaluation ^^^
 
 // vvv source evaluator vvv
 
-// >>> mirrors the backend's scriptEngine.ts brace-body finder, keep in sync
+// >>> mirrors backend brace finder, keep in sync
 function findBraceBody(
   src: string,
   from: number,
@@ -156,7 +157,7 @@ function evalSrc(src: string, env: MockEnv): string {
   while (i < src.length) {
     const rest = src.slice(i);
 
-    // >>> $if(cond){}[$else{}] new syntax, or $if(cond)...[$else...]$end legacy
+    // >>> handles new brace syntax and old $end legacy syntax
     const ifM = rest.match(/^\$if\s*\(/);
     if (ifM) {
       const condStart = i + ifM[0].length;
@@ -190,7 +191,7 @@ function evalSrc(src: string, env: MockEnv): string {
       continue;
     }
 
-    // >>> $foreach(item in list){} new syntax, or ...$end legacy
+    // >>> foreach: new brace syntax or old $end legacy
     const feM = rest.match(/^\$foreach\s*\(/);
     if (feM) {
       const argStart = i + feM[0].length;
@@ -217,7 +218,7 @@ function evalSrc(src: string, env: MockEnv): string {
       continue;
     }
 
-    // >>> $repeat(n){} new syntax, or ...$end legacy
+    // >>> repeat: new brace syntax or old $end legacy
     const repM = rest.match(/^\$repeat\s*\(/);
     if (repM) {
       const argStart = i + repM[0].length;
@@ -236,7 +237,7 @@ function evalSrc(src: string, env: MockEnv): string {
       continue;
     }
 
-    // >>> $define name(params){} new syntax, or ...$end legacy
+    // >>> define: new brace syntax or old $end legacy
     const defM = rest.match(/^\$define\s+(\w+)\s*\(([^)]*)\)/);
     if (defM) {
       const name = defM[1]!;
@@ -265,6 +266,7 @@ function evalSrc(src: string, env: MockEnv): string {
 
   return out;
 }
+// ^^^ end source evaluator ^^^
 
 function evalExpr(raw: string, env: MockEnv): string {
   const expr = raw.trim();
@@ -342,7 +344,7 @@ function evalExpr(raw: string, env: MockEnv): string {
     return "";
   }
 
-  // >>> $counter.<n>[.op] - bare form reads without incrementing, only .add/.set/.reset mutate
+  // >>> bare counter reads without incrementing
   const counterM = inner.match(/^counter\.(\w+)(?:\.(.+))?$/);
   if (counterM) {
     const name = counterM[1]!;
@@ -623,7 +625,7 @@ function findIfBody(
     elseStart = -1,
     endIdx = src.length;
   while (i < src.length) {
-    // >>> nested blocks also consume a $end, track depth to skip past those
+    // >>> track depth so nested blocks don't eat our $end
     if (
       src.slice(i).match(/^\$if\s*\(/) ||
       src.slice(i).match(/^\$foreach\s*\(/) ||
@@ -712,3 +714,4 @@ function isTruthy(val: string): boolean {
   if (!isNaN(n)) return n !== 0;
   return true;
 }
+// ^^^ end parser helpers ^^^

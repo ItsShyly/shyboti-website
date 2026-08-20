@@ -1,4 +1,4 @@
-// >>> plain @click.self closes on drag-out-of-panel too (some browsers still fire the click), so only close when BOTH mousedown and mouseup land on the backdrop itself
+// >>> needs both mousedown+mouseup on backdrop, click.self alone leaks
 export function useOverlayClose() {
   let mousedownOnSelf = false;
 

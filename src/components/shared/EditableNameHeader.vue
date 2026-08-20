@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// >>> blank name on blur/enter/esc reverts to origName
+// >>> blank name on blur/enter/esc reverts to the original
 import { ref, nextTick, onMounted } from "vue";
 import { iconSvg as iconSvgFor } from "../../composables/icons";
 

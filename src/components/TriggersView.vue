@@ -24,7 +24,7 @@ import RefPanel from "./shared/RefPanel.vue";
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
 
-// >>> Open edit panel from global search
+// >>> opens edit panel from global search
 const searchOpenTrigger = inject<Ref<string | null>>(
   "searchOpenTrigger",
   ref(null),
@@ -76,7 +76,7 @@ const success = ref("");
 
 const editOpen = ref(false);
 const isNew = ref(false);
-const editOrigName = ref(""); // <<< name before rename, so we know which row to delete
+const editOrigName = ref(""); // <<< old name, needed to delete on rename
 const overlay = useOverlayClose();
 const editorRef = ref<HTMLDivElement | null>(null);
 const editTrigger = ref<Partial<Trigger> & { name: string }>({
@@ -93,7 +93,7 @@ const editTrigger = ref<Partial<Trigger> & { name: string }>({
   is_active: 1,
 });
 
-// >>> Event and action type labels (static - these are system values not translated)
+// >>> static, not translated on purpose
 const EVENT_TYPES = [
   {
     value: "message",
@@ -205,7 +205,7 @@ function onEditorInput() {
   applyScriptHighlight(el);
 }
 
-// >>> Reference panel click-to-insert - inserts at the response editor's cursor
+// >>> inserts token at editor cursor
 function insertRefToken(token: string) {
   const el = editorRef.value;
   if (!el) return;
@@ -236,7 +236,7 @@ async function saveTrigger() {
       },
     );
     if (!res.ok) throw new Error(await res.text());
-    // >>> renamed, old-named row is now a stale duplicate, delete it
+    // >>> renamed, delete the old duplicate row
     if (!isNew.value && editOrigName.value && editOrigName.value !== name) {
       await fetch(
         `${API}/triggers/${session.value.channel}/${editOrigName.value}`,
@@ -328,6 +328,7 @@ async function doShare() {
   }
   shareSaving.value = false;
 }
+// ^^^ share ^^^
 
 // vvv sync vvv
 const syncConf = ref<{
@@ -414,6 +415,7 @@ async function runSync() {
   }
   syncRunning.value = false;
 }
+// ^^^ sync ^^^
 
 onMounted(() => {
   load();
@@ -439,7 +441,7 @@ function matchLabel(v: string) {
 
 const needsPattern = (ev: string) => ["message", "command"].includes(ev);
 
-// >>> Header (title/count/create) lives in AutomationsView.vue - expose what it needs
+// >>> header stuff lives in AutomationsView, exposed for it
 defineExpose({
   header: computed(() => ({
     count: triggers.value.length,
@@ -839,8 +841,7 @@ defineExpose({
 .match-type {
   width: 140px;
   flex-shrink: 0;
-  height: 36px;
-  /* match ep-field-input exactly */
+  height: 36px; /* >>> matches input height */
 }
 
 .match-row .ep-field-input {

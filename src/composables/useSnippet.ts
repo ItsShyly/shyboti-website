@@ -149,7 +149,7 @@ export function useSnippet() {
       activeUploadController = null;
     }
 
-    // >>> html-to-image resets scroll to 0 on clone, so render full content height and crop in content-space coords
+    // >>> lib resets scroll on clone, render full height instead
     const captureRoot =
       (containerEl.querySelector(".logs-tbody") as HTMLElement | null) ??
       containerEl;
@@ -300,7 +300,7 @@ export function useSnippet() {
 
       let cropCanvas: HTMLCanvasElement;
       try {
-        // >>> override overflow/height on the clone to force full content render, so scroll pos is irrelevant and coords map 1:1 to canvas pixels
+        // >>> force full render so scroll pos doesn't matter
         const contentH = captureRoot.scrollHeight;
         const contentW = captureRoot.scrollWidth;
 

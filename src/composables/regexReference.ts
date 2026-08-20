@@ -1,9 +1,7 @@
-// >>> static regex cheat-sheet for the Blocked Term / Nuke trigger inputs -
-// >>> unlike scriptReference.ts this has no per-user data, just fixed syntax docs
+// >>> regex cheat-sheet for term/nuke trigger inputs
 import type { RefGroup } from "./scriptReference";
 
-// >>> "/pattern/flags" (wrapped in slashes) is what switches a term/trigger into
-// >>> regex mode - anything else is matched as plain text (word-boundary, case-insensitive)
+// >>> slash-wrapped pattern means regex mode, else plain text match
 const REGEX_LITERAL_RE = /^\/(.+)\/([a-z]*)$/i;
 
 export function looksLikeRegex(raw: string): boolean {

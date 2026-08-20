@@ -49,7 +49,7 @@ const userParams = ref<ParamEntry[]>([
 ])
 const PARAMS = computed(() => userParams.value.map(p => `{${p.key}}`))
 
-// vvv Built-in aliases + flags reference vvv
+// vvv built-in aliases + flags reference vvv
 const builtinChannelAliases = ref<string[]>([])
 const builtinGlobalAliases = ref<string[]>([])
 const newAliasName = ref('')
@@ -108,6 +108,7 @@ async function removeAlias(alias: string) {
   } catch { }
   aliasSaving.value = false
 }
+// ^^^ built-in aliases + flags reference ^^^
 
 function addParam(type: 'text' | 'regex') {
   const prefix = type === 'regex' ? 'regex' : 'text'
@@ -141,7 +142,7 @@ async function load() {
   loading.value = true
   try {
     if (props.isBuiltIn) {
-      // >>> For built-ins: load description from /commands/:channel
+      // >>> built-ins load description from /commands
       const res = await fetch(`${API}/commands/${props.channel}`, {
         headers: { Authorization: `Bearer ${session.value.token}` }
       })
@@ -172,7 +173,7 @@ async function load() {
   } catch { }
   loading.value = false
 
-  // >>> Fetch real counter/var values to seed the preview with actual state
+  // >>> seeds preview with real counter/var values
   try {
     const vres = await fetch(`${API}/variables/${props.channel}`, {
       headers: { Authorization: `Bearer ${session.value!.token}` }
@@ -199,7 +200,7 @@ async function load() {
   updatePreview()
 }
 
-// vvv Validation vvv
+// vvv validation vvv
 interface ValidationError {
   blockIndex: number
   type: 'cond_missing' | 'cond_invalid' | 'body_missing'
@@ -236,7 +237,7 @@ function validateScript(src: string): ValidationError[] {
       if (bodyEnd !== -1) {
         const body = src.slice(braceStart + 1, bodyEnd).trim()
         if (condSrc === '') errors.push({ blockIndex: idx, type: 'cond_missing', message: 'Expression missing' })
-        // >>> catches unedited "condition" placeholder text, still allows bare exprs like "1 = 1"
+        // >>> allows bare exprs, catches unedited placeholder
         else if (!/\$/.test(condSrc) && !/[=<>!]/.test(condSrc) && !/^(true|false|\d+)$/i.test(condSrc) && !/\b(and|or|not)\b/i.test(condSrc))
           errors.push({ blockIndex: idx, type: 'cond_invalid', message: `${condSrc} is not a valid expression` })
         if (body === '') errors.push({ blockIndex: idx, type: 'body_missing', message: 'Body missing' })
@@ -257,8 +258,8 @@ const validationMessage = computed(() => {
   if (errs.length === 0) return ''
   return errs.map(e => e.message).join(' · ')
 })
+// ^^^ validation ^^^
 
-// vvv Line numbers vvv
 const lineCount = ref(1)
 function updateLineNumbers(text: string) {
   lineCount.value = (text.match(/\n/g) || []).length + 1
@@ -275,7 +276,7 @@ function scanArgNums(src: string): { positional: Set<number>; hasGeneric: boolea
   return { positional, hasGeneric }
 }
 
-// >>> parse a clause like "$1 = test" or "$channel.name = $2"
+// >>> parses a clause like $1 = test
 function parseCondClause(clause: string): { argNum: number; value: string } | null {
   clause = clause.trim()
   let m = clause.match(/^\$(?:args\.)?(\d+)\s*=\s*(.+)$/)
@@ -301,7 +302,7 @@ interface VariantEntry {
   bodyHasArgs: Set<number>          // <<< $N refs found inside the $if body
 }
 
-// >>> extract all $if blocks as VariantEntry[], plus bare $N refs
+// >>> extracts all $if blocks plus bare $N refs
 function extractVariants(src: string): { variants: VariantEntry[]; bareArgs: Set<number> } {
   const variants: VariantEntry[] = []
   const usedInIf = new Set<number>()
@@ -460,6 +461,7 @@ function removeArgFromResponse(src: string, argNum: number): string {
   r = r.replace(new RegExp(`\\$(?:args\\.)?${argNum}\\b`, 'g'), '')
   return r.replace(/  +/g, ' ').trim()
 }
+// ^^^ arg variant system ^^^
 
 watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; saveError.value = '' } })
 onMounted(() => { if (props.open) load() })
@@ -488,7 +490,7 @@ async function save() {
     const isNew = !oldName
     const renamed = !props.isBuiltIn && !isNew && newName && newName !== oldName
 
-    // >>> PUT the data under the new name
+    // >>> put the data under the new name
     const targetName = (renamed || isNew) ? newName : oldName
     await fetch(`${API}/custom-commands/${props.channel}/${targetName}`, {
       method: 'PUT',
@@ -500,7 +502,7 @@ async function save() {
       }),
     })
 
-    // >>> If renamed, delete the old name
+    // >>> if renamed, delete the old name
     if (renamed) {
       await fetch(`${API}/custom-commands/${props.channel}/${oldName}`, {
         method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
@@ -526,7 +528,7 @@ async function deleteCmd() {
   deleting.value = false
 }
 
-// vvv normal mode editor vvv
+// vvv editor vvv
 const normalEditorRef = ref<HTMLDivElement | null>(null)
 const previewOutput = ref('')
 const mockCtx = ref<MockContext>({ ...DEFAULT_MOCK })
@@ -591,7 +593,7 @@ function onNormalInput() {
   syncLineNumbers(el)
 }
 
-// >>> content-only, no Selection/Range touched - avoids stealing focus on panel open
+// >>> avoids stealing focus, no selection/range touched
 function setNormalEditorContent(el: HTMLElement, text: string) {
   el.innerHTML = highlightScript(text)
 }
@@ -636,7 +638,6 @@ function restoreTextOffset(el: HTMLElement, offset: number) {
   if (!placed) { const r = document.createRange(); r.selectNodeContents(el); r.collapse(false); window.getSelection()?.removeAllRanges(); window.getSelection()?.addRange(r) }
 }
 
-// vvv Line numbers vvv
 const lineNumbersRef = ref<HTMLDivElement | null>(null)
 
 function syncLineNumbers(el: HTMLElement) {
@@ -748,7 +749,7 @@ function acceptCurrentGhost() {
   // >>> special case for $if, adds the braces too
   if (full.startsWith('$if(')) {
     insert = '$if(  ){ }'
-    cursorOffset = before.length - partial.length + 5 // cursor between parentheses
+    cursorOffset = before.length - partial.length + 5 // <<< cursor between parentheses
   } else if (full === '$foreach()') {
     insert = '$foreach( in ){\n  \n}'
     cursorOffset = before.length - partial.length + 9
@@ -765,7 +766,7 @@ function acceptCurrentGhost() {
   ghostSuggestion.value = ''; ghostMatches.value = []; ghostMatchIdx.value = 0; _lastGhostPartial = ''
 }
 
-// >>> insert at cursor, reuses the caret-preserving helpers from ghost autocomplete
+// >>> reuses caret-preserving helpers from ghost autocomplete
 function insertRefToken(token: string) {
   const el = normalEditorRef.value; if (!el) return
   removeGhostSpan()
@@ -850,6 +851,7 @@ function removeArgVariant(i: number) {
     form.value.arg_descs = d
   }
 }
+// ^^^ editor ^^^
 </script>
 
 <template>
@@ -945,7 +947,7 @@ function removeArgVariant(i: number) {
             </div>
           </details>
 
-          <!-- >>> aliases - available for both built-in and custom commands -->
+          <!-- >>> aliases work for built-in and custom -->
           <details class="ep-field-group desc-details" open>
             <summary class="ep-field-label desc-summary">
               {{ t('edit.aliases') }} <span class="ep-field-hint">{{ t('edit.aliases_hint') }}</span>
@@ -1098,7 +1100,7 @@ function removeArgVariant(i: number) {
   border-radius: 2px;
 }
 
-/* Description + args dropdown */
+/* >>> description + args dropdown */
 .desc-details {
   border: 1px solid #1e1e22;
   background: #0d0d10;
@@ -1125,7 +1127,7 @@ function removeArgVariant(i: number) {
   padding: 10px;
 }
 
-/* Arg variants editor */
+/* >>> arg variants editor */
 .arg-descs-header {
   display: flex;
   align-items: center;
@@ -1223,7 +1225,7 @@ function removeArgVariant(i: number) {
   background: #f1494911;
 }
 
-/* Built-in aliases + flags */
+/* >>> built-in aliases + flags */
 .alias-chip-list {
   display: flex;
   flex-wrap: wrap;
@@ -1310,7 +1312,7 @@ function removeArgVariant(i: number) {
   color: #888;
 }
 
-/* built-in prefix lock */
+/* >>> built-in prefix lock */
 .builtin-prefix-row {
   display: flex;
   align-items: center;
@@ -1341,8 +1343,7 @@ function removeArgVariant(i: number) {
   color: #383838;
 }
 
-/* normal mode editor */
-/* editor-wrapper: line numbers + editor side by side, sharing one border */
+/* >>> line numbers + editor side by side, one border */
 .editor-wrapper {
   display: flex;
   align-items: stretch;
@@ -1358,7 +1359,6 @@ function removeArgVariant(i: number) {
   border-color: #6f2bff55;
 }
 
-/* Line numbers gutter */
 .line-numbers {
   display: flex;
   flex-direction: column;
@@ -1366,8 +1366,7 @@ function removeArgVariant(i: number) {
   padding: 12px 6px 12px 8px;
   background: #0a0a0d;
   border-right: 1px solid #1a1a22;
-  overflow: hidden;
-  /* hides scroll bar, synced manually */
+  overflow: hidden; /* >>> hides scroll bar, synced manually */
   flex-shrink: 0;
   user-select: none;
   pointer-events: none;
@@ -1376,14 +1375,12 @@ function removeArgVariant(i: number) {
 .line-number {
   font-family: 'Consolas', 'Fira Mono', monospace;
   font-size: 13px;
-  line-height: 1.7;
-  /* must match .normal-editor line-height */
+  line-height: 1.7; /* >>> must match .normal-editor line-height */
   color: #3a3a50;
   text-align: right;
   white-space: pre;
 }
 
-/* Editor area inside wrapper */
 .normal-editor-container {
   position: relative;
   flex: 1;
@@ -1406,8 +1403,7 @@ function removeArgVariant(i: number) {
   word-break: break-word;
   tab-size: 2;
   background: transparent;
-  border: none;
-  /* border is on .editor-wrapper */
+  border: none; /* >>> border is on .editor-wrapper */
 }
 
 .normal-editor:empty::before {
@@ -1417,7 +1413,6 @@ function removeArgVariant(i: number) {
   white-space: pre;
 }
 
-/* Validation badge - sits below the editor, inside editor-container */
 .validation-badge {
   display: flex;
   flex-wrap: wrap;
@@ -1464,7 +1459,7 @@ function removeArgVariant(i: number) {
   color: #9d6cff;
 }
 
-/* preview + mock values dropdown */
+/* >>> preview + mock values dropdown */
 .preview-details {
   border: 1px solid #1e1e22;
   background: #0d0d10;
@@ -1510,7 +1505,6 @@ function removeArgVariant(i: number) {
   word-break: break-all;
 }
 
-/* mock context, nested in preview dropdown */
 .mock-ctx-grid {
   display: grid;
   grid-template-columns: 60px 1fr;
@@ -1556,7 +1550,6 @@ function removeArgVariant(i: number) {
   accent-color: #6f2bff;
 }
 
-/* section label */
 .ep-section-label {
   font-size: 9px;
   font-weight: 700;
@@ -1568,7 +1561,7 @@ function removeArgVariant(i: number) {
 </style>
 
 <style>
-/* ── $if coloring (unique to this rich editor) ────────────────────────────── */
+/* >>> $if coloring, unique to this editor */
 .sh-if-kw {
   font-weight: 600;
 }
@@ -1599,7 +1592,7 @@ function removeArgVariant(i: number) {
   font-weight: 600;
 }
 
-/* Ghost autocomplete suffix (unique to this editor's inline ghost span) */
+/* >>> ghost autocomplete suffix styling */
 .ghost-inline {
   color: #3a3a50;
   pointer-events: none;

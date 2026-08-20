@@ -32,10 +32,9 @@ const props = defineProps<{
   scenes: string[];
   currentScene: string;
   initialOverlayId?: string;
-  // >>> which scene the user actually clicked "edit" on - falls back to currentScene
+  // >>> scene actually clicked, falls back to the current one
   initialScene?: string;
-  // >>> only true from ObsControlView, where we know the agent/OBS connection state -
-  // >>> the standalone Tools page can't promise that, so hide/show + scene-preview hide there
+  // >>> only true when we know the OBS connection state
   obsReady?: boolean;
 }>();
 const emit = defineEmits<{
@@ -46,7 +45,7 @@ const { session } = useAuth();
 
 const loading = ref(true);
 const saving = ref(false);
-const busy = ref(false); // <<< add/remove/show/hide/swap in flight
+const busy = ref(false); // <<< add/remove/show/hide in flight
 const overlays = ref<Overlay[]>([]);
 const currentOverlayId = ref<string | null>(null);
 const currentOverlay = computed(
@@ -72,7 +71,7 @@ const dirty = ref(false);
 const previewValues = ref<Record<string, string>>({});
 const snapEnabled = ref(true);
 
-// vvv "saved X ago" - ticks so the label stays fresh without re-saving vvv
+// vvv "saved X ago" ticks without re-saving vvv
 const lastSavedAt = ref<number | null>(null);
 const clockNow = ref(Date.now());
 let clockTimer: ReturnType<typeof setInterval> | null = null;
@@ -88,8 +87,7 @@ const lastSavedLabel = computed(() => {
 });
 // ^^^ "saved X ago" ^^^
 
-// >>> editor-only backdrop - never rendered live, just lets you eyeball contrast or
-// >>> compare against the real scene (only offered while the overlay is hidden there)
+// >>> editor-only backdrop, never shown in the live render
 const stageBackdrop = ref<"checker" | "white" | "black" | "scene">("checker");
 const sceneShotUrl = ref<string | null>(null);
 async function loadSceneShot() {
@@ -119,14 +117,12 @@ const selectedElement = computed(() =>
     : null,
 );
 
-// vvv countdown/countup - the top-of-panel time field + start/stop, ticked by clockNow (same
-// vvv 1s timer already driving "saved X ago") vvv
+// vvv countdown time field ticks off the same timer vvv
 function isCountdownLike(type: string): type is CountdownLikeType {
   return type === "countdown" || type === "countup";
 }
 
-// vvv alignment - lives at the top of the panel, not tucked in the style panel's typography
-// vvv collapsible, since it's used on nearly every text-like element vvv
+// vvv alignment kept top-level since it's used everywhere vvv
 function isTextLikeType(type: string): boolean {
   return ["text", "variable-text", "countdown", "countup"].includes(type);
 }
@@ -151,17 +147,16 @@ function canToggleRunning(el: OverlayElement): boolean {
 }
 const countdownFieldFocused = ref<string | null>(null);
 const countdownDraft = ref("");
-// >>> live while unfocused, frozen at whatever the user's typed once they click in - avoids
-// >>> the field fighting their edit every second (same caret-fighting concern noted elsewhere)
+// >>> frozen while focused, avoids fighting the user's typing
 function countdownTimeFieldValue(el: OverlayElement): string {
-  clockNow.value; // <<< reactive dependency, keeps this ticking while unfocused
+  clockNow.value; // <<< reactive dep, keeps ticking while unfocused
   if (countdownFieldFocused.value === el.id) return countdownDraft.value;
   return formatDuration(computeCountdown(el.type as CountdownLikeType, el.data || {}).seconds);
 }
 function onCountdownFieldFocus(el: OverlayElement, e: FocusEvent) {
   countdownFieldFocused.value = el.id;
   countdownDraft.value = formatDuration(computeCountdown(el.type as CountdownLikeType, el.data || {}).seconds);
-  (e.target as HTMLInputElement).select(); // <<< select-all so typing replaces it, doesn't append
+  (e.target as HTMLInputElement).select(); // <<< select-all so typing replaces, not appends
 }
 function commitCountdownTimeField(el: OverlayElement, e: FocusEvent) {
   countdownFieldFocused.value = null;
@@ -222,8 +217,7 @@ function updateElements(updates: Array<{ id: string; patch: Partial<OverlayEleme
   for (const u of updates) applyPatch(u.id, u.patch);
 }
 
-// >>> a live-drag patch from another editing user - applied straight to the local model
-// >>> (skips pushHistory/dirty) so it never enters undo history and never lights up Save
+// >>> remote patch skips history so it won't trigger save
 function applyRemotePatch(id: string, patch: Record<string, unknown>) {
   const idx = pendingElements.value.findIndex((e) => e.id === id);
   if (idx === -1) return;
@@ -340,7 +334,7 @@ async function fetchPreviewValues() {
   } catch { }
 }
 
-// vvv counters used by this overlay's elements - quick +/- right from the editor vvv
+// vvv counters used here, quick +/- from the editor vvv
 const usedCounterNames = computed(() => {
   const names = new Set<string>();
   for (const el of pendingElements.value) {
@@ -380,9 +374,7 @@ async function load() {
   await loadOverlaysList();
   await loadElements();
   if (!activateScene.value) {
-    // >>> only auto-pick when there's an actual reason to - a specific scene was clicked,
-    // >>> or this overlay is already attached somewhere. Otherwise leave it unset so the
-    // >>> picker shows "pick scene" instead of silently guessing one (e.g. fresh from Tools)
+    // >>> only auto-pick a scene when there's good reason
     activateScene.value = props.initialScene || currentOverlay.value?.scenes[0]?.scene || "";
   }
   try {
@@ -512,7 +504,7 @@ function onSelect(id: string | null, additive: boolean) {
     selectedIds.value = [id];
   }
 }
-// >>> marquee-select result - additive adds to the current selection, otherwise replaces it
+// >>> additive adds to selection, otherwise replaces it
 function onSelectMany(ids: string[], additive: boolean) {
   if (!additive) {
     selectedIds.value = ids;
@@ -550,11 +542,10 @@ function toggleVisible(id: string) {
   if (!el) return;
   pushHistory();
   applyPatch(id, { visible: !el.visible });
-  save({ silent: true }); // <<< hide/show is expected to apply immediately, not wait for Save
+  save({ silent: true }); // <<< hide/show applies immediately, not on Save
 }
 function hideAllLayers() {
-  // >>> staged like any other edit - the pendingElements watcher already handles the
-  // >>> save itself if Live Update is on, don't force-save when it's off
+  // >>> staged edit, watcher saves it when live update is on
   if (!pendingElements.value.some((e) => e.visible)) return;
   updateElements(pendingElements.value.map((e) => ({ id: e.id, patch: { visible: false } })));
 }
@@ -613,9 +604,7 @@ function pasteClipboard() {
   pasteFrom(clipboard.value);
 }
 
-// vvv Ctrl+V from the OS clipboard - paste an image (e.g. copied off Google Images) or
-// vvv plain text directly as a new element; falls back to the internal element clipboard
-// vvv above when there's nothing image/text-shaped on the system clipboard vvv
+// vvv OS clipboard paste, falls back to the internal one vvv
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -643,8 +632,7 @@ function pasteTextAsElement(text: string) {
   if (selectedElement.value) updateElement(selectedElement.value.id, { content: text });
 }
 async function pasteFromSystemClipboard() {
-  // >>> an explicit in-app Ctrl+C this session wins - otherwise the OS clipboard almost
-  // >>> always has SOMETHING (stale text from anywhere) that would silently shadow it
+  // >>> in-app copy wins over stale OS clipboard content
   if (clipboard.value.length) {
     pasteClipboard();
     return;
@@ -664,8 +652,7 @@ async function pasteFromSystemClipboard() {
       return;
     }
   } catch {
-    // >>> API unavailable/denied (or nothing readable) - nothing to fall back to here,
-    // >>> the in-app clipboard was already checked above
+    // >>> clipboard unavailable, nothing else to fall back to
   }
 }
 // ^^^ system clipboard paste ^^^
@@ -673,15 +660,15 @@ function duplicateSelected() {
   const sel = pendingElements.value.filter((e) => selectedIds.value.includes(e.id));
   pasteFrom(sel);
 }
-// >>> layers-panel row action - duplicates that one layer regardless of current selection
+// >>> duplicates one layer, ignores current selection
 function duplicateLayer(id: string) {
   const el = pendingElements.value.find((e) => e.id === id);
   if (el) pasteFrom([el]);
 }
 // ^^^ copy/paste/duplicate ^^^
 
-// vvv add/remove/show/hide/swap - immediate, not part of the staged/Save flow vvv
-// >>> whichever OTHER overlay is currently attached to the picked scene, if any
+// vvv add/remove/show/hide/swap apply immediately, not staged vvv
+// >>> other overlay already attached to the picked scene
 const occupantOverlay = computed(() =>
   overlays.value.find(
     (o) => o.id !== currentOverlayId.value && o.scenes.some((s) => s.scene === activateScene.value),
@@ -704,8 +691,7 @@ async function addToScene() {
   busy.value = false;
   menuOpen.value = false;
 }
-// >>> makes an independent copy of this overlay (own elements) and attaches the copy
-// >>> to the picked scene - lets a scene diverge instead of sharing the same content
+// >>> copies overlay so the scene can diverge, not share
 async function duplicateToScene() {
   if (busy.value || !currentOverlay.value || !activateScene.value) return;
   busy.value = true;
@@ -793,8 +779,7 @@ async function save(opts: { silent?: boolean } = {}) {
   if (!currentOverlayId.value || saving.value) return;
   saving.value = true;
   try {
-    // >>> a live-drag's final position was already pushed via the forced live-preview call
-    // >>> on release - refreshing the browser source here would just flash it for no reason
+    // >>> skip refresh, live-preview already pushed the final position
     const skipRefresh = !!opts.silent && Date.now() - lastLivePreviewAt < 1500;
     const res = await fetch(
       `${API}/overlay/${props.channel}/${currentOverlayId.value}/elements/bulk`,
@@ -811,7 +796,7 @@ async function save(opts: { silent?: boolean } = {}) {
     if (res.ok) {
       lastSavedAt.value = Date.now();
       if (opts.silent) {
-        // >>> live update - don't reload from the server mid-edit, that'd wipe undo history
+        // >>> don't reload mid-edit, that wipes undo history
         savedIds.value = new Set(pendingElements.value.map((e) => e.id));
         deletedIds.value = [];
         dirty.value = false;
@@ -823,10 +808,9 @@ async function save(opts: { silent?: boolean } = {}) {
   saving.value = false;
 }
 
-// vvv live update - auto-save on every change instead of only on Save click vvv
+// vvv live update auto-saves on every change vvv
 const liveUpdate = ref(false);
-// >>> throttle+trailing, not a pure debounce - continuous typing/dragging would otherwise
-// >>> keep resetting a debounce timer and never actually push until you stop entirely
+// >>> throttle with trailing edge, pure debounce never fires
 const LIVE_THROTTLE_MS = 800;
 let liveUpdateLastSaveAt = 0;
 let liveUpdateTimer: ReturnType<typeof setTimeout> | null = null;
@@ -851,20 +835,16 @@ watch(
     if (!ok) liveUpdate.value = false;
   },
 );
-// >>> force one non-silent save on turn-on - guarantees the live browser source has actually
-// >>> reloaded (and so has the live-patch listener) before relying on the ephemeral SSE path
+// >>> force a real save on turn-on so source reloads
 async function toggleLiveUpdate() {
   const turningOn = !liveUpdate.value;
   liveUpdate.value = turningOn;
   if (turningOn) await save();
 }
 
-// >>> mid-drag/resize/rotate - ephemeral broadcast-only push, never touches pendingElements
-// or the DB, so it never becomes an undo step and never fights the in-progress drag. The
-// real value still lands via the normal Save/scheduleLiveSave path on drag-release.
+// >>> broadcast-only push, doesn't touch undo or the DB
 let livePreviewSending = false;
-// >>> read by save() to decide whether the trailing DB write can skip its browser-source
-// >>> refresh - a recent live-preview means the visual state is already correct
+// >>> lets the trailing save skip an unneeded refresh
 let lastLivePreviewAt = 0;
 async function onLivePreview(updates: Array<{ id: string; patch: Partial<OverlayElement> }>) {
   lastLivePreviewAt = Date.now();
@@ -884,9 +864,9 @@ async function onLivePreview(updates: Array<{ id: string; patch: Partial<Overlay
 }
 // ^^^ live update ^^^
 
-// vvv live cursor share - per-user opt-in, broadcast onto the live output vvv
+// vvv live cursor share, per-user opt-in vvv
 const liveCursor = ref(false);
-// >>> one random color per session, not per toggle - stays consistent while editing
+// >>> random color per session, stays consistent while editing
 const myCursorColor = `hsl(${Math.floor(Math.random() * 360)}, 75%, 60%)`;
 let cursorSending = false;
 function onCursorMove(x: number, y: number) {
@@ -920,7 +900,7 @@ watch(liveUpdate, (on) => {
 });
 // ^^^ live cursor share ^^^
 
-// vvv multi-editor sync - other open editor sessions on the same overlay vvv
+// vvv multi-editor sync, other sessions on same overlay vvv
 let editStream: EventSource | null = null;
 function connectEditStream() {
   editStream?.close();
@@ -941,7 +921,7 @@ function connectEditStream() {
         applyRemotePatch(u.id, u.patch);
       }
     } else if (msg.saved) {
-      // >>> only auto-refetch when we have nothing unsaved of our own to lose
+      // >>> only refetch if nothing unsaved locally
       if (!dirty.value) loadElements();
     }
   };
@@ -978,7 +958,7 @@ function onKeydown(e: KeyboardEvent) {
     return;
   }
   const mod = e.ctrlKey || e.metaKey;
-  // >>> Ctrl+S works everywhere, even while focused in a field - overrides the browser's save-page
+  // >>> Ctrl+S works even in a focused field
   if (mod && e.key.toLowerCase() === "s") {
     e.preventDefault();
     save();
@@ -1032,7 +1012,7 @@ onMounted(() => {
   load();
   fetchCounterValues();
   window.addEventListener("keydown", onKeydown);
-  // >>> capture phase - canvas item clicks stopPropagation(), bubble phase would never see them
+  // >>> capture phase, bubble would never see canvas clicks
   window.addEventListener("mousedown", onWindowMousedownForMenu, true);
   previewTimer = setInterval(() => {
     fetchPreviewValues();
@@ -1109,7 +1089,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- >>> pinned, stays visible in full-screen just like OBS's own safe-area bar -->
+        <!-- >>> pinned, stays visible like OBS's own safe area -->
         <div class="ovl-activate-bar">
           <span class="ovl-activate-dot" :class="{ on: overlayVisible }"></span>
           <span class="ovl-activate-status">
@@ -1203,7 +1183,7 @@ onUnmounted(() => {
                   :auth-headers="authHeaders" @insert="insertVariableToken" />
               </template>
 
-              <!-- >>> always visible, not tucked in a collapsible - alignment is used constantly -->
+              <!-- >>> alignment stays visible, not in a collapsible -->
               <label v-if="isTextLikeType(selectedElement.type)" class="ovl-props-label ovl-align-label">
                 Alignment
                 <div class="ovl-align-grid">

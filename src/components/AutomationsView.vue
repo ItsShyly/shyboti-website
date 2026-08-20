@@ -24,7 +24,7 @@ function parseTab(v: unknown): Tab {
   return "timers";
 }
 
-// >>> Derived directly from the route on every read/write
+// >>> tab lives in the route, not local state
 const activeTab = computed<Tab>({
   get: () => parseTab(route.query.tab),
   set: (tab) => {
@@ -32,13 +32,13 @@ const activeTab = computed<Tab>({
   },
 });
 
-// >>> Each sub-view exposes { header, reload, create } via defineExpose
+// >>> each tab exposes header/reload/create for the toolbar
 const timersRef = ref<any>(null);
 const triggersRef = ref<any>(null);
 const countdownsRef = ref<any>(null);
 const obsRef = ref<any>(null);
 
-// >>> Snapshotted post-flush, NOT a computed read during render.
+// >>> set after render, not read live during render
 const activeChild = ref<any>(null);
 watch(
   [activeTab, timersRef, triggersRef, countdownsRef, obsRef],
@@ -51,7 +51,7 @@ watch(
   { immediate: true, flush: "post" },
 );
 
-// >>> Close any Teleport(to body) panel on outgoing tab before it unmounts.
+// >>> close open panel before the tab unmounts
 async function switchTab(tab: Tab) {
   activeChild.value?.close?.();
   await nextTick();
@@ -111,7 +111,7 @@ async function switchTab(tab: Tab) {
 </template>
 
 <style scoped>
-/* .automations layout (flex column, gap, height) comes from shared.css */
+/* >>> layout comes from shared.css */
 
 .auto-body {
   flex: 1;

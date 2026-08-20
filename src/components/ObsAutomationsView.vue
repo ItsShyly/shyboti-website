@@ -22,7 +22,7 @@ const rules = ref<ObsRule[]>([]);
 const scenes = ref<string[]>([]);
 const sources = ref<string[]>([]);
 const saving = ref<string | null>(null);
-const hasCategoryScope = ref(true); // >>> optimistic default so the warning doesn't flash before the check resolves
+const hasCategoryScope = ref(true); // >>> avoids warning flash before check resolves
 
 const RULE_ACTION_LABEL: Record<string, string> = {
   scene: "scene",
@@ -44,7 +44,7 @@ function ruleTitle(rule: ObsRule): string {
   return `${rule.trigger_scene ?? "?"} -> ${rule.target}`;
 }
 
-// >>> a rule that touches category (trigger or action) but can't actually fire without this scope
+// >>> category rule but missing required scope
 const hasCategoryRule = computed(() =>
   rules.value.some((r) => r.trigger_type === "category" || r.action === "category"),
 );
@@ -164,7 +164,7 @@ watch(
   },
 );
 
-// >>> Header (title/count/create) lives in AutomationsView.vue - expose what it needs
+// >>> header stuff lives in AutomationsView, exposed for it
 defineExpose({
   header: computed(() => ({
     count: rules.value.length,

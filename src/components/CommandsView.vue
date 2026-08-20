@@ -23,7 +23,7 @@ const { t } = useI18n();
 const canView = computed(
   () => channelRole.value?.permissions.commands_view ?? false,
 );
-// >>> default true so real users don't see a false "needs bot" flash before channelRole loads
+// >>> avoids a false needs-bot flash before load
 const botPresent = computed(() => channelRole.value?.botPresent ?? true);
 const canToggle = computed(
   () =>
@@ -84,12 +84,12 @@ const search = ref("");
 const saving = ref<string | null>(null);
 const cdTimers = ref<Record<string, ReturnType<typeof setTimeout>>>({});
 
-// >>> Edit panel - isBuiltIn=true for hardcoded commands, false for custom
+// >>> true for hardcoded commands, false for custom
 const editOpen = ref(false);
 const editingCmd = ref("");
 const editIsBuiltIn = ref(true);
 
-// >>>  New command name input state
+// >>> new command name input state
 const creatingNew = ref(false);
 const newCmdName = ref("");
 const newCmdError = ref("");
@@ -101,7 +101,7 @@ function openEdit(name: string, builtIn: boolean) {
   editOpen.value = true;
 }
 
-// >>> When App.vue search selects a command, open its edit panel directly
+// >>> opens edit panel when search selects a command
 const searchOpenEdit = inject<Ref<{ name: string; builtIn: boolean } | null>>(
   "searchOpenEdit",
   ref(null),
@@ -124,13 +124,13 @@ function startCreate() {
   openEdit('', false);
 }
 
-// >>>  Internal tab state
+// >>> tab state
 const activeTab = ref<"Default" | "Custom" | "Extras" | "Obs">("Default");
 watch(activeTab, (tab) => {
   if (tab === "Obs" && !obsFetched.value) fetchObsCommands();
 });
 
-// >>> Extras / Feature flags
+// >>> extras / feature flags
 const mentionEnabled = ref(false);
 const has7tvSet = ref(false);
 const extrasLoading = ref(false);
@@ -175,8 +175,7 @@ async function saveExtras() {
   extrasSaving.value = false;
 }
 
-// >>> OBS commands - types imported from ObsCommandEditPanel.vue 
-
+// >>> obs command state
 const obsPaired = ref(false);
 const obsLoading = ref(false);
 const obsSceneBindings = ref<ObsSceneBind[]>([]);
@@ -246,7 +245,7 @@ const obsCommandCount = computed(
     Object.keys(obsArgCommands.value).length,
 );
 
-// >>> OBS edit panel
+// >>> obs edit panel
 const obsEditOpen = ref(false);
 const obsEditTarget = ref<{
   kind: "scene" | "source" | "arg";
@@ -295,7 +294,7 @@ function onObsSaved() {
   fetchObsCommands();
 }
 
-// >>> OBS inline cooldown editing
+// >>> obs inline cooldown editing
 const obsCdTimers = ref<Record<string, ReturnType<typeof setTimeout>>>({});
 
 function onObsCooldownInput(
@@ -346,7 +345,7 @@ async function saveObsBindings() {
   });
 }
 
-// >>> OBS delete
+// >>> obs delete
 const obsDeleteConfirm = ref<string | null>(null);
 
 function deleteObsBinding(kind: "scene" | "source" | "arg", key: string) {
@@ -378,7 +377,7 @@ async function doDeleteObsBinding(kind: "scene" | "source" | "arg", key: string)
 
 const isBroadcaster = computed(() => channelRole.value?.role === "broadcaster");
 
-// >>> Expanded row tracking - one set for default, one for custom
+// >>> separate expand-sets for default vs custom
 const expandedDefault = ref<Set<string>>(new Set());
 const expandedCustom = ref<Set<string>>(new Set());
 
@@ -713,7 +712,7 @@ function onCooldownInput(
   cdTimers.value[key] = setTimeout(() => updateCommand(cmd), 600);
 }
 
-// >>> Share
+// >>> share
 const shareOpen = ref(false);
 const shareCmd = ref("");
 const shareTarget = ref("");
@@ -756,7 +755,7 @@ async function doShare() {
   shareSaving.value = false;
 }
 
-// >>> Sync
+// >>> sync
 const syncConf = ref<{
   sync_from: string;
   is_active: number;
@@ -938,7 +937,7 @@ onUnmounted(() => {
         </div>
       </div>
       <div class="ep-view-header-right">
-        <!-- >>> Custom tab only -->
+        <!-- >>> custom tab only -->
         <div v-if="botPresent" class="ep-sync-wrap">
           <button v-if="activeTab === 'Custom' && syncConf?.is_active" class="ep-sync-indicator"
             @click="syncOpen = !syncOpen" :title="`${t('cmd.sync.active')} #${syncConf.sync_from}`">
@@ -1142,6 +1141,7 @@ onUnmounted(() => {
           </div>
         </template>
       </template>
+      <!-- ^^^ default tab ^^^ -->
 
       <!-- vvv custom tab vvv -->
       <template v-if="activeTab === 'Custom'">
@@ -1284,6 +1284,7 @@ onUnmounted(() => {
           </div>
         </template>
       </template>
+      <!-- ^^^ custom tab ^^^ -->
 
       <!-- vvv obs tab vvv -->
       <template v-if="activeTab === 'Obs'">
@@ -1302,7 +1303,7 @@ onUnmounted(() => {
         </template>
 
         <template v-else>
-          <!-- >>> count and new button live in ep-view-header -->
+          <!-- >>> count and new button live in the header -->
 
           <div v-if="obsCommandCount === 0" class="custom-empty">
             <div class="empty-icon" v-html="iconSvgFor('star')"></div>
@@ -1455,6 +1456,7 @@ onUnmounted(() => {
           </template>
         </template>
       </template>
+      <!-- ^^^ obs tab ^^^ -->
 
       <!-- vvv extras tab vvv -->
       <template v-if="activeTab === 'Extras'">
@@ -1490,6 +1492,7 @@ onUnmounted(() => {
           </div>
         </template>
       </template>
+      <!-- ^^^ extras tab ^^^ -->
     </div>
   </div>
 
@@ -1530,12 +1533,13 @@ onUnmounted(() => {
       </div>
     </div>
   </Teleport>
+  <!-- ^^^ share modal ^^^ -->
 </template>
 
 <style scoped>
-/* .cmd-root layout (flex column, gap, height) comes from shared.css */
+/* >>> layout comes from shared.css */
 
-/* Scrolls internally so the header/tabs stay put*/
+/* >>> scrolls internally, header/tabs stay put */
 .cmd-body {
   flex: 1;
   overflow-y: auto;
@@ -1712,7 +1716,7 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-/* .square now comes from shared.css */
+/* >>> .square comes from shared.css */
 
 .cmd-name {
   font-size: 14px;
@@ -2025,9 +2029,8 @@ onUnmounted(() => {
   background: rgba(78, 201, 176, 0.1);
 }
 
-/* select/save/stop/run for sync now come from shared.css.  */
+/* >>> sync buttons come from shared.css */
 
-/* Share modal */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -2138,7 +2141,6 @@ onUnmounted(() => {
   font-family: "Consolas", "Fira Mono", monospace;
 }
 
-/* Extras tab */
 .extras-gate-note {
   font-size: 11px;
   color: #e5c07b;
@@ -2236,7 +2238,6 @@ onUnmounted(() => {
   text-align: center;
 }
 
-/* Responsive */
 @media (max-width: 680px) {
   .table-header {
     display: none;

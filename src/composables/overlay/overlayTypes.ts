@@ -28,7 +28,7 @@ export interface OverlayElementStyle {
   borderWidth?: number;
   borderRadius?: number;
   borderStyle?: "solid" | "dashed" | "dotted";
-  opacity?: number; // <<< 0-100, whole-element - set from the canvas right-click menu
+  opacity?: number; // <<< 0-100, set via canvas right-click menu
 }
 
 export interface OverlayElement {
@@ -63,7 +63,7 @@ export interface Overlay {
   scenes: OverlaySceneAttachment[];
 }
 
-// >>> client-generated but permanent - stays as the row's id once saved, no swap needed
+// >>> generated client-side but permanent once saved
 export function newElementId(): string {
   if (typeof crypto !== "undefined" && crypto.randomUUID)
     return crypto.randomUUID();

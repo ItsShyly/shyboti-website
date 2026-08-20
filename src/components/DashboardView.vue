@@ -56,10 +56,10 @@ const error = ref("");
 const liveStatus = ref<"connecting" | "live" | "off">("off");
 const ALL_CHANNELS = "__all__";
 const viewChannel = ref(session.value?.channel ?? "");
-// >>> holds activityKey() results, not raw e.type
+// >>> holds derived type keys, not raw types
 const activeTypes = ref<Set<string>>(new Set());
 
-// >>> WHO/WHAT did it
+// >>> combines type + actor into one key
 function activityKey(e: ActivityEntry): string {
   if (["ban", "timeout", "unban", "message_deleted"].includes(e.type)) {
     if (e.actor === "trigger") return `${e.type}#trigger`;
@@ -72,7 +72,7 @@ function activityKey(e: ActivityEntry): string {
   return e.type;
 }
 
-// >>> Collapsed day groups - only today open by default
+// >>> only today starts expanded
 const collapsedDays = ref<Set<string>>(new Set());
 
 // vvv user popup vvv
@@ -97,13 +97,13 @@ interface TwitchUser {
 const popup = ref<{ entry: ActivityEntry; x: number; y: number } | null>(null);
 const popupUser = ref<TwitchUser | null>(null);
 const popupLoading = ref(false);
+// ^^^ user popup ^^^
 
 let sseSource: EventSource | null = null;
-// >>> fetchActivity()/startSSE() cross an await
+// >>> guards against async work after unmount
 let disposed = false;
 
-// >>> group "types" hold activityKey() results (type#actorBucket), not raw types -
-// >>> that's how ban/timeout/etc split across the two moderation chips below
+// >>> keys are type+actor, splits mod chips below
 const TYPE_GROUPS = computed(() => [
   {
     label: t("dash.filter.commands"),
@@ -228,7 +228,7 @@ async function fetchActivity() {
     error.value = "Could not load activity.";
   }
   loading.value = false;
-  // >>> Collapse all days except today
+  // >>> collapse all days except today
   const today = fmtDate(Date.now());
   const days = new Set(filteredActivity.value.map((e) => fmtDate(e.timestamp)));
   collapsedDays.value = new Set([...days].filter((d) => d !== today));
@@ -284,7 +284,7 @@ async function startSSE() {
     try {
       const entry = JSON.parse(e.data) as ActivityEntry;
       activity.value = [entry, ...activity.value].slice(0, 200);
-      // >>> today should never end up collapsed when new entries arrive
+      // >>> keeps today expanded when new entries arrive
       const todayLabel = fmtDate(Date.now());
       collapsedDays.value.delete(todayLabel);
     } catch { }
@@ -326,9 +326,10 @@ function groupedActivity() {
   }
   return groups;
 }
+// ^^^ grouping & collapse ^^^
 
-// vvv TYPE META vvv
-// >>> icon = key into ICONS below (Feather-style stroke paths), not a text glyph
+// vvv type meta vvv
+// >>> icon maps to an svg name, not text
 const TYPE_META = computed(
   () =>
     ({
@@ -468,6 +469,7 @@ const TYPE_META = computed(
       },
     }) as Record<string, { icon: string; color: string; label: string }>,
 );
+// ^^^ type meta ^^^
 
 function iconSvg(type: string): string {
   const name = TYPE_META.value[type]?.icon ?? "dot";
@@ -495,8 +497,7 @@ function goToAutomations(e: ActivityEntry) {
   router.push({ path: "/automations", query: { tab } });
 }
 
-// >>> only ban/timeout/unban/automod/mod-list entries carry a real Twitch username as target -
-// >>> cmd/timer/trigger/countdown entries carry a resource name, which isn't a user
+// >>> only mod-type entries carry a real username
 const USER_TARGET_TYPES = new Set([
   "ban",
   "unban",
@@ -528,7 +529,7 @@ function onTargetClick(e: ActivityEntry, evt: MouseEvent) {
   }
 }
 
-// >>> Open user popup - works for any entry with a target username
+// >>> works for any entry with a username
 function openUserPopup(username: string, channel: string, evt: MouseEvent) {
   evt.stopPropagation();
   const fakeEntry = { channel } as ActivityEntry;
@@ -585,7 +586,7 @@ function fmtJoined(iso: string): string {
   });
 }
 
-// >>> How long ago an ISO date was, e.g. "2y 3m" or "4 months"
+// >>> formats how long ago, e.g. 2y 3mo
 function fmtDuration(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const days = Math.floor(ms / 86_400_000);
@@ -602,7 +603,7 @@ function subTierLabel(tier: string): string {
   return tier === "3000" ? "Tier 3" : tier === "2000" ? "Tier 2" : "Tier 1";
 }
 
-// >>> Build CSS style for a 7TV paint name display
+// >>> builds css style for a 7tv paint name
 function paintNameStyle(paint: {
   imageUrl: string | null;
   stops: { at: number; color: number }[];
@@ -644,7 +645,7 @@ function paintNameStyle(paint: {
   return styles;
 }
 
-// >>> Detail strings from the backend look like "[Category] Detected: X — reason"
+// >>> backend format: [category] text — reason
 interface ParsedDetail {
   category: string | null;
   reason: string | null;
@@ -652,7 +653,7 @@ interface ParsedDetail {
 }
 function parseDetail(e: ActivityEntry): ParsedDetail {
   let raw = e.detail || "";
-  // >>> plain numeric-seconds detail (native Twitch/IRC timeouts) has no category tag
+  // >>> native timeouts store plain seconds, no category
   if (e.type === "timeout" && raw && !raw.startsWith("[")) {
     const s = parseInt(raw);
     if (!isNaN(s)) {
@@ -679,7 +680,7 @@ function parseDetail(e: ActivityEntry): ParsedDetail {
   return { category, reason: null, text: raw };
 }
 
-// >>> Actor display - 'mod' is generic (Twitch chat event, actor unknown), otherwise show name
+// >>> 'mod' means actor unknown, else show name
 function fmtActor(actor: string) {
   return actor === "mod"
     ? t("dash.filter.moderation") === "Moderation"
@@ -687,6 +688,7 @@ function fmtActor(actor: string) {
       : "ein Mod"
     : actor;
 }
+// ^^^ actions ^^^
 </script>
 
 <template>
@@ -1032,7 +1034,7 @@ function fmtActor(actor: string) {
   display: none;
 }
 
-/* Day header */
+/* >>> day header */
 .feed-day-header {
   display: flex;
   align-items: center;
@@ -1078,7 +1080,7 @@ function fmtActor(actor: string) {
   padding: 1px 6px;
 }
 
-/* Feed rows */
+/* >>> feed rows */
 .feed-row {
   display: flex;
   align-items: center;
@@ -1205,7 +1207,7 @@ function fmtActor(actor: string) {
   border-color: #9d6cff44;
 }
 
-/* User popup */
+/* >>> user popup */
 .user-popup {
   position: fixed;
   z-index: 100;
@@ -1405,7 +1407,7 @@ function fmtActor(actor: string) {
   color: #444;
 }
 
-/* 7TV Paint */
+/* >>> 7tv paint */
 .popup-paint {
   display: flex;
   flex-direction: column;

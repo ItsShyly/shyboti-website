@@ -3,7 +3,7 @@ import { computed } from "vue";
 import { useAuth } from "../../auth";
 import { API } from "../../api";
 
-// >>> admin mode would re-auth as the admin's own account, not the broadcaster - only render the link on your own channel
+// >>> only show link on own channel, admin mode would re-auth wrong account
 const { session } = useAuth();
 const isOwnChannel = computed(
   () => !!session.value && session.value.login === session.value.channel,

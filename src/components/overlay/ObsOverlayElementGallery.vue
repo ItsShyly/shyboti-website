@@ -21,10 +21,7 @@ const entries: { type: OverlayElementType; variant?: ShapeVariant; label: string
 
 const helpOpen = ref(false);
 
-// >>> mouse icon with the referenced button filled in the site's accent purple - built by
-// >>> hand like RESET_ZOOM_ICON in ObsOverlayCanvasStage.vue, doesn't fit the shared 24x24
-// >>> stroke icon set. No <clipPath>/ids - this gets injected via v-html potentially several
-// >>> times on the same page, and duplicate SVG ids across instances can misrender.
+// >>> no svg ids, duplicate ids break with repeated v-html injection
 const MOUSE_PURPLE = "#9d6cff";
 const MOUSE_GRAY = "#666";
 function mouseIcon(button: "left" | "right" | "middle"): string {
@@ -44,8 +41,7 @@ const MOUSE_LEFT = mouseIcon("left");
 const MOUSE_RIGHT = mouseIcon("right");
 const MOUSE_MIDDLE = mouseIcon("middle");
 
-// >>> each row's key column is built from parts - {k} renders as a bracket/keycap chip,
-// >>> {svg} renders a raw icon (e.g. a mouse-button symbol), {t} is plain connecting text
+// >>> parts render as a keycap, icon, or plain text
 interface KeyPart { k?: string; svg?: string; t?: string }
 interface Shortcut { parts: KeyPart[]; desc: string }
 const shortcuts: Shortcut[] = [

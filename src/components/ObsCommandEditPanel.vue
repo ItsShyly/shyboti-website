@@ -39,11 +39,11 @@ type BindKind = "scene" | "source" | "arg";
 interface Props {
   open: boolean;
   channel: string;
-  // >>> pass current bindings in so we can pre-populate the form
+  // >>> used to pre-fill the form
   sceneBindings: ObsSceneBind[];
   sourceBindings: ObsSourceBind[];
   argCommands: Record<string, ObsArgEntry>;
-  // >>> which row to open for editing (null = create new)
+  // >>> null means creating a new one
   editTarget: { kind: BindKind; command: string } | null;
   prefix: string;
   scenes: string[];
@@ -61,7 +61,7 @@ const error = ref("");
 const deleting = ref(false);
 const deleteConfirm = ref(false);
 
-// >>> form state
+// >>> form fields
 const fKind = ref<BindKind>("scene");
 const fAction = ref("scene");
 const fCommand = ref("");
@@ -94,7 +94,7 @@ const ARG_ACTIONS = [
 
 const isEdit = computed(() => !!props.editTarget);
 
-// >>> populate form when opening
+// >>> fill form on open
 watch(
   () => props.open,
   (open) => {
@@ -133,7 +133,7 @@ watch(
       fCooldown.value = b?.cooldown ?? 0;
       fUserCd.value = b?.userCooldown ?? 0;
     } else {
-      // >>> arg: find which action maps to this command
+      // >>> find which action maps to this command
       const match = Object.entries(props.argCommands).find(
         ([, e]) => (typeof e === "string" ? e : e.command) === command,
       );
@@ -151,7 +151,7 @@ watch(
   },
 );
 
-// >>> reset kind/action when kind tab changes
+// >>> reset action when kind tab changes
 watch(fKind, (k) => {
   if (k === "scene") fAction.value = "scene";
   if (k === "source") fAction.value = "show";
@@ -160,7 +160,6 @@ watch(fKind, (k) => {
   fValue.value = "";
 });
 
-// vvv save vvv
 async function save() {
   if (!session.value) return;
   if (missingFields.value.length) {
@@ -170,7 +169,7 @@ async function save() {
   error.value = "";
   saving.value = true;
   try {
-    // >>> clone current bindings, mutate the relevant list before saving
+    // >>> clone lists before mutating them
     const newScenes = props.sceneBindings.map((b) => ({ ...b }));
     const newSources = props.sourceBindings.map((b) => ({ ...b }));
     const newArgs = { ...props.argCommands };
@@ -207,7 +206,7 @@ async function save() {
       if (idx >= 0) newSources[idx] = entry;
       else newSources.push(entry);
     } else {
-      // >>> arg: key is the action; if editing, drop the old key first (action may've changed)
+      // >>> drop old key first, action may've changed
       if (isEdit.value) {
         const oldKey = Object.entries(props.argCommands).find(
           ([, e]) =>
@@ -245,7 +244,6 @@ async function save() {
   saving.value = false;
 }
 
-// >>> delete
 async function deleteCmd() {
   if (!session.value || !isEdit.value) return;
   if (!deleteConfirm.value) {
@@ -289,7 +287,6 @@ async function deleteCmd() {
   deleting.value = false;
 }
 
-// >>> validation
 const missingFields = computed(() => {
   const missing: string[] = [];
   if (!fCommand.value.trim()) missing.push("Command");
