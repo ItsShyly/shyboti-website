@@ -611,6 +611,13 @@
   opacity: 0.35;
   cursor: not-allowed;
 }
+/* >>> label + switch, click anywhere on the row to toggle */
+.ep-switch-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
 
 /* Pills used in row meta lines */
 .ep-meta-pill {

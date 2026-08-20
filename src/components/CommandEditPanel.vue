@@ -33,6 +33,7 @@ const saved = ref(false)
 const saveError = ref('')
 const deleting = ref(false)
 const deleteConfirm = ref(false)
+const activeTab = ref<'response' | 'args' | 'behavior'>('response')
 
 const form = ref<CustomCommand>({
   name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
@@ -465,7 +466,7 @@ function removeArgFromResponse(src: string, argNum: number): string {
 }
 // ^^^ arg variant system ^^^
 
-watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; saveError.value = '' } })
+watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; saveError.value = ''; activeTab.value = 'response' } })
 onMounted(() => { if (props.open) load() })
 // >>> unlocks aliases right after the first save of a new command, no full reload
 watch(() => props.cmdName, (name, old) => { if (name && !old && props.open) loadAliases() })
@@ -879,81 +880,126 @@ function removeArgVariant(i: number) {
         <div v-else class="ep-panel-body">
           <div v-if="saveError" class="ep-toast error">{{ saveError }}</div>
 
-          <div class="ep-field-group">
-            <label class="ep-field-label">{{ t('edit.response') }}</label>
-
-            <!-- >>> locked prefix for built-in commands -->
-            <div v-if="isBuiltIn" class="builtin-prefix-row">
-              <span class="builtin-prefix-token">$command.output <span class="builtin-prefix-lock" v-html="iconSvgFor('lock')"></span></span>
-              <span class="builtin-prefix-hint">{{ t('edit.builtin_locked') }}</span>
-            </div>
-
-            <div class="editor-wrapper">
-              <!-- >>> scrolls in sync with editor -->
-              <div class="line-numbers" ref="lineNumbersRef">
-                <div v-for="n in lineCount" :key="n" class="line-number">{{ n }}</div>
-              </div>
-              <div class="normal-editor-container">
-                <div ref="normalEditorRef" class="normal-editor" contenteditable="true" spellcheck="false"
-                  :data-placeholder="isBuiltIn ? '$text.upper($command.output)' : 'Hello $user.mention! $if($args){ You said: $args }'"
-                  @input="onNormalInput" @keydown="onNormalKeydown" @keyup="onEditorKeyupClearGhost"
-                  @click="onEditorClick" @scroll="onEditorScroll" @blur="removeGhostSpan"></div>
-                <div v-if="validationMessage" class="validation-badge">
-                  <span v-for="(err, idx) in validationErrors" :key="idx" class="validation-pill" :class="err.type">
-                    {{ err.message }}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div class="normal-hint">{{ t('edit.tab_complete') }} &nbsp;·&nbsp; <code>$</code></div>
+          <div class="ep-tabs">
+            <button class="ep-tab" :class="{ active: activeTab === 'response' }"
+              @click="activeTab = 'response'">{{ t('edit.tab_response') }}</button>
+            <button class="ep-tab" :class="{ active: activeTab === 'args' }" @click="activeTab = 'args'">
+              {{ t('edit.tab_args') }}
+              <span v-if="!isBuiltIn && form.arg_descs?.length">{{ form.arg_descs.length }}</span>
+            </button>
+            <button class="ep-tab" :class="{ active: activeTab === 'behavior' }"
+              @click="activeTab = 'behavior'">{{ t('edit.tab_behavior') }}</button>
           </div>
 
-          <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
+          <!-- vvv response tab vvv -->
+          <template v-if="activeTab === 'response'">
+            <div class="ep-field-group">
+              <label class="ep-field-label">{{ t('edit.response') }}</label>
 
-          <!-- >>> docs only, doesn't touch the script itself -->
-          <details class="ep-field-group desc-details">
-            <summary class="ep-field-label desc-summary">
-              {{ t('edit.description') }} <span class="ep-field-hint">&amp; usage</span>
-            </summary>
+              <!-- >>> locked prefix for built-in commands -->
+              <div v-if="isBuiltIn" class="builtin-prefix-row">
+                <span class="builtin-prefix-token">$command.output <span class="builtin-prefix-lock" v-html="iconSvgFor('lock')"></span></span>
+                <span class="builtin-prefix-hint">{{ t('edit.builtin_locked') }}</span>
+              </div>
 
-            <div class="desc-body">
+              <div class="editor-wrapper">
+                <!-- >>> scrolls in sync with editor -->
+                <div class="line-numbers" ref="lineNumbersRef">
+                  <div v-for="n in lineCount" :key="n" class="line-number">{{ n }}</div>
+                </div>
+                <div class="normal-editor-container">
+                  <div ref="normalEditorRef" class="normal-editor" contenteditable="true" spellcheck="false"
+                    :data-placeholder="isBuiltIn ? '$text.upper($command.output)' : 'Hello $user.mention! $if($args){ You said: $args }'"
+                    @input="onNormalInput" @keydown="onNormalKeydown" @keyup="onEditorKeyupClearGhost"
+                    @click="onEditorClick" @scroll="onEditorScroll" @blur="removeGhostSpan"></div>
+                  <div v-if="validationMessage" class="validation-badge">
+                    <span v-for="(err, idx) in validationErrors" :key="idx" class="validation-pill" :class="err.type">
+                      {{ err.message }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="normal-hint">{{ t('edit.tab_complete') }} &nbsp;·&nbsp; <code>$</code></div>
+            </div>
+
+            <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
+
+            <div class="ep-field-group">
+              <label class="ep-field-label">{{ t('edit.description') }}</label>
               <div v-if="isBuiltIn" class="desc-readonly">{{ form.description || '-' }}</div>
               <input v-else v-model="form.description" class="ep-field-input" :placeholder="t('edit.desc_placeholder')"
                 maxlength="120" />
-
-              <!-- >>> usage is auto-detected, only the description text is editable -->
-              <template v-if="!isBuiltIn">
-                <div class="arg-descs-header">
-                  <span class="arg-descs-title">Argument usage <span class="ep-field-hint">auto-detected - describe what
-                      each does</span></span>
-                  <button class="arg-add-btn" @click="addArgVariant" type="button">+ Arg</button>
-                </div>
-                <div v-if="!form.arg_descs?.length" class="arg-descs-empty">
-                  No variants detected. Use <code class="hint-code">$if($1 = value)</code>, <code
-                    class="hint-code">$1</code>, <code class="hint-code">$args</code> in the response.
-                </div>
-                <div class="arg-descs-list">
-                  <div v-for="(v, i) in form.arg_descs" :key="i" class="arg-desc-row">
-                    <span class="arg-desc-prefix">{{ prefix || '+' }}{{ form.name }}</span>
-                    <span class="arg-usage-display">{{ form.arg_descs[i]?.usage || '<value>' }}</span>
-                    <input :value="form.arg_descs[i]?.desc ?? ''" class="ep-field-input arg-desc-input"
-                      placeholder="What this variant does…"
-                      @change="(e) => { if (form.arg_descs[i]) form.arg_descs[i].desc = (e.target as HTMLInputElement).value }" />
-                    <button class="arg-remove-btn" @click="removeArgVariant(i)" type="button"
-                      title="Remove this variant from the response" v-html="iconSvgFor('x')"></button>
-                  </div>
-                </div>
-              </template>
             </div>
-          </details>
 
-          <!-- >>> aliases work for built-in and custom -->
-          <details class="ep-field-group desc-details" open>
-            <summary class="ep-field-label desc-summary">
-              {{ t('edit.aliases') }} <span class="ep-field-hint">{{ t('edit.aliases_hint') }}</span>
-            </summary>
-            <div class="desc-body">
+            <details class="ep-field-group preview-details" open>
+              <summary class="ep-field-label preview-summary">
+                {{ t('edit.preview') }} <span class="preview-note">{{ t('edit.preview_note') }}</span>
+              </summary>
+              <div class="preview-body">
+                <div class="preview-output">{{ previewOutput || '-' }}</div>
+
+                <div class="mock-ctx-grid">
+                  <label>user</label><input v-model="mockCtx.user" class="ep-field-input mock-input"
+                    @input="mockCtx.display = mockCtx.user" />
+                  <label>message</label><input v-model="mockCtx.messageText" class="ep-field-input mock-input"
+                    @input="() => { const w = mockCtx.messageText.split(' '); mockCtx.args = w.slice(1).join(' '); mockCtx.argList = w.slice(1) }"
+                    placeholder="message without command" />
+                </div>
+                <div class="mock-role-row">
+                  <span class="mock-role-hint">Role:</span>
+                  <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isMod" /> mod</label>
+                  <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isSub" /> sub</label>
+                  <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isVip" /> vip</label>
+                  <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isBroadcaster" />
+                    broadcaster</label>
+                </div>
+              </div>
+            </details>
+          </template>
+          <!-- ^^^ response tab ^^^ -->
+
+          <!-- vvv args tab vvv -->
+          <template v-if="activeTab === 'args'">
+            <!-- >>> usage is auto-detected, only the description text is editable -->
+            <div v-if="!isBuiltIn" class="ep-field-group">
+              <div class="arg-descs-header">
+                <span class="ep-field-label">{{ t('edit.arg_usage') }} <span class="ep-field-hint">auto-detected - describe what
+                    each does</span></span>
+                <button class="arg-add-btn" @click="addArgVariant" type="button">+ Arg</button>
+              </div>
+              <div v-if="!form.arg_descs?.length" class="arg-descs-empty">
+                No variants detected. Use <code class="hint-code">$if($1 = value)</code>, <code
+                  class="hint-code">$1</code>, <code class="hint-code">$args</code> in the response.
+              </div>
+              <div class="arg-descs-list">
+                <div v-for="(v, i) in form.arg_descs" :key="i" class="arg-desc-row">
+                  <span class="arg-desc-prefix">{{ prefix || '+' }}{{ form.name }}</span>
+                  <span class="arg-usage-display">{{ form.arg_descs[i]?.usage || '<value>' }}</span>
+                  <input :value="form.arg_descs[i]?.desc ?? ''" class="ep-field-input arg-desc-input"
+                    placeholder="What this variant does…"
+                    @change="(e) => { if (form.arg_descs[i]) form.arg_descs[i].desc = (e.target as HTMLInputElement).value }" />
+                  <button class="arg-remove-btn" @click="removeArgVariant(i)" type="button"
+                    title="Remove this variant from the response" v-html="iconSvgFor('x')"></button>
+                </div>
+              </div>
+            </div>
+
+            <!-- >>> built-ins only -->
+            <div v-if="isBuiltIn" class="ep-field-group">
+              <label class="ep-field-label">{{ t('edit.flags') }}</label>
+              <div v-if="!builtinFlags.length" class="arg-descs-empty">{{ t('edit.flags_empty') }}</div>
+              <div v-else class="flags-list">
+                <div v-for="f in builtinFlags" :key="f.flag" class="flags-row">
+                  <span class="flags-flag">{{ f.flag }}</span>
+                  <span class="flags-desc">{{ f.desc }}</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- >>> aliases work for built-in and custom -->
+            <div class="ep-field-group">
+              <label class="ep-field-label">{{ t('edit.aliases') }} <span class="ep-field-hint">{{ t('edit.aliases_hint') }}</span></label>
               <div v-if="aliasesNeedSave" class="arg-descs-empty">
                 {{ t('edit.aliases_save_first') }}
               </div>
@@ -981,86 +1027,57 @@ function removeArgVariant(i: number) {
                 <div v-if="aliasError" class="alias-error">{{ aliasError }}</div>
               </template>
             </div>
-          </details>
+          </template>
+          <!-- ^^^ args tab ^^^ -->
 
-          <!-- >>> built-ins only -->
-          <details v-if="isBuiltIn" class="ep-field-group desc-details" open>
-            <summary class="ep-field-label desc-summary">
-              {{ t('edit.flags') }}
-            </summary>
-            <div class="desc-body">
-              <div v-if="!builtinFlags.length" class="arg-descs-empty">{{ t('edit.flags_empty') }}</div>
-              <div v-else class="flags-list">
-                <div v-for="f in builtinFlags" :key="f.flag" class="flags-row">
-                  <span class="flags-flag">{{ f.flag }}</span>
-                  <span class="flags-desc">{{ f.desc }}</span>
-                </div>
+          <!-- vvv behavior tab vvv -->
+          <template v-if="activeTab === 'behavior'">
+            <div v-if="!isBuiltIn" class="ep-field-group">
+              <label class="ep-field-label">{{ t('edit.status') }}</label>
+              <div class="ep-switch-wrap" @click="form.isActive = !form.isActive">
+                <div class="ep-switch" :class="{ on: form.isActive }"><span class="ep-switch-knob"></span></div>
+                <span>{{ form.isActive ? t('edit.enabled') : t('edit.disabled') }}</span>
               </div>
             </div>
-          </details>
 
-          <details class="ep-field-group preview-details">
-            <summary class="ep-field-label preview-summary">
-              {{ t('edit.preview') }} <span class="preview-note">{{ t('edit.preview_note') }}</span>
-            </summary>
-            <div class="preview-body">
-              <div class="preview-output">{{ previewOutput || '-' }}</div>
-
-              <div class="mock-ctx-grid">
-                <label>user</label><input v-model="mockCtx.user" class="ep-field-input mock-input"
-                  @input="mockCtx.display = mockCtx.user" />
-                <label>message</label><input v-model="mockCtx.messageText" class="ep-field-input mock-input"
-                  @input="() => { const w = mockCtx.messageText.split(' '); mockCtx.args = w.slice(1).join(' '); mockCtx.argList = w.slice(1) }"
-                  placeholder="message without command" />
+            <div class="ep-row-3">
+              <div class="ep-field-group ep-sm">
+                <label class="ep-field-label">{{ t('edit.active_when') }}</label>
+                <select v-model="form.enabled_when" class="ep-field-select">
+                  <option value="always">{{ t('edit.when.always') }}</option>
+                  <option value="online">{{ t('edit.when.online') }}</option>
+                  <option value="offline">{{ t('edit.when.offline') }}</option>
+                </select>
               </div>
-              <div class="mock-role-row">
-                <span class="mock-role-hint">Role:</span>
-                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isMod" /> mod</label>
-                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isSub" /> sub</label>
-                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isVip" /> vip</label>
-                <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isBroadcaster" />
-                  broadcaster</label>
+              <div class="ep-field-group ep-sm">
+                <label class="ep-field-label">{{ t('edit.required_game') }} <span class="ep-field-hint">{{
+                  t('edit.optional')
+                    }}</span></label>
+                <input v-model="form.required_game" class="ep-field-input" placeholder="Fortnite" />
+              </div>
+              <div v-if="!isBuiltIn" class="ep-field-group ep-sm">
+                <label class="ep-field-label">{{ t('edit.alias') }} <span class="ep-field-hint">{{ t('edit.optional')
+                }}</span></label>
+                <input v-model="form.alias" class="ep-field-input" placeholder="shortname" />
               </div>
             </div>
-          </details>
 
-          <div class="ep-section-label">Behavior</div>
-          <div class="ep-row-3">
-            <div class="ep-field-group ep-sm">
-              <label class="ep-field-label">{{ t('edit.active_when') }}</label>
-              <select v-model="form.enabled_when" class="ep-field-select">
-                <option value="always">{{ t('edit.when.always') }}</option>
-                <option value="online">{{ t('edit.when.online') }}</option>
-                <option value="offline">{{ t('edit.when.offline') }}</option>
-              </select>
+            <div class="ep-row-3">
+              <div class="ep-field-group ep-sm">
+                <label class="ep-field-label">{{ t('edit.global_cd') }} <span class="ep-field-hint">{{
+                  t('edit.seconds_short')
+                    }}</span></label>
+                <input v-model.number="form.cooldown" type="number" min="0" class="ep-field-input" />
+              </div>
+              <div class="ep-field-group ep-sm">
+                <label class="ep-field-label">{{ t('edit.user_cd') }} <span class="ep-field-hint">{{
+                  t('edit.seconds_short')
+                    }}</span></label>
+                <input v-model.number="form.userCooldown" type="number" min="0" class="ep-field-input" />
+              </div>
             </div>
-            <div class="ep-field-group ep-sm">
-              <label class="ep-field-label">{{ t('edit.required_game') }} <span class="ep-field-hint">{{
-                t('edit.optional')
-                  }}</span></label>
-              <input v-model="form.required_game" class="ep-field-input" placeholder="Fortnite" />
-            </div>
-            <div v-if="!isBuiltIn" class="ep-field-group ep-sm">
-              <label class="ep-field-label">{{ t('edit.alias') }} <span class="ep-field-hint">{{ t('edit.optional')
-              }}</span></label>
-              <input v-model="form.alias" class="ep-field-input" placeholder="shortname" />
-            </div>
-          </div>
-
-          <div class="ep-row-3">
-            <div class="ep-field-group ep-sm">
-              <label class="ep-field-label">{{ t('edit.global_cd') }} <span class="ep-field-hint">{{
-                t('edit.seconds_short')
-                  }}</span></label>
-              <input v-model.number="form.cooldown" type="number" min="0" class="ep-field-input" />
-            </div>
-            <div class="ep-field-group ep-sm">
-              <label class="ep-field-label">{{ t('edit.user_cd') }} <span class="ep-field-hint">{{
-                t('edit.seconds_short')
-                  }}</span></label>
-              <input v-model.number="form.userCooldown" type="number" min="0" class="ep-field-input" />
-            </div>
-          </div>
+          </template>
+          <!-- ^^^ behavior tab ^^^ -->
 
         </div>
 
@@ -1106,47 +1123,12 @@ function removeArgVariant(i: number) {
   border-radius: 2px;
 }
 
-/* >>> description + args dropdown */
-.desc-details {
-  border: 1px solid #1e1e22;
-  background: #0d0d10;
-  padding: 0 !important;
-}
-
-.desc-summary {
-  display: flex;
-  padding: 8px 10px;
-  margin: 0;
-  cursor: pointer;
-  user-select: none;
-  list-style: none;
-}
-
-.desc-details[open] .desc-summary {
-  border-bottom: 1px solid #1e1e22;
-}
-
-.desc-body {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px;
-}
-
 /* >>> arg variants editor */
 .arg-descs-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 6px;
-}
-
-.arg-descs-title {
-  font-size: 10px;
-  font-weight: 600;
-  color: #555;
-  text-transform: uppercase;
-  letter-spacing: .05em;
 }
 
 .arg-add-btn {
@@ -1556,14 +1538,6 @@ function removeArgVariant(i: number) {
   accent-color: #6f2bff;
 }
 
-.ep-section-label {
-  font-size: 9px;
-  font-weight: 700;
-  color: #444;
-  text-transform: uppercase;
-  letter-spacing: .08em;
-  margin: 2px 0 -4px;
-}
 </style>
 
 <style>

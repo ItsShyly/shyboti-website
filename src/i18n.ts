@@ -179,6 +179,13 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.share.copying": "Copying…",
 
     // vvv Command Edit Panel vvv
+    "edit.tab_response": "Response",
+    "edit.tab_args": "Args",
+    "edit.tab_behavior": "Behavior",
+    "edit.arg_usage": "Argument usage",
+    "edit.status": "Status",
+    "edit.enabled": "Enabled",
+    "edit.disabled": "Disabled",
     "edit.response": "Response",
     "edit.description": "Description",
     "edit.desc_hint_builtin": "read-only - set in the command file",
@@ -1041,6 +1048,13 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.share.copying": "Wird kopiert…",
 
     // vvv Command Edit Panel vvv
+    "edit.tab_response": "Response",
+    "edit.tab_args": "Args",
+    "edit.tab_behavior": "Verhalten",
+    "edit.arg_usage": "Argument-Nutzung",
+    "edit.status": "Status",
+    "edit.enabled": "Aktiviert",
+    "edit.disabled": "Deaktiviert",
     "edit.response": "Antwort",
     "edit.description": "Beschreibung",
     "edit.desc_hint_builtin": "schreibgeschützt - in der Command-Datei gesetzt",
