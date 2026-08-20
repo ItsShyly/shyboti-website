@@ -2279,8 +2279,8 @@ watch(
             <div class="obs-filter-list">
               <div v-for="s in scenes" :key="s.sceneName" class="ep-list-row"
                 :class="{ inactive: hiddenScenes.has(s.sceneName) }">
-                <div class="square" :class="hiddenScenes.has(s.sceneName) ? 'off' : 'on'"
-                  @click="toggleSceneHidden(s.sceneName)"></div>
+                <div class="ep-switch" :class="hiddenScenes.has(s.sceneName) ? 'off' : 'on'"
+                  @click="toggleSceneHidden(s.sceneName)"><span class="ep-switch-knob"></span></div>
                 <span>{{ s.sceneName }}</span>
               </div>
               <div v-if="!scenes.length" class="ep-field-hint">no scenes loaded yet</div>

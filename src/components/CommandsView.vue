@@ -1068,10 +1068,10 @@ onUnmounted(() => {
                   </button>
                 </div>
                 <div>
-                  <div class="square" :class="[
+                  <div class="ep-switch" :class="[
                     cmd.isActive ? 'on' : 'off',
                     { disabled: !canToggle },
-                  ]" @click="toggle(cmd, 'isActive')"></div>
+                  ]" @click="toggle(cmd, 'isActive')"><span class="ep-switch-knob"></span></div>
                 </div>
                 <div class="cmd-name">
                   <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
@@ -1205,13 +1205,13 @@ onUnmounted(() => {
                   </button>
                 </div>
                 <div>
-                  <div class="square" :class="[
+                  <div class="ep-switch" :class="[
                     cmd.isActive ? 'on' : 'off',
                     { disabled: !canToggle },
                   ]" @click="
                     cmd.isActive = !cmd.isActive;
                   updateCustomActive(cmd);
-                  "></div>
+                  "><span class="ep-switch-knob"></span></div>
                 </div>
                 <div class="cmd-name">
                   <span class="cmd-cat-dot" style="background: #9d6cff"></span>{{ prefix }}{{ cmd.name
@@ -1332,7 +1332,7 @@ onUnmounted(() => {
               <div v-for="b in obsSceneBindings" :key="'sc' + b.command" class="table-row custom-row">
                 <div class="row-chevron-cell"></div>
                 <div>
-                  <div class="square on"></div>
+                  <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
                 <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
                   b.command }}</div>
@@ -1372,7 +1372,7 @@ onUnmounted(() => {
               <div v-for="b in obsSourceBindings" :key="'so' + b.command" class="table-row custom-row">
                 <div class="row-chevron-cell"></div>
                 <div>
-                  <div class="square on"></div>
+                  <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
                 <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
                   b.command }}</div>
@@ -1414,7 +1414,7 @@ onUnmounted(() => {
               <div v-for="(entry, action) in obsArgCommands" :key="'arg' + action" class="table-row custom-row">
                 <div class="row-chevron-cell"></div>
                 <div>
-                  <div class="square on"></div>
+                  <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
                 <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
                   obsArgCommand(entry) }}</div>
@@ -1718,7 +1718,7 @@ onUnmounted(() => {
   text-overflow: ellipsis;
 }
 
-/* >>> .square comes from shared.css */
+/* >>> .ep-switch comes from shared.css */
 
 .cmd-name {
   font-size: 14px;

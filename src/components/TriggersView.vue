@@ -525,8 +525,8 @@ defineExpose({
       <div v-for="trigger in triggers" :key="trigger.id" class="ep-list-row trigger-row"
         :class="{ inactive: !trigger.is_active }">
         <div class="trigger-toggle-wrap">
-          <button class="square" :class="{ on: trigger.is_active, off: !trigger.is_active, disabled: !canToggle }"
-            @click="canToggle && toggleActive(trigger)"></button>
+          <button class="ep-switch" :class="{ on: trigger.is_active, off: !trigger.is_active, disabled: !canToggle }"
+            @click="canToggle && toggleActive(trigger)"><span class="ep-switch-knob"></span></button>
         </div>
         <div class="trigger-info" @click="openEdit(trigger)">
           <div class="trigger-name">{{ trigger.name }}</div>

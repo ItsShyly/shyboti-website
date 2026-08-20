@@ -195,9 +195,9 @@ function toggle(key: string) {
           </div>
         </label>
         <label class="ovl-style-check">
-          <div class="ep-toggle-btn" :class="{ on: !!element.style.stroke }"
+          <div class="ep-switch" :class="{ on: !!element.style.stroke }"
             @click="setStyle({ stroke: !element.style.stroke })">
-            <span class="ep-toggle-knob"></span>
+            <span class="ep-switch-knob"></span>
           </div>
           outline
         </label>
@@ -213,9 +213,9 @@ function toggle(key: string) {
           </div>
         </label>
         <label class="ovl-style-check">
-          <div class="ep-toggle-btn" :class="{ on: !!element.style.shadow }"
+          <div class="ep-switch" :class="{ on: !!element.style.shadow }"
             @click="setStyle({ shadow: !element.style.shadow })">
-            <span class="ep-toggle-knob"></span>
+            <span class="ep-switch-knob"></span>
           </div>
           drop shadow
         </label>
@@ -254,9 +254,9 @@ function toggle(key: string) {
               @change="setData({ durationSec: Math.max(0, num($event) * 60) })" />
           </label>
           <label class="ovl-style-check">
-            <div class="ep-toggle-btn" :class="{ on: element.data.repeat !== false }"
+            <div class="ep-switch" :class="{ on: element.data.repeat !== false }"
               @click="setData({ repeat: element.data.repeat === false })">
-              <span class="ep-toggle-knob"></span>
+              <span class="ep-switch-knob"></span>
             </div>
             repeat when it reaches zero
           </label>
@@ -348,9 +348,9 @@ function toggle(key: string) {
     <template v-if="isAudio">
       <div class="ovl-style-section-title-static">audio</div>
       <label class="ovl-style-check">
-        <div class="ep-toggle-btn" :class="{ on: element.data.muted !== false }"
+        <div class="ep-switch" :class="{ on: element.data.muted !== false }"
           @click="setData({ muted: element.data.muted === false })">
-          <span class="ep-toggle-knob"></span>
+          <span class="ep-switch-knob"></span>
         </div>
         muted
       </label>
@@ -383,8 +383,8 @@ function toggle(key: string) {
         <input type="number" :value="Math.round(element.rotation)" @change="set({ rotation: num($event) })" />
       </label>
       <label class="ovl-style-check">
-        <div class="ep-toggle-btn" :class="{ on: aspectLocked }" @click="aspectLocked = !aspectLocked">
-          <span class="ep-toggle-knob"></span>
+        <div class="ep-switch" :class="{ on: aspectLocked }" @click="aspectLocked = !aspectLocked">
+          <span class="ep-switch-knob"></span>
         </div>
         lock aspect
       </label>

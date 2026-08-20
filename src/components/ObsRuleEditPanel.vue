@@ -393,8 +393,8 @@ const missingFields = computed(() => {
           <div class="ep-field-group">
             <label class="ep-field-label">Chat message</label>
             <div class="obs-toggle-row">
-              <button class="ep-toggle-btn" :class="{ on: fChatMsgEnabled }" @click="toggleChatMessage">
-                <span class="ep-toggle-knob"></span>
+              <button class="ep-switch" :class="{ on: fChatMsgEnabled }" @click="toggleChatMessage">
+                <span class="ep-switch-knob"></span>
               </button>
               <span class="obs-toggle-label">{{ fChatMsgEnabled ? "send a message when this fires" : "off" }}</span>
             </div>
@@ -405,8 +405,8 @@ const missingFields = computed(() => {
           <div class="ep-field-group">
             <label class="ep-field-label">Enabled</label>
             <div class="obs-toggle-row">
-              <button class="ep-toggle-btn" :class="{ on: fEnabled }" @click="fEnabled = !fEnabled">
-                <span class="ep-toggle-knob"></span>
+              <button class="ep-switch" :class="{ on: fEnabled }" @click="fEnabled = !fEnabled">
+                <span class="ep-switch-knob"></span>
               </button>
               <span class="obs-toggle-label">{{ fEnabled ? "active" : "disabled" }}</span>
             </div>

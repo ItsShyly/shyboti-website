@@ -856,8 +856,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <div v-for="term in section.items" :key="term.id" class="ep-list-row mod-item-row"
                 :class="{ inactive: !term.is_active }" draggable="true" @dragstart="onDragStart(term.id)">
                 <div class="timer-toggle-wrap">
-                  <button class="square" :class="{ on: term.is_active, off: !term.is_active, disabled: !canManage }"
-                    @click="toggleActive('blocked', term)" :title="term.is_active ? 'Disable' : 'Enable'"></button>
+                  <button class="ep-switch" :class="{ on: term.is_active, off: !term.is_active, disabled: !canManage }"
+                    @click="toggleActive('blocked', term)" :title="term.is_active ? 'Disable' : 'Enable'"><span class="ep-switch-knob"></span></button>
                 </div>
                 <div class="mod-item-main">
                   <div class="mod-item-title">
@@ -918,8 +918,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <div v-for="f in section.items" :key="f.id" class="ep-list-row mod-item-row"
                 :class="{ inactive: !f.is_active }" draggable="true" @dragstart="onDragStart(f.id)">
                 <div class="timer-toggle-wrap">
-                  <button class="square" :class="{ on: f.is_active, off: !f.is_active, disabled: !canManage }"
-                    @click="toggleActive('spam', f)" :title="f.is_active ? 'Disable' : 'Enable'"></button>
+                  <button class="ep-switch" :class="{ on: f.is_active, off: !f.is_active, disabled: !canManage }"
+                    @click="toggleActive('spam', f)" :title="f.is_active ? 'Disable' : 'Enable'"><span class="ep-switch-knob"></span></button>
                 </div>
                 <div class="mod-item-main">
                   <div class="spam-label">
@@ -1122,8 +1122,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <div class="ep-field-group">
                 <label class="ep-field-label">{{ t("mod.field.type") }}</label>
                 <label class="ep-toggle-label">
-                  <div class="ep-toggle-btn" :class="{ on: fSpamIgnore7tv }" @click="fSpamIgnore7tv = !fSpamIgnore7tv">
-                    <span class="ep-toggle-knob"></span>
+                  <div class="ep-switch" :class="{ on: fSpamIgnore7tv }" @click="fSpamIgnore7tv = !fSpamIgnore7tv">
+                    <span class="ep-switch-knob"></span>
                   </div>
                   <span class="toggle-text">{{ t("mod.spam.ignore_7tv") }}</span>
                 </label>
@@ -1238,24 +1238,24 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <label class="ep-field-label">{{ t("mod.field.options") }}</label>
               <div class="toggle-row-group">
                 <label class="ep-toggle-label">
-                  <div class="ep-toggle-btn" :class="{ on: fNukeStay }" @click="fNukeStay = !fNukeStay">
-                    <span class="ep-toggle-knob"></span>
+                  <div class="ep-switch" :class="{ on: fNukeStay }" @click="fNukeStay = !fNukeStay">
+                    <span class="ep-switch-knob"></span>
                   </div>
                   <span class="toggle-text">{{ t("mod.nuke.stay") }}</span>
                   <span class="info-icon" :title="t('mod.nuke.stay_hint')" v-html="iconSvgFor('info')"></span>
                 </label>
                 <label class="ep-toggle-label" :class="{ dimmed: fNukeIsRegex }">
-                  <div class="ep-toggle-btn" :class="{ on: fNukeMatchExact && !fNukeIsRegex }"
+                  <div class="ep-switch" :class="{ on: fNukeMatchExact && !fNukeIsRegex }"
                     @click="!fNukeIsRegex && (fNukeMatchExact = !fNukeMatchExact)">
-                    <span class="ep-toggle-knob"></span>
+                    <span class="ep-switch-knob"></span>
                   </div>
                   <span class="toggle-text">{{ t("mod.nuke.exact") }}</span>
                   <span class="info-icon" :title="t('mod.nuke.exact_hint')" v-html="iconSvgFor('info')"></span>
                 </label>
                 <label class="ep-toggle-label" :class="{ dimmed: !fNukeStay }">
-                  <div class="ep-toggle-btn" :class="{ on: fNukeExpiry && fNukeStay }"
+                  <div class="ep-switch" :class="{ on: fNukeExpiry && fNukeStay }"
                     @click="fNukeStay && (fNukeExpiry = !fNukeExpiry)">
-                    <span class="ep-toggle-knob"></span>
+                    <span class="ep-switch-knob"></span>
                   </div>
                   <span class="toggle-text">{{ t("mod.nuke.expiry") }}</span>
                   <span class="info-icon" :title="t('mod.nuke.expiry_hint')" v-html="iconSvgFor('info')"></span>

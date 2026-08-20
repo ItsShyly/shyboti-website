@@ -571,9 +571,9 @@
   cursor: not-allowed;
 }
 
-/* Toggle switch */
-.ep-toggle-btn {
-  width: 36px;
+/* Toggle switch - single shared component, every boolean toggle uses this */
+.ep-switch {
+  width: 38px;
   height: 20px;
   border: 1px solid #2a2a30;
   background: #0d0d10;
@@ -584,49 +584,31 @@
     background 0.2s,
     border-color 0.2s;
 }
-.ep-toggle-btn.on {
+.ep-switch.on {
   background: #6f2bff33;
   border-color: #6f2bff88;
 }
-.ep-toggle-knob {
+.ep-switch-knob {
   position: absolute;
   top: 2px;
   left: 2px;
   width: 14px;
   height: 14px;
-  background: #333;
+  background: #fff;
   transition:
     transform 0.2s,
-    background 0.2s;
+    background 0.2s,
+    box-shadow 0.2s;
 }
-.ep-toggle-btn.on .ep-toggle-knob {
-  transform: translateX(16px);
+.ep-switch:hover .ep-switch-knob {
+  box-shadow: 0 0 5px #0006;
+}
+.ep-switch.on .ep-switch-knob {
+  transform: translateX(18px);
   background: #9d6cff;
 }
-.ep-toggle-btn.disabled {
+.ep-switch.disabled {
   opacity: 0.35;
-  cursor: not-allowed;
-}
-
-/* Solid on/off toggle for a row's own active state */
-.square {
-  width: 24px;
-  height: 24px;
-  border: 2px solid #161616;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-.square.on {
-  background: #6b35d4;
-}
-.square.off {
-  background: #111217;
-}
-.square:hover {
-  opacity: 0.8;
-}
-.square.disabled {
-  opacity: 0.3;
   cursor: not-allowed;
 }
 
