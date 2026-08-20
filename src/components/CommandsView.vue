@@ -114,7 +114,8 @@ watch(searchOpenEdit, (val) => {
   });
 });
 
-function onEditSaved() {
+function onEditSaved(name: string) {
+  editingCmd.value = name;
   fetchCommands();
   fetchCustomCommands();
 }

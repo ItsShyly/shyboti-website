@@ -22,7 +22,7 @@ export interface CustomCommand {
 interface Props { cmdName: string; channel: string; open: boolean; isBuiltIn?: boolean; prefix?: string }
 
 const props = defineProps<Props>()
-const emit = defineEmits<{ (e: 'close'): void; (e: 'saved'): void }>()
+const emit = defineEmits<{ (e: 'close'): void; (e: 'saved', name: string): void }>()
 const { session } = useAuth()
 const { t } = useI18n()
 const overlay = useOverlayClose()
@@ -56,6 +56,8 @@ const newAliasName = ref('')
 const aliasSaving = ref(false)
 const aliasError = ref('')
 const builtinFlags = computed(() => props.isBuiltIn ? (COMMAND_FLAGS[props.cmdName] ?? []) : [])
+// >>> alias needs a saved command to attach to
+const aliasesNeedSave = computed(() => !props.isBuiltIn && !props.cmdName)
 
 async function loadAliases() {
   if (!session.value || !props.cmdName) return
@@ -465,6 +467,8 @@ function removeArgFromResponse(src: string, argNum: number): string {
 
 watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; saveError.value = '' } })
 onMounted(() => { if (props.open) load() })
+// >>> unlocks aliases right after the first save of a new command, no full reload
+watch(() => props.cmdName, (name, old) => { if (name && !old && props.open) loadAliases() })
 
 watch(() => form.value.response, (src) => {
   if (props.isBuiltIn) return
@@ -509,7 +513,7 @@ async function save() {
       })
     }
 
-    saved.value = true; setTimeout(() => { saved.value = false }, 2000); emit('saved')
+    saved.value = true; setTimeout(() => { saved.value = false }, 2000); emit('saved', targetName)
   } catch { }
   saving.value = false
 }
@@ -523,7 +527,7 @@ async function deleteCmd() {
     await fetch(`${API}/custom-commands/${props.channel}/${props.cmdName}`, {
       method: 'DELETE', headers: { Authorization: `Bearer ${session.value.token}` }
     })
-    emit('saved'); emit('close')
+    emit('saved', ''); emit('close')
   } catch { }
   deleting.value = false
 }
@@ -953,27 +957,32 @@ function removeArgVariant(i: number) {
               {{ t('edit.aliases') }} <span class="ep-field-hint">{{ t('edit.aliases_hint') }}</span>
             </summary>
             <div class="desc-body">
-              <div v-if="!builtinChannelAliases.length && !builtinGlobalAliases.length" class="arg-descs-empty">
-                {{ t('edit.aliases_empty') }}
+              <div v-if="aliasesNeedSave" class="arg-descs-empty">
+                {{ t('edit.aliases_save_first') }}
               </div>
-              <div v-else class="alias-chip-list">
-                <span v-for="a in builtinGlobalAliases" :key="'g:' + a" class="alias-chip locked"
-                  :title="t('edit.alias_global_hint')">
-                  {{ prefix || '+' }}{{ a }}
-                </span>
-                <span v-for="a in builtinChannelAliases" :key="'c:' + a" class="alias-chip">
-                  {{ prefix || '+' }}{{ a }}
-                  <button class="alias-chip-remove" type="button" :disabled="aliasSaving" @click="removeAlias(a)" v-html="iconSvgFor('x')"></button>
-                </span>
-              </div>
-              <div class="alias-add-row">
-                <input v-model="newAliasName" class="ep-field-input alias-add-input" :placeholder="t('edit.aliases_placeholder')"
-                  @keydown.enter="addAlias" />
-                <button class="arg-add-btn" type="button" :disabled="aliasSaving || !newAliasName.trim()" @click="addAlias">
-                  {{ t('edit.aliases_add') }}
-                </button>
-              </div>
-              <div v-if="aliasError" class="alias-error">{{ aliasError }}</div>
+              <template v-else>
+                <div v-if="!builtinChannelAliases.length && !builtinGlobalAliases.length" class="arg-descs-empty">
+                  {{ t('edit.aliases_empty') }}
+                </div>
+                <div v-else class="alias-chip-list">
+                  <span v-for="a in builtinGlobalAliases" :key="'g:' + a" class="alias-chip locked"
+                    :title="t('edit.alias_global_hint')">
+                    {{ prefix || '+' }}{{ a }}
+                  </span>
+                  <span v-for="a in builtinChannelAliases" :key="'c:' + a" class="alias-chip">
+                    {{ prefix || '+' }}{{ a }}
+                    <button class="alias-chip-remove" type="button" :disabled="aliasSaving" @click="removeAlias(a)" v-html="iconSvgFor('x')"></button>
+                  </span>
+                </div>
+                <div class="alias-add-row">
+                  <input v-model="newAliasName" class="ep-field-input alias-add-input" :placeholder="t('edit.aliases_placeholder')"
+                    @keydown.enter="addAlias" />
+                  <button class="arg-add-btn" type="button" :disabled="aliasSaving || !newAliasName.trim()" @click="addAlias">
+                    {{ t('edit.aliases_add') }}
+                  </button>
+                </div>
+                <div v-if="aliasError" class="alias-error">{{ aliasError }}</div>
+              </template>
             </div>
           </details>
 
