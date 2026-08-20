@@ -880,10 +880,7 @@ function removeArgVariant(i: number) {
           <div v-if="saveError" class="ep-toast error">{{ saveError }}</div>
 
           <div class="ep-field-group">
-            <label class="ep-field-label">
-              {{ t('edit.response') }}
-              <span class="ep-field-hint">{{ t('edit.response_hint') }}</span>
-            </label>
+            <label class="ep-field-label">{{ t('edit.response') }}</label>
 
             <!-- >>> locked prefix for built-in commands -->
             <div v-if="isBuiltIn" class="builtin-prefix-row">

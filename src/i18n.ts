@@ -180,7 +180,6 @@ const translations: Record<Locale, Record<string, string>> = {
 
     // vvv Command Edit Panel vvv
     "edit.response": "Response",
-    "edit.response_hint": "full scripting language · $ to start a variable",
     "edit.description": "Description",
     "edit.desc_hint_builtin": "read-only - set in the command file",
     "edit.desc_hint_custom": "short description shown in the commands list",
@@ -1042,7 +1041,6 @@ const translations: Record<Locale, Record<string, string>> = {
 
     // vvv Command Edit Panel vvv
     "edit.response": "Antwort",
-    "edit.response_hint": "vollständige Skriptsprache · $ für eine Variable",
     "edit.description": "Beschreibung",
     "edit.desc_hint_builtin": "schreibgeschützt - in der Command-Datei gesetzt",
     "edit.desc_hint_custom": "kurze Beschreibung in der Command-Liste",
