@@ -135,6 +135,7 @@ const ACTION_TYPES = [
   { value: "timeout", label: "Timeout user" },
   { value: "ban", label: "Ban user" },
   { value: "mod", label: "Mod user" },
+  { value: "shoutout", label: "Shoutout" },
 ];
 
 function showSuccess(msg: string) {
@@ -332,10 +333,38 @@ const syncConf = ref<{
   last_synced: number;
 } | null>(null);
 const syncOpen = ref(false);
+const syncMode = ref<"ongoing" | "import">("ongoing");
 const syncFrom = ref("");
 const syncSaving = ref(false);
 const syncRunning = ref(false);
+const syncImporting = ref(false);
 const syncMsg = ref("");
+
+async function runImport() {
+  if (!session.value || !syncFrom.value) return;
+  syncImporting.value = true;
+  syncMsg.value = "";
+  try {
+    const res = await fetch(
+      `${API}/trigger-sync/${session.value.channel}/import`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.value.token}`,
+        },
+        body: JSON.stringify({ from: syncFrom.value }),
+      },
+    );
+    const data = (await res.json()) as { count?: number; error?: string };
+    if (!res.ok) throw new Error(data.error);
+    syncMsg.value = `Imported ${data.count} triggers from #${syncFrom.value}.`;
+    await load();
+  } catch (e: any) {
+    syncMsg.value = e.message ?? "Import failed";
+  }
+  syncImporting.value = false;
+}
 
 async function fetchSync() {
   if (!session.value) return;
@@ -472,24 +501,31 @@ defineExpose({
         </button>
         <div v-if="syncOpen" class="ep-sync-panel">
           <div class="ep-sync-modes">
-            <button class="ep-sync-mode-btn active">Sync (ongoing)</button>
-            <button class="ep-sync-mode-btn" @click="syncOpen = false">Import (one-time)</button>
+            <button class="ep-sync-mode-btn" :class="{ active: syncMode === 'ongoing' }"
+              @click="syncMode = 'ongoing'">Sync (ongoing)</button>
+            <button class="ep-sync-mode-btn" :class="{ active: syncMode === 'import' }"
+              @click="syncMode = 'import'">Import (one-time)</button>
           </div>
           <div class="ep-sync-row">
             <select v-model="syncFrom" class="ep-field-select-sm">
-              <option value="">{{ syncConf?.is_active ? t("trigger.sync.change") : t("trigger.sync.select") }}</option>
+              <option value="">{{ syncMode === 'import' ? t("trigger.sync.select") : (syncConf?.is_active ?
+                t("trigger.sync.change") : t("trigger.sync.select")) }}</option>
               <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
             </select>
-            <button class="ep-sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">
+            <button v-if="syncMode === 'import'" class="ep-sync-save-btn" @click="runImport"
+              :disabled="syncImporting || !syncFrom">
+              {{ syncImporting ? '…' : 'Import' }}
+            </button>
+            <button v-else class="ep-sync-save-btn" @click="saveSync" :disabled="syncSaving || !syncFrom">
               {{ syncSaving ? '…' : syncConf?.is_active ? t('trigger.sync.update') : t('trigger.sync.enable') }}
             </button>
           </div>
-          <div v-if="syncConf?.is_active" class="ep-sync-row">
+          <div v-if="syncMode === 'ongoing' && syncConf?.is_active" class="ep-sync-row">
             <button class="ep-sync-run-btn" @click="runSync" :disabled="syncRunning">{{ syncRunning ? '…' :
               t("trigger.sync.pull") }}</button>
             <button class="ep-sync-stop-btn" @click="stopSync">{{ t("trigger.sync.stop") }}</button>
           </div>
-          <div v-if="syncConf?.last_synced" class="ep-sync-last">{{ t("trigger.sync.last") }} {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
+          <div v-if="syncMode === 'ongoing' && syncConf?.last_synced" class="ep-sync-last">{{ t("trigger.sync.last") }} {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
           <div v-if="syncMsg" class="ep-sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{ syncMsg }}</div>
         </div>
       </div>

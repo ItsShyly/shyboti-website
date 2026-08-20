@@ -222,6 +222,26 @@ export const REF_GROUPS: RefGroup[] = [
       { token: "$channel.viewers", desc: "Viewer count", example: "42" },
       { token: "$channel.isLive", desc: "true/false", example: "true" },
       { token: "$channel.uptime", desc: "Stream uptime", example: "1h 23m" },
+      {
+        token: "$channel.followers(user)",
+        desc: "Follower count",
+        example: "$channel.followers($user.name) → 1234",
+      },
+      {
+        token: "$channel.subscribers",
+        desc: "Subscriber count",
+        example: "$channel.subscribers → 87",
+      },
+      {
+        token: "$channel.title.set(text)",
+        desc: "Sets the stream title",
+        example: "$channel.title.set(Playing games!)",
+      },
+      {
+        token: "$channel.game.set(name)",
+        desc: "Sets the category (exact name)",
+        example: "$channel.game.set(Just Chatting)",
+      },
     ],
   },
   {
@@ -254,6 +274,16 @@ export const REF_GROUPS: RefGroup[] = [
         token: "$random.chance(pct)",
         desc: "true with pct% chance",
         example: "$random.chance(30) → true",
+      },
+      {
+        token: "$random.user.name",
+        desc: "Random current chatter",
+        example: "$random.user.name → someviewer",
+      },
+      {
+        token: "$random.user.mention",
+        desc: "Random current chatter, @mention",
+        example: "$random.user.mention → @someviewer",
       },
     ],
   },
@@ -339,23 +369,6 @@ export const REF_GROUPS: RefGroup[] = [
         token: "$http.json(url,path)",
         desc: "GET + extract JSON path",
         example: "$http.json(https://api.example.com/data,$.name)",
-      },
-    ],
-  },
-  {
-    label: "Twitch",
-    items: [
-      { token: "$twitch.uptime", desc: "Stream uptime", example: "1h 23m" },
-      { token: "$twitch.game", desc: "Current game", example: "Just Chatting" },
-      {
-        token: "$twitch.title",
-        desc: "Stream title",
-        example: "Playing games!",
-      },
-      {
-        token: "$twitch.followers(user)",
-        desc: "Follower count",
-        example: "$twitch.followers($user.name) → 1234",
       },
     ],
   },

@@ -635,8 +635,13 @@ const saveDisabled = computed(() => {
 
 // >>> separate sync config per tab
 interface ModSyncConf { sync_from: string; is_active: number; last_synced: number }
-interface ModSyncState { conf: ModSyncConf | null; open: boolean; from: string; saving: boolean; running: boolean; msg: string }
-function freshModSync(): ModSyncState { return { conf: null, open: false, from: "", saving: false, running: false, msg: "" } }
+interface ModSyncState {
+  conf: ModSyncConf | null; open: boolean; mode: "ongoing" | "import"; from: string;
+  saving: boolean; running: boolean; importing: boolean; msg: string;
+}
+function freshModSync(): ModSyncState {
+  return { conf: null, open: false, mode: "ongoing", from: "", saving: false, running: false, importing: false, msg: "" };
+}
 const modSync: Record<Tab, ModSyncState> = reactive({ blocked: freshModSync(), spam: freshModSync(), nukes: freshModSync() });
 const curSync = computed(() => modSync[activeTab.value]);
 
@@ -681,6 +686,25 @@ async function stopModSync(tab: Tab) {
     modSync[tab].msg = "Failed.";
   }
   modSync[tab].saving = false;
+}
+async function runModImport(tab: Tab) {
+  if (!session.value || !modSync[tab].from) return;
+  modSync[tab].importing = true;
+  modSync[tab].msg = "";
+  try {
+    const res = await fetch(`${API}/mod-sync/${tab}/${session.value.channel}/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ from: modSync[tab].from }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+    modSync[tab].msg = `Imported ${data.count} from #${modSync[tab].from}.`;
+    await load();
+  } catch (e: any) {
+    modSync[tab].msg = e?.message ?? "Import failed";
+  }
+  modSync[tab].importing = false;
 }
 async function runModSync(tab: Tab) {
   if (!session.value) return;
@@ -763,27 +787,34 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
           </button>
           <div v-if="curSync.open" class="ep-sync-panel">
             <div class="ep-sync-modes">
-              <button class="ep-sync-mode-btn active">Sync (ongoing)</button>
-              <button class="ep-sync-mode-btn" @click="curSync.open = false">Import (one-time)</button>
+              <button class="ep-sync-mode-btn" :class="{ active: curSync.mode === 'ongoing' }"
+                @click="curSync.mode = 'ongoing'">Sync (ongoing)</button>
+              <button class="ep-sync-mode-btn" :class="{ active: curSync.mode === 'import' }"
+                @click="curSync.mode = 'import'">Import (one-time)</button>
             </div>
             <div class="ep-sync-row">
               <select v-model="curSync.from" class="ep-field-select-sm">
-                <option value="">{{ curSync.conf?.is_active ? t("mod.sync.change") : t("mod.sync.select") }}</option>
+                <option value="">{{ curSync.mode === 'import' ? t("mod.sync.select") : (curSync.conf?.is_active ?
+                  t("mod.sync.change") : t("mod.sync.select")) }}</option>
                 <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{
                   ch }}</option>
               </select>
-              <button class="ep-sync-save-btn" @click="saveModSync(activeTab)"
+              <button v-if="curSync.mode === 'import'" class="ep-sync-save-btn" @click="runModImport(activeTab)"
+                :disabled="curSync.importing || !curSync.from">
+                {{ curSync.importing ? '…' : 'Import' }}
+              </button>
+              <button v-else class="ep-sync-save-btn" @click="saveModSync(activeTab)"
                 :disabled="curSync.saving || !curSync.from">
                 {{ curSync.saving ? '…' : curSync.conf?.is_active ? t('mod.sync.update') : t('mod.sync.enable') }}
               </button>
             </div>
-            <div class="ep-sync-row">
+            <div v-if="curSync.mode === 'ongoing'" class="ep-sync-row">
               <button v-if="curSync.conf?.is_active" class="ep-sync-run-btn" @click="runModSync(activeTab)"
                 :disabled="curSync.running">{{ curSync.running ? '…' : t('mod.sync.pull') }}</button>
               <button v-if="curSync.conf?.is_active" class="ep-sync-stop-btn" @click="stopModSync(activeTab)">{{
                 t('mod.sync.stop') }}</button>
             </div>
-            <div v-if="curSync.conf?.last_synced" class="ep-sync-last">{{ t('mod.sync.last') }} {{ new
+            <div v-if="curSync.mode === 'ongoing' && curSync.conf?.last_synced" class="ep-sync-last">{{ t('mod.sync.last') }} {{ new
               Date(curSync.conf.last_synced).toLocaleString() }}</div>
             <div v-if="curSync.msg" class="ep-sync-msg"
               :class="{ err: curSync.msg.includes('fail') || curSync.msg.includes('Error') }">
