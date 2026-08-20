@@ -76,6 +76,7 @@ const _dbgDefaults = {
   badgeLoad: false,
   emoteLoad: false,
   recycleEvt: false,
+  scrollTrigger: false,
 };
 if (typeof window !== "undefined") {
   (window as any).__logsDbg = Object.assign(
@@ -954,6 +955,7 @@ async function appendMsgs(newMsgs: LogMsg[]) {
 
 async function loadOlder() {
   if (loadingMore.value || noMore.value) return;
+  if (dbg("scrollTrigger")) console.debug("[scroll:trigger] loadOlder() enter");
   const ch = channel.value.trim().toLowerCase().replace(/^#/, "");
   const signal = abortCtrl.signal;
   const cutoff = new Date();
@@ -1033,6 +1035,10 @@ async function loadOlder() {
   await nextTick();
   const body = getBody();
   if (body && body.scrollTop < 180) body.scrollTop = 180;
+  if (dbg("scrollTrigger"))
+    console.debug(
+      `[scroll:trigger] loadOlder() exit st=${body?.scrollTop} sh=${body?.scrollHeight} ch=${body?.clientHeight}`,
+    );
   loadingMore.value = false;
 }
 
@@ -1304,9 +1310,18 @@ function onScroll() {
     isNearBottom.value = distFromBottom < 200;
 
     const hasOverflow = body.scrollHeight > body.clientHeight + 20;
+    if (dbg("scrollTrigger")) {
+      console.debug(
+        `[scroll:trigger] st=${body.scrollTop} ch=${body.clientHeight} sh=${body.scrollHeight} ` +
+        `overflow=${hasOverflow} viewportChanged=${viewportChanged} loadingMore=${loadingMore.value} noMore=${noMore.value}`,
+      );
+    }
     if (!viewportChanged && hasOverflow) {
       const olderReady = !loadingMore.value && !noMore.value;
-      if (olderReady && body.scrollTop < 120) loadOlder();
+      if (olderReady && body.scrollTop < 120) {
+        if (dbg("scrollTrigger")) console.debug("[scroll:trigger] -> loadOlder()");
+        loadOlder();
+      }
       if (!loadingNewer.value && !noNewer.value && distFromBottom < 120)
         loadNewer();
       // >>> oldest-first mode is reversed: hitting bottom means going further back in time
