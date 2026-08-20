@@ -1288,6 +1288,7 @@ function onWheel() {
   scheduleWheelIdleCheck();
 }
 
+let lastKnownClientHeight = 0;
 function onScroll() {
   if (rafScrollPending) return;
   rafScrollPending = true;
@@ -1295,19 +1296,27 @@ function onScroll() {
     rafScrollPending = false;
     const body = getBody();
     if (!body) return;
+    // >>> mobile's dynamic viewport (address bar show/hide while scrolling) changes
+    // >>> clientHeight mid-gesture - when that happens the browser also re-clamps scrollTop
+    // >>> toward 0 on its own, which looks exactly like "user scrolled to top" with no real
+    // >>> intent behind it. Skip the near-top/near-bottom triggers on that tick and wait for
+    // >>> the next one, once the viewport size has actually settled.
+    const viewportChanged = body.clientHeight !== lastKnownClientHeight;
+    lastKnownClientHeight = body.clientHeight;
     const distFromBottom =
       body.scrollHeight - body.clientHeight - body.scrollTop;
     isNearBottom.value = distFromBottom < 200;
-    if (!loadingMore.value && !noMore.value && body.scrollTop < 120)
-      loadOlder();
-    if (!loadingNewer.value && !noNewer.value && distFromBottom < 120)
-      loadNewer();
-    // >>> oldest-first mode is reversed: hitting bottom means going further back in time
-    if (direction.value === "oldest") {
-      if (!loadingNewer.value && !noNewer.value && body.scrollTop < 120)
+    if (!viewportChanged) {
+      const olderReady = !loadingMore.value && !noMore.value;
+      if (olderReady && body.scrollTop < 120) loadOlder();
+      if (!loadingNewer.value && !noNewer.value && distFromBottom < 120)
         loadNewer();
-      if (!loadingMore.value && !noMore.value && distFromBottom < 120)
-        loadOlder();
+      // >>> oldest-first mode is reversed: hitting bottom means going further back in time
+      if (direction.value === "oldest") {
+        if (!loadingNewer.value && !noNewer.value && body.scrollTop < 120)
+          loadNewer();
+        if (olderReady && distFromBottom < 120) loadOlder();
+      }
     }
     vUpdateWindow();
     updateCustomScrollbar();
@@ -4291,9 +4300,7 @@ function paintNameStyle(paint: {
 
 .top-loader {
   position: sticky;
-  /* >>> clears the opaque .pinned-day-header (~26px) sitting above the list, plus a gap -
-  same offset as .day-jump-pill-row, otherwise the header's higher z-index hides this entirely */
-  top: 34px;
+  top: 5px;
   z-index: 4;
   text-align: center;
   font-size: 11px;
