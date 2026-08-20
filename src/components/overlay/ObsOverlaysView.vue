@@ -16,6 +16,8 @@ const overlays = ref<Overlay[]>([]);
 const scenes = ref<string[]>([]);
 const currentScene = ref("");
 const editingId = ref<string | null>(null);
+// >>> /scenes only succeeds when the agent + OBS are actually reachable
+const obsReady = ref(false);
 
 async function load() {
   if (!session.value) return;
@@ -29,12 +31,15 @@ async function load() {
       const d = (await ovRes.json()) as { overlays: Overlay[] };
       overlays.value = d.overlays ?? [];
     }
+    obsReady.value = scRes.ok;
     if (scRes.ok) {
       const d = (await scRes.json()) as { scenes: { sceneName: string }[]; currentScene: string };
       scenes.value = (d.scenes ?? []).map((s) => s.sceneName);
       currentScene.value = d.currentScene ?? "";
     }
-  } catch { }
+  } catch {
+    obsReady.value = false;
+  }
   loading.value = false;
 }
 
@@ -105,7 +110,8 @@ onMounted(load);
     </div>
 
     <ObsOverlayEditor v-if="editingId && session" :channel="session.channel" :auth-headers="authHeaders"
-      :scenes="scenes" :current-scene="currentScene" :initial-overlay-id="editingId" @close="closeEditor" />
+      :scenes="scenes" :current-scene="currentScene" :initial-overlay-id="editingId" :obs-ready="obsReady"
+      @close="closeEditor" />
   </div>
 </template>
 
