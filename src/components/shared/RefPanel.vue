@@ -62,7 +62,7 @@ const filteredGroups = computed(() => {
         />
       </div>
       <div class="ep-ref-groups">
-        <details v-if="showVars && filteredVarRefs.length" class="ep-ref-group" open>
+        <details v-if="showVars && filteredVarRefs.length" class="ep-ref-group">
           <summary class="ep-ref-group-label">Your Variables</summary>
           <div
             v-for="v in filteredVarRefs"
@@ -96,7 +96,8 @@ const filteredGroups = computed(() => {
 
 <style scoped>
 .ep-ref-search-row {
-  padding: 0 2px 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #1e1e22;
 }
 .ep-ref-search {
   width: 100%;
@@ -126,7 +127,13 @@ const filteredGroups = computed(() => {
   align-items: center;
   gap: 6px;
   margin-bottom: 0;
-  padding: 6px 2px;
+  padding: 7px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #555;
+}
+.ep-ref-group > summary.ep-ref-group-label:hover {
+  color: #9d6cff;
 }
 .ep-ref-group > summary.ep-ref-group-label::-webkit-details-marker {
   display: none;
@@ -141,6 +148,6 @@ const filteredGroups = computed(() => {
   transform: rotate(90deg);
 }
 .ep-ref-group > :not(summary) {
-  padding-bottom: 6px;
+  margin: 0 12px 6px;
 }
 </style>

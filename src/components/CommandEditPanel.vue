@@ -704,7 +704,7 @@ function onNormalKeydown(e: KeyboardEvent) {
             </div>
 
             <details class="ep-field-group preview-details" open>
-              <summary class="ep-field-label preview-summary">
+              <summary class="preview-summary">
                 {{ t('edit.preview') }} <span class="preview-note">{{ t('edit.preview_note') }}</span>
               </summary>
               <div class="preview-body">
@@ -718,7 +718,6 @@ function onNormalKeydown(e: KeyboardEvent) {
                     placeholder="message without command" />
                 </div>
                 <div class="mock-role-row">
-                  <span class="mock-role-hint">Role:</span>
                   <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isMod" /> mod</label>
                   <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isSub" /> sub</label>
                   <label class="mock-check-label"><input type="checkbox" v-model="mockCtx.isVip" /> vip</label>
@@ -1102,9 +1101,9 @@ function onNormalKeydown(e: KeyboardEvent) {
 }
 
 .validation-pill.body_missing {
-  color: #ffd569;
-  background: rgba(255, 213, 105, .10);
-  border: 1px solid rgba(255, 213, 105, .3);
+  color: #4ec9b0;
+  background: rgba(78, 201, 176, .10);
+  border: 1px solid rgba(78, 201, 176, .3);
 }
 
 .normal-hint {
@@ -1120,25 +1119,24 @@ function onNormalKeydown(e: KeyboardEvent) {
 /* >>> preview + mock values dropdown */
 .preview-details {
   border: 1px solid #1e1e22;
-  background: #0d0d10;
-  padding: 0 !important;
 }
 
 .preview-summary {
   display: flex;
-  padding: 8px 10px;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
   margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  color: #555;
   cursor: pointer;
   user-select: none;
   list-style: none;
 }
 
-.preview-details[open] .preview-summary {
-  border-bottom: 1px solid #1e1e22;
-}
-
 .preview-note {
-  font-size: 11px;
+  font-size: 10px;
   color: #555;
   font-weight: 400;
   text-transform: none;
@@ -1149,58 +1147,47 @@ function onNormalKeydown(e: KeyboardEvent) {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px;
+  padding: 0 12px 10px;
 }
 
 .preview-output {
   font-family: 'Consolas', 'Fira Mono', monospace;
-  font-size: 13px;
-  color: #ffd569;
-  background: rgba(255, 213, 105, .06);
-  border: 1px solid rgba(255, 213, 105, .15);
-  padding: 8px 12px;
-  min-height: 32px;
+  font-size: 12px;
+  color: #4ec9b0;
+  background: rgba(78, 201, 176, .06);
+  border: 1px solid rgba(78, 201, 176, .2);
+  padding: 8px 10px;
+  min-height: 30px;
   word-break: break-all;
 }
 
 .mock-ctx-grid {
   display: grid;
-  grid-template-columns: 60px 1fr;
-  gap: 4px 8px;
-  align-items: center;
+  grid-template-columns: 56px 1fr;
+  gap: 5px 8px;
 }
 
 .mock-ctx-grid label {
-  font-size: 11px;
+  font-size: 10px;
   color: #555;
-  font-family: 'Consolas', 'Fira Mono', monospace;
 }
 
 .mock-input {
   font-size: 11px !important;
-  padding: 3px 6px !important;
+  padding: 4px 8px !important;
 }
 
 .mock-role-row {
   display: flex;
-  align-items: center;
   gap: 10px;
-}
-
-.mock-role-hint {
-  font-size: 11px;
-  color: #555;
-  text-transform: uppercase;
-  letter-spacing: .04em;
-  font-weight: 600;
 }
 
 .mock-check-label {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
-  color: #666;
+  font-size: 10px;
+  color: #555;
   cursor: pointer;
 }
 
