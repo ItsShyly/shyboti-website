@@ -847,6 +847,10 @@ function openAgentPairingPage() {
   window.open("http://127.0.0.1:47115/", "_blank");
 }
 
+function openAgentDebugConsole() {
+  window.open("http://127.0.0.1:47115/logs", "_blank");
+}
+
 const checkingAgentUpdate = ref(false);
 const agentUpdateResult = ref("");
 async function checkAgentUpdate() {
@@ -2258,6 +2262,7 @@ watch(
               <div class="ep-field-group">
                 <div class="ep-download-row">
                   <button class="ep-btn ep-btn-secondary" @click="openAgentPairingPage">Open pairing page</button>
+                  <button class="ep-btn ep-btn-secondary" @click="openAgentDebugConsole">Open debug console</button>
                   <button class="ep-btn ep-btn-secondary" :disabled="checkingAgentUpdate" @click="checkAgentUpdate">
                     {{ checkingAgentUpdate ? "checking..." : "Check for update" }}
                   </button>
