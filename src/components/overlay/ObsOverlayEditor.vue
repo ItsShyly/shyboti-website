@@ -7,6 +7,7 @@ import {
   defaultElement,
   shapeDefaultStyle,
   newElementId,
+  youtubeVideoId,
   type Overlay,
   type OverlayElement,
   type OverlayElementType,
@@ -627,7 +628,14 @@ async function pasteImageBlob(blob: Blob) {
   } catch { }
 }
 function pasteTextAsElement(text: string) {
-  addElement("text");
+  const type: OverlayElementType = youtubeVideoId(text)
+    ? "video"
+    : /^https?:\/\/\S+\.(mp4|webm|mov)(\?\S*)?$/i.test(text)
+      ? "video"
+      : /^https?:\/\/\S+\.(png|jpe?g|gif|webp|svg)(\?\S*)?$/i.test(text)
+        ? "image"
+        : "text";
+  addElement(type);
   if (selectedElement.value) updateElement(selectedElement.value.id, { content: text });
 }
 async function pasteFromSystemClipboard() {
