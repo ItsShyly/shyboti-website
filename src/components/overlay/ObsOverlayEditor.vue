@@ -1218,7 +1218,7 @@ onUnmounted(() => {
 
                 <div v-if="selectedElement.type === 'video'" class="ovl-video-controls">
                   <button class="ep-btn-cancel" @click="toggleVideoPlay(selectedElement)">
-                    {{ selectedElement.data.paused === true ? "Start" : "Stop" }}
+                    {{ selectedElement.data.paused === true ? "Play" : "Pause" }}
                   </button>
                   <button class="ep-btn-cancel" @click="restartVideo(selectedElement)">Restart</button>
                 </div>

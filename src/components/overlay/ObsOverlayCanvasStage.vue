@@ -1154,7 +1154,7 @@ const guideStyleY = computed(() => {
     </template>
     <template v-if="contextMenuElement?.type === 'video'">
       <button @click="ctxToggleVideoPlay">
-        {{ contextMenuElement.data.paused === true ? "Start" : "Stop" }}
+        {{ contextMenuElement.data.paused === true ? "Play" : "Pause" }}
       </button>
       <button @click="ctxRestartVideo">Restart</button>
       <div class="ovl-ctx-sep"></div>
