@@ -2208,7 +2208,7 @@ watch(
             </div>
           </div>
 
-          <details class="ep-details">
+          <details class="ep-details" open>
             <summary>
               General Settings
               <span class="ep-details-icon closed" v-html="iconSvgFor('chevron-right')"></span>
