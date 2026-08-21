@@ -769,9 +769,7 @@ async function swapIn() {
 
 function insertVariableToken(token: string) {
   if (!selectedElement.value) return;
-  updateElement(selectedElement.value.id, {
-    content: (selectedElement.value.content || "") + token,
-  });
+  updateElement(selectedElement.value.id, { content: token });
 }
 
 async function save(opts: { silent?: boolean } = {}) {
@@ -862,6 +860,35 @@ async function onLivePreview(updates: Array<{ id: string; patch: Partial<Overlay
   livePreviewSending = false;
 }
 // ^^^ live update ^^^
+
+// vvv video stop/start/restart, always live regardless of the Live Update toggle vvv
+const canvasStageRef = ref<InstanceType<typeof ObsOverlayCanvasStage> | null>(null);
+async function broadcastVideoCommand(id: string, cmd: "play" | "pause" | "restart") {
+  if (!currentOverlayId.value) return;
+  try {
+    await fetch(
+      `${API}/overlay/${props.channel}/${currentOverlayId.value}/video-command`,
+      {
+        method: "POST",
+        headers: { ...props.authHeaders, "Content-Type": "application/json" },
+        body: JSON.stringify({ id, cmd }),
+      },
+    );
+  } catch { }
+}
+function onVideoCommand(id: string, cmd: "play" | "pause" | "restart") {
+  canvasStageRef.value?.applyVideoCommand(id, cmd);
+  broadcastVideoCommand(id, cmd);
+}
+function toggleVideoPlay(el: OverlayElement) {
+  const nowPaused = el.data.paused !== true;
+  updateElement(el.id, { data: { ...el.data, paused: nowPaused } });
+  onVideoCommand(el.id, nowPaused ? "pause" : "play");
+}
+function restartVideo(el: OverlayElement) {
+  onVideoCommand(el.id, "restart");
+}
+// ^^^ video stop/start/restart ^^^
 
 // vvv live cursor share, per-user opt-in vvv
 const liveCursor = ref(false);
@@ -1139,13 +1166,13 @@ onUnmounted(() => {
 
           <div class="ovl-body">
             <div v-if="loading" class="ovl-loading">loading…</div>
-            <ObsOverlayCanvasStage v-else :elements="pendingElements" :selected-ids="selectedIds"
-              :base-width="baseWidth" :base-height="baseHeight" :backdrop="stageBackdrop"
+            <ObsOverlayCanvasStage v-else ref="canvasStageRef" :elements="pendingElements"
+              :selected-ids="selectedIds" :base-width="baseWidth" :base-height="baseHeight" :backdrop="stageBackdrop"
               :scene-shot-url="sceneShotUrl" :preview-values="previewValues" :snap-enabled="snapEnabled"
               @select="onSelect" @select-many="onSelectMany" @update-element="updateElement"
               @update-elements="updateElements" @delete-element="deleteOne" @delete-selected="deleteSelected"
-              @duplicate-element="duplicateSelected" @live-preview="onLivePreview"
-              @cursor-move="onCursorMove" />
+              @duplicate-element="duplicateSelected" @live-preview="onLivePreview" @cursor-move="onCursorMove"
+              @video-command="onVideoCommand" />
           </div>
 
           <div class="ovl-props">
@@ -1180,7 +1207,24 @@ onUnmounted(() => {
 
                 <ObsOverlayVariablePicker v-if="selectedElement.type === 'variable-text'" :channel="channel"
                   :auth-headers="authHeaders" @insert="insertVariableToken" />
+
+                <div v-if="selectedElement.type === 'video'" class="ovl-video-controls">
+                  <button class="ep-btn-cancel" @click="toggleVideoPlay(selectedElement)">
+                    {{ selectedElement.data.paused === true ? "Start" : "Stop" }}
+                  </button>
+                  <button class="ep-btn-cancel" @click="restartVideo(selectedElement)">Restart</button>
+                </div>
               </template>
+
+              <!-- >>> global, stays visible, not in a collapsible -->
+              <label class="ovl-props-label ovl-opacity-label">
+                Opacity
+                <div class="ovl-opacity-row">
+                  <input type="range" min="0" max="100" :value="selectedElement.style.opacity ?? 100"
+                    @input="updateElement(selectedElement.id, { style: { ...selectedElement.style, opacity: Number(($event.target as HTMLInputElement).value) } })" />
+                  <span class="ovl-opacity-pct">{{ selectedElement.style.opacity ?? 100 }}%</span>
+                </div>
+              </label>
 
               <!-- >>> alignment stays visible, not in a collapsible -->
               <label v-if="isTextLikeType(selectedElement.type)" class="ovl-props-label ovl-align-label">
@@ -1725,6 +1769,16 @@ onUnmounted(() => {
   gap: 6px;
 }
 
+.ovl-video-controls {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.ovl-video-controls button {
+  flex: 1;
+}
+
 .ovl-props-time-input {
   flex: 1;
   min-width: 0;
@@ -1753,6 +1807,29 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 5px;
+}
+
+.ovl-opacity-label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ovl-opacity-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ovl-opacity-row input[type="range"] {
+  flex: 1;
+}
+
+.ovl-opacity-pct {
+  font-size: 11px;
+  color: #999;
+  width: 32px;
+  text-align: right;
 }
 
 .ovl-align-grid {

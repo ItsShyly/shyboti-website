@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { iconSvg as iconSvgFor } from "../../composables/icons";
 import type { OverlayElement } from "../../composables/overlay/overlayTypes";
+import { youtubeVideoId, youtubeEmbedSrc } from "../../composables/overlay/overlayTypes";
 import {
   computeCountdown,
   countdownDisplayText,
@@ -42,6 +43,8 @@ const emit = defineEmits<{
   "live-preview": [updates: Array<{ id: string; patch: Partial<OverlayElement> }>];
   // >>> parent decides whether to actually broadcast this
   "cursor-move": [x: number, y: number];
+  // >>> parent drives local-preview + live-stream propagation, this component just asks
+  "video-command": [id: string, cmd: "play" | "pause" | "restart"];
 }>();
 
 // >>> shared throttle for all three live-preview emitters below
@@ -984,6 +987,46 @@ function ctxSetOpacity(v: number) {
       .map((e) => ({ id: e.id, patch: { style: { ...e.style, opacity: v } } })),
   );
 }
+// >>> drives the local preview element directly, native <video> or youtube iframe
+function applyVideoCommand(id: string, cmd: "play" | "pause" | "restart") {
+  const el = document.getElementById(`el-video-${id}`);
+  if (!el) return;
+  if (el.tagName === "IFRAME") {
+    const win = (el as HTMLIFrameElement).contentWindow;
+    if (!win) return;
+    const send = (func: string, args: any[] = []) =>
+      win.postMessage(JSON.stringify({ event: "command", func, args }), "*");
+    if (cmd === "play") send("playVideo");
+    else if (cmd === "pause") send("pauseVideo");
+    else if (cmd === "restart") {
+      send("seekTo", [0, true]);
+      send("playVideo");
+    }
+  } else {
+    const v = el as HTMLVideoElement;
+    if (cmd === "play") v.play?.().catch(() => {});
+    else if (cmd === "pause") v.pause?.();
+    else if (cmd === "restart") {
+      v.currentTime = 0;
+      v.play?.().catch(() => {});
+    }
+  }
+}
+defineExpose({ stageRef, applyVideoCommand });
+
+function ctxToggleVideoPlay() {
+  const el = contextMenuElement.value;
+  if (!el) return;
+  const nowPaused = el.data.paused !== true;
+  emit("update-element", el.id, { data: { ...el.data, paused: nowPaused } });
+  emit("video-command", el.id, nowPaused ? "pause" : "play");
+}
+function ctxRestartVideo() {
+  const el = contextMenuElement.value;
+  if (!el) return;
+  emit("video-command", el.id, "restart");
+}
+
 // >>> target-mode countdown can't toggle running
 function ctxCanToggleRunning(el: OverlayElement | null): boolean {
   if (!el) return false;
@@ -1026,8 +1069,6 @@ const guideStyleY = computed(() => {
   if (snapGuides.value.y === null) return null;
   return { top: `${snapGuides.value.y * scale()}px` };
 });
-
-defineExpose({ stageRef });
 </script>
 
 <template>
@@ -1045,7 +1086,11 @@ defineExpose({ stageRef });
     }" :style="displayStyle(el)" @mousedown="onItemMouseDown(el, $event)"
       @contextmenu="onItemContextMenu(el, $event)">
       <img v-if="el.type === 'image'" :src="el.content" class="ovl-item-img" draggable="false" />
-      <video v-else-if="el.type === 'video'" :src="el.content" class="ovl-item-img" muted></video>
+      <iframe v-else-if="el.type === 'video' && youtubeVideoId(el.content)" :id="`el-video-${el.id}`"
+        :src="youtubeEmbedSrc(el.content, { paused: el.data.paused === true })" class="ovl-item-img" frameborder="0"
+        allow="autoplay; encrypted-media"></iframe>
+      <video v-else-if="el.type === 'video'" :id="`el-video-${el.id}`" :src="el.content" class="ovl-item-img"
+        muted></video>
       <div v-else-if="el.type === 'audio'" class="ovl-item-audio">
         {{ el.data.muted !== false ? "🔇" : "🔊" }}
       </div>
@@ -1096,7 +1141,7 @@ defineExpose({ stageRef });
   <!-- sibling of stage, fixed pos breaks under a transform -->
   <div v-if="contextMenu" class="ovl-ctx-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
     @mousedown.stop>
-    <template v-if="contextMenuElement?.type === 'video'">
+    <template v-if="contextMenuElement?.type === 'video' && !youtubeVideoId(contextMenuElement.content)">
       <button @click="ctxToggleMute">{{ contextMenuElement.data.muted !== false ? "Unmute" : "Mute" }}</button>
       <div class="ovl-ctx-volume">
         <span>Vol</span>
@@ -1104,6 +1149,13 @@ defineExpose({ stageRef });
           @input="ctxSetVolume(Number(($event.target as HTMLInputElement).value))" />
         <span>{{ contextMenuElement.data.volume ?? 100 }}%</span>
       </div>
+      <div class="ovl-ctx-sep"></div>
+    </template>
+    <template v-if="contextMenuElement?.type === 'video'">
+      <button @click="ctxToggleVideoPlay">
+        {{ contextMenuElement.data.paused === true ? "Start" : "Stop" }}
+      </button>
+      <button @click="ctxRestartVideo">Restart</button>
       <div class="ovl-ctx-sep"></div>
     </template>
     <template v-if="ctxCanToggleRunning(contextMenuElement)">

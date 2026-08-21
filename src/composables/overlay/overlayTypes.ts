@@ -10,6 +10,26 @@ export type OverlayElementType =
 
 export type ShapeVariant = "border" | "background-box" | "frame";
 
+// >>> pastes of youtube links should just play, not load as a broken <video src>
+export function youtubeVideoId(url: string): string | null {
+  if (!url) return null;
+  const m = url.match(
+    /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/,
+  );
+  return m ? m[1]! : null;
+}
+
+// >>> mute required for autoplay policy, loop+playlist is youtube's single-video loop trick
+export function youtubeEmbedSrc(
+  url: string,
+  opts: { paused?: boolean } = {},
+): string {
+  const id = youtubeVideoId(url);
+  if (!id) return "";
+  const autoplay = opts.paused ? 0 : 1;
+  return `https://www.youtube.com/embed/${id}?enablejsapi=1&autoplay=${autoplay}&mute=1&loop=1&playlist=${id}&playsinline=1&controls=0&rel=0`;
+}
+
 export interface OverlayElementStyle {
   fontFamily?: string;
   fontSize?: number;
