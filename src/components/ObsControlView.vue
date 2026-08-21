@@ -1797,7 +1797,7 @@ watch(
             <span class="obs-live-stat-label">bitrate</span>
             <span class="obs-live-stat-value">{{
               bitrateLabel ?? "not streaming"
-              }}</span>
+            }}</span>
           </div>
           <div class="obs-live-stat">
             <span class="obs-live-stat-label">preview size</span>
@@ -1942,7 +1942,7 @@ watch(
               <label class="ep-field-label">sources
                 <span v-if="selectedScene" class="ep-field-hint">{{
                   selectedScene
-                }}</span></label>
+                  }}</span></label>
               <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
                 @click="openAddSource" v-html="iconSvgFor('plus')"></button>
             </div>
@@ -1995,7 +1995,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
                 :class="{ pending: isSourcePending(src) }">
@@ -2087,7 +2087,7 @@ watch(
   <Teleport to="body">
     <div v-if="showSettings && isBroadcaster" class="ep-overlay"
       v-bind="settingsOverlay.handlers(() => (showSettings = false))">
-      <div class="ep-panel obsconn-settings-panel">
+      <div class="ep-panel obsconn-settings-panel obs-settings-redesign">
         <div class="ep-panel-header">
           <div>
             <div class="ep-panel-title">OBS settings</div>
@@ -2099,8 +2099,8 @@ watch(
         </div>
 
         <div class="ep-panel-body">
-          <div v-if="agentConnected && obsConnected" class="ep-field-group">
-            <label class="ep-field-label">Connection</label>
+          <div v-if="agentConnected && obsConnected" class="ep-section">
+            <div class="ep-section-label">Connection</div>
             <div class="ep-status-badge ready">
               <span class="ep-status-dot"></span>
               Agent ready
@@ -2117,8 +2117,9 @@ watch(
                 <div class="ep-note">
                   Agent is connected and paired. You can view your pairing token or regenerate it.
                 </div>
-                <button class="ep-btn-cancel" :disabled="generatingToken" @click="generateToken">
-                  {{ generatingToken ? "generating…" : "show / regenerate token" }}
+                <button class="ep-btn ep-btn-secondary" style="margin-top: 4px;" :disabled="generatingToken"
+                  @click="generateToken">
+                  {{ generatingToken ? "generating..." : "Show/Regenerate token" }}
                 </button>
               </template>
               <template v-else>
@@ -2126,42 +2127,50 @@ watch(
                   <li>
                     <strong>Generate a pairing token</strong>
                     <div style="margin-top: 4px;">
-                      <button class="ep-btn-save" :disabled="generatingToken" @click="generateToken">
+                      <button class="ep-btn ep-btn-primary" :disabled="generatingToken" @click="generateToken">
                         {{
                           generatingToken
-                            ? "generating…"
+                            ? "generating..."
                             : agentStatus?.paired
-                              ? "regenerate token"
-                              : "generate token"
+                              ? "Regenerate token"
+                              : "Generate token"
                         }}
                       </button>
+                      <div v-if="!(tokenVisible && token)" class="ep-field-hint" style="margin-top: 4px;">
+                        {{
+                          agentStatus?.paired
+                            ? 'Token already set. Click "Regenerate token" to replace it.'
+                            : "No token generated yet."
+                        }}
+                      </div>
                     </div>
                   </li>
                   <li>
-                    <strong>Download the ShyBoti Agent</strong> - Keeps OBS control local to your PC. Shyboti tells
-                    this app what to do, and it talks to OBS directly. Requires
-                    <a href="https://nodejs.org" target="_blank" rel="noopener" class="ep-inline-link">Node.js</a>.
+                    <strong>Download the ShyBoti Agent</strong>
                     <div class="ep-download-row">
-                      <a class="ep-btn-cancel" :href="`${API}/agent/download/windows`" target="_blank" rel="noopener">
+                      <a class="ep-btn ep-btn-secondary" :href="`${API}/agent/download/windows`" target="_blank"
+                        rel="noopener">
                         Windows (.zip)
                       </a>
-                      <a class="ep-btn-cancel" :href="`${API}/agent/download/linux`" target="_blank" rel="noopener">
+                      <a class="ep-btn ep-btn-secondary" :href="`${API}/agent/download/linux`" target="_blank"
+                        rel="noopener">
                         Linux (.tar.gz)
                       </a>
                     </div>
-                    <div class="ep-note">
-                      Extract, then run <code>start.bat</code> (Windows) or <code>start.sh</code> (Linux/Mac)
+                    <div class="ep-note" style="margin-top: 4px;">
+                      Extract, then run <code>start.bat</code> (Win) or <code>start.sh</code> (Linux/Mac). Requires
+                      <a href="https://nodejs.org" target="_blank" rel="noopener" class="ep-note-link">Node.js</a>.
                     </div>
                   </li>
                   <li>
                     <strong>Paste the token</strong> into the agent when prompted.
                   </li>
                   <li>
-                    <strong>Open OBS</strong> - the agent connects locally on the same PC.
+                    <strong>Open OBS</strong> - the agent connects locally.
                   </li>
                 </ol>
                 <div v-if="agentStatus?.paired && !agentConnected" class="ep-note">
-                  Token is set - waiting for the agent to start...
+                  Token is set - waiting for agent to connect...
                 </div>
               </template>
 
@@ -2170,113 +2179,101 @@ watch(
                 <button class="ep-eye-btn" @click="tokenRevealed = !tokenRevealed"
                   :title="tokenRevealed ? 'hide token' : 'show token'"
                   v-html="iconSvgFor(tokenRevealed ? 'eye-off' : 'eye')"></button>
-                <button class="ep-copy-btn" @click="copyToken">
-                  {{ tokenJustCopied ? "copied!" : "copy" }}
-                </button>
+                <button class="ep-copy-btn" @click="copyToken">{{ tokenJustCopied ? "copied!" : "Copy" }}</button>
                 <button class="ep-dismiss-btn" @click="
                   tokenVisible = false;
                 token = '';
                 tokenRevealed = false;
                 " title="I saved it, dismiss">
-                  done
+                  Done
                 </button>
-                <div class="ep-token-warning">
-                  Copy this before dismissing - it is not stored on the server and cannot be shown again. If you
-                  lose it, regenerate a new one (this will disconnect the agent).
-                </div>
-              </div>
-              <div v-else-if="agentStatus?.paired && !token" class="ep-field-hint">
-                Token already set. Click "regenerate token" to replace it.
-              </div>
-
-              <div class="ep-field-group" style="margin-top: 10px;">
-                <label class="ep-field-label">Optional: autostart with OBS</label>
-                <div class="ep-note">
-                  In OBS, Tools → Scripts → + → pick <code>autostart.lua</code> from the agent's extracted folder.
-                  Starts the agent with OBS, stops it when OBS closes.
-                </div>
+                <div class="ep-token-warning">Copy before dismissing - not stored on server.</div>
               </div>
             </div>
           </details>
 
+          <div class="ep-field-group">
+            <label class="ep-field-label">Optional: autostart with OBS</label>
+            <div class="ep-note">
+              In OBS, Tools → Scripts → + → pick <code>autostart.lua</code> from the agent's extracted folder.
+              Starts the agent with OBS, stops it when OBS closes.
+            </div>
+          </div>
+
           <div class="ep-section">
-            <div class="ep-section-label">General settings</div>
+            <div class="ep-section-label">General Settings</div>
 
             <div class="ep-field-group">
-              <div class="ep-switch-wrap" @click="
+              <div class="ep-switch-row" @click="
                 enabledLocal = !enabledLocal;
               saveSettings();
               ">
                 <div class="ep-switch" :class="{ on: enabledLocal }">
                   <div class="ep-switch-knob"></div>
                 </div>
-                <span class="ep-field-hint">{{ enabledLocal ? "Connection enabled" : "Connection disabled" }}</span>
+                <span class="ep-switch-label">{{ enabledLocal ? "Connection enabled" : "Connection disabled"
+                  }}</span>
               </div>
               <div class="ep-field-hint">Turn off to reject all agent connections.</div>
             </div>
 
             <div class="ep-field-group">
-              <div class="ep-switch-wrap" @click="
+              <div class="ep-switch-row" @click="
                 screenshotsLocal = !screenshotsLocal;
               saveSettings();
               ">
                 <div class="ep-switch" :class="{ on: screenshotsLocal }">
                   <div class="ep-switch-knob"></div>
                 </div>
-                <span class="ep-field-hint">{{ screenshotsLocal ? "Scene previews on" : "Scene previews off"
-                }}</span>
+                <span class="ep-switch-label">{{ screenshotsLocal ? "Scene previews on" : "Scene previews off"
+                  }}</span>
               </div>
+              <div class="ep-field-hint">Periodic screenshots of each scene.</div>
               <div v-if="screenshotsLocal" class="ep-interval-row">
-                <span class="ep-field-hint">refresh every</span>
-                <input v-model.number="screenshotIntervalLocal" type="number" min="1" max="60"
-                  class="ep-field-input ep-interval-input" @change="saveSettings" />
+                <span class="ep-field-hint">Refresh every</span>
+                <input v-model.number="screenshotIntervalLocal" type="number" min="1" max="60" class="ep-field-input"
+                  @change="saveSettings" />
                 <span class="ep-field-hint">seconds (min 1)</span>
               </div>
-              <div class="ep-field-hint">
-                Only you (the broadcaster) can change this - moderators can see previews if they're on, but can't
-                turn them on or off.
-              </div>
+              <div class="ep-field-hint">Only the broadcaster can change this.</div>
             </div>
           </div>
 
           <div v-if="agentConnected" class="ep-section">
-            <div class="ep-section-label">Agent management</div>
+            <div class="ep-section-label">Agent Management</div>
 
             <div class="ep-field-group">
               <div class="ep-download-row">
-                <button class="ep-btn-cancel" @click="openAgentPairingPage">Open pairing page</button>
-                <button class="ep-btn-cancel" :disabled="checkingAgentUpdate" @click="checkAgentUpdate">
+                <button class="ep-btn ep-btn-secondary" @click="openAgentPairingPage">Open pairing page</button>
+                <button class="ep-btn ep-btn-secondary" :disabled="checkingAgentUpdate" @click="checkAgentUpdate">
                   {{ checkingAgentUpdate ? "checking..." : "Check for update" }}
                 </button>
               </div>
               <div v-if="agentUpdateResult" class="ep-field-hint">{{ agentUpdateResult }}</div>
-              <div class="ep-field-hint">The pairing page only opens if the agent is running on this PC.</div>
             </div>
 
             <div class="ep-field-group">
-              <button class="ep-btn-delete" :class="{ confirm: disconnectConfirm }" :disabled="disconnectingAgent"
-                @click="disconnectAgent">
+              <button class="ep-btn ep-btn-danger" :class="{ confirm: disconnectConfirm }"
+                :disabled="disconnectingAgent" @click="disconnectAgent">
                 {{
                   disconnectingAgent
                     ? "disconnecting..."
                     : disconnectConfirm
-                      ? "click again to confirm"
-                      : "disconnect agent"
+                      ? "Click again to confirm"
+                      : "Disconnect agent"
                 }}
               </button>
-              <div class="ep-field-hint">
-                Shuts down the agent process on your PC. Run the launcher again to reconnect.
-              </div>
+              <div class="ep-field-hint">Shuts down agent process on your PC.</div>
             </div>
           </div>
 
           <div v-if="settingsSaving || settingsSaved" class="ep-autosave">
-            {{ settingsSaving ? "saving…" : "saved" }}
+            {{ settingsSaving ? "saving..." : "saved" }}
           </div>
         </div>
 
         <div class="ep-panel-footer">
-          <button class="ep-btn-cancel" @click="showSettings = false">Done</button>
+          <button class="ep-btn ep-btn-secondary" @click="showSettings = false">Done</button>
         </div>
       </div>
     </div>
@@ -2567,6 +2564,32 @@ watch(
 }
 
 /* >>> settings panel redesign */
+/* >>> scoped to just this panel, obsconn-settings-panel is shared with Filter scenes too */
+.obs-settings-redesign .ep-panel-header {
+  padding: 16px 20px;
+}
+
+.obs-settings-redesign .ep-panel-body {
+  padding: 20px;
+  gap: 16px;
+}
+
+.obs-settings-redesign .ep-field-label,
+.obs-settings-redesign .ep-field-hint {
+  font-size: 10px;
+}
+
+.obs-settings-redesign .ep-field-input {
+  height: 32px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.obs-settings-redesign .ep-panel-footer {
+  justify-content: flex-end;
+  padding: 12px 20px;
+}
+
 .ep-section {
   display: flex;
   flex-direction: column;
@@ -2608,6 +2631,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 6px;
+  transition: color 0.15s;
 }
 
 .ep-details summary::-webkit-details-marker {
@@ -2676,10 +2700,6 @@ watch(
   line-height: 1.6;
 }
 
-.ep-steps li:last-child {
-  margin-bottom: 0;
-}
-
 .ep-steps li::before {
   content: counter(step);
   position: absolute;
@@ -2708,6 +2728,12 @@ watch(
   margin-top: 4px;
 }
 
+.ep-download-row .ep-btn {
+  height: 28px;
+  font-size: 10px;
+  padding: 0 12px;
+}
+
 .ep-note {
   font-size: 10px;
   color: #555;
@@ -2719,15 +2745,94 @@ watch(
   color: #9d6cff;
 }
 
-.ep-inline-link {
+.ep-note-link {
   color: #9d6cff;
   text-decoration: none;
 }
 
-.ep-inline-link:hover {
-  text-decoration: underline;
+/* Buttons */
+.ep-btn {
+  padding: 7px 14px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
+  letter-spacing: 0.02em;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  text-decoration: none;
+  color: inherit;
+  font-family: inherit;
 }
 
+.ep-btn-primary {
+  background: #6f2bff;
+  border-color: #6f2bff;
+  color: #fff;
+}
+
+.ep-btn-primary:hover {
+  background: #7c3cff;
+}
+
+.ep-btn-secondary {
+  background: transparent;
+  border-color: #333;
+  color: #888;
+}
+
+.ep-btn-secondary:hover {
+  border-color: #555;
+  color: #e0e0e0;
+}
+
+.ep-btn-danger {
+  background: transparent;
+  border-color: rgba(241, 73, 73, 0.4);
+  color: #f14949;
+}
+
+.ep-btn-danger:hover {
+  background: rgba(241, 73, 73, 0.1);
+}
+
+.ep-btn-danger.confirm {
+  background: rgba(241, 73, 73, 0.2);
+  border-color: #f14949;
+  font-weight: 700;
+}
+
+.ep-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.obs-settings-redesign .ep-panel-footer .ep-btn {
+  min-width: 80px;
+}
+
+/* Toggle switch row (label + switch, exact demo sizing) */
+.ep-switch-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.ep-switch-label {
+  font-size: 12px;
+  color: #888;
+}
+
+/* Token box */
 .ep-token-box {
   display: flex;
   align-items: center;
@@ -2740,7 +2845,7 @@ watch(
 
 .ep-token-value {
   font-family: "Consolas", "Fira Mono", monospace;
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 2px;
   color: #b795ff;
   background: transparent;
@@ -2783,7 +2888,6 @@ watch(
   border: 1px solid #2a2a30;
   background: transparent;
   color: #555;
-  flex-shrink: 0;
 }
 
 .ep-copy-btn:hover {
@@ -2810,11 +2914,10 @@ watch(
   margin-top: 4px;
 }
 
-.ep-interval-row .ep-interval-input {
+.ep-interval-row .ep-field-input {
   width: 60px;
   flex-shrink: 0;
   text-align: center;
-  height: 28px;
 }
 
 .ep-autosave {
