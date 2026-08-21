@@ -414,6 +414,7 @@ const dragState = ref<{
 const dragPreview = ref<Record<string, { x: number; y: number }>>({});
 
 function onItemMouseDown(el: OverlayElement, e: MouseEvent) {
+  if (e.button !== 0) return; // <<< only left click moves an element
   if ((e.target as HTMLElement).closest(".ovl-handle")) return;
   if (editingId.value === el.id) return;
   if (el.locked) return;
