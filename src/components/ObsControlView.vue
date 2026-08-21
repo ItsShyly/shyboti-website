@@ -3090,6 +3090,13 @@ watch(
   margin-bottom: 12px;
 }
 
+.obs-setup-hint {
+  font-size: 11px;
+  color: #555;
+  display: block;
+  margin-top: 4px;
+}
+
 .obs-section-label {
   display: flex;
   align-items: center;
