@@ -2151,6 +2151,10 @@ watch(
                   Extract the zip, then run <code>start.bat</code> (Windows) or
                   <code>start.sh</code> (Linux/Mac)
                 </div>
+                <div class="obs-av-note">
+                  Optional: autostart with OBS - in OBS, Tools → Scripts → + →
+                  pick <code>autostart.lua</code> from the extracted folder.
+                </div>
               </li>
               <li>
                 <strong>Paste the token</strong> into the agent when prompted, when asked.
