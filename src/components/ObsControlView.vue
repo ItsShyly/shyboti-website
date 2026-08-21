@@ -1797,7 +1797,7 @@ watch(
             <span class="obs-live-stat-label">bitrate</span>
             <span class="obs-live-stat-value">{{
               bitrateLabel ?? "not streaming"
-            }}</span>
+              }}</span>
           </div>
           <div class="obs-live-stat">
             <span class="obs-live-stat-label">preview size</span>
@@ -1942,7 +1942,7 @@ watch(
               <label class="ep-field-label">sources
                 <span v-if="selectedScene" class="ep-field-hint">{{
                   selectedScene
-                  }}</span></label>
+                }}</span></label>
               <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
                 @click="openAddSource" v-html="iconSvgFor('plus')"></button>
             </div>
@@ -1995,7 +1995,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-                }}</span></label>
+              }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
                 :class="{ pending: isSourcePending(src) }">
@@ -2110,8 +2110,12 @@ watch(
             </div>
           </div>
 
-          <details class="ep-details" :open="!(agentConnected && obsConnected)">
-            <summary>Setup &amp; Pairing</summary>
+          <details class="ep-details" :open="!agentStatus?.paired">
+            <summary>
+              Setup &amp; Pairing
+              <span class="ep-details-icon closed" v-html="iconSvgFor('chevron-right')"></span>
+              <span class="ep-details-icon open" v-html="iconSvgFor('chevron-down')"></span>
+            </summary>
             <div class="ep-details-body">
               <template v-if="agentConnected && obsConnected">
                 <div class="ep-note">
@@ -2158,15 +2162,14 @@ watch(
                       </a>
                     </div>
                     <div class="ep-note" style="margin-top: 4px;">
-                      Extract, then run <code>start.bat</code> (Win) or <code>start.sh</code> (Linux/Mac). Requires
-                      <a href="https://nodejs.org" target="_blank" rel="noopener" class="ep-note-link">Node.js</a>.
+                      Extract, then run <code>start.bat</code> (Win) or <code>start.sh</code>
                     </div>
                   </li>
                   <li>
-                    <strong>Paste the token</strong> into the agent when prompted.
+                    <strong>Paste the token</strong> <span class="ep-step-sub">into the agent when prompted.</span>
                   </li>
                   <li>
-                    <strong>Open OBS</strong> - the agent connects locally.
+                    <strong>Open OBS</strong> <span class="ep-step-sub">- the agent connects locally.</span>
                   </li>
                 </ol>
                 <div v-if="agentStatus?.paired && !agentConnected" class="ep-note">
@@ -2195,77 +2198,88 @@ watch(
           <div class="ep-field-group">
             <label class="ep-field-label">Optional: autostart with OBS</label>
             <div class="ep-note">
-              In OBS, Tools → Scripts → + → pick <code>autostart.lua</code> from the agent's extracted folder.
-              Starts the agent with OBS, stops it when OBS closes.
+              In OBS, <strong class="ep-note-menu">Tools</strong> → <strong class="ep-note-menu">Scripts</strong> →
+              <strong class="ep-note-menu">+</strong> → pick <code>autostart.lua</code> from the agent's extracted
+              folder. Starts the agent with OBS, stops it when OBS closes.
             </div>
           </div>
 
-          <div class="ep-section">
-            <div class="ep-section-label">General Settings</div>
-
-            <div class="ep-field-group">
-              <div class="ep-switch-row" @click="
-                enabledLocal = !enabledLocal;
-              saveSettings();
-              ">
-                <div class="ep-switch" :class="{ on: enabledLocal }">
-                  <div class="ep-switch-knob"></div>
-                </div>
-                <span class="ep-switch-label">{{ enabledLocal ? "Connection enabled" : "Connection disabled"
+          <details class="ep-details">
+            <summary>
+              General Settings
+              <span class="ep-details-icon closed" v-html="iconSvgFor('chevron-right')"></span>
+              <span class="ep-details-icon open" v-html="iconSvgFor('chevron-down')"></span>
+            </summary>
+            <div class="ep-details-body">
+              <div class="ep-field-group">
+                <div class="ep-switch-row" @click="
+                  enabledLocal = !enabledLocal;
+                saveSettings();
+                ">
+                  <div class="ep-switch" :class="{ on: enabledLocal }">
+                    <div class="ep-switch-knob"></div>
+                  </div>
+                  <span class="ep-switch-label">{{ enabledLocal ? "Connection enabled" : "Connection disabled"
                   }}</span>
-              </div>
-              <div class="ep-field-hint">Turn off to reject all agent connections.</div>
-            </div>
-
-            <div class="ep-field-group">
-              <div class="ep-switch-row" @click="
-                screenshotsLocal = !screenshotsLocal;
-              saveSettings();
-              ">
-                <div class="ep-switch" :class="{ on: screenshotsLocal }">
-                  <div class="ep-switch-knob"></div>
                 </div>
-                <span class="ep-switch-label">{{ screenshotsLocal ? "Scene previews on" : "Scene previews off"
+                <div class="ep-field-hint">Turn off to reject all agent connections.</div>
+              </div>
+
+              <div class="ep-field-group">
+                <div class="ep-switch-row" @click="
+                  screenshotsLocal = !screenshotsLocal;
+                saveSettings();
+                ">
+                  <div class="ep-switch" :class="{ on: screenshotsLocal }">
+                    <div class="ep-switch-knob"></div>
+                  </div>
+                  <span class="ep-switch-label">{{ screenshotsLocal ? "Scene previews on" : "Scene previews off"
                   }}</span>
+                </div>
+                <div class="ep-field-hint">Periodic screenshots of each scene.</div>
+                <div v-if="screenshotsLocal" class="ep-interval-row">
+                  <span class="ep-switch-label">Refresh every</span>
+                  <input v-model.number="screenshotIntervalLocal" type="number" min="1" max="60"
+                    class="ep-field-input" @change="saveSettings" />
+                  <span class="ep-switch-label">seconds (min 1)</span>
+                </div>
+                <div class="ep-field-hint">Only the broadcaster can change this.</div>
               </div>
-              <div class="ep-field-hint">Periodic screenshots of each scene.</div>
-              <div v-if="screenshotsLocal" class="ep-interval-row">
-                <span class="ep-field-hint">Refresh every</span>
-                <input v-model.number="screenshotIntervalLocal" type="number" min="1" max="60" class="ep-field-input"
-                  @change="saveSettings" />
-                <span class="ep-field-hint">seconds (min 1)</span>
-              </div>
-              <div class="ep-field-hint">Only the broadcaster can change this.</div>
             </div>
-          </div>
+          </details>
 
-          <div v-if="agentConnected" class="ep-section">
-            <div class="ep-section-label">Agent Management</div>
+          <details v-if="agentConnected" class="ep-details">
+            <summary>
+              Agent Management
+              <span class="ep-details-icon closed" v-html="iconSvgFor('chevron-right')"></span>
+              <span class="ep-details-icon open" v-html="iconSvgFor('chevron-down')"></span>
+            </summary>
+            <div class="ep-details-body">
+              <div class="ep-field-group">
+                <div class="ep-download-row">
+                  <button class="ep-btn ep-btn-secondary" @click="openAgentPairingPage">Open pairing page</button>
+                  <button class="ep-btn ep-btn-secondary" :disabled="checkingAgentUpdate" @click="checkAgentUpdate">
+                    {{ checkingAgentUpdate ? "checking..." : "Check for update" }}
+                  </button>
+                </div>
+                <div v-if="agentUpdateResult" class="ep-field-hint">{{ agentUpdateResult }}</div>
+              </div>
 
-            <div class="ep-field-group">
-              <div class="ep-download-row">
-                <button class="ep-btn ep-btn-secondary" @click="openAgentPairingPage">Open pairing page</button>
-                <button class="ep-btn ep-btn-secondary" :disabled="checkingAgentUpdate" @click="checkAgentUpdate">
-                  {{ checkingAgentUpdate ? "checking..." : "Check for update" }}
+              <div class="ep-field-group">
+                <button class="ep-btn ep-btn-danger" :class="{ confirm: disconnectConfirm }"
+                  :disabled="disconnectingAgent" @click="disconnectAgent">
+                  {{
+                    disconnectingAgent
+                      ? "disconnecting..."
+                      : disconnectConfirm
+                        ? "Click again to confirm"
+                        : "Disconnect agent"
+                  }}
                 </button>
+                <div class="ep-field-hint">Shuts down agent process on your PC.</div>
               </div>
-              <div v-if="agentUpdateResult" class="ep-field-hint">{{ agentUpdateResult }}</div>
             </div>
-
-            <div class="ep-field-group">
-              <button class="ep-btn ep-btn-danger" :class="{ confirm: disconnectConfirm }"
-                :disabled="disconnectingAgent" @click="disconnectAgent">
-                {{
-                  disconnectingAgent
-                    ? "disconnecting..."
-                    : disconnectConfirm
-                      ? "Click again to confirm"
-                      : "Disconnect agent"
-                }}
-              </button>
-              <div class="ep-field-hint">Shuts down agent process on your PC.</div>
-            </div>
-          </div>
+          </details>
 
           <div v-if="settingsSaving || settingsSaved" class="ep-autosave">
             {{ settingsSaving ? "saving..." : "saved" }}
@@ -2630,6 +2644,7 @@ watch(
   list-style: none;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 6px;
   transition: color 0.15s;
 }
@@ -2642,14 +2657,34 @@ watch(
   color: #9d6cff;
 }
 
-.ep-details summary::after {
-  content: "▸";
-  font-size: 10px;
-  transition: transform 0.15s;
+.ep-details-icon {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.ep-details[open] summary::after {
-  transform: rotate(90deg);
+.ep-details-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.ep-details-icon.open {
+  display: none;
+}
+
+.ep-details[open] .ep-details-icon.closed {
+  display: none;
+}
+
+.ep-details[open] .ep-details-icon.open {
+  display: flex;
+}
+
+.ep-details[open] {
+  background: #17171a;
 }
 
 .ep-details-body {
@@ -2721,6 +2756,10 @@ watch(
   color: #aaa;
 }
 
+.ep-step-sub {
+  font-size: 11px;
+}
+
 .ep-download-row {
   display: flex;
   gap: 8px;
@@ -2748,6 +2787,11 @@ watch(
 .ep-note-link {
   color: #9d6cff;
   text-decoration: none;
+}
+
+.ep-note-menu {
+  color: #9d6cff;
+  font-weight: 700;
 }
 
 /* Buttons */
