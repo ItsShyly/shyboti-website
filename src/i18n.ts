@@ -154,6 +154,11 @@ const translations: Record<Locale, Record<string, string>> = {
       "When enabled, users can trigger the bot by starting a message with @shyboti or shyboti. He replies only with Emotes tho!",
     "cmd.extras.mention_needs_7tv":
       "Requires a 7TV emote set. Configure it in Settings.",
+    "cmd.extras.reply_all_label": "React to replies on any bot message",
+    "cmd.extras.reply_all_desc":
+      "Replying to a @shyboti/shyboti message always works. When enabled, replying to a command or automation message also gets a response - when disabled, only replies to @shyboti/shyboti messages do.",
+    "cmd.extras.reply_all_needs_mention":
+      "Requires the @shyboti / shyboti mention to be enabled.",
     "cmd.extras.readonly": "Only the broadcaster can change these settings.",
 
     "settings.7tv.title": "7TV Emote Set",
@@ -1051,6 +1056,11 @@ const translations: Record<Locale, Record<string, string>> = {
       "Wenn aktiviert, können User den Bot mit @shyboti oder shyboti ansprechen. Er antwortet allerdings nur mit Emotes!",
     "cmd.extras.mention_needs_7tv":
       "Benötigt ein 7TV Emote-Set. In den Einstellungen konfigurieren.",
+    "cmd.extras.reply_all_label": "Auf Antworten auf jede Bot-Nachricht reagieren",
+    "cmd.extras.reply_all_desc":
+      "Antworten auf eine @shyboti/shyboti-Nachricht funktionieren immer. Wenn aktiviert, bekommt auch eine Antwort auf eine Command- oder Automation-Nachricht eine Reaktion - wenn deaktiviert, nur Antworten auf @shyboti/shyboti-Nachrichten.",
+    "cmd.extras.reply_all_needs_mention":
+      "Benötigt die aktivierte @shyboti / shyboti Erwähnung.",
     "cmd.extras.readonly":
       "Nur der Broadcaster kann diese Einstellungen ändern.",
 

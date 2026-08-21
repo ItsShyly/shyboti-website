@@ -133,6 +133,7 @@ watch(activeTab, (tab) => {
 
 // >>> extras / feature flags
 const mentionEnabled = ref(false);
+const replyAllEnabled = ref(false);
 const has7tvSet = ref(false);
 const extrasLoading = ref(false);
 const extrasSaving = ref(false);
@@ -148,9 +149,11 @@ async function fetchExtras() {
     if (!res.ok) return;
     const data = (await res.json()) as {
       mention_enabled: boolean;
+      reply_all_enabled: boolean;
       has_7tv_set: boolean;
     };
     mentionEnabled.value = data.mention_enabled;
+    replyAllEnabled.value = data.reply_all_enabled;
     has7tvSet.value = data.has_7tv_set ?? false;
   } catch {
   } finally {
@@ -168,7 +171,10 @@ async function saveExtras() {
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.value.token}`,
       },
-      body: JSON.stringify({ mention_enabled: mentionEnabled.value }),
+      body: JSON.stringify({
+        mention_enabled: mentionEnabled.value,
+        reply_all_enabled: replyAllEnabled.value,
+      }),
     });
     extrasSaved.value = true;
     setTimeout(() => (extrasSaved.value = false), 2000);
@@ -1520,6 +1526,26 @@ onUnmounted(() => {
                 <div class="extras-desc">{{ t("cmd.extras.mention_desc") }}</div>
                 <div v-if="!has7tvSet" class="extras-gate-note">
                   {{ t("cmd.extras.mention_needs_7tv") }}
+                </div>
+              </div>
+            </div>
+            <div class="extras-row">
+              <div class="ep-switch" :class="{
+                on: replyAllEnabled && has7tvSet && mentionEnabled,
+                disabled: !isBroadcaster || !has7tvSet || !mentionEnabled,
+              }" @click="
+                isBroadcaster &&
+                has7tvSet &&
+                mentionEnabled &&
+                ((replyAllEnabled = !replyAllEnabled), saveExtras())
+                "><span class="ep-switch-knob"></span></div>
+              <div class="extras-info">
+                <div class="extras-label">
+                  {{ t("cmd.extras.reply_all_label") }}
+                </div>
+                <div class="extras-desc">{{ t("cmd.extras.reply_all_desc") }}</div>
+                <div v-if="!mentionEnabled" class="extras-gate-note">
+                  {{ t("cmd.extras.reply_all_needs_mention") }}
                 </div>
               </div>
             </div>
