@@ -18,6 +18,7 @@ export interface CustomCommand {
   isActive: boolean | number; cooldown: number; userCooldown: number
   description: string
   arg_descs: { usage: string; desc: string }[]
+  flags: string[]
 }
 interface Props { cmdName: string; channel: string; open: boolean; isBuiltIn?: boolean; prefix?: string }
 
@@ -33,15 +34,27 @@ const saved = ref(false)
 const saveError = ref('')
 const deleting = ref(false)
 const deleteConfirm = ref(false)
-const activeTab = ref<'response' | 'args' | 'behavior'>('response')
+const activeTab = ref<'response' | 'args' | 'flags' | 'behavior'>('response')
 const dirty = ref(false)
 const closeConfirmOpen = ref(false)
 
 const form = ref<CustomCommand>({
   name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
   regex1: '', regex2: '', text1: '', text2: '', isActive: true, cooldown: 0, userCooldown: 0,
-  description: '', arg_descs: [],
+  description: '', arg_descs: [], flags: [],
 })
+
+// vvv custom command invocation flags, off by default vvv
+interface CustomFlagDef { flag: string; label: string; desc: string }
+const CUSTOM_FLAG_DEFS = computed<CustomFlagDef[]>(() => [
+  { flag: '-s', label: t('edit.flag_s_label'), desc: t('edit.flag_s_desc') },
+])
+function toggleCustomFlag(flag: string) {
+  const idx = form.value.flags.indexOf(flag)
+  if (idx === -1) form.value.flags.push(flag)
+  else form.value.flags.splice(idx, 1)
+}
+// ^^^ custom command invocation flags ^^^
 
 interface ParamEntry { key: string; type: 'text' | 'regex'; value: string }
 const userParams = ref<ParamEntry[]>([
@@ -139,7 +152,7 @@ async function load() {
     form.value = {
       name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
       regex1: '', regex2: '', text1: '', text2: '', isActive: true, cooldown: 0, userCooldown: 0,
-      description: '', arg_descs: []
+      description: '', arg_descs: [], flags: []
     }
     loading.value = false
     return
@@ -165,11 +178,11 @@ async function load() {
         const data = await res.json() as { commands: CustomCommand[] }
         const ex = data.commands.find(c => c.name === props.cmdName)
         form.value = ex
-          ? { ...ex, isActive: !!ex.isActive, description: ex.description ?? '', arg_descs: ex.arg_descs ?? [] }
+          ? { ...ex, isActive: !!ex.isActive, description: ex.description ?? '', arg_descs: ex.arg_descs ?? [], flags: ex.flags ?? [] }
           : {
             name: props.cmdName, response: '', rule: '', alias: '', enabled_when: 'always',
             required_game: '', regex1: '', regex2: '', text1: '', text2: '',
-            isActive: true, cooldown: 0, userCooldown: 0, description: '', arg_descs: []
+            isActive: true, cooldown: 0, userCooldown: 0, description: '', arg_descs: [], flags: []
           }
         userParams.value = userParams.value.map(p => ({ ...p, value: ex ? ((ex as any)[p.key] ?? '') : '' }))
       }
@@ -695,6 +708,8 @@ function onNormalKeydown(e: KeyboardEvent) {
               @click="activeTab = 'response'">{{ t('edit.tab_response') }}</button>
             <button class="ep-tab" :class="{ active: activeTab === 'args' }"
               @click="activeTab = 'args'">{{ t('edit.tab_args') }}</button>
+            <button v-if="!isBuiltIn" class="ep-tab" :class="{ active: activeTab === 'flags' }"
+              @click="activeTab = 'flags'">{{ t('edit.tab_flags') }}</button>
             <button class="ep-tab" :class="{ active: activeTab === 'behavior' }"
               @click="activeTab = 'behavior'">{{ t('edit.tab_behavior') }}</button>
           </div>
@@ -812,6 +827,23 @@ function onNormalKeydown(e: KeyboardEvent) {
             </div>
           </template>
           <!-- ^^^ args tab ^^^ -->
+
+          <!-- vvv flags tab vvv -->
+          <template v-if="activeTab === 'flags' && !isBuiltIn">
+            <div class="ep-field-group">
+              <label class="ep-field-label">{{ t('edit.tab_flags') }} <span class="ep-field-hint">{{ t('edit.custom_flags_hint') }}</span></label>
+              <div class="flags-list">
+                <div v-for="f in CUSTOM_FLAG_DEFS" :key="f.flag" class="flags-row flags-row-toggle" @click="toggleCustomFlag(f.flag)">
+                  <div class="ep-switch" :class="{ on: form.flags.includes(f.flag) }">
+                    <div class="ep-switch-knob"></div>
+                  </div>
+                  <span class="flags-flag">{{ f.label }}</span>
+                  <span class="flags-desc">{{ f.desc }}</span>
+                </div>
+              </div>
+            </div>
+          </template>
+          <!-- ^^^ flags tab ^^^ -->
 
           <!-- vvv behavior tab vvv -->
           <template v-if="activeTab === 'behavior'">
@@ -1018,6 +1050,17 @@ function onNormalKeydown(e: KeyboardEvent) {
 
 .flags-desc {
   color: #888;
+}
+
+.flags-row-toggle {
+  align-items: center;
+  cursor: pointer;
+  padding: 6px 8px;
+  user-select: none;
+}
+
+.flags-row-toggle:hover {
+  background: #1c1c22;
 }
 
 /* >>> built-in prefix lock */
