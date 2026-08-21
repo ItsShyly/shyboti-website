@@ -542,7 +542,6 @@ function toggleVisible(id: string) {
   if (!el) return;
   pushHistory();
   applyPatch(id, { visible: !el.visible });
-  save({ silent: true }); // <<< hide/show applies immediately, not on Save
 }
 function hideAllLayers() {
   // >>> staged edit, watcher saves it when live update is on
