@@ -80,6 +80,11 @@ export const REF_GROUPS: RefGroup[] = [
         desc: "Combine conditions",
         example: "$if($user.is(mod) and $args){ ok }",
       },
+      {
+        token: "*s",
+        desc: "Runs normally, no chat output",
+        example: "$counter.scared*s",
+      },
     ],
   },
   {
