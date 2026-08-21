@@ -184,7 +184,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "edit.tab_behavior": "Behavior",
     "edit.tab_flags": "Flags",
     "edit.close_confirm_title": "Close without saving?",
-    "edit.close_confirm_body": "You have unsaved changes. Save them before closing, or discard them?",
+    "edit.close_confirm_body":
+      "You have unsaved changes. Save them before closing, or discard them?",
     "edit.discard": "Discard",
     "edit.save_and_close": "Save & close",
     "edit.status": "Status",
@@ -209,7 +210,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "edit.alias_error": "Could not create alias",
     "edit.flags": "Flags",
     "edit.flags_empty": "No flags for this command",
-    "edit.custom_flags_hint": "Off by default - enable a flag to let chatters use it when invoking this command",
+    "edit.custom_flags_hint":
+      "Enable a flag to let chatters use it when invoking this command",
     "edit.flag_s_label": "-s",
     "edit.flag_s_desc": "Silent - runs the command but posts nothing in chat",
     "edit.global_cd": "Global cooldown",
@@ -574,7 +576,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "roles.delete": "Delete",
     "roles.delete_user_sure": "Remove this user's dashboard access?",
     "roles.all_users_title": "All Users",
-    "roles.all_users_sub": "Everyone with dashboard access - mods, VIPs, and custom users.",
+    "roles.all_users_sub":
+      "Everyone with dashboard access - mods, VIPs, and custom users.",
     "roles.filter_all": "All",
     "roles.filter_mods": "Mods",
     "roles.filter_vips": "VIPs",
@@ -584,8 +587,10 @@ const translations: Record<Locale, Record<string, string>> = {
     "roles.role_mod": "Mod",
     "roles.role_vip": "VIP",
     "roles.role_custom": "Custom",
-    "roles.already_mod": "This user is already a mod - edit their row below instead.",
-    "roles.already_vip": "This user is already a VIP - edit their row below instead.",
+    "roles.already_mod":
+      "This user is already a mod - edit their row below instead.",
+    "roles.already_vip":
+      "This user is already a VIP - edit their row below instead.",
     "perm.group.dashboard": "Dashboard",
     "perm.group.commands": "Commands",
     "perm.group.automations": "Automations",
@@ -787,7 +792,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.create": "Quickly create commands, timers, triggers, or filters.",
     "cmddesc.delete": "Deletes the message you replied to.",
     "cmddesc.timeout": "Times out a user for a set duration. Alias: +to.",
-    "cmddesc.vanish": "Times yourself out for 1s to delete your last message. Alias: +v.",
+    "cmddesc.vanish":
+      "Times yourself out for 1s to delete your last message. Alias: +v.",
     "cmddesc.ban": "Bans a user from the channel.",
     "cmddesc.git": "Owner-only: show recent commits or switch branch.",
     "cmddesc.refresh": "Refresh the 7TV emote cache for this channel.",
@@ -819,8 +825,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.prediction": "Starts a native Twitch prediction (mods only).",
     "cmddesc.endprediction":
       "Resolves or cancels the active prediction (mods only).",
-    "cmddesc.followage":
-      "Shows how long you (or someone else) have followed.",
+    "cmddesc.followage": "Shows how long you (or someone else) have followed.",
     "cmddesc.uptime": "Shows how long the channel has been live.",
     "cmddesc.schedule": "Shows the next scheduled stream.",
     "cmddesc.subage":
@@ -1078,7 +1083,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "edit.tab_behavior": "Verhalten",
     "edit.tab_flags": "Flags",
     "edit.close_confirm_title": "Ohne Speichern schließen?",
-    "edit.close_confirm_body": "Es gibt ungespeicherte Änderungen. Vor dem Schließen speichern oder verwerfen?",
+    "edit.close_confirm_body":
+      "Es gibt ungespeicherte Änderungen. Vor dem Schließen speichern oder verwerfen?",
     "edit.discard": "Verwerfen",
     "edit.save_and_close": "Speichern & schließen",
     "edit.status": "Status",
@@ -1105,9 +1111,10 @@ const translations: Record<Locale, Record<string, string>> = {
     "edit.flags": "Flags",
     "edit.flags_empty": "Keine Flags für diesen Command",
     "edit.custom_flags_hint":
-      "Standardmäßig aus - aktiviere ein Flag, damit Chatter es beim Aufruf dieses Commands nutzen können",
+      "Aktiviere ein Flag, damit Chatter es beim Aufruf dieses Commands nutzen können",
     "edit.flag_s_label": "-s",
-    "edit.flag_s_desc": "Silent - führt den Command aus, postet aber nichts im Chat",
+    "edit.flag_s_desc":
+      "Silent - führt den Command aus, postet aber nichts im Chat",
     "edit.global_cd": "Globaler Cooldown",
     "edit.user_cd": "User-Cooldown",
     "edit.seconds_short": "s",
@@ -1464,7 +1471,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "roles.delete": "Löschen",
     "roles.delete_user_sure": "Dashboard-Zugriff für diesen Nutzer entfernen?",
     "roles.all_users_title": "Alle Nutzer",
-    "roles.all_users_sub": "Jeder mit Dashboard-Zugriff - Mods, VIPs und individuelle Nutzer.",
+    "roles.all_users_sub":
+      "Jeder mit Dashboard-Zugriff - Mods, VIPs und individuelle Nutzer.",
     "roles.filter_all": "Alle",
     "roles.filter_mods": "Mods",
     "roles.filter_vips": "VIPs",
@@ -1474,8 +1482,10 @@ const translations: Record<Locale, Record<string, string>> = {
     "roles.role_mod": "Mod",
     "roles.role_vip": "VIP",
     "roles.role_custom": "Individuell",
-    "roles.already_mod": "Dieser Nutzer ist bereits Mod - bearbeite stattdessen seine Zeile unten.",
-    "roles.already_vip": "Dieser Nutzer ist bereits VIP - bearbeite stattdessen seine Zeile unten.",
+    "roles.already_mod":
+      "Dieser Nutzer ist bereits Mod - bearbeite stattdessen seine Zeile unten.",
+    "roles.already_vip":
+      "Dieser Nutzer ist bereits VIP - bearbeite stattdessen seine Zeile unten.",
     "perm.group.dashboard": "Dashboard",
     "perm.group.commands": "Commands",
     "perm.group.automations": "Automationen",
@@ -1707,7 +1717,8 @@ const translations: Record<Locale, Record<string, string>> = {
       "Listet die Moderatoren des Channels, oder schaut die eines anderen Channels nach (nur Mods).",
     "cmddesc.mc": "Alias für +modcheck.",
     "cmddesc.vips": "Listet die VIPs des Channels.",
-    "cmddesc.shoutout": "Gibt einem anderen Streamer einen Shoutout (nur Mods).",
+    "cmddesc.shoutout":
+      "Gibt einem anderen Streamer einen Shoutout (nur Mods).",
     "cmddesc.title": "Zeigt den aktuellen Stream-Titel.",
     "cmddesc.settitle": "Setzt den Stream-Titel (nur Mods).",
     "cmddesc.game": "Zeigt die aktuelle Stream-Kategorie.",
