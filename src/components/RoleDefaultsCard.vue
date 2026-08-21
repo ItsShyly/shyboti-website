@@ -275,15 +275,15 @@ watch(() => session.value?.channel, reload);
 }
 
 .badge-mod {
-  background: #6f2bff22;
-  color: #9d6cff;
-  border: 1px solid #6f2bff44;
+  background: rgba(35, 209, 139, 0.13);
+  color: #23d18b;
+  border: 1px solid rgba(35, 209, 139, 0.4);
 }
 
 .badge-vip {
-  background: rgba(229, 192, 123, 0.13);
-  color: #e5c07b;
-  border: 1px solid rgba(229, 192, 123, 0.4);
+  background: rgba(255, 95, 168, 0.13);
+  color: #ff5fa8;
+  border: 1px solid rgba(255, 95, 168, 0.4);
 }
 
 .scope-warning {

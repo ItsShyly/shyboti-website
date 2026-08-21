@@ -849,15 +849,15 @@ watch(() => session.value?.channel, loadAll);
 }
 
 .user-dot.mod {
-  background: #9d6cff;
+  background: #23d18b;
 }
 
 .user-dot.vip {
-  background: #e5c07b;
+  background: #ff5fa8;
 }
 
 .user-dot.custom {
-  background: #23d18b;
+  background: #e5c07b;
 }
 
 .user-dot.blocked {
@@ -893,21 +893,21 @@ watch(() => session.value?.channel, loadAll);
 }
 
 .user-badge.mod {
-  background: #6f2bff22;
-  color: #9d6cff;
-  border-color: #6f2bff44;
-}
-
-.user-badge.vip {
-  background: rgba(229, 192, 123, 0.13);
-  color: #e5c07b;
-  border-color: rgba(229, 192, 123, 0.4);
-}
-
-.user-badge.custom {
   background: rgba(35, 209, 139, 0.13);
   color: #23d18b;
   border-color: rgba(35, 209, 139, 0.4);
+}
+
+.user-badge.vip {
+  background: rgba(255, 95, 168, 0.13);
+  color: #ff5fa8;
+  border-color: rgba(255, 95, 168, 0.4);
+}
+
+.user-badge.custom {
+  background: rgba(229, 192, 123, 0.13);
+  color: #e5c07b;
+  border-color: rgba(229, 192, 123, 0.4);
 }
 
 .user-badge.blocked {
