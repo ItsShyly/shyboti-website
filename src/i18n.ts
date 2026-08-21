@@ -525,7 +525,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "roles.save": "Save changes",
     "roles.saving": "Saving…",
     "roles.saved": "Saved",
-    "roles.mod_access": "Moderator Access",
+    "roles.mod_access": "Moderator Default Access",
     "roles.mod_sub":
       "Allow mods to access the dashboard at all. When off, mods see nothing.",
     "roles.overrides": "Individual Overrides",
@@ -544,9 +544,12 @@ const translations: Record<Locale, Record<string, string>> = {
     "roles.custom_perms": "Custom permissions (overrides global defaults)",
     "roles.default_on": "default: on",
     "roles.default_off": "default: off",
-    "roles.vip_access": "VIP Access",
+    "roles.vip_access": "VIP Default Access",
     "roles.vip_sub":
       "Allow VIPs to access the dashboard at all. When off, VIPs see nothing.",
+    "roles.chatter_access": "Chatter Default Access",
+    "roles.chatter_sub":
+      "Allow any chatter to access the dashboard at all. When off, chatters see nothing.",
     "roles.loading_vips": "Loading VIPs…",
     "roles.no_vips": "No VIPs found - make sure the bot is in your channel.",
     "roles.search_placeholder": "Search…",
@@ -1404,7 +1407,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "roles.save": "Änderungen speichern",
     "roles.saving": "Wird gespeichert…",
     "roles.saved": "Gespeichert",
-    "roles.mod_access": "Moderator-Zugriff",
+    "roles.mod_access": "Moderator-Standardzugriff",
     "roles.mod_sub":
       "Erlaubt Mods den Zugriff auf das Dashboard. Wenn deaktiviert, sehen Mods nichts.",
     "roles.overrides": "Individuelle Überschreibungen",
@@ -1425,9 +1428,12 @@ const translations: Record<Locale, Record<string, string>> = {
       "Eigene Berechtigungen (überschreibt globale Standards)",
     "roles.default_on": "Standard: an",
     "roles.default_off": "Standard: aus",
-    "roles.vip_access": "VIP-Zugriff",
+    "roles.vip_access": "VIP-Standardzugriff",
     "roles.vip_sub":
       "Erlaubt VIPs den Zugriff auf das Dashboard. Wenn deaktiviert, sehen VIPs nichts.",
+    "roles.chatter_access": "Chatter-Standardzugriff",
+    "roles.chatter_sub":
+      "Erlaubt jedem Chatter den Zugriff auf das Dashboard. Wenn deaktiviert, sehen Chatter nichts.",
     "roles.loading_vips": "VIPs werden geladen…",
     "roles.no_vips":
       "Keine VIPs gefunden - stelle sicher dass der Bot in deinem Channel ist.",

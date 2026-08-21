@@ -7,16 +7,44 @@ import { iconSvg as iconSvgFor } from "../composables/icons";
 import type { RolePermissions } from "../auth";
 import ReauthLink from "./shared/ReauthLink.vue";
 
-const props = defineProps<{ kind: "mod" | "vip" }>();
+const props = defineProps<{ kind: "mod" | "vip" | "chatter" }>();
 const emit = defineEmits<{ saved: [] }>();
 
 const { session } = useAuth();
 const { t } = useI18n();
 
 const isVip = computed(() => props.kind === "vip");
-const badgeLabel = computed(() => (isVip.value ? "VIP" : "MOD"));
-const rolesBase = computed(() => (isVip.value ? "vip-roles" : "roles"));
-const enabledField = computed(() => (isVip.value ? "vipsEnabled" : "modsEnabled"));
+const isChatter = computed(() => props.kind === "chatter");
+const rolesBase = computed(() =>
+  isChatter.value ? "chatter-roles" : isVip.value ? "vip-roles" : "roles",
+);
+const enabledField = computed(() =>
+  isChatter.value ? "chattersEnabled" : isVip.value ? "vipsEnabled" : "modsEnabled",
+);
+const accessLabel = computed(() =>
+  isChatter.value ? t("roles.chatter_access") : isVip.value ? t("roles.vip_access") : t("roles.mod_access"),
+);
+const accessSub = computed(() =>
+  isChatter.value ? t("roles.chatter_sub") : isVip.value ? t("roles.vip_sub") : t("roles.mod_sub"),
+);
+
+// >>> chatters have no twitch badge, gray dot only
+const twitchBadgeKey = computed(() => (isChatter.value ? "" : isVip.value ? "vip/1" : "moderator/1"));
+const twitchBadgeUrl = ref("");
+
+async function loadTwitchBadge() {
+  twitchBadgeUrl.value = "";
+  if (!session.value || !twitchBadgeKey.value) return;
+  try {
+    const res = await fetch(`${API}/twitch/badges/${encodeURIComponent(session.value.channel)}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    if (!res.ok) return;
+    const d = (await res.json()) as any;
+    const b = d?.badgeMap?.[twitchBadgeKey.value];
+    twitchBadgeUrl.value = String(b?.image_url_2x ?? b?.image_url_1x ?? "");
+  } catch {}
+}
 
 type Perms = Omit<RolePermissions, "modsEnabled">;
 
@@ -84,10 +112,10 @@ const DEFAULT_VIP_PERMS: Perms = {
   ...Object.fromEntries(Object.keys(DEFAULT_MOD_PERMS).map((k) => [k, false])),
 } as Perms;
 
-const DEFAULT_PERMS = computed(() => (isVip.value ? DEFAULT_VIP_PERMS : DEFAULT_MOD_PERMS));
+const DEFAULT_PERMS = computed(() => (isVip.value || isChatter.value ? DEFAULT_VIP_PERMS : DEFAULT_MOD_PERMS));
 
 const open = ref(false);
-const enabled = ref(!isVip.value);
+const enabled = ref(!isVip.value && !isChatter.value);
 const globalPerms = ref<Perms>({ ...DEFAULT_PERMS.value });
 
 const hasScope = ref(true); // >>> avoids warning flash before check resolves
@@ -103,9 +131,12 @@ async function load() {
     const data = (await res.json()) as {
       modsEnabled?: boolean;
       vipsEnabled?: boolean;
+      chattersEnabled?: boolean;
       permissions: Perms;
     };
-    enabled.value = (isVip.value ? data.vipsEnabled : data.modsEnabled) ?? !isVip.value;
+    enabled.value =
+      (isChatter.value ? data.chattersEnabled : isVip.value ? data.vipsEnabled : data.modsEnabled) ??
+      (!isVip.value && !isChatter.value);
     Object.assign(globalPerms.value, DEFAULT_PERMS.value, data.permissions);
   } catch {}
 }
@@ -153,6 +184,7 @@ async function syncNow() {
 function reload() {
   load();
   loadScopeStatus();
+  loadTwitchBadge();
 }
 
 onMounted(reload);
@@ -162,8 +194,9 @@ watch(() => session.value?.channel, reload);
 <template>
   <details class="ep-details defaults-card" :open="open">
     <summary @click.prevent="open = !open">
-      <span class="badge" :class="isVip ? 'badge-vip' : 'badge-mod'">{{ badgeLabel }}</span>
-      {{ isVip ? t("roles.vip_access") : t("roles.mod_access") }}
+      <img v-if="twitchBadgeUrl" class="role-badge-icon" :src="twitchBadgeUrl" alt="" />
+      <span v-else class="role-badge-dot"></span>
+      {{ accessLabel }}
       <div class="card-toggle" @click.stop>
         <div class="ep-switch" :class="{ on: enabled }" @click="enabled = !enabled; save();">
           <div class="ep-switch-knob"></div>
@@ -173,7 +206,7 @@ watch(() => session.value?.channel, reload);
       <span class="ep-details-icon open" v-html="iconSvgFor('chevron-down')"></span>
     </summary>
     <div class="ep-details-body">
-      <p class="card-sub">{{ isVip ? t("roles.vip_sub") : t("roles.mod_sub") }}</p>
+      <p class="card-sub">{{ accessSub }}</p>
 
       <div v-if="isVip && !hasScope" class="scope-warning">
         {{ t("roles.scope_warning_pre") }}<ReauthLink>{{ t("roles.scope_warning_link") }}</ReauthLink>{{ t("roles.scope_warning_post") }}
@@ -210,6 +243,10 @@ watch(() => session.value?.channel, reload);
 .defaults-card {
   background: #1a1a1e;
   border: 1px solid #2a2a30;
+}
+
+.defaults-card[open] {
+  border-color: #6f2bff66;
 }
 
 .defaults-card summary {
@@ -254,12 +291,20 @@ watch(() => session.value?.channel, reload);
 }
 
 .ep-details-body {
-  padding: 0 18px 18px;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  z-index: 30;
+  margin-top: 6px;
+  background: #1a1a1e;
+  border: 1px solid #6f2bff66;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  padding: 14px 18px 18px;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  border-top: 1px solid #222;
-  padding-top: 14px;
+  box-sizing: border-box;
 }
 
 .card-sub {
@@ -267,23 +312,18 @@ watch(() => session.value?.channel, reload);
   color: #555;
 }
 
-.badge {
-  font-size: 9px;
-  font-weight: 700;
-  padding: 2px 6px;
-  letter-spacing: 0.05em;
+.role-badge-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
-.badge-mod {
-  background: rgba(35, 209, 139, 0.13);
-  color: #23d18b;
-  border: 1px solid rgba(35, 209, 139, 0.4);
-}
-
-.badge-vip {
-  background: rgba(255, 95, 168, 0.13);
-  color: #ff5fa8;
-  border: 1px solid rgba(255, 95, 168, 0.4);
+.role-badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #3a3a50;
+  flex-shrink: 0;
 }
 
 .scope-warning {

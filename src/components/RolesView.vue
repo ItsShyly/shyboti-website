@@ -113,6 +113,24 @@ async function loadDefaultsSnapshot() {
   } catch {}
 }
 
+// >>> real twitch mod/vip badge icons, gray dot fallback if unavailable
+const modBadgeUrl = ref("");
+const vipBadgeUrl = ref("");
+
+async function loadTwitchBadges() {
+  if (!session.value) return;
+  try {
+    const res = await fetch(`${API}/twitch/badges/${encodeURIComponent(session.value.channel)}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    if (!res.ok) return;
+    const d = (await res.json()) as any;
+    const badgeMap = d?.badgeMap ?? {};
+    modBadgeUrl.value = String(badgeMap["moderator/1"]?.image_url_2x ?? badgeMap["moderator/1"]?.image_url_1x ?? "");
+    vipBadgeUrl.value = String(badgeMap["vip/1"]?.image_url_2x ?? badgeMap["vip/1"]?.image_url_1x ?? "");
+  } catch {}
+}
+
 const mods = ref<RawRoleRow[]>([]);
 const vips = ref<RawRoleRow[]>([]);
 const customUsers = ref<CustomUserRow[]>([]);
@@ -156,7 +174,7 @@ async function loadCustomUsers() {
 
 async function loadAll() {
   listLoading.value = true;
-  await Promise.all([loadDefaultsSnapshot(), loadMods(), loadVips(), loadCustomUsers()]);
+  await Promise.all([loadDefaultsSnapshot(), loadTwitchBadges(), loadMods(), loadVips(), loadCustomUsers()]);
   listLoading.value = false;
 }
 
@@ -355,6 +373,7 @@ watch(() => session.value?.channel, loadAll);
     <div class="defaults-row">
       <RoleDefaultsCard kind="mod" @saved="onDefaultsSaved" />
       <RoleDefaultsCard kind="vip" @saved="onDefaultsSaved" />
+      <RoleDefaultsCard kind="chatter" @saved="onDefaultsSaved" />
     </div>
 
     <div class="users-section">
@@ -436,12 +455,14 @@ watch(() => session.value?.channel, loadAll);
           :class="{ expanded: expandedKey === entry.key, blocked: entry.blocked, overridden: !entry.blocked && entry.permissions !== null }"
         >
           <div class="user-row" @click="toggleExpand(entry)">
-            <span class="user-dot" :class="entry.blocked ? 'blocked' : entry.role"></span>
+            <img v-if="!entry.blocked && entry.role === 'mod' && modBadgeUrl" class="role-badge-icon" :src="modBadgeUrl" alt="" />
+            <img v-else-if="!entry.blocked && entry.role === 'vip' && vipBadgeUrl" class="role-badge-icon" :src="vipBadgeUrl" alt="" />
+            <span v-else class="user-dot" :class="entry.blocked ? 'blocked' : 'gray'"></span>
             <span class="user-name">{{ entry.username }}</span>
             <div class="user-badges">
               <span v-if="entry.blocked" class="user-badge blocked">{{ t("roles.badge.blocked") }}</span>
-              <span v-else class="user-badge" :class="entry.role">{{ t(`roles.role_${entry.role}`) }}</span>
-              <span v-if="!entry.blocked && entry.role !== 'custom' && entry.permissions !== null" class="user-badge custom">{{ t("roles.badge.custom") }}</span>
+              <span v-else-if="entry.role === 'custom'" class="user-badge custom">{{ t("roles.role_custom") }}</span>
+              <span v-else-if="entry.permissions !== null" class="user-badge custom">{{ t("roles.badge.custom") }}</span>
             </div>
             <div class="user-actions" @click.stop>
               <button v-if="entry.role !== 'custom'" class="btn btn-danger sm" :class="{ 'btn-allow': entry.blocked }" @click="toggleBlock(entry)" :disabled="itemSaving === entry.key">
@@ -533,8 +554,9 @@ watch(() => session.value?.channel, loadAll);
 
 .defaults-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
+  position: relative;
 }
 
 .users-section {
@@ -614,6 +636,9 @@ watch(() => session.value?.channel, loadAll);
 
 .search-input {
   width: 100%;
+  height: 40px;
+  font-size: 13px;
+  padding: 0 14px;
 }
 
 .btn {
@@ -848,20 +873,18 @@ watch(() => session.value?.channel, loadAll);
   flex-shrink: 0;
 }
 
-.user-dot.mod {
-  background: #23d18b;
-}
-
-.user-dot.vip {
-  background: #ff5fa8;
-}
-
-.user-dot.custom {
-  background: #e5c07b;
+.user-dot.gray {
+  background: #3a3a50;
 }
 
 .user-dot.blocked {
   background: #f14949;
+}
+
+.role-badge-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .user-name {
@@ -890,18 +913,6 @@ watch(() => session.value?.channel, loadAll);
   background: #11111a;
   color: #555;
   border: 1px solid #222;
-}
-
-.user-badge.mod {
-  background: rgba(35, 209, 139, 0.13);
-  color: #23d18b;
-  border-color: rgba(35, 209, 139, 0.4);
-}
-
-.user-badge.vip {
-  background: rgba(255, 95, 168, 0.13);
-  color: #ff5fa8;
-  border-color: rgba(255, 95, 168, 0.4);
 }
 
 .user-badge.custom {
