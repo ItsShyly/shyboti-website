@@ -287,8 +287,11 @@ export function highlightScript(src: string, ifLevel = 0): string {
       out += `<span class="${cls}">${esc(tok)}</span>`;
       i = j;
       // >>> trailing *s modifier, silences chat output for this response
-      if (src.slice(i, i + 2) === "*s" && !/[a-zA-Z0-9_]/.test(src[i + 2] ?? "")) {
-        out += `<span class="sh-op" title="Runs normally, no chat output">*s</span>`;
+      if (
+        src.slice(i, i + 2) === "*s" &&
+        !/[a-zA-Z0-9_]/.test(src[i + 2] ?? "")
+      ) {
+        out += `<span class="sh-op" title="Run counter/vars without chat output">*s</span>`;
         i += 2;
       }
       continue;
