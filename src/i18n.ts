@@ -159,6 +159,9 @@ const translations: Record<Locale, Record<string, string>> = {
       "Replying to a @shyboti/shyboti message always works. When enabled, replying to a command or automation message also gets a response - when disabled, only replies to @shyboti/shyboti messages do.",
     "cmd.extras.reply_all_needs_mention":
       "Requires the @shyboti / shyboti mention to be enabled.",
+    "cmd.extras.only_offline_label": "Only respond while offline",
+    "cmd.extras.only_offline_desc":
+      "When enabled, mention replies stay off while the channel is live.",
     "cmd.extras.readonly": "Only the broadcaster can change these settings.",
 
     "settings.7tv.title": "7TV Emote Set",
@@ -1061,6 +1064,9 @@ const translations: Record<Locale, Record<string, string>> = {
       "Antworten auf eine @shyboti/shyboti-Nachricht funktionieren immer. Wenn aktiviert, bekommt auch eine Antwort auf eine Command- oder Automation-Nachricht eine Reaktion - wenn deaktiviert, nur Antworten auf @shyboti/shyboti-Nachrichten.",
     "cmd.extras.reply_all_needs_mention":
       "Benötigt die aktivierte @shyboti / shyboti Erwähnung.",
+    "cmd.extras.only_offline_label": "Nur während Offline antworten",
+    "cmd.extras.only_offline_desc":
+      "Wenn aktiviert, bleiben Erwähnungs-Antworten aus, solange der Kanal live ist.",
     "cmd.extras.readonly":
       "Nur der Broadcaster kann diese Einstellungen ändern.",
 
