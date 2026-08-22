@@ -148,7 +148,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.error.name": "Enter a name",
     "cmd.error.chars": "Only letters, numbers, _",
     "cmd.error.exists": "Already exists",
-    "cmd.extras.section": "Bot Behaviour",
+    "cmd.extras.mention_section": "@Shyboti Behaviour",
     "cmd.extras.mention_label": "@shyboti / shyboti mention",
     "cmd.extras.mention_desc":
       "When enabled, users can trigger the bot by starting a message with @shyboti or shyboti. He replies only with Emotes tho!",
@@ -162,6 +162,10 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.extras.only_offline_label": "Only respond while offline",
     "cmd.extras.only_offline_desc":
       "When enabled, mention replies stay off while the channel is live.",
+    "cmd.extras.bot_section": "Bot Behaviour",
+    "cmd.extras.online_only_label": "Only active while live",
+    "cmd.extras.online_only_desc":
+      "When enabled, the bot ignores commands, triggers and mentions while the channel is offline. Moderation keeps running.",
     "cmd.extras.readonly": "Only the broadcaster can change these settings.",
 
     "settings.7tv.title": "7TV Emote Set",
@@ -1053,7 +1057,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.error.name": "Name eingeben",
     "cmd.error.chars": "Nur Buchstaben, Zahlen, _",
     "cmd.error.exists": "Bereits vorhanden",
-    "cmd.extras.section": "Bot-Verhalten",
+    "cmd.extras.mention_section": "@Shyboti-Verhalten",
     "cmd.extras.mention_label": "@shyboti / shyboti Erwähnung",
     "cmd.extras.mention_desc":
       "Wenn aktiviert, können User den Bot mit @shyboti oder shyboti ansprechen. Er antwortet allerdings nur mit Emotes!",
@@ -1067,6 +1071,10 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.extras.only_offline_label": "Nur während Offline antworten",
     "cmd.extras.only_offline_desc":
       "Wenn aktiviert, bleiben Erwähnungs-Antworten aus, solange der Kanal live ist.",
+    "cmd.extras.bot_section": "Bot-Verhalten",
+    "cmd.extras.online_only_label": "Nur während Live aktiv",
+    "cmd.extras.online_only_desc":
+      "Wenn aktiviert, ignoriert der Bot Commands, Trigger und Erwähnungen, solange der Kanal offline ist. Moderation läuft weiterhin.",
     "cmd.extras.readonly":
       "Nur der Broadcaster kann diese Einstellungen ändern.",
 

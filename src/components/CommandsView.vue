@@ -135,6 +135,7 @@ watch(activeTab, (tab) => {
 const mentionEnabled = ref(false);
 const replyAllEnabled = ref(false);
 const mentionOnlyOffline = ref(false);
+const botOnlineOnly = ref(false);
 const has7tvSet = ref(false);
 const extrasLoading = ref(false);
 const extrasSaving = ref(false);
@@ -152,11 +153,13 @@ async function fetchExtras() {
       mention_enabled: boolean;
       reply_all_enabled: boolean;
       mention_only_offline: boolean;
+      bot_online_only: boolean;
       has_7tv_set: boolean;
     };
     mentionEnabled.value = data.mention_enabled;
     replyAllEnabled.value = data.reply_all_enabled;
     mentionOnlyOffline.value = data.mention_only_offline;
+    botOnlineOnly.value = data.bot_online_only;
     has7tvSet.value = data.has_7tv_set ?? false;
   } catch {
   } finally {
@@ -178,6 +181,7 @@ async function saveExtras() {
         mention_enabled: mentionEnabled.value,
         reply_all_enabled: replyAllEnabled.value,
         mention_only_offline: mentionOnlyOffline.value,
+        bot_online_only: botOnlineOnly.value,
       }),
     });
     extrasSaved.value = true;
@@ -1513,7 +1517,7 @@ onUnmounted(() => {
         <div v-else-if="!botPresent" class="state-msg">{{ t("cmd.no_bot") }}</div>
         <template v-else>
           <div class="extras-section">
-            <div class="extras-section-title">{{ t("cmd.extras.section") }}</div>
+            <div class="extras-section-title">{{ t("cmd.extras.mention_section") }}</div>
             <div class="extras-row">
               <div class="ep-switch" :class="{
                 on: mentionEnabled && has7tvSet,
@@ -1574,6 +1578,26 @@ onUnmounted(() => {
               </div>
             </div>
           </div>
+
+          <div class="extras-section">
+            <div class="extras-section-title">{{ t("cmd.extras.bot_section") }}</div>
+            <div class="extras-row">
+              <div class="ep-switch" :class="{
+                on: botOnlineOnly,
+                disabled: !isBroadcaster,
+              }" @click="
+                isBroadcaster &&
+                ((botOnlineOnly = !botOnlineOnly), saveExtras())
+                "><span class="ep-switch-knob"></span></div>
+              <div class="extras-info">
+                <div class="extras-label">
+                  {{ t("cmd.extras.online_only_label") }}
+                </div>
+                <div class="extras-desc">{{ t("cmd.extras.online_only_desc") }}</div>
+              </div>
+            </div>
+          </div>
+
           <div v-if="!isBroadcaster" class="extras-readonly-note">
             {{ t("cmd.extras.readonly") }}
           </div>
