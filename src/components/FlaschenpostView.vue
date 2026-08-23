@@ -150,7 +150,7 @@ const debugNow = ref(Date.now());
 
 function fmtTime(ms) {
     if (!ms) return '-';
-    return new Date(ms).toLocaleTimeString();
+    return new Date(ms).toLocaleTimeString('de-DE');
 }
 function fmtCountdown(targetMs) {
     if (!targetMs) return '-';
@@ -271,7 +271,7 @@ async function fetchFlaschenpost() {
 
 function formatTimestamp(ms) {
     if (!ms) return '';
-    return new Date(ms).toLocaleString();
+    return new Date(ms).toLocaleString('de-DE');
 }
 
 // >>> true elapsed fraction of the real drift window (server timestamps,
