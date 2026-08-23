@@ -1827,8 +1827,15 @@ onUnmounted(() => {
   background: #222226;
   border-top: 1px solid #1e1e22;
   align-items: center;
-  gap: 8px;
   animation: slideDown 0.15s ease;
+}
+
+.arg-variant-usage {
+  padding-left: 8px;
+}
+
+.arg-variant-desc {
+  padding-left: 8px;
 }
 
 .arg-variant-indent {
