@@ -63,6 +63,68 @@ function fmtBytes(b: number): string {
   return `${(b / 1024 / 1024).toFixed(1)} MB`;
 }
 
+const admins = ref<string[]>([]);
+const newAdminName = ref("");
+const addAdminError = ref("");
+const removeAdminId = ref<string | null>(null);
+
+async function loadAdmins() {
+  if (!session.value?.isAdmin) return;
+  try {
+    const res = await fetch(`${API}/admin/admins`, { headers: authHeaders() });
+    if (res.ok) {
+      const data = (await res.json()) as { admins: string[] };
+      admins.value = data.admins;
+    }
+  } catch {}
+}
+
+async function addAdmin() {
+  const username = newAdminName.value.trim().toLowerCase();
+  if (!username) return;
+  addAdminError.value = "";
+  try {
+    const res = await fetch(`${API}/admin/admins`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    });
+    if (!res.ok) {
+      const d = (await res.json()) as any;
+      throw new Error(d.error ?? "Could not add admin");
+    }
+    newAdminName.value = "";
+    await loadAdmins();
+  } catch (e: any) {
+    addAdminError.value = e.message ?? "Could not add admin";
+  }
+}
+
+async function removeAdmin(username: string) {
+  if (removeAdminId.value !== username) {
+    removeAdminId.value = username;
+    setTimeout(() => {
+      if (removeAdminId.value === username) removeAdminId.value = null;
+    }, 3000);
+    return;
+  }
+  removeAdminId.value = null;
+  addAdminError.value = "";
+  try {
+    const res = await fetch(`${API}/admin/admins/${username}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (!res.ok) {
+      const d = (await res.json()) as any;
+      throw new Error(d.error ?? "Could not remove admin");
+    }
+    admins.value = admins.value.filter((a) => a !== username);
+  } catch (e: any) {
+    addAdminError.value = e.message ?? "Could not remove admin";
+  }
+}
+
 const filtered = computed(() => {
   if (filter.value === "all") return bugs.value;
   return bugs.value.filter((b) => b.status === filter.value);
@@ -133,6 +195,7 @@ function fmtDate(ts: number) {
 onMounted(() => {
   loadBugs();
   loadHealth();
+  loadAdmins();
   healthTimer = setInterval(loadHealth, 30_000);
 });
 onUnmounted(() => {
@@ -144,6 +207,7 @@ watch(
     if (v) {
       loadBugs();
       loadHealth();
+      loadAdmins();
     }
   },
 );
@@ -160,6 +224,24 @@ watch(
       <div class="health-stat">
         DB: {{ fmtBytes(health.configDbBytes) }} / {{ fmtBytes(health.gamesDbBytes) }}
       </div>
+    </div>
+
+    <div class="admins-tile">
+      <div class="admins-title">Admins</div>
+      <div class="admins-list">
+        <div v-for="a in admins" :key="a" class="admin-pill">
+          {{ a }}
+          <button class="admin-pill-remove" :class="{ confirm: removeAdminId === a }" @click="removeAdmin(a)">
+            <template v-if="removeAdminId === a">?</template>
+            <span v-else>×</span>
+          </button>
+        </div>
+      </div>
+      <form class="admin-add-form" @submit.prevent="addAdmin">
+        <input v-model="newAdminName" class="admin-add-input" placeholder="Twitch-Login…" />
+        <button type="submit" class="admin-add-btn">+</button>
+      </form>
+      <div v-if="addAdminError" class="admin-add-error">{{ addAdminError }}</div>
     </div>
 
     <div class="admin-header">
@@ -238,6 +320,100 @@ watch(
 }
 .health-dot.on {
   background: #4caf50;
+}
+
+.admins-tile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: #141418;
+  border: 1px solid #2a2a30;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.admins-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+.admins-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.admin-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 8px;
+  font-size: 11px;
+  color: #9d6cff;
+  background: rgba(111, 43, 255, 0.1);
+  border: 1px solid #6f2bff44;
+}
+.admin-pill-remove {
+  width: 15px;
+  height: 15px;
+  border: none;
+  background: transparent;
+  color: #f14949;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.admin-pill-remove:hover {
+  background: rgba(241, 73, 73, 0.15);
+}
+.admin-pill-remove.confirm {
+  background: rgba(241, 73, 73, 0.25);
+  font-weight: 700;
+}
+.admin-add-form {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.admin-add-input {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #2a2a30;
+  background: #0d0d10;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: 11px;
+  outline: none;
+  width: 130px;
+}
+.admin-add-input:focus {
+  border-color: #6f2bff55;
+}
+.admin-add-btn {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: #6f2bff;
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.admin-add-btn:hover {
+  background: #7f3fff;
+}
+.admin-add-error {
+  width: 100%;
+  font-size: 10px;
+  color: #f14949;
 }
 
 .admin-header {
