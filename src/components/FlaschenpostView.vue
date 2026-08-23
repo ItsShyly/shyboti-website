@@ -64,6 +64,7 @@ const route = useRoute();
 const channel = computed(() => String(route.params.channel || '').toLowerCase());
 
 const fpExists = ref(false);
+const fpId = ref('');
 const fpCreatedAt = ref(0);
 const fpExpiresAt = ref(0);
 const fpMessages = ref([]); // <<< [{ senderName, html, createdAt }]
@@ -80,7 +81,7 @@ const bottleStyle = computed(() => ({
 const emoteMap = ref({});
 
 // vvv debug panel vvv
-const fpDebug = ref({ serverNow: 0, nextAppearAt: null }); // <<< { serverNow, nextAppearAt }
+const fpDebug = ref({ serverNow: 0, nextAppearAt: null, revivingId: null }); // <<< { serverNow, nextAppearAt, revivingId }
 const clockSkewMs = ref(0); // <<< serverNow - Date.now() at last fetch
 const debugNow = ref(Date.now());
 
@@ -105,6 +106,7 @@ const debugText = computed(() => {
     ];
     if (fpExists.value) {
         lines.push(
+            `id: ${fpId.value}`,
             `created: ${fmtTime(fpCreatedAt.value)}`,
             `expires: ${fmtTime(fpExpiresAt.value)} (in ${fmtCountdown(fpExpiresAt.value)})`,
             `drift: ${(driftProgress.value * 100).toFixed(1)}%`,
@@ -113,6 +115,7 @@ const debugText = computed(() => {
     } else {
         lines.push(
             `next appear: ${fmtTime(fpDebug.value.nextAppearAt)} (in ${fmtCountdown(fpDebug.value.nextAppearAt)})`,
+            `reviving: ${fpDebug.value.revivingId || '(new bottle)'}`,
         );
     }
     lines.push(`server clock skew: ${clockSkewMs.value}ms`);
@@ -176,6 +179,7 @@ async function fetchFlaschenpost() {
             clockSkewMs.value = d.debug.serverNow - Date.now();
         }
         if (d.exists) {
+            fpId.value = d.id || '';
             fpCreatedAt.value = d.createdAt || 0;
             fpExpiresAt.value = d.expiresAt || 0;
             fpMessages.value = (d.messages ?? []).map((m) => ({
