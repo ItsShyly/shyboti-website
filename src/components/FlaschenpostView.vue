@@ -202,7 +202,8 @@ function formatTimestamp(ms) {
 // >>> drives bottleStyle every frame so the drift looks continuous, not choppy per-poll
 function updateDrift() {
     if (fpExists.value && fpExpiresAt.value > fpCreatedAt.value) {
-        const now = Date.now();
+        // >>> createdAt/expiresAt are server timestamps
+        const now = Date.now() + clockSkewMs.value;
         const p = (now - fpCreatedAt.value) / (fpExpiresAt.value - fpCreatedAt.value);
         driftProgress.value = Math.max(0, Math.min(1, p));
         if (p >= 1) {
