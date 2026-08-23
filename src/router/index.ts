@@ -134,6 +134,14 @@ window.addEventListener("vite:preloadError", (e) =>
 );
 
 router.beforeEach((to) => {
+  // >>> bare domain (no channel) has nothing to show - bounce to the real dashboard
+
+  // @TODO change to shyboti.de when live
+  if (isFlaschenpostDomain && to.path === "/") {
+    window.location.href = "https://dev.shyboti.de";
+    return false;
+  }
+
   const { session, adminMode } = useAuth();
   const viewingOtherChannel =
     !!session.value && session.value.login !== session.value.channel;
