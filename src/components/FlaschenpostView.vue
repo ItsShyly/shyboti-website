@@ -256,9 +256,6 @@ async function fetchFlaschenpost() {
             fpId.value = d.id || '';
             fpCreatedAt.value = d.createdAt || 0;
             fpDriftStartedAt.value = d.driftStartedAt || 0;
-            // >>> a revived bottle keeps its id, but gets a fresh expiresAt -
-            // >>> that's what tells us this is a new appearance to animate
-            if (d.expiresAt !== fpExpiresAt.value) driftWindowStart = null;
             fpExpiresAt.value = d.expiresAt || 0;
             fpMessages.value = (d.messages ?? []).map((m) => ({
                 senderName: m.senderName,
@@ -268,7 +265,6 @@ async function fetchFlaschenpost() {
         } else {
             showPaper.value = false;
             fpMessages.value = [];
-            driftWindowStart = null;
         }
     } catch { }
 }
@@ -278,23 +274,20 @@ function formatTimestamp(ms) {
     return new Date(ms).toLocaleString();
 }
 
-// >>> always animates a fresh 0->1 sweep from whenever we first noticed this
-// >>> appearance to its expiresAt - never starts already-partway-through, and
-// >>> if little time is actually left it just moves faster to still arrive on time
-let driftWindowStart = null; // <<< server-corrected ms, reset per new appearance
+// >>> true elapsed fraction of the real drift window (server timestamps,
+// >>> clock-skew corrected) - a reload mid-drift shows the actual progress,
+// >>> e.g. halfway through its window shows 50%, not a fresh 0% restart
 function updateDrift() {
-    if (fpExists.value && fpExpiresAt.value > 0) {
+    if (fpExists.value && fpExpiresAt.value > fpDriftStartedAt.value) {
         const now = Date.now() + clockSkewMs.value;
-        if (driftWindowStart === null) driftWindowStart = now;
-        const total = fpExpiresAt.value - driftWindowStart;
-        const p = total > 0 ? (now - driftWindowStart) / total : 1;
+        const total = fpExpiresAt.value - fpDriftStartedAt.value;
+        const p = total > 0 ? (now - fpDriftStartedAt.value) / total : 1;
         driftProgress.value = Math.max(0, Math.min(1, p));
         if (p >= 1) {
             // >>> drifted off screen - don't wait for the next poll to hide it
             fpExists.value = false;
             showPaper.value = false;
             fpMessages.value = [];
-            driftWindowStart = null;
         }
     }
     driftAnimId = requestAnimationFrame(updateDrift);
