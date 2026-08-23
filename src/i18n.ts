@@ -148,6 +148,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.error.name": "Enter a name",
     "cmd.error.chars": "Only letters, numbers, _",
     "cmd.error.exists": "Already exists",
+    "cmd.flaschenpost.description":
+      "Send a Message-in-a-bottle, it appears rarely and users can add a message only then.",
     "cmd.extras.mention_section": "@Shyboti Behaviour",
     "cmd.extras.mention_label": "@shyboti / shyboti mention",
     "cmd.extras.mention_desc":
@@ -1057,13 +1059,16 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.error.name": "Name eingeben",
     "cmd.error.chars": "Nur Buchstaben, Zahlen, _",
     "cmd.error.exists": "Bereits vorhanden",
+    "cmd.flaschenpost.description":
+      "Sende eine Flaschenpost, sie taucht sehr selten wieder auf und dann kann man eine Nachricht hinzufügen.",
     "cmd.extras.mention_section": "@Shyboti-Verhalten",
     "cmd.extras.mention_label": "@shyboti / shyboti Erwähnung",
     "cmd.extras.mention_desc":
       "Wenn aktiviert, können User den Bot mit @shyboti oder shyboti ansprechen. Er antwortet allerdings nur mit Emotes!",
     "cmd.extras.mention_needs_7tv":
       "Benötigt ein 7TV Emote-Set. In den Einstellungen konfigurieren.",
-    "cmd.extras.reply_all_label": "Auf Antworten auf jede Bot-Nachricht reagieren",
+    "cmd.extras.reply_all_label":
+      "Auf Antworten auf jede Bot-Nachricht reagieren",
     "cmd.extras.reply_all_desc":
       "Antworten auf eine @shyboti/shyboti-Nachricht funktionieren immer. Wenn aktiviert, bekommt auch eine Antwort auf eine Command- oder Automation-Nachricht eine Reaktion - wenn deaktiviert, nur Antworten auf @shyboti/shyboti-Nachrichten.",
     "cmd.extras.reply_all_needs_mention":
