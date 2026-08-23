@@ -25,9 +25,6 @@
     <div class="ocean-container">
         <canvas ref="canvas" id="ocean"></canvas>
 
-        <!-- Debug -->
-        <pre class="debug-panel">{{ debugText }}</pre>
-
         <!-- Flaschenpost -->
         <div v-if="bottleVisible" class="bottle" :class="{ 'bottle-open': showPaper }" :style="bottleStyle"
             @click="showPaper = true; playOpenSound()" title="Flaschenpost öffnen">
@@ -305,7 +302,6 @@ function updateDrift() {
 let driftAnimId = null;
 
 let pollTimer = null;
-let debugTimer = null;
 // ^^^ flaschenpost data ^^^
 
 /* ── PALETTE KEYFRAMES (full 24h cycle) ── */
@@ -764,7 +760,6 @@ onMounted(() => {
 
     fetchEmotes(channel.value).then(fetchFlaschenpost);
     pollTimer = setInterval(fetchFlaschenpost, 5000);
-    debugTimer = setInterval(() => (debugNow.value = Date.now()), 1000);
     updateDrift();
 
     initAudio();
@@ -778,7 +773,6 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(driftAnimId);
     window.removeEventListener('resize', resize);
     if (pollTimer) clearInterval(pollTimer);
-    if (debugTimer) clearInterval(debugTimer);
     window.removeEventListener('click', onFirstGesture);
     window.removeEventListener('keydown', onFirstGesture);
     if (bgAudio) bgAudio.pause();
