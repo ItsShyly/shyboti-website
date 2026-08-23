@@ -705,6 +705,10 @@ onMounted(async () => {
     showToast(`ShyBoti left #${channel}`);
   }
 
+  // >>> route.path can still be the router's stale "/" default here since
+  // >>> main.ts doesn't await router.isReady() before mount - wait for the
+  // >>> real initial navigation to resolve before trusting this path check
+  await router.isReady();
   if (route.path === "/" || route.path === "") {
     router.push(session.value ? "/dashboard" : "/");
   }
