@@ -89,6 +89,7 @@ const channel = computed(() => String(route.params.channel || '').toLowerCase())
 const fpExists = ref(false);
 const fpId = ref('');
 const fpCreatedAt = ref(0);
+const fpDriftStartedAt = ref(0); // <<< when the CURRENT appearance started
 const fpExpiresAt = ref(0);
 const fpMessages = ref([]); // <<< [{ senderName, html, createdAt }]
 
@@ -133,7 +134,8 @@ const debugText = computed(() => {
             `created: ${fmtTime(fpCreatedAt.value)}`,
             `expires: ${fmtTime(fpExpiresAt.value)} (in ${fmtCountdown(fpExpiresAt.value)})`,
             `drift: ${(driftProgress.value * 100).toFixed(1)}%`,
-            `messages: ${fpMessages.value.length}/3`,
+            `messages this appearance: ${fpMessages.value.filter((m) => m.createdAt >= fpDriftStartedAt.value).length}/3`,
+            `messages total: ${fpMessages.value.length}`,
         );
     } else {
         lines.push(
@@ -214,6 +216,7 @@ async function fetchFlaschenpost() {
         if (d.exists) {
             fpId.value = d.id || '';
             fpCreatedAt.value = d.createdAt || 0;
+            fpDriftStartedAt.value = d.driftStartedAt || 0;
             // >>> a revived bottle keeps its id, but gets a fresh expiresAt -
             // >>> that's what tells us this is a new appearance to animate
             if (d.expiresAt !== fpExpiresAt.value) driftWindowStart = null;
