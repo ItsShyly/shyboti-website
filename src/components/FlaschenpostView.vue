@@ -181,6 +181,9 @@ async function fetchFlaschenpost() {
         if (d.exists) {
             fpId.value = d.id || '';
             fpCreatedAt.value = d.createdAt || 0;
+            // >>> a revived bottle keeps its id, but gets a fresh expiresAt -
+            // >>> that's what tells us this is a new appearance to animate
+            if (d.expiresAt !== fpExpiresAt.value) driftWindowStart = null;
             fpExpiresAt.value = d.expiresAt || 0;
             fpMessages.value = (d.messages ?? []).map((m) => ({
                 senderName: m.senderName,
@@ -190,6 +193,7 @@ async function fetchFlaschenpost() {
         } else {
             showPaper.value = false;
             fpMessages.value = [];
+            driftWindowStart = null;
         }
     } catch { }
 }
@@ -199,18 +203,23 @@ function formatTimestamp(ms) {
     return new Date(ms).toLocaleString();
 }
 
-// >>> drives bottleStyle every frame so the drift looks continuous, not choppy per-poll
+// >>> always animates a fresh 0->1 sweep from whenever we first noticed this
+// >>> appearance to its expiresAt - never starts already-partway-through, and
+// >>> if little time is actually left it just moves faster to still arrive on time
+let driftWindowStart = null; // <<< server-corrected ms, reset per new appearance
 function updateDrift() {
-    if (fpExists.value && fpExpiresAt.value > fpCreatedAt.value) {
-        // >>> createdAt/expiresAt are server timestamps
+    if (fpExists.value && fpExpiresAt.value > 0) {
         const now = Date.now() + clockSkewMs.value;
-        const p = (now - fpCreatedAt.value) / (fpExpiresAt.value - fpCreatedAt.value);
+        if (driftWindowStart === null) driftWindowStart = now;
+        const total = fpExpiresAt.value - driftWindowStart;
+        const p = total > 0 ? (now - driftWindowStart) / total : 1;
         driftProgress.value = Math.max(0, Math.min(1, p));
         if (p >= 1) {
             // >>> drifted off screen - don't wait for the next poll to hide it
             fpExists.value = false;
             showPaper.value = false;
             fpMessages.value = [];
+            driftWindowStart = null;
         }
     }
     driftAnimId = requestAnimationFrame(updateDrift);
