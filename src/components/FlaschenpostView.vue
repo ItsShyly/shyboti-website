@@ -52,9 +52,9 @@
 
         <!-- Papier / Brief -->
         <transition name="paper">
-            <div v-if="showPaper" class="paper-overlay" @click.self="showPaper = false">
+            <div v-if="showPaper" class="paper-overlay" @click.self="closePaper">
                 <div class="paper">
-                    <button class="paper-close" @click="showPaper = false">✕</button>
+                    <button class="paper-close" @click="closePaper">✕</button>
                     <div class="paper-content">
                         <p v-if="!fpMessages.length" class="paper-waiting">
                             Noch niemand hat etwas hineingeschrieben...
@@ -72,7 +72,7 @@
 
 <script setup lang="ts">
 // @ts-nocheck -- ocean canvas below is loosely-typed by design, keep it untyped
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import { API } from '../api';
 
@@ -131,11 +131,11 @@ function playThrowSound() {
     throwAudio.currentTime = 0;
     throwAudio.play().catch(() => { });
 }
-// >>> catches the bottle actually leaving, whether the local drift-timeout
-// >>> hid it first or the next poll is what confirms it's gone
-watch(fpExists, (isThere, wasThere) => {
-    if (wasThere && !isThere) playThrowSound();
-});
+// >>> "throwing the bottle back" - plays when the reader closes the paper
+function closePaper() {
+    showPaper.value = false;
+    playThrowSound();
+}
 // ^^^ sound ^^^
 
 // >>> 0..1 how far it's drifted, driven every frame so movement stays smooth between polls
