@@ -3,9 +3,8 @@
         <canvas ref="canvas" id="ocean"></canvas>
 
         <!-- Flaschenpost -->
-        <!-- Flaschenpost -->
-        <div v-if="bottleVisible" class="bottle" :class="{ 'bottle-open': showPaper }" @click="showPaper = true"
-            title="Flaschenpost öffnen">
+        <div v-if="bottleVisible" class="bottle" :class="{ 'bottle-open': showPaper }" :style="bottleStyle"
+            @click="showPaper = true" title="Flaschenpost öffnen">
             <svg viewBox="0 0 80 160" width="60" height="120">
 
                 <!-- Cork (only visible when bottle is closed) -->
@@ -31,13 +30,13 @@
                 <div class="paper">
                     <button class="paper-close" @click="showPaper = false">✕</button>
                     <div class="paper-content">
-                        <p v-if="fpStatus === 'waiting'" class="paper-waiting">
-                            Diese Flaschenpost wartet noch auf eine Nachricht...
+                        <p v-if="!fpMessages.length" class="paper-waiting">
+                            Noch niemand hat etwas hineingeschrieben...
                         </p>
-                        <template v-else>
-                            <p class="paper-message" v-html="fpMessageHtml"></p>
-                            <p class="paper-meta">— {{ fpSenderName }}, {{ formatTimestamp(fpSentAt) }}</p>
-                        </template>
+                        <div v-for="(m, i) in fpMessages" :key="i" class="paper-entry">
+                            <p class="paper-message" v-html="m.html"></p>
+                            <p class="paper-meta">— {{ m.senderName }}, {{ formatTimestamp(m.createdAt) }}</p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -62,13 +61,18 @@ const route = useRoute();
 const channel = computed(() => String(route.params.channel || '').toLowerCase());
 
 const fpExists = ref(false);
-const fpStatus = ref('');
-const fpMessageHtml = ref('');
-const fpSenderName = ref('');
-const fpSentAt = ref(null);
+const fpCreatedAt = ref(0);
+const fpExpiresAt = ref(0);
+const fpMessages = ref([]); // <<< [{ senderName, html, createdAt }]
 
 const bottleVisible = computed(() => fpExists.value);
 const showPaper = ref(false);
+
+// >>> 0..1 how far it's drifted, driven every frame so movement stays smooth between polls
+const driftProgress = ref(0);
+const bottleStyle = computed(() => ({
+    left: `${driftProgress.value * 110 - 5}%`,
+}));
 
 const emoteMap = ref({});
 
@@ -124,12 +128,16 @@ async function fetchFlaschenpost() {
         const d = await r.json();
         fpExists.value = !!d.exists;
         if (d.exists) {
-            fpStatus.value = d.status;
-            fpSenderName.value = d.senderName || '';
-            fpSentAt.value = d.sentAt || null;
-            fpMessageHtml.value = d.message ? renderMsgWithMap(d.message, emoteMap.value) : '';
+            fpCreatedAt.value = d.createdAt || 0;
+            fpExpiresAt.value = d.expiresAt || 0;
+            fpMessages.value = (d.messages ?? []).map((m) => ({
+                senderName: m.senderName,
+                html: renderMsgWithMap(m.message, emoteMap.value),
+                createdAt: m.createdAt,
+            }));
         } else {
             showPaper.value = false;
+            fpMessages.value = [];
         }
     } catch { }
 }
@@ -138,6 +146,23 @@ function formatTimestamp(ms) {
     if (!ms) return '';
     return new Date(ms).toLocaleString();
 }
+
+// >>> drives bottleStyle every frame so the drift looks continuous, not choppy per-poll
+function updateDrift() {
+    if (fpExists.value && fpExpiresAt.value > fpCreatedAt.value) {
+        const now = Date.now();
+        const p = (now - fpCreatedAt.value) / (fpExpiresAt.value - fpCreatedAt.value);
+        driftProgress.value = Math.max(0, Math.min(1, p));
+        if (p >= 1) {
+            // >>> drifted off screen - don't wait for the next poll to hide it
+            fpExists.value = false;
+            showPaper.value = false;
+            fpMessages.value = [];
+        }
+    }
+    driftAnimId = requestAnimationFrame(updateDrift);
+}
+let driftAnimId = null;
 
 let pollTimer = null;
 // ^^^ flaschenpost data ^^^
@@ -598,10 +623,12 @@ onMounted(() => {
 
     fetchEmotes(channel.value).then(fetchFlaschenpost);
     pollTimer = setInterval(fetchFlaschenpost, 5000);
+    updateDrift();
 });
 
 onBeforeUnmount(() => {
     cancelAnimationFrame(animationId);
+    cancelAnimationFrame(driftAnimId);
     window.removeEventListener('resize', resize);
     if (pollTimer) clearInterval(pollTimer);
 });
@@ -638,9 +665,7 @@ body {
 /* ── Flaschenpost ── */
 .bottle {
     position: fixed;
-    left: 50%;
     top: 70%;
-    transform: translateX(-50%);
     cursor: pointer;
     z-index: 20;
     pointer-events: auto;
@@ -649,7 +674,7 @@ body {
 }
 
 .bottle:hover {
-    transform: translateX(-50%) scale(1.05);
+    transform: scale(1.05);
 }
 
 .bottle-open {
@@ -735,13 +760,21 @@ body {
     font-style: italic;
 }
 
+.paper-entry {
+    margin-bottom: 18px;
+}
+
+.paper-entry:last-child {
+    margin-bottom: 0;
+}
+
 .paper-message {
     white-space: pre-wrap;
     word-break: break-word;
 }
 
 .paper-meta {
-    margin-top: 14px;
+    margin-top: 6px;
     font-size: 1.1rem;
     opacity: 0.65;
 }
