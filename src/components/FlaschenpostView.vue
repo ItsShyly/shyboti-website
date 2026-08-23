@@ -30,7 +30,7 @@
 
         <!-- Flaschenpost -->
         <div v-if="bottleVisible" class="bottle" :class="{ 'bottle-open': showPaper }" :style="bottleStyle"
-            @click="showPaper = true" title="Flaschenpost öffnen">
+            @click="showPaper = true; playOpenSound()" title="Flaschenpost öffnen">
             <svg viewBox="0 0 80 160" width="60" height="120">
 
                 <!-- Cork (only visible when bottle is closed) -->
@@ -72,7 +72,7 @@
 
 <script setup lang="ts">
 // @ts-nocheck -- ocean canvas below is loosely-typed by design, keep it untyped
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import { API } from '../api';
 
@@ -95,6 +95,48 @@ const fpMessages = ref([]); // <<< [{ senderName, html, createdAt }]
 
 const bottleVisible = computed(() => fpExists.value);
 const showPaper = ref(false);
+
+// vvv sound vvv
+let bgAudio = null;
+let openAudio = null;
+let throwAudio = null;
+
+function initAudio() {
+    bgAudio = new Audio('/sounds/background.wav');
+    bgAudio.loop = true;
+    bgAudio.volume = 0.25;
+    openAudio = new Audio('/sounds/open.wav');
+    throwAudio = new Audio('/sounds/throw.wav');
+}
+
+// >>> browsers block audio autoplay until a real user gesture - try right away,
+// >>> and again on the first click/key anywhere if that got blocked
+function tryStartBackground() {
+    if (!bgAudio || !bgAudio.paused) return;
+    bgAudio.play().catch(() => { });
+}
+function onFirstGesture() {
+    tryStartBackground();
+    window.removeEventListener('click', onFirstGesture);
+    window.removeEventListener('keydown', onFirstGesture);
+}
+
+function playOpenSound() {
+    if (!openAudio) return;
+    openAudio.currentTime = 0;
+    openAudio.play().catch(() => { });
+}
+function playThrowSound() {
+    if (!throwAudio) return;
+    throwAudio.currentTime = 0;
+    throwAudio.play().catch(() => { });
+}
+// >>> catches the bottle actually leaving, whether the local drift-timeout
+// >>> hid it first or the next poll is what confirms it's gone
+watch(fpExists, (isThere, wasThere) => {
+    if (wasThere && !isThere) playThrowSound();
+});
+// ^^^ sound ^^^
 
 // >>> 0..1 how far it's drifted, driven every frame so movement stays smooth between polls
 const driftProgress = ref(0);
@@ -724,6 +766,11 @@ onMounted(() => {
     pollTimer = setInterval(fetchFlaschenpost, 5000);
     debugTimer = setInterval(() => (debugNow.value = Date.now()), 1000);
     updateDrift();
+
+    initAudio();
+    tryStartBackground();
+    window.addEventListener('click', onFirstGesture);
+    window.addEventListener('keydown', onFirstGesture);
 });
 
 onBeforeUnmount(() => {
@@ -732,6 +779,9 @@ onBeforeUnmount(() => {
     window.removeEventListener('resize', resize);
     if (pollTimer) clearInterval(pollTimer);
     if (debugTimer) clearInterval(debugTimer);
+    window.removeEventListener('click', onFirstGesture);
+    window.removeEventListener('keydown', onFirstGesture);
+    if (bgAudio) bgAudio.pause();
 });
 </script>
 
