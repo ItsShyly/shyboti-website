@@ -2,6 +2,9 @@
     <div class="ocean-container">
         <canvas ref="canvas" id="ocean"></canvas>
 
+        <!-- Debug -->
+        <pre class="debug-panel">{{ debugText }}</pre>
+
         <!-- Flaschenpost -->
         <div v-if="bottleVisible" class="bottle" :class="{ 'bottle-open': showPaper }" :style="bottleStyle"
             @click="showPaper = true" title="Flaschenpost öffnen">
@@ -76,6 +79,47 @@ const bottleStyle = computed(() => ({
 
 const emoteMap = ref({});
 
+// vvv debug panel vvv
+const fpDebug = ref({ serverNow: 0, nextAppearAt: null }); // <<< { serverNow, nextAppearAt }
+const clockSkewMs = ref(0); // <<< serverNow - Date.now() at last fetch
+const debugNow = ref(Date.now());
+
+function fmtTime(ms) {
+    if (!ms) return '-';
+    return new Date(ms).toLocaleTimeString();
+}
+function fmtCountdown(targetMs) {
+    if (!targetMs) return '-';
+    const diff = targetMs - (debugNow.value + clockSkewMs.value);
+    if (diff <= 0) return 'now';
+    const s = Math.floor(diff / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    return `${m}m ${s % 60}s`;
+}
+
+const debugText = computed(() => {
+    const lines = [
+        `channel: ${channel.value}`,
+        `state: ${fpExists.value ? 'drifting' : 'none'}`,
+    ];
+    if (fpExists.value) {
+        lines.push(
+            `created: ${fmtTime(fpCreatedAt.value)}`,
+            `expires: ${fmtTime(fpExpiresAt.value)} (in ${fmtCountdown(fpExpiresAt.value)})`,
+            `drift: ${(driftProgress.value * 100).toFixed(1)}%`,
+            `messages: ${fpMessages.value.length}/3`,
+        );
+    } else {
+        lines.push(
+            `next appear: ${fmtTime(fpDebug.value.nextAppearAt)} (in ${fmtCountdown(fpDebug.value.nextAppearAt)})`,
+        );
+    }
+    lines.push(`server clock skew: ${clockSkewMs.value}ms`);
+    return lines.join('\n');
+});
+// ^^^ debug panel ^^^
+
 function esc(s) {
     return String(s)
         .replace(/&/g, '&amp;')
@@ -127,6 +171,10 @@ async function fetchFlaschenpost() {
         if (!r.ok) return;
         const d = await r.json();
         fpExists.value = !!d.exists;
+        if (d.debug) {
+            fpDebug.value = d.debug;
+            clockSkewMs.value = d.debug.serverNow - Date.now();
+        }
         if (d.exists) {
             fpCreatedAt.value = d.createdAt || 0;
             fpExpiresAt.value = d.expiresAt || 0;
@@ -165,6 +213,7 @@ function updateDrift() {
 let driftAnimId = null;
 
 let pollTimer = null;
+let debugTimer = null;
 // ^^^ flaschenpost data ^^^
 
 /* ── PALETTE KEYFRAMES (full 24h cycle) ── */
@@ -623,6 +672,7 @@ onMounted(() => {
 
     fetchEmotes(channel.value).then(fetchFlaschenpost);
     pollTimer = setInterval(fetchFlaschenpost, 5000);
+    debugTimer = setInterval(() => (debugNow.value = Date.now()), 1000);
     updateDrift();
 });
 
@@ -631,6 +681,7 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(driftAnimId);
     window.removeEventListener('resize', resize);
     if (pollTimer) clearInterval(pollTimer);
+    if (debugTimer) clearInterval(debugTimer);
 });
 </script>
 
@@ -660,6 +711,25 @@ body {
     position: fixed;
     inset: 0;
     display: block;
+}
+
+/* ── Debug ── */
+.debug-panel {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 40;
+    margin: 0;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.55);
+    color: #7fffb0;
+    font-family: "DM Mono", "Consolas", monospace;
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre;
+    pointer-events: none;
+    border: 1px solid rgba(127, 255, 176, 0.25);
+    border-radius: 4px;
 }
 
 /* ── Flaschenpost ── */
