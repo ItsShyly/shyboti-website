@@ -104,7 +104,7 @@ const bottleStyle = computed(() => ({
 const emoteMap = ref({});
 
 // vvv debug panel vvv
-const fpDebug = ref({ serverNow: 0, nextAppearAt: null, revivingId: null }); // <<< { serverNow, nextAppearAt, revivingId }
+const fpDebug = ref({ serverNow: 0, nextAppearAt: null, revivingId: null, bottles: [] }); // <<< { serverNow, nextAppearAt, revivingId, bottles: [{id,status,expiresAt,nextAppearAt,onHold}] }
 const clockSkewMs = ref(0); // <<< serverNow - Date.now() at last fetch
 const debugNow = ref(Date.now());
 
@@ -138,8 +138,18 @@ const debugText = computed(() => {
     } else {
         lines.push(
             `next appear: ${fmtTime(fpDebug.value.nextAppearAt)} (in ${fmtCountdown(fpDebug.value.nextAppearAt)})`,
-            `reviving: ${fpDebug.value.revivingId || '(new bottle)'}`,
+            `next bottle: ${fpDebug.value.revivingId || '(none armed)'}`,
         );
+    }
+    const bottles = fpDebug.value.bottles || [];
+    lines.push(`bottles: ${bottles.length}/3`);
+    for (const b of bottles) {
+        if (b.status === 'drifting') {
+            lines.push(`  #${b.id} drifting, expires ${fmtTime(b.expiresAt)} (in ${fmtCountdown(b.expiresAt)})`);
+        } else {
+            const hold = b.onHold ? ' [ON HOLD - slot taken]' : '';
+            lines.push(`  #${b.id} waiting, next ${fmtTime(b.nextAppearAt)} (in ${fmtCountdown(b.nextAppearAt)})${hold}`);
+        }
     }
     lines.push(`server clock skew: ${clockSkewMs.value}ms`);
     return lines.join('\n');
