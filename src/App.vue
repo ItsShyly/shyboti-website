@@ -1053,8 +1053,11 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <div class="sidebar-spacer"></div>
 
         <button v-if="session?.isAdmin" class="sidebar-btn admin-nav-btn" :class="{ active: adminMode }"
-          @click="toggleAdminMode()">
+          @click="router.push('/admin')">
           {{ t("nav.admin") }}
+          <span class="ep-switch admin-mode-switch" :class="{ on: adminMode }" @click.stop="toggleAdminMode()">
+            <span class="ep-switch-knob"></span>
+          </span>
         </button>
         <button v-if="!session || channelRole?.role === 'broadcaster' || (session.isAdmin && adminMode)"
           class="sidebar-btn" :class="{ active: activeRoute === 'settings', locked: !session }"
@@ -1948,6 +1951,14 @@ body.snippet-dragging * {
   color: #f14949;
   background: rgba(241, 73, 73, 0.08);
   border-left: 2px solid #f14949;
+}
+
+.admin-mode-switch.on {
+  background: #f1494933;
+  border-color: #f1494988;
+}
+.admin-mode-switch.on .ep-switch-knob {
+  background: #f14949;
 }
 
 .sidebar-btn.locked {
