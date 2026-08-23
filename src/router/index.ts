@@ -93,6 +93,10 @@ const router = createRouter({
       path: "/privacy",
       component: lazy(() => import("../components/PrivacyView.vue")),
     },
+    {
+      path: "/flaschenpost/:channel",
+      component: lazy(() => import("../components/FlaschenpostView.vue")),
+    },
     { path: "/:path(.*)", redirect: "/" },
   ],
 });

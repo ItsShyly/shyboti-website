@@ -32,6 +32,9 @@ const {
 } = useAuth();
 const router = useRouter();
 const route = useRoute();
+
+// >>> fully standalone page, no dashboard chrome (own full-viewport styling)
+const isStandalonePage = computed(() => route.path.startsWith("/flaschenpost/"));
 const { t } = useI18n();
 const { locale, setLocale } = useLocale();
 
@@ -727,7 +730,8 @@ provide("searchOpenTrigger", searchOpenTrigger);
 </script>
 
 <template>
-  <div class="page">
+  <RouterView v-if="isStandalonePage" />
+  <div v-else class="page">
     <div class="topbar" :class="{ 'other-channel': viewingOtherChannel, 'admin-channel': viewingAsAdmin }">
       <div class="topbar-brand" @click="session ? router.push('/dashboard') : router.push('/')" style="cursor: pointer">
         <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
