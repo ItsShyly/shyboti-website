@@ -52,7 +52,12 @@ interface Command {
   modOnly: boolean;
   broadcasterOnly: boolean;
   description: string;
-  argVariants: { usage: string; desc: string }[];
+  argVariants: {
+    usage: string;
+    desc: string;
+    argKey: string;
+    access: "everyone" | "mod" | "broadcaster";
+  }[];
 }
 
 interface CustomCommand {
@@ -653,6 +658,40 @@ function restrictionLabel(cmd: {
   return t("cmd.access.everyone");
 }
 
+function argAccessLabel(access: string): string {
+  if (access === "broadcaster") return t("cmd.access.bc");
+  if (access === "mod") return t("cmd.access.mod");
+  return t("cmd.access.everyone");
+}
+
+// >>> per-subcommand access override, independent of the command's own access
+async function cycleArgAccess(
+  cmd: Command,
+  variant: Command["argVariants"][number],
+) {
+  if (!canEdit.value || !session.value) return;
+  const order: Array<"everyone" | "mod" | "broadcaster"> = [
+    "everyone",
+    "mod",
+    "broadcaster",
+  ];
+  const next = order[(order.indexOf(variant.access) + 1) % order.length]!;
+  variant.access = next;
+  try {
+    await fetch(
+      `${API}/commands/${session.value.channel}/${cmd.name}/arg-access`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.value.token}`,
+        },
+        body: JSON.stringify({ argKey: variant.argKey, access: next }),
+      },
+    );
+  } catch { }
+}
+
 function cmdDesc(cmd: Command): string {
   const key = `cmddesc.${cmd.name}`;
   const translated = t(key);
@@ -1188,6 +1227,13 @@ onUnmounted(() => {
                     }}</span>
                   </div>
                   <div class="arg-variant-desc">{{ v.desc || "" }}</div>
+                  <button class="access-btn arg-access-btn" :class="{
+                    'access-mod': v.access === 'mod',
+                    'access-bc': v.access === 'broadcaster',
+                    disabled: !canEdit,
+                  }" :title="t('cmd.arg_access_title')" @click.stop="cycleArgAccess(cmd, v)">
+                    {{ argAccessLabel(v.access) }}
+                  </button>
                 </div>
               </template>
             </template>
@@ -1771,13 +1817,19 @@ onUnmounted(() => {
 
 .arg-variant-row {
   display: grid;
-  grid-template-columns: 28px 1fr 1fr;
+  grid-template-columns: 28px 1fr 1fr auto;
   padding: 6px 16px 6px 8px;
   background: #222226;
   border-top: 1px solid #1e1e22;
   align-items: center;
   gap: 8px;
   animation: slideDown 0.15s ease;
+}
+
+.arg-access-btn {
+  font-size: 10px;
+  padding: 3px 8px;
+  height: 22px;
 }
 
 .arg-variant-row:last-of-type {
