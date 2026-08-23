@@ -125,6 +125,63 @@ async function removeAdmin(username: string) {
   }
 }
 
+const devGateUsers = ref<string[]>([]);
+const newDevGateName = ref("");
+const addDevGateError = ref("");
+const removeDevGateId = ref<string | null>(null);
+
+async function loadDevGate() {
+  if (!session.value?.isAdmin) return;
+  try {
+    const res = await fetch(`${API}/admin/devgate`, {
+      headers: authHeaders(),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { users: string[] };
+      devGateUsers.value = data.users;
+    }
+  } catch {}
+}
+
+async function addDevGateUser() {
+  const username = newDevGateName.value.trim().toLowerCase();
+  if (!username) return;
+  addDevGateError.value = "";
+  try {
+    const res = await fetch(`${API}/admin/devgate`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    });
+    if (!res.ok) {
+      const d = (await res.json()) as any;
+      throw new Error(d.error ?? "Could not add user");
+    }
+    newDevGateName.value = "";
+    await loadDevGate();
+  } catch (e: any) {
+    addDevGateError.value = e.message ?? "Could not add user";
+  }
+}
+
+async function removeDevGateUser(username: string) {
+  if (removeDevGateId.value !== username) {
+    removeDevGateId.value = username;
+    setTimeout(() => {
+      if (removeDevGateId.value === username) removeDevGateId.value = null;
+    }, 3000);
+    return;
+  }
+  removeDevGateId.value = null;
+  try {
+    await fetch(`${API}/admin/devgate/${username}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    devGateUsers.value = devGateUsers.value.filter((a) => a !== username);
+  } catch {}
+}
+
 const filtered = computed(() => {
   if (filter.value === "all") return bugs.value;
   return bugs.value.filter((b) => b.status === filter.value);
@@ -196,6 +253,7 @@ onMounted(() => {
   loadBugs();
   loadHealth();
   loadAdmins();
+  loadDevGate();
   healthTimer = setInterval(loadHealth, 30_000);
 });
 onUnmounted(() => {
@@ -208,6 +266,7 @@ watch(
       loadBugs();
       loadHealth();
       loadAdmins();
+      loadDevGate();
     }
   },
 );
@@ -242,6 +301,24 @@ watch(
         <button type="submit" class="admin-add-btn">+</button>
       </form>
       <div v-if="addAdminError" class="admin-add-error">{{ addAdminError }}</div>
+    </div>
+
+    <div class="admins-tile">
+      <div class="admins-title">Dev Access</div>
+      <div class="admins-list">
+        <div v-for="u in devGateUsers" :key="u" class="admin-pill">
+          {{ u }}
+          <button class="admin-pill-remove" :class="{ confirm: removeDevGateId === u }" @click="removeDevGateUser(u)">
+            <template v-if="removeDevGateId === u">?</template>
+            <span v-else>×</span>
+          </button>
+        </div>
+      </div>
+      <form class="admin-add-form" @submit.prevent="addDevGateUser">
+        <input v-model="newDevGateName" class="admin-add-input" placeholder="Twitch-Login…" />
+        <button type="submit" class="admin-add-btn">+</button>
+      </form>
+      <div v-if="addDevGateError" class="admin-add-error">{{ addDevGateError }}</div>
     </div>
 
     <div class="admin-header">
