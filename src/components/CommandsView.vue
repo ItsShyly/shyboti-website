@@ -1150,7 +1150,8 @@ onUnmounted(() => {
               <div class="table-row" :class="{
                 saving: saving === cmd.name,
                 expanded: expandedDefault.has(cmd.name),
-              }">
+                expandable: cmd.argVariants?.length,
+              }" @click="cmd.argVariants?.length && toggleExpandDefault(cmd.name)">
                 <div class="row-chevron-cell">
                   <button v-if="cmd.argVariants?.length" class="row-chevron"
                     :class="{ open: expandedDefault.has(cmd.name) }" @click.stop="toggleExpandDefault(cmd.name)"
@@ -1161,7 +1162,7 @@ onUnmounted(() => {
                   <div class="ep-switch" :class="[
                     cmd.isActive ? 'on' : 'off',
                     { disabled: !canToggle },
-                  ]" @click="toggle(cmd, 'isActive')"><span class="ep-switch-knob"></span></div>
+                  ]" @click.stop="toggle(cmd, 'isActive')"><span class="ep-switch-knob"></span></div>
                 </div>
                 <div class="cmd-name">
                   <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
@@ -1173,12 +1174,12 @@ onUnmounted(() => {
                     'access-mod': cmd.modOnly,
                     'access-bc': cmd.broadcasterOnly,
                     disabled: !canToggle,
-                  }" @click="cycleRestriction(cmd)">
+                  }" @click.stop="cycleRestriction(cmd)">
                     {{ restrictionLabel(cmd) }}
                   </button>
                 </div>
                 <div>
-                  <div class="cd-input-wrap" :class="{ disabled: !canEdit }">
+                  <div class="cd-input-wrap" :class="{ disabled: !canEdit }" @click.stop>
                     <input type="number" min="0" class="cd-input" :disabled="!canEdit" :value="cmd.cooldown" @change="
                       onCooldownInput(
                         cmd,
@@ -1190,7 +1191,7 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div>
-                  <div class="cd-input-wrap user" :class="{ disabled: !canEdit }">
+                  <div class="cd-input-wrap user" :class="{ disabled: !canEdit }" @click.stop>
                     <input type="number" min="0" class="cd-input" :disabled="!canEdit" :value="cmd.userCooldown"
                       @change="
                         onCooldownInput(
@@ -1203,7 +1204,7 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div>
-                  <button class="edit-btn" :class="{ blocked: BLOCKED.includes(cmd.name) || !canEdit }" @click="
+                  <button class="edit-btn" :class="{ blocked: BLOCKED.includes(cmd.name) || !canEdit }" @click.stop="
                     canEdit &&
                     !BLOCKED.includes(cmd.name) &&
                     openEdit(cmd.name, true)
@@ -1781,6 +1782,10 @@ onUnmounted(() => {
   border-bottom: none;
 }
 
+.table-row.expandable {
+  cursor: pointer;
+}
+
 .row-chevron-cell {
   display: flex;
   align-items: center;
@@ -1817,7 +1822,7 @@ onUnmounted(() => {
 
 .arg-variant-row {
   display: grid;
-  grid-template-columns: 28px 1fr 1fr auto;
+  grid-template-columns: 28px 50px 140px 1fr 110px 90px 90px 110px;
   padding: 6px 16px 6px 8px;
   background: #222226;
   border-top: 1px solid #1e1e22;
@@ -1826,7 +1831,22 @@ onUnmounted(() => {
   animation: slideDown 0.15s ease;
 }
 
+.arg-variant-indent {
+  grid-column: 1;
+}
+
+.arg-variant-usage {
+  grid-column: 2 / 4;
+}
+
+.arg-variant-desc {
+  grid-column: 4;
+}
+
 .arg-access-btn {
+  /* >>> lines up under the "Access" table header */
+  grid-column: 5;
+  justify-self: start;
   font-size: 10px;
   padding: 3px 8px;
   height: 22px;
