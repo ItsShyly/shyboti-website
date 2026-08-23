@@ -789,6 +789,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.user": "Show info about a Twitch user.",
     "cmddesc.talk": "Toggle automatic chat responses.",
     "cmddesc.verify": "Verify a user in the channel.",
+    "cmddesc.bug": "Report a bug to the admin team.",
     "cmddesc.cmd": "Create or manage custom commands.",
     "cmddesc.command": "Create or manage custom commands.",
     "cmddesc.nuke": "Mass-action everyone who said a trigger phrase recently.",
@@ -1705,6 +1706,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.user": "Zeigt Infos über einen Twitch-Nutzer.",
     "cmddesc.talk": "Schaltet automatische Chat-Antworten um.",
     "cmddesc.verify": "Verifiziert einen Nutzer im Channel.",
+    "cmddesc.bug": "Meldet einen Bug ans Admin-Team.",
     "cmddesc.cmd": "Erstelle oder verwalte eigene Commands.",
     "cmddesc.command": "Erstelle oder verwalte eigene Commands.",
     "cmddesc.nuke":
