@@ -25,6 +25,11 @@ function lazy(loader: () => Promise<any>) {
   });
 }
 
+// >>> on this domain, bare /<channel> paths ARE the flaschenpost route
+const isFlaschenpostDomain =
+  typeof window !== "undefined" &&
+  window.location.hostname === "flaschenpost.shyboti.de";
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -65,7 +70,9 @@ const router = createRouter({
     },
     {
       path: "/obs-overlays",
-      component: lazy(() => import("../components/overlay/ObsOverlaysView.vue")),
+      component: lazy(
+        () => import("../components/overlay/ObsOverlaysView.vue"),
+      ),
     },
     {
       path: "/notes",
@@ -97,6 +104,14 @@ const router = createRouter({
       path: "/flaschenpost/:channel",
       component: lazy(() => import("../components/FlaschenpostView.vue")),
     },
+    ...(isFlaschenpostDomain
+      ? [
+          {
+            path: "/:channel",
+            component: lazy(() => import("../components/FlaschenpostView.vue")),
+          },
+        ]
+      : []),
     { path: "/:path(.*)", redirect: "/" },
   ],
 });
@@ -107,13 +122,16 @@ const router = createRouter({
 // >>> so a genuinely broken deploy doesn't reload-loop forever
 function reloadOnStaleChunk(err: unknown) {
   const msg = String((err as any)?.message ?? err ?? "");
-  if (!/dynamically imported module|fetch dynamically|preload/i.test(msg)) return;
+  if (!/dynamically imported module|fetch dynamically|preload/i.test(msg))
+    return;
   if (sessionStorage.getItem("chunk_reload_done")) return;
   sessionStorage.setItem("chunk_reload_done", "1");
   window.location.reload();
 }
 router.onError(reloadOnStaleChunk);
-window.addEventListener("vite:preloadError", (e) => reloadOnStaleChunk((e as any).payload));
+window.addEventListener("vite:preloadError", (e) =>
+  reloadOnStaleChunk((e as any).payload),
+);
 
 router.beforeEach((to) => {
   const { session, adminMode } = useAuth();

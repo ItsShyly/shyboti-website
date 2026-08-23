@@ -34,7 +34,12 @@ const router = useRouter();
 const route = useRoute();
 
 // >>> fully standalone page, no dashboard chrome (own full-viewport styling)
-const isStandalonePage = computed(() => route.path.startsWith("/flaschenpost/"));
+// >>> on flaschenpost.shyboti.de every path (bare /<channel>) is this page
+const isStandalonePage = computed(
+  () =>
+    route.path.startsWith("/flaschenpost/") ||
+    window.location.hostname === "flaschenpost.shyboti.de",
+);
 const { t } = useI18n();
 const { locale, setLocale } = useLocale();
 
