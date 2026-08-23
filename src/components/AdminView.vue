@@ -63,10 +63,8 @@ function fmtBytes(b: number): string {
   return `${(b / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// >>> admins list is display-only here - add/remove happens directly in the db
 const admins = ref<string[]>([]);
-const newAdminName = ref("");
-const addAdminError = ref("");
-const removeAdminId = ref<string | null>(null);
 
 async function loadAdmins() {
   if (!session.value?.isAdmin) return;
@@ -77,52 +75,6 @@ async function loadAdmins() {
       admins.value = data.admins;
     }
   } catch {}
-}
-
-async function addAdmin() {
-  const username = newAdminName.value.trim().toLowerCase();
-  if (!username) return;
-  addAdminError.value = "";
-  try {
-    const res = await fetch(`${API}/admin/admins`, {
-      method: "POST",
-      headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ username }),
-    });
-    if (!res.ok) {
-      const d = (await res.json()) as any;
-      throw new Error(d.error ?? "Could not add admin");
-    }
-    newAdminName.value = "";
-    await loadAdmins();
-  } catch (e: any) {
-    addAdminError.value = e.message ?? "Could not add admin";
-  }
-}
-
-async function removeAdmin(username: string) {
-  if (removeAdminId.value !== username) {
-    removeAdminId.value = username;
-    setTimeout(() => {
-      if (removeAdminId.value === username) removeAdminId.value = null;
-    }, 3000);
-    return;
-  }
-  removeAdminId.value = null;
-  addAdminError.value = "";
-  try {
-    const res = await fetch(`${API}/admin/admins/${username}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    if (!res.ok) {
-      const d = (await res.json()) as any;
-      throw new Error(d.error ?? "Could not remove admin");
-    }
-    admins.value = admins.value.filter((a) => a !== username);
-  } catch (e: any) {
-    addAdminError.value = e.message ?? "Could not remove admin";
-  }
 }
 
 const devGateUsers = ref<string[]>([]);
@@ -288,19 +240,10 @@ watch(
     <div class="admins-tile">
       <div class="admins-title">Admins</div>
       <div class="admins-list">
-        <div v-for="a in admins" :key="a" class="admin-pill">
+        <div v-for="a in admins" :key="a" class="admin-pill readonly">
           {{ a }}
-          <button class="admin-pill-remove" :class="{ confirm: removeAdminId === a }" @click="removeAdmin(a)">
-            <template v-if="removeAdminId === a">?</template>
-            <span v-else>×</span>
-          </button>
         </div>
       </div>
-      <form class="admin-add-form" @submit.prevent="addAdmin">
-        <input v-model="newAdminName" class="admin-add-input" placeholder="Twitch-Login…" />
-        <button type="submit" class="admin-add-btn">+</button>
-      </form>
-      <div v-if="addAdminError" class="admin-add-error">{{ addAdminError }}</div>
     </div>
 
     <div class="admins-tile">
@@ -433,6 +376,9 @@ watch(
   color: #9d6cff;
   background: rgba(111, 43, 255, 0.1);
   border: 1px solid #6f2bff44;
+}
+.admin-pill.readonly {
+  padding: 3px 8px;
 }
 .admin-pill-remove {
   width: 15px;
