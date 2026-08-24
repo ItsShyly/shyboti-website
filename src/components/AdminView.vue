@@ -31,6 +31,11 @@ const loading = ref(false);
 const filter = ref<"open" | "done" | "all">("open");
 const deleteId = ref<number | null>(null);
 
+const pageTab = ref<"bugs" | "logs">("bugs");
+watch(pageTab, (t) => {
+  if (t === "logs" && !logEntries.value.length) loadLogs();
+});
+
 interface Health {
   uptimeSeconds: number;
   ircConnected: boolean;
@@ -156,6 +161,59 @@ async function loadAudit() {
   } catch {}
 }
 
+interface LogEntry {
+  id: number;
+  level: "error" | "warn";
+  message: string;
+  created_at: number;
+}
+const logEntries = ref<LogEntry[]>([]);
+const logsLoading = ref(false);
+const logQuery = ref("");
+const logLevel = ref<"all" | "error" | "warn">("all");
+const clearLogsConfirm = ref(false);
+let logSearchTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function loadLogs() {
+  if (!session.value?.isAdmin) return;
+  logsLoading.value = true;
+  try {
+    const params = new URLSearchParams();
+    if (logQuery.value.trim()) params.set("q", logQuery.value.trim());
+    if (logLevel.value !== "all") params.set("level", logLevel.value);
+    const res = await fetch(`${API}/admin/logs?${params}`, {
+      headers: authHeaders(),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as { entries: LogEntry[] };
+      logEntries.value = data.entries;
+    }
+  } catch {}
+  logsLoading.value = false;
+}
+
+function debouncedLoadLogs() {
+  if (logSearchTimer) clearTimeout(logSearchTimer);
+  logSearchTimer = setTimeout(loadLogs, 300);
+}
+
+async function clearLogs() {
+  if (!clearLogsConfirm.value) {
+    clearLogsConfirm.value = true;
+    setTimeout(() => (clearLogsConfirm.value = false), 3000);
+    return;
+  }
+  clearLogsConfirm.value = false;
+  try {
+    await fetch(`${API}/admin/logs`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    logEntries.value = [];
+    loadAudit();
+  } catch {}
+}
+
 const filtered = computed(() => {
   if (filter.value === "all") return bugs.value;
   return bugs.value.filter((b) => b.status === filter.value);
@@ -235,6 +293,7 @@ onMounted(() => {
 });
 onUnmounted(() => {
   if (healthTimer) clearInterval(healthTimer);
+  if (logSearchTimer) clearTimeout(logSearchTimer);
 });
 watch(
   () => session.value?.isAdmin,
@@ -290,44 +349,80 @@ watch(
       <div v-if="addDevGateError" class="admin-add-error">{{ addDevGateError }}</div>
     </div>
 
-    <div class="admin-header">
-      <div class="admin-title">Admin</div>
-      <div class="admin-tabs">
-        <button class="admin-tab" :class="{ active: filter === 'open' }" @click="filter = 'open'">
-          Offen<span v-if="openCount" class="tab-count">{{ openCount }}</span>
-        </button>
-        <button class="admin-tab" :class="{ active: filter === 'done' }" @click="filter = 'done'">
-          Erledigt
-        </button>
-        <button class="admin-tab" :class="{ active: filter === 'all' }" @click="filter = 'all'">
-          Alle
-        </button>
-      </div>
+    <div class="page-tabs">
+      <button class="page-tab" :class="{ active: pageTab === 'bugs' }" @click="pageTab = 'bugs'">
+        Bugs
+      </button>
+      <button class="page-tab" :class="{ active: pageTab === 'logs' }" @click="pageTab = 'logs'">
+        Logs
+      </button>
     </div>
 
-    <div v-if="loading" class="admin-empty">Lädt…</div>
-    <div v-else-if="!filtered.length" class="admin-empty">Keine Bugs.</div>
-    <div v-else class="bug-list">
-      <div v-for="bug in filtered" :key="bug.id" class="bug-item" :class="{ done: bug.status === 'done' }">
-        <button class="bug-check" :class="{ on: bug.status === 'done' }" @click="toggleStatus(bug)">
-          <span v-if="bug.status === 'done'" v-html="iconSvg('check')"></span>
-        </button>
-        <div class="bug-body">
-          <div class="bug-message">{{ bug.message }}</div>
-          <div class="bug-meta">
-            <span>#{{ bug.channel }}</span>
-            <span class="bug-dot">·</span>
-            <span>{{ bug.username }}</span>
-            <span class="bug-dot">·</span>
-            <span>{{ fmtDate(bug.created_at) }}</span>
-          </div>
+    <template v-if="pageTab === 'bugs'">
+      <div class="admin-header">
+        <div class="admin-tabs">
+          <button class="admin-tab" :class="{ active: filter === 'open' }" @click="filter = 'open'">
+            Offen<span v-if="openCount" class="tab-count">{{ openCount }}</span>
+          </button>
+          <button class="admin-tab" :class="{ active: filter === 'done' }" @click="filter = 'done'">
+            Erledigt
+          </button>
+          <button class="admin-tab" :class="{ active: filter === 'all' }" @click="filter = 'all'">
+            Alle
+          </button>
         </div>
-        <button class="bug-delete" :class="{ confirm: deleteId === bug.id }" @click="deleteBug(bug.id)">
-          <template v-if="deleteId === bug.id">?</template>
-          <span v-else v-html="iconSvg('trash')"></span>
-        </button>
       </div>
-    </div>
+
+      <div v-if="loading" class="admin-empty">Lädt…</div>
+      <div v-else-if="!filtered.length" class="admin-empty">Keine Bugs.</div>
+      <div v-else class="bug-list">
+        <div v-for="bug in filtered" :key="bug.id" class="bug-item" :class="{ done: bug.status === 'done' }">
+          <button class="bug-check" :class="{ on: bug.status === 'done' }" @click="toggleStatus(bug)">
+            <span v-if="bug.status === 'done'" v-html="iconSvg('check')"></span>
+          </button>
+          <div class="bug-body">
+            <div class="bug-message">{{ bug.message }}</div>
+            <div class="bug-meta">
+              <span>#{{ bug.channel }}</span>
+              <span class="bug-dot">·</span>
+              <span>{{ bug.username }}</span>
+              <span class="bug-dot">·</span>
+              <span>{{ fmtDate(bug.created_at) }}</span>
+            </div>
+          </div>
+          <button class="bug-delete" :class="{ confirm: deleteId === bug.id }" @click="deleteBug(bug.id)">
+            <template v-if="deleteId === bug.id">?</template>
+            <span v-else v-html="iconSvg('trash')"></span>
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <template v-else>
+      <div class="admin-header">
+        <div class="log-controls">
+          <input v-model="logQuery" class="log-search" placeholder="Nach Wort filtern…" @input="debouncedLoadLogs" />
+          <select v-model="logLevel" class="log-level-select" @change="loadLogs">
+            <option value="all">Alle</option>
+            <option value="error">Errors</option>
+            <option value="warn">Warnings</option>
+          </select>
+          <button class="log-clear-btn" :class="{ confirm: clearLogsConfirm }" @click="clearLogs">
+            {{ clearLogsConfirm ? "Sicher?" : "Leeren" }}
+          </button>
+        </div>
+      </div>
+
+      <div v-if="logsLoading" class="admin-empty">Lädt…</div>
+      <div v-else-if="!logEntries.length" class="admin-empty">Keine Logs.</div>
+      <div v-else class="log-list">
+        <div v-for="entry in logEntries" :key="entry.id" class="log-row" :class="entry.level">
+          <span class="log-level">{{ entry.level }}</span>
+          <span class="log-message">{{ entry.message }}</span>
+          <span class="log-time">{{ fmtDate(entry.created_at) }}</span>
+        </div>
+      </div>
+    </template>
 
     <details v-if="auditEntries.length" class="audit-tile">
       <summary class="audit-summary">Audit-Log ({{ auditEntries.length }})</summary>
@@ -527,6 +622,34 @@ watch(
   color: #f14949;
 }
 
+.page-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+.page-tab {
+  height: 32px;
+  padding: 0 16px;
+  border: 1px solid #2a2a30;
+  background: transparent;
+  color: #888;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.page-tab:hover {
+  color: #ccc;
+  border-color: #444;
+}
+.page-tab.active {
+  color: #fff;
+  background: #6f2bff;
+  border-color: #6f2bff;
+}
+
 .admin-header {
   display: flex;
   align-items: center;
@@ -670,5 +793,110 @@ watch(
   border-color: #f14949;
   background: rgba(241, 73, 73, 0.2);
   font-weight: 700;
+}
+
+.log-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+.log-search {
+  flex: 1;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #2a2a30;
+  background: #0d0d10;
+  color: #e0e0e0;
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+}
+.log-search:focus {
+  border-color: #6f2bff55;
+}
+.log-level-select {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #2a2a30;
+  background: #0d0d10;
+  color: #aaa;
+  font-family: inherit;
+  font-size: 11px;
+  outline: none;
+  cursor: pointer;
+}
+.log-clear-btn {
+  height: 30px;
+  padding: 0 14px;
+  border: 1px solid #f1494933;
+  background: transparent;
+  color: #f14949;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.log-clear-btn:hover {
+  background: rgba(241, 73, 73, 0.12);
+}
+.log-clear-btn.confirm {
+  border-color: #f14949;
+  background: rgba(241, 73, 73, 0.2);
+  font-weight: 700;
+}
+
+.log-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  flex: 1;
+  font-family: "Consolas", "Fira Mono", monospace;
+}
+.log-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 10px;
+  background: #141418;
+  border-bottom: 1px solid #1a1a1e;
+  border-left: 2px solid transparent;
+  font-size: 11px;
+}
+.log-row.error {
+  border-left-color: #f14949;
+}
+.log-row.warn {
+  border-left-color: #e5c07b;
+}
+.log-level {
+  flex-shrink: 0;
+  width: 42px;
+  text-transform: uppercase;
+  font-weight: 700;
+  font-size: 9px;
+  padding-top: 2px;
+}
+.log-row.error .log-level {
+  color: #f14949;
+}
+.log-row.warn .log-level {
+  color: #e5c07b;
+}
+.log-message {
+  flex: 1;
+  min-width: 0;
+  color: #ccc;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.log-time {
+  flex-shrink: 0;
+  color: #555;
+  font-size: 10px;
+  padding-top: 2px;
 }
 </style>
