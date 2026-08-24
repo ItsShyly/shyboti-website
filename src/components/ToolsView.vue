@@ -46,6 +46,11 @@ const vars = ref<Var[]>([]);
 const ucounters = ref<UCounter[]>([]);
 const uvars = ref<UVar[]>([]);
 const varsTab = ref<"counters" | "vars" | "ucounters" | "uvars">("counters");
+// >>> switching tabs mid-create left the old type's add-form open
+watch(varsTab, () => {
+  addingType.value = "";
+  addForm.value = { name: "", value: "", username: "" };
+});
 const editingKey = ref("");
 const editingVal = ref("");
 const addingType = ref("");
@@ -469,7 +474,7 @@ async function addEntry() {
               ? '0'
               : t('feat.vars.add.placeholder.value')
               " style="width: 100px" />
-            <input v-if="addingType.includes('u')" class="vars-add-input" v-model="addForm.username"
+            <input v-if="addingType.startsWith('u')" class="vars-add-input" v-model="addForm.username"
               :placeholder="t('feat.vars.add.placeholder.user')" style="width: 110px" />
             <button class="vars-add-submit" @click="addEntry" :disabled="varSaving || !addForm.name.trim()">
               {{ t("feat.vars.add.btn") }}
