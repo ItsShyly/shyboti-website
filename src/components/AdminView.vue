@@ -111,6 +111,7 @@ async function addDevGateUser() {
     }
     newDevGateName.value = "";
     await loadDevGate();
+    loadAudit();
   } catch (e: any) {
     addDevGateError.value = e.message ?? "Could not add user";
   }
@@ -131,6 +132,27 @@ async function removeDevGateUser(username: string) {
       headers: authHeaders(),
     });
     devGateUsers.value = devGateUsers.value.filter((a) => a !== username);
+    loadAudit();
+  } catch {}
+}
+
+interface AuditEntry {
+  id: number;
+  actor: string;
+  action: string;
+  target: string;
+  created_at: number;
+}
+const auditEntries = ref<AuditEntry[]>([]);
+
+async function loadAudit() {
+  if (!session.value?.isAdmin) return;
+  try {
+    const res = await fetch(`${API}/admin/audit`, { headers: authHeaders() });
+    if (res.ok) {
+      const data = (await res.json()) as { entries: AuditEntry[] };
+      auditEntries.value = data.entries;
+    }
   } catch {}
 }
 
@@ -170,6 +192,7 @@ async function toggleStatus(bug: Bug) {
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ status: next }),
     });
+    loadAudit();
   } catch {}
 }
 
@@ -188,6 +211,7 @@ async function deleteBug(id: number) {
       method: "DELETE",
       headers: authHeaders(),
     });
+    loadAudit();
   } catch {}
 }
 
@@ -206,6 +230,7 @@ onMounted(() => {
   loadHealth();
   loadAdmins();
   loadDevGate();
+  loadAudit();
   healthTimer = setInterval(loadHealth, 30_000);
 });
 onUnmounted(() => {
@@ -219,6 +244,7 @@ watch(
       loadHealth();
       loadAdmins();
       loadDevGate();
+      loadAudit();
     }
   },
 );
@@ -302,10 +328,72 @@ watch(
         </button>
       </div>
     </div>
+
+    <details v-if="auditEntries.length" class="audit-tile">
+      <summary class="audit-summary">Audit-Log ({{ auditEntries.length }})</summary>
+      <div class="audit-list">
+        <div v-for="entry in auditEntries" :key="entry.id" class="audit-row">
+          <span class="audit-actor">{{ entry.actor }}</span>
+          <span class="audit-action">{{ entry.action }}</span>
+          <span class="audit-target">{{ entry.target }}</span>
+          <span class="audit-time">{{ fmtDate(entry.created_at) }}</span>
+        </div>
+      </div>
+    </details>
   </div>
 </template>
 
 <style scoped>
+.audit-tile {
+  margin-top: 10px;
+  flex-shrink: 0;
+  border-top: 1px solid #222;
+  padding-top: 10px;
+}
+.audit-summary {
+  font-size: 11px;
+  color: #666;
+  cursor: pointer;
+  user-select: none;
+}
+.audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+.audit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  font-size: 10px;
+  color: #777;
+  background: #141418;
+  border-bottom: 1px solid #1a1a1e;
+}
+.audit-actor {
+  color: #9d6cff;
+  flex-shrink: 0;
+}
+.audit-action {
+  color: #ccc;
+  flex-shrink: 0;
+}
+.audit-target {
+  color: #666;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.audit-time {
+  color: #444;
+  flex-shrink: 0;
+}
+
 .admin-page {
   display: flex;
   flex-direction: column;
