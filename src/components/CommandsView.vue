@@ -51,6 +51,7 @@ interface Command {
   userCooldown: number;
   modOnly: boolean;
   broadcasterOnly: boolean;
+  renamedTo: string | null;
   description: string;
   argVariants: {
     usage: string;
@@ -1166,7 +1167,8 @@ onUnmounted(() => {
                 </div>
                 <div class="cmd-name">
                   <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
-                  {{ prefix }}{{ cmd.name }}
+                  {{ prefix }}{{ cmd.renamedTo || cmd.name }}
+                  <span v-if="cmd.renamedTo" class="cmd-renamed-hint" :title="`Default: ${prefix}${cmd.name}`">↺</span>
                 </div>
                 <div class="cmd-desc">{{ cmdDesc(cmd) }}</div>
                 <div>
@@ -1222,12 +1224,11 @@ onUnmounted(() => {
               <template v-if="expandedDefault.has(cmd.name) && cmd.argVariants?.length">
                 <div v-for="(v, vi) in cmd.argVariants" :key="vi" class="arg-variant-row">
                   <div class="arg-variant-indent"></div>
-                  <div class="arg-variant-usage">
+                  <div class="arg-variant-usage arg-variant-usage-wide">
                     <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{
                       v.usage.replace(/^<(\$[^>]+)>$/, "[$1]")
                     }}</span>
                   </div>
-                  <div class="arg-variant-desc">{{ v.desc || "" }}</div>
                   <button class="access-btn arg-access-btn" :class="{
                     'access-mod': v.access === 'mod',
                     'access-bc': v.access === 'broadcaster',
@@ -1850,6 +1851,11 @@ onUnmounted(() => {
   grid-column: 4;
 }
 
+/* >>> default commands never have a usage desc, give usage the full width instead */
+.arg-variant-usage-wide {
+  grid-column: 2 / 5;
+}
+
 .arg-access-btn {
   /* >>> lines up under the "Access" table header */
   grid-column: 5;
@@ -1922,6 +1928,12 @@ onUnmounted(() => {
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+.cmd-renamed-hint {
+  color: #9d6cff;
+  font-size: 11px;
+  cursor: help;
 }
 
 .cd-input-wrap {

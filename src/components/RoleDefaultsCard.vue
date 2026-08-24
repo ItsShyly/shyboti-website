@@ -1,3 +1,9 @@
+<script lang="ts">
+import { ref as moduleRef } from "vue";
+// >>> module-scoped so all 3 sibling cards (mod/vip/chatter) share one open slot
+const openCardKind = moduleRef<"mod" | "vip" | "chatter" | null>(null);
+</script>
+
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from "vue";
 import { API } from "../api";
@@ -114,7 +120,11 @@ const DEFAULT_VIP_PERMS: Perms = {
 
 const DEFAULT_PERMS = computed(() => (isVip.value || isChatter.value ? DEFAULT_VIP_PERMS : DEFAULT_MOD_PERMS));
 
-const open = ref(false);
+// >>> shared across the 3 sibling cards so opening one closes the others
+const open = computed({
+  get: () => openCardKind.value === props.kind,
+  set: (v) => { openCardKind.value = v ? props.kind : null; },
+});
 const enabled = ref(!isVip.value && !isChatter.value);
 const globalPerms = ref<Perms>({ ...DEFAULT_PERMS.value });
 

@@ -10,8 +10,9 @@ const props = withDefaults(
     placeholder?: string;
     prefix?: string;
     disabled?: boolean;
+    error?: boolean;
   }>(),
-  { placeholder: "", prefix: "", disabled: false },
+  { placeholder: "", prefix: "", disabled: false, error: false },
 );
 
 const emit = defineEmits<{ (e: "update:modelValue", v: string): void }>();
@@ -39,11 +40,11 @@ defineExpose({ start });
 </script>
 
 <template>
-  <span v-if="disabled" class="ep-name-static">{{ prefix }}{{ modelValue || origName }}</span>
-  <span v-else-if="!editing" class="ep-name-editable" title="Click to rename" @click="start">{{ prefix }}{{ modelValue
+  <span v-if="disabled" class="ep-name-static" :class="{ 'ep-name-error': error }">{{ prefix }}{{ modelValue || origName }}</span>
+  <span v-else-if="!editing" class="ep-name-editable" :class="{ 'ep-name-error': error }" title="Click to rename" @click="start">{{ prefix }}{{ modelValue
     || origName
   }}<span class="ep-name-edit-icon" v-html="iconSvgFor('edit')"></span></span>
-  <span v-else class="ep-name-rename-wrap">
+  <span v-else class="ep-name-rename-wrap" :class="{ 'ep-name-error': error }">
     <span v-if="prefix" class="ep-name-prefix">{{ prefix }}</span>
     <input ref="inputEl" :value="modelValue" class="ep-name-rename-input" :placeholder="placeholder" @input="
       emit('update:modelValue', ($event.target as HTMLInputElement).value)

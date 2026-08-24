@@ -37,6 +37,7 @@ const deleteConfirm = ref(false)
 const activeTab = ref<'response' | 'args' | 'flags' | 'behavior'>('response')
 const dirty = ref(false)
 const closeConfirmOpen = ref(false)
+const missingFields = ref<string[]>([])
 
 const form = ref<CustomCommand>({
   name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
@@ -68,9 +69,33 @@ const PARAMS = computed(() => userParams.value.map(p => `{${p.key}}`))
 // vvv built-in aliases + flags reference vvv
 const builtinChannelAliases = ref<string[]>([])
 const builtinGlobalAliases = ref<string[]>([])
+const builtinRenamedTo = ref<string | null>(null)
 const newAliasName = ref('')
 const aliasSaving = ref(false)
 const aliasError = ref('')
+const resetting = ref(false)
+const resetConfirm = ref(false)
+
+async function resetToDefault() {
+  if (!session.value || !props.cmdName) return
+  if (!resetConfirm.value) {
+    resetConfirm.value = true
+    setTimeout(() => { resetConfirm.value = false }, 3000)
+    return
+  }
+  resetConfirm.value = false
+  resetting.value = true
+  try {
+    await fetch(`${API}/commands/${props.channel}/${props.cmdName}/reset`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    builtinRenamedTo.value = null
+    form.value.name = props.cmdName
+    await loadAliases()
+  } catch { }
+  resetting.value = false
+}
 const builtinFlags = computed(() => props.isBuiltIn ? (COMMAND_FLAGS[props.cmdName] ?? []) : [])
 // >>> alias needs a saved command to attach to
 const aliasesNeedSave = computed(() => !props.isBuiltIn && !props.cmdName)
@@ -146,8 +171,10 @@ async function load() {
   if (!session.value) return
   builtinChannelAliases.value = []
   builtinGlobalAliases.value = []
+  builtinRenamedTo.value = null
   newAliasName.value = ''
   aliasError.value = ''
+  missingFields.value = []
   if (!props.cmdName) {
     form.value = {
       name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
@@ -165,9 +192,10 @@ async function load() {
         headers: { Authorization: `Bearer ${session.value.token}` }
       })
       if (res.ok) {
-        const data = await res.json() as { commands: Array<{ name: string; description: string }> }
+        const data = await res.json() as { commands: Array<{ name: string; description: string; renamedTo: string | null }> }
         const cmd = data.commands.find(c => c.name === props.cmdName)
-        form.value = { ...form.value, name: props.cmdName, description: cmd?.description ?? '' }
+        builtinRenamedTo.value = cmd?.renamedTo ?? null
+        form.value = { ...form.value, name: cmd?.renamedTo || props.cmdName, description: cmd?.description ?? '' }
       }
       await loadAliases()
     } else {
@@ -290,6 +318,18 @@ function updateLineNumbers(text: string) {
 watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; saveError.value = ''; activeTab.value = 'response'; closeConfirmOpen.value = false } })
 onMounted(() => { if (props.open) load() })
 
+// >>> the response tab's v-if unmounts the contenteditable - repopulate it
+// >>> from form.value.response when switching back, else it renders empty
+watch(activeTab, async tab => {
+  if (tab !== 'response') return
+  await nextTick()
+  const el = normalEditorRef.value
+  if (!el) return
+  const src = form.value.response || (props.isBuiltIn ? BUILTIN_PREFIX : '')
+  setNormalEditorContent(el, src)
+  updateLineNumbers(src)
+})
+
 // vvv close confirm + shortcuts vvv
 function requestClose() {
   if (dirty.value) closeConfirmOpen.value = true
@@ -327,16 +367,25 @@ watch(() => form.value.response, (src) => {
   if (props.isBuiltIn) return
   validationErrors.value = validateScript(src)
   updateLineNumbers(src)
+  if (src?.trim()) missingFields.value = missingFields.value.filter(f => f !== 'response')
 }, { immediate: false })
+
+watch(() => form.value.name, (n) => {
+  if (n?.trim()) missingFields.value = missingFields.value.filter(f => f !== 'name')
+})
 
 async function save() {
   if (!session.value) return
   const newName = form.value.name?.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '')
   const missing: string[] = []
-  if (!newName) missing.push(t('edit.name'))
-  if (!props.isBuiltIn && !form.value.response?.trim()) missing.push(t('edit.response'))
+  const missingKeys: string[] = []
+  if (!newName) { missing.push(t('edit.name')); missingKeys.push('name') }
+  if (!props.isBuiltIn && !form.value.response?.trim()) { missing.push(t('edit.response')); missingKeys.push('response') }
+  missingFields.value = missingKeys
   if (missing.length) {
     saveError.value = t('edit.missing_fields') + missing.join(', ')
+    // >>> jump to the response tab so its red border is actually visible
+    if (missingKeys.includes('response') && activeTab.value !== 'response') activeTab.value = 'response'
     return
   }
   saveError.value = ''
@@ -345,6 +394,26 @@ async function save() {
     const oldName = props.cmdName
     const isNew = !oldName
     const renamed = !props.isBuiltIn && !isNew && newName && newName !== oldName
+
+    // >>> built-ins rename through /commands (renamedTo override), never
+    // >>> through custom-commands - their own name in that table is fixed
+    if (props.isBuiltIn && oldName) {
+      const wantsRenameChange = newName !== oldName || !!builtinRenamedTo.value
+      if (wantsRenameChange) {
+        const rres = await fetch(`${API}/commands/${props.channel}/${oldName}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+          body: JSON.stringify({ renamedTo: newName === oldName ? null : newName }),
+        })
+        if (!rres.ok) {
+          const d = await rres.json().catch(() => ({})) as { error?: string }
+          saveError.value = d.error ?? t('edit.rename_error')
+          saving.value = false
+          return
+        }
+        builtinRenamedTo.value = newName === oldName ? null : newName
+      }
+    }
 
     // >>> put the data under the new name
     const targetName = (renamed || isNew) ? newName : oldName
@@ -692,11 +761,17 @@ function onNormalKeydown(e: KeyboardEvent) {
             <div class="ep-panel-title">
               Edit
               <EditableNameHeader v-model="form.name" :orig-name="cmdName" :prefix="prefix || '+'"
-                placeholder="commandname" :disabled="!!isBuiltIn" />
+                placeholder="commandname" :error="missingFields.includes('name')" />
             </div>
             <div class="ep-panel-sub">Rule builder for #{{ channel }}</div>
           </div>
-          <button class="ep-panel-close" title="Close (Esc)" @click="requestClose" v-html="iconSvgFor('x')"></button>
+          <div class="ep-panel-header-actions">
+            <button v-if="isBuiltIn" class="reset-default-btn" :class="{ confirm: resetConfirm }"
+              :disabled="resetting" @click="resetToDefault">
+              {{ resetConfirm ? t('edit.reset_confirm') : t('edit.reset_default') }}
+            </button>
+            <button class="ep-panel-close" title="Close (Esc)" @click="requestClose" v-html="iconSvgFor('x')"></button>
+          </div>
         </div>
 
         <div v-if="loading" class="ep-panel-loading">{{ t('edit.saving').replace('…', '…') || 'Loading…' }}</div>
@@ -725,7 +800,7 @@ function onNormalKeydown(e: KeyboardEvent) {
                 <span class="builtin-prefix-hint">{{ t('edit.builtin_locked') }}</span>
               </div>
 
-              <div class="editor-wrapper">
+              <div class="editor-wrapper" :class="{ 'field-error': missingFields.includes('response') }">
                 <!-- >>> scrolls in sync with editor -->
                 <div class="line-numbers" ref="lineNumbersRef">
                   <div v-for="n in lineCount" :key="n" class="line-number">{{ n }}</div>
@@ -813,9 +888,11 @@ function onNormalKeydown(e: KeyboardEvent) {
                   {{ t('edit.aliases_empty') }}
                 </div>
                 <div v-else class="alias-chip-list">
-                  <span v-for="a in builtinGlobalAliases" :key="'g:' + a" class="alias-chip locked"
-                    :title="t('edit.alias_global_hint')">
+                  <span v-for="a in builtinGlobalAliases" :key="'g:' + a" class="alias-chip"
+                    :class="{ locked: !isBuiltIn }" :title="isBuiltIn ? '' : t('edit.alias_global_hint')">
                     {{ prefix || '+' }}{{ a }}
+                    <button v-if="isBuiltIn" class="alias-chip-remove" type="button" :disabled="aliasSaving"
+                      @click="removeAlias(a)" v-html="iconSvgFor('x')"></button>
                   </span>
                   <span v-for="a in builtinChannelAliases" :key="'c:' + a" class="alias-chip">
                     {{ prefix || '+' }}{{ a }}
@@ -933,6 +1010,39 @@ function onNormalKeydown(e: KeyboardEvent) {
 </template>
 
 <style scoped>
+.ep-panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.reset-default-btn {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #2a2a30;
+  background: transparent;
+  color: #888;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .15s;
+}
+.reset-default-btn:hover:not(:disabled) {
+  color: #ccc;
+  border-color: #444;
+}
+.reset-default-btn.confirm {
+  border-color: #f14949;
+  background: rgba(241, 73, 73, 0.15);
+  color: #f14949;
+  font-weight: 700;
+}
+.reset-default-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
 .desc-readonly {
   font-size: 12px;
   color: #555;
@@ -1108,6 +1218,9 @@ function onNormalKeydown(e: KeyboardEvent) {
 
 .editor-wrapper:focus-within {
   border-color: #6f2bff55;
+}
+.editor-wrapper.field-error {
+  border-color: #f14949;
 }
 
 .line-numbers {

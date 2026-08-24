@@ -146,6 +146,15 @@
   outline: none;
   width: 160px;
 }
+/* >>> visually flags a required field left empty on save attempt */
+.ep-name-editable.ep-name-error,
+.ep-name-static.ep-name-error {
+  outline: 1px solid #f14949;
+  border-radius: 4px;
+}
+.ep-name-rename-wrap.ep-name-error {
+  border-color: #f14949;
+}
 
 /* Form fields */
 .ep-field-group {

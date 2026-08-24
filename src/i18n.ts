@@ -223,6 +223,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "edit.aliases_empty": "No aliases yet",
     "edit.alias_global_hint": "built-in alias, can't be removed here",
     "edit.alias_error": "Could not create alias",
+    "edit.rename_error": "Could not rename command",
+    "edit.reset_default": "Reset to default",
+    "edit.reset_confirm": "Sure?",
     "edit.flags": "Flags",
     "edit.flags_empty": "No flags for this command",
     "edit.custom_flags_hint":
@@ -1140,6 +1143,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "edit.alias_global_hint":
       "eingebauter Alias, kann hier nicht entfernt werden",
     "edit.alias_error": "Alias konnte nicht erstellt werden",
+    "edit.rename_error": "Command konnte nicht umbenannt werden",
+    "edit.reset_default": "Auf Standard zurücksetzen",
+    "edit.reset_confirm": "Sicher?",
     "edit.flags": "Flags",
     "edit.flags_empty": "Keine Flags für diesen Command",
     "edit.custom_flags_hint":

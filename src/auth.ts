@@ -146,9 +146,14 @@ export function useAuth() {
         channel: string;
         isAdmin: boolean;
       };
+      // >>> the server session only remembers the channel from login time -
+      // >>> restore whatever channel was last viewed instead, so a reload
+      // >>> doesn't bounce back to the own channel after switching away.
+      // refreshAccessState() below re-validates this against availableChannels.
+      const lastChannel = localStorage.getItem("shyboti_last_channel");
       session.value = {
         login: data.login,
-        channel: data.channel,
+        channel: lastChannel || data.channel,
         token,
         isAdmin: data.isAdmin,
       };
@@ -168,6 +173,7 @@ export function useAuth() {
   async function switchChannel(channel: string) {
     if (!session.value) return;
     session.value = { ...session.value, channel };
+    localStorage.setItem("shyboti_last_channel", channel);
     await fetchRole(channel);
   }
 
@@ -185,6 +191,7 @@ export function useAuth() {
     localStorage.removeItem("shyboti_admin_mode");
     stopAccessRefresh();
     localStorage.removeItem("shyboti_token");
+    localStorage.removeItem("shyboti_last_channel");
   }
 
   function login() {
