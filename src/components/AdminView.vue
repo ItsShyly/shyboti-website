@@ -31,7 +31,7 @@ const loading = ref(false);
 const filter = ref<"open" | "done" | "all">("open");
 const deleteId = ref<number | null>(null);
 
-const pageTab = ref<"bugs" | "logs">("bugs");
+const pageTab = ref<"bugs" | "logs" | "access">("bugs");
 watch(pageTab, (t) => {
   if (t === "logs" && !logEntries.value.length) loadLogs();
 });
@@ -322,39 +322,15 @@ watch(
       </div>
     </div>
 
-    <div class="admins-tile">
-      <div class="admins-title">Admins</div>
-      <div class="admins-list">
-        <div v-for="a in admins" :key="a" class="admin-pill readonly">
-          {{ a }}
-        </div>
-      </div>
-    </div>
-
-    <div class="admins-tile">
-      <div class="admins-title">Dev Access</div>
-      <div class="admins-list">
-        <div v-for="u in devGateUsers" :key="u" class="admin-pill">
-          {{ u }}
-          <button class="admin-pill-remove" :class="{ confirm: removeDevGateId === u }" @click="removeDevGateUser(u)">
-            <template v-if="removeDevGateId === u">?</template>
-            <span v-else>×</span>
-          </button>
-        </div>
-      </div>
-      <form class="admin-add-form" @submit.prevent="addDevGateUser">
-        <input v-model="newDevGateName" class="admin-add-input" placeholder="Twitch-Login…" />
-        <button type="submit" class="admin-add-btn">+</button>
-      </form>
-      <div v-if="addDevGateError" class="admin-add-error">{{ addDevGateError }}</div>
-    </div>
-
-    <div class="page-tabs">
-      <button class="page-tab" :class="{ active: pageTab === 'bugs' }" @click="pageTab = 'bugs'">
+    <div class="ep-tabs">
+      <button class="ep-tab" :class="{ active: pageTab === 'bugs' }" @click="pageTab = 'bugs'">
         Bugs
       </button>
-      <button class="page-tab" :class="{ active: pageTab === 'logs' }" @click="pageTab = 'logs'">
+      <button class="ep-tab" :class="{ active: pageTab === 'logs' }" @click="pageTab = 'logs'">
         Logs
+      </button>
+      <button class="ep-tab" :class="{ active: pageTab === 'access' }" @click="pageTab = 'access'">
+        Access
       </button>
     </div>
 
@@ -398,7 +374,7 @@ watch(
       </div>
     </template>
 
-    <template v-else>
+    <template v-else-if="pageTab === 'logs'">
       <div class="admin-header">
         <div class="log-controls">
           <input v-model="logQuery" class="log-search" placeholder="Nach Wort filtern…" @input="debouncedLoadLogs" />
@@ -421,6 +397,35 @@ watch(
           <span class="log-message">{{ entry.message }}</span>
           <span class="log-time">{{ fmtDate(entry.created_at) }}</span>
         </div>
+      </div>
+    </template>
+
+    <template v-else>
+      <div class="admins-tile">
+        <div class="admins-title">Admins</div>
+        <div class="admins-list">
+          <div v-for="a in admins" :key="a" class="admin-pill readonly">
+            {{ a }}
+          </div>
+        </div>
+      </div>
+
+      <div class="admins-tile">
+        <div class="admins-title">Dev Access</div>
+        <div class="admins-list">
+          <div v-for="u in devGateUsers" :key="u" class="admin-pill">
+            {{ u }}
+            <button class="admin-pill-remove" :class="{ confirm: removeDevGateId === u }" @click="removeDevGateUser(u)">
+              <template v-if="removeDevGateId === u">?</template>
+              <span v-else>×</span>
+            </button>
+          </div>
+        </div>
+        <form class="admin-add-form" @submit.prevent="addDevGateUser">
+          <input v-model="newDevGateName" class="admin-add-input" placeholder="Twitch-Login…" />
+          <button type="submit" class="admin-add-btn">+</button>
+        </form>
+        <div v-if="addDevGateError" class="admin-add-error">{{ addDevGateError }}</div>
       </div>
     </template>
 
@@ -622,32 +627,8 @@ watch(
   color: #f14949;
 }
 
-.page-tabs {
-  display: flex;
-  gap: 6px;
+.ep-tabs {
   margin-bottom: 16px;
-  flex-shrink: 0;
-}
-.page-tab {
-  height: 32px;
-  padding: 0 16px;
-  border: 1px solid #2a2a30;
-  background: transparent;
-  color: #888;
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.page-tab:hover {
-  color: #ccc;
-  border-color: #444;
-}
-.page-tab.active {
-  color: #fff;
-  background: #6f2bff;
-  border-color: #6f2bff;
 }
 
 .admin-header {
