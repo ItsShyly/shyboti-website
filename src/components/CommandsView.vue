@@ -693,11 +693,16 @@ async function cycleArgAccess(
   } catch { }
 }
 
+// >>> mirrors backend applyPrefix() 
+function applyPrefix(text: string): string {
+  return text.replace(/\+(?=[a-zA-Z])/g, prefix.value);
+}
+
 function cmdDesc(cmd: Command): string {
   const key = `cmddesc.${cmd.name}`;
   const translated = t(key);
-  if (translated !== key) return translated;
-  return cmd.description || "-";
+  if (translated !== key) return applyPrefix(translated);
+  return cmd.description ? applyPrefix(cmd.description) : "-";
 }
 
 const deletingName = ref<string | null>(null);
@@ -1018,7 +1023,7 @@ onUnmounted(() => {
           <template v-else-if="activeTab === 'Custom'">{{ customCommands.length }} {{ customCommands.length !== 1 ?
             t('cmd.count_plural') : t('cmd.count') }}</template>
           <template v-else-if="activeTab === 'Obs' && obsPaired">{{ obsCommandCount }} OBS {{ t('cmd.count_plural')
-            }}</template>
+          }}</template>
           <template v-else>&mdash;</template>
         </div>
       </div>
@@ -1036,9 +1041,11 @@ onUnmounted(() => {
           <div v-if="syncOpen && activeTab === 'Custom'" class="ep-sync-panel">
             <div class="ep-sync-modes">
               <button class="ep-sync-mode-btn" :class="{ active: syncMode === 'ongoing' }"
-                @click="syncMode = 'ongoing'">Sync (ongoing)</button>
+                @click="syncMode = 'ongoing'">Sync
+                (ongoing)</button>
               <button class="ep-sync-mode-btn" :class="{ active: syncMode === 'import' }"
-                @click="syncMode = 'import'">Import (one-time)</button>
+                @click="syncMode = 'import'">Import
+                (one-time)</button>
             </div>
             <div class="ep-sync-row">
               <select v-model="syncFrom" class="ep-field-select-sm">
@@ -1061,7 +1068,7 @@ onUnmounted(() => {
                 syncRunning
                   ? '…' : t('cmd.sync.pull') }}</button>
               <button v-if="syncConf?.is_active" class="ep-sync-stop-btn" @click="stopSync">{{ t('cmd.sync.stop')
-                }}</button>
+              }}</button>
             </div>
             <div v-if="syncMode === 'ongoing' && syncConf?.last_synced" class="ep-sync-last">{{ t('cmd.sync.last') }}
               {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
@@ -1079,7 +1086,7 @@ onUnmounted(() => {
             t('cmd.new') }}</button>
         <button v-else-if="activeTab === 'Obs' && obsPaired" class="ep-btn-new" @click="openObsEdit(null)">+ {{
           t('cmd.new')
-          }}</button>
+        }}</button>
       </div>
     </div>
 
@@ -1110,12 +1117,12 @@ onUnmounted(() => {
             <div></div>
             <div>{{ t("cmd.header.onoff") }}</div>
             <div class="sort-col" @click="setSort('name')">{{ t("cmd.header.name") }}<span class="sort-arrow"
-              v-html="sortField === 'name' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
+                v-html="sortField === 'name' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
             </div>
             <div>{{ t("cmd.header.desc") }}</div>
             <div>{{ t("cmd.header.access") }}</div>
             <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.header.gcd") }}<span class="sort-arrow"
-              v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
+                v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
             </div>
             <div>{{ t("cmd.header.ucd") }}</div>
             <div>{{ t("cmd.sort.actions") }}</div>
@@ -1227,7 +1234,7 @@ onUnmounted(() => {
                   <div class="arg-variant-usage arg-variant-usage-wide">
                     <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{
                       v.usage.replace(/^<(\$[^>]+)>$/, "[$1]")
-                    }}</span>
+                        }}</span>
                   </div>
                   <button class="access-btn arg-access-btn" :class="{
                     'access-mod': v.access === 'mod',
@@ -1251,12 +1258,12 @@ onUnmounted(() => {
           <div></div>
           <div>{{ t("cmd.header.onoff") }}</div>
           <div class="sort-col" @click="setSort('name')">{{ t("cmd.sort.name") }}<span class="sort-arrow"
-            v-html="sortField === 'name' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
+              v-html="sortField === 'name' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
           </div>
           <div>{{ t("cmd.header.desc") }}</div>
           <div>{{ t("cmd.sort.access") }}</div>
           <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.sort.gcd") }}<span class="sort-arrow"
-            v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
+              v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
           </div>
           <div>{{ t("cmd.header.ucd") }}</div>
           <div>{{ t("cmd.sort.actions") }}</div>
@@ -1300,7 +1307,8 @@ onUnmounted(() => {
               <div class="table-row custom-row" :class="{ expanded: expandedCustom.has(cmd.name) }">
                 <div class="row-chevron-cell">
                   <button v-if="customHasArgs(cmd)" class="row-chevron" :class="{ open: expandedCustom.has(cmd.name) }"
-                    @click.stop="toggleExpandCustom(cmd.name)" title="Show argument variants" v-html="iconSvgFor('chevron-down')">
+                    @click.stop="toggleExpandCustom(cmd.name)" title="Show argument variants"
+                    v-html="iconSvgFor('chevron-down')">
                   </button>
                 </div>
                 <div>
