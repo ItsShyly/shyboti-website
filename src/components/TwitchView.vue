@@ -132,7 +132,9 @@ interface CategoryGate {
   state: "activate" | "deactivate";
 }
 const categoryGates = ref<Record<string, CategoryGate>>({});
-async function loadCategoryGates() {
+// >>> reward id -> its redemption actions' types, for row-list action tags
+const actionTypesByReward = ref<Record<string, string[]>>({});
+async function loadRewardTriggerTags() {
   if (!session.value) return;
   const ch = session.value.channel;
   try {
@@ -142,7 +144,8 @@ async function loadCategoryGates() {
     if (!res.ok) return;
     const data = (await res.json()) as { triggers: any[] };
     if (session.value?.channel !== ch) return;
-    const map: Record<string, CategoryGate> = {};
+    const gates: Record<string, CategoryGate> = {};
+    const actions: Record<string, string[]> = {};
     for (const tr of data.triggers ?? []) {
       if (
         tr.event_type === "category" &&
@@ -151,20 +154,34 @@ async function loadCategoryGates() {
         tr.action_reward_id &&
         tr.required_game
       ) {
-        map[tr.action_reward_id] = {
+        gates[tr.action_reward_id] = {
           name: tr.name,
           category: tr.required_game,
           state: tr.action_reward_state === "deactivate" ? "deactivate" : "activate",
         };
       }
+      if (tr.event_type === "channel_point_reward" && tr.event_reward_id) {
+        (actions[tr.event_reward_id] ??= []).push(tr.action_type);
+      }
     }
-    categoryGates.value = map;
+    categoryGates.value = gates;
+    actionTypesByReward.value = actions;
   } catch {
-    if (session.value?.channel === ch) categoryGates.value = {};
+    if (session.value?.channel === ch) {
+      categoryGates.value = {};
+      actionTypesByReward.value = {};
+    }
   }
 }
-onMounted(loadCategoryGates);
-watch(() => session.value?.channel, loadCategoryGates);
+onMounted(loadRewardTriggerTags);
+watch(() => session.value?.channel, loadRewardTriggerTags);
+
+// >>> trigger storage uses "timeout" (self) vs "timeout_input_user" - only the
+// >>> self case needs remapping back to the cp.actions.type.* label key
+function actionTagLabel(actionType: string): string {
+  const key = actionType === "timeout" ? "timeout_self" : actionType;
+  return t(`cp.actions.type.${key}`);
+}
 
 // vvv edit panel vvv
 
@@ -767,7 +784,7 @@ async function saveActions() {
 
     if (reward.manageable) {
       await syncCategoryGate(reward.id, reward.title);
-      await loadCategoryGates();
+      await loadRewardTriggerTags();
     }
 
     // >>> closes whichever context triggered the save (standalone panel or edit-panel tab)
@@ -846,6 +863,9 @@ async function saveActions() {
                   <span v-if="categoryGates[r.id]" class="ep-meta-pill game">
                     {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
                   </span>
+                  <span v-for="at in actionTypesByReward[r.id] ?? []" :key="at" class="ep-meta-pill cp-action-tag">
+                    {{ actionTagLabel(at) }}
+                  </span>
                 </div>
               </div>
               <div class="ep-row-actions">
@@ -878,6 +898,9 @@ async function saveActions() {
                   <span>{{ r.cost }}</span>
                   <span v-if="categoryGates[r.id]" class="ep-meta-pill game">
                     {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
+                  </span>
+                  <span v-for="at in actionTypesByReward[r.id] ?? []" :key="at" class="ep-meta-pill cp-action-tag">
+                    {{ actionTagLabel(at) }}
                   </span>
                 </div>
               </div>
@@ -1096,6 +1119,12 @@ async function saveActions() {
 <style scoped>
 /* >>> layout comes from shared.css, only channel-points-specific bits here */
 
+.ep-meta-pill.cp-action-tag {
+  color: #4ec9b0;
+  border-color: #4ec9b044;
+  background: #4ec9b011;
+}
+
 .cp-explain {
   display: flex;
   align-items: flex-start;
@@ -1174,6 +1203,7 @@ async function saveActions() {
 .cp-cost {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   font-size: 13px;
   color: #999;

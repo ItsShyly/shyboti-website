@@ -175,6 +175,32 @@ async function fetchExtras() {
   }
 }
 
+// >>> command name -> its keyword patterns, for the row-list keyword tags
+const keywordsByCommand = ref<Record<string, string[]>>({});
+async function loadKeywordTags() {
+  if (!session.value) return;
+  const ch = session.value.channel;
+  try {
+    const res = await fetch(`${API}/triggers/${ch}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { triggers: any[] };
+    if (session.value?.channel !== ch) return;
+    const map: Record<string, string[]> = {};
+    for (const tr of data.triggers ?? []) {
+      if (tr.linked_command) {
+        (map[tr.linked_command] ??= []).push(tr.match_pattern || tr.name);
+      }
+    }
+    keywordsByCommand.value = map;
+  } catch {
+    if (session.value?.channel === ch) keywordsByCommand.value = {};
+  }
+}
+onMounted(loadKeywordTags);
+watch(() => session.value?.channel, loadKeywordTags);
+
 async function saveExtras() {
   if (!session.value) return;
   extrasSaving.value = true;
@@ -1189,7 +1215,15 @@ onUnmounted(() => {
                   {{ prefix }}{{ cmd.renamedTo || cmd.name }}
                   <span v-if="cmd.renamedTo" class="cmd-renamed-hint" :title="`Default: ${prefix}${cmd.name}`">↺</span>
                 </div>
-                <div class="cmd-desc">{{ cmdDesc(cmd) }}</div>
+                <div class="cmd-desc">
+                  <span class="cmd-desc-text">{{ cmdDesc(cmd) }}</span>
+                  <span v-if="cmd.argVariants?.length" class="ep-meta-pill cmd-args">{{ cmd.argVariants.length }} args</span>
+                  <span v-for="kw in (keywordsByCommand[cmd.name] ?? []).slice(0, 3)" :key="kw"
+                    class="ep-meta-pill cmd-keyword">{{ kw }}</span>
+                  <span v-if="(keywordsByCommand[cmd.name]?.length ?? 0) > 3" class="ep-meta-pill cmd-keyword">
+                    +{{ keywordsByCommand[cmd.name]!.length - 3 }}
+                  </span>
+                </div>
                 <div>
                   <button class="access-btn" :class="{
                     'access-mod': cmd.modOnly,
@@ -1336,7 +1370,15 @@ onUnmounted(() => {
                   <span class="cmd-cat-dot" style="background: #9d6cff"></span>{{ prefix }}{{ cmd.name
                   }}<span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
                 </div>
-                <div class="cmd-desc">{{ cmd.description }}</div>
+                <div class="cmd-desc">
+                  <span class="cmd-desc-text">{{ cmd.description }}</span>
+                  <span v-if="cmd.arg_descs?.length" class="ep-meta-pill cmd-args">{{ cmd.arg_descs.length }} args</span>
+                  <span v-for="kw in (keywordsByCommand[cmd.name] ?? []).slice(0, 3)" :key="kw"
+                    class="ep-meta-pill cmd-keyword">{{ kw }}</span>
+                  <span v-if="(keywordsByCommand[cmd.name]?.length ?? 0) > 3" class="ep-meta-pill cmd-keyword">
+                    +{{ keywordsByCommand[cmd.name]!.length - 3 }}
+                  </span>
+                </div>
                 <div>
                   <button class="access-btn" :class="{
                     'access-mod': cmd.modOnly,
@@ -2144,11 +2186,39 @@ onUnmounted(() => {
 }
 
 .cmd-desc {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.cmd-desc-text {
   font-size: 11px;
   color: #8d8d8d;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex-shrink: 1;
+}
+
+.ep-meta-pill.cmd-args,
+.ep-meta-pill.cmd-keyword {
+  flex-shrink: 0;
+}
+
+.ep-meta-pill.cmd-args {
+  color: #c792ea;
+  border-color: #c792ea44;
+  background: #c792ea11;
+}
+
+.ep-meta-pill.cmd-keyword {
+  color: #e5c07b;
+  border-color: #e5c07b44;
+  background: #e5c07b11;
+  font-family: monospace;
 }
 
 .del-btn {
