@@ -51,28 +51,32 @@ const hasCategoryRule = computed(() =>
 
 async function fetchRules() {
   if (!session.value || !canView.value) return;
+  const ch = session.value.channel;
   loading.value = true;
   try {
-    const res = await fetch(`${API}/obs/${session.value.channel}`, {
+    const res = await fetch(`${API}/obs/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (res.ok) {
       const d = (await res.json()) as { paired: boolean; rules?: ObsRule[] };
+      if (session.value?.channel !== ch) return;
       paired.value = !!d.paired;
       rules.value = d.rules ?? [];
     }
   } catch { }
-  loading.value = false;
+  if (session.value?.channel === ch) loading.value = false;
 }
 
 async function fetchCategoryScope() {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
-    const res = await fetch(`${API}/obs/${session.value.channel}/category-scope-status`, {
+    const res = await fetch(`${API}/obs/${ch}/category-scope-status`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (res.ok) {
       const d = (await res.json()) as { hasScope: boolean };
+      if (session.value?.channel !== ch) return;
       hasCategoryScope.value = d.hasScope;
     }
   } catch { }

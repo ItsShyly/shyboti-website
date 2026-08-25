@@ -122,19 +122,23 @@ function fmtInterval(s: number) {
 
 async function load() {
   if (!session.value) return;
+  const ch = session.value.channel;
   loading.value = true;
   error.value = "";
   try {
-    const res = await fetch(`${API}/timers/${session.value.channel}`, {
+    const res = await fetch(`${API}/timers/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) throw new Error();
     const data = (await res.json()) as { timers: Timer[] };
+    // >>> channel switched again while this was in flight - discard
+    if (session.value?.channel !== ch) return;
     timers.value = data.timers;
   } catch (e: any) {
-    error.value = "Could not load timers: " + (e?.message ?? e);
+    if (session.value?.channel === ch)
+      error.value = "Could not load timers: " + (e?.message ?? e);
   }
-  loading.value = false;
+  if (session.value?.channel === ch) loading.value = false;
 }
 
 const creatingNew = ref(false);
@@ -340,11 +344,13 @@ async function runImport() {
 
 async function fetchSync() {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
-    const res = await fetch(`${API}/timer-sync/${session.value.channel}`, {
+    const res = await fetch(`${API}/timer-sync/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     const data = (await res.json()) as { sync: any };
+    if (session.value?.channel !== ch) return;
     syncConf.value = data.sync;
     syncFrom.value = data.sync?.sync_from ?? "";
   } catch { }

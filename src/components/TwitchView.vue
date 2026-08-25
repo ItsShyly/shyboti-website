@@ -62,13 +62,16 @@ function errMsg(code: string | undefined, detail?: string): string {
 
 async function load() {
   if (!session.value) return;
+  const ch = session.value.channel;
   loading.value = true;
   error.value = "";
   try {
-    const res = await fetch(`${API}/channelpoints/${session.value.channel}`, {
+    const res = await fetch(`${API}/channelpoints/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     const data = await res.json();
+    // >>> channel switched again while this was in flight - discard
+    if (session.value?.channel !== ch) return;
     if (!res.ok) {
       rewards.value = [];
       error.value = errMsg(data.error);
@@ -76,9 +79,9 @@ async function load() {
     }
     rewards.value = data.rewards ?? [];
   } catch {
-    error.value = errMsg("request_failed");
+    if (session.value?.channel === ch) error.value = errMsg("request_failed");
   } finally {
-    loading.value = false;
+    if (session.value?.channel === ch) loading.value = false;
   }
 }
 
@@ -91,25 +94,30 @@ const channelPrefix = ref("+");
 
 async function loadCommandNames() {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
     const h = { Authorization: `Bearer ${session.value.token}` };
     const [builtinRes, customRes] = await Promise.all([
-      fetch(`${API}/commands/${session.value.channel}`, { headers: h }),
-      fetch(`${API}/custom-commands/${session.value.channel}`, { headers: h }),
+      fetch(`${API}/commands/${ch}`, { headers: h }),
+      fetch(`${API}/custom-commands/${ch}`, { headers: h }),
     ]);
     const names = new Set<string>();
+    let prefix = "+";
     if (builtinRes.ok) {
       const d = await builtinRes.json();
-      channelPrefix.value = d.prefix || "+";
+      prefix = d.prefix || "+";
       for (const c of d.commands ?? []) if (c?.name) names.add(c.name);
     }
     if (customRes.ok) {
       const d = await customRes.json();
       for (const c of d.commands ?? []) if (c?.name) names.add(c.name);
     }
+    // >>> channel switched again while this was in flight - discard
+    if (session.value?.channel !== ch) return;
+    channelPrefix.value = prefix;
     commandNames.value = [...names].sort();
   } catch {
-    commandNames.value = [];
+    if (session.value?.channel === ch) commandNames.value = [];
   }
 }
 onMounted(loadCommandNames);

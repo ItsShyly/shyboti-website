@@ -128,19 +128,23 @@ watch(() => session.value?.channel, load);
 
 async function load() {
   if (!session.value) return;
+  const ch = session.value.channel;
   loading.value = true;
   error.value = "";
   try {
-    const res = await fetch(`${API}/countdowns/${session.value.channel}`, {
+    const res = await fetch(`${API}/countdowns/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.error ?? `Load failed (${res.status})`);
+    // >>> channel switched again while this was in flight - discard
+    if (session.value?.channel !== ch) return;
     countdowns.value = (data as { countdowns: Countdown[] })?.countdowns ?? [];
   } catch (e: any) {
-    error.value = e.message ?? "Could not load countdowns.";
+    if (session.value?.channel === ch)
+      error.value = e.message ?? "Could not load countdowns.";
   }
-  loading.value = false;
+  if (session.value?.channel === ch) loading.value = false;
 }
 
 function openNew() {

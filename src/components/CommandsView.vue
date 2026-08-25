@@ -149,9 +149,10 @@ const extrasSaved = ref(false);
 
 async function fetchExtras() {
   if (!session.value) return;
+  const ch = session.value.channel;
   extrasLoading.value = true;
   try {
-    const res = await fetch(`${API}/settings/${session.value.channel}`, {
+    const res = await fetch(`${API}/settings/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) return;
@@ -162,6 +163,7 @@ async function fetchExtras() {
       bot_online_only: boolean;
       has_7tv_set: boolean;
     };
+    if (session.value?.channel !== ch) return;
     mentionEnabled.value = data.mention_enabled;
     replyAllEnabled.value = data.reply_all_enabled;
     mentionOnlyOffline.value = data.mention_only_offline;
@@ -169,7 +171,7 @@ async function fetchExtras() {
     has7tvSet.value = data.has_7tv_set ?? false;
   } catch {
   } finally {
-    extrasLoading.value = false;
+    if (session.value?.channel === ch) extrasLoading.value = false;
   }
 }
 
@@ -225,9 +227,10 @@ function obsAccessLabel(access?: string): string {
 
 async function fetchObsCommands() {
   if (!session.value || !canViewObs.value) return;
+  const ch = session.value.channel;
   obsLoading.value = true;
   try {
-    const res = await fetch(`${API}/obs/${session.value.channel}`, {
+    const res = await fetch(`${API}/obs/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (res.ok) {
@@ -237,14 +240,17 @@ async function fetchObsCommands() {
         source_bindings?: ObsSourceBind[];
         arg_commands?: Record<string, ObsArgEntry>;
       };
+      if (session.value?.channel !== ch) return;
       obsPaired.value = !!d.paired;
       obsSceneBindings.value = d.scene_bindings ?? [];
       obsSourceBindings.value = d.source_bindings ?? [];
       obsArgCommands.value = d.arg_commands ?? {};
     }
   } catch { }
-  obsFetched.value = true;
-  obsLoading.value = false;
+  if (session.value?.channel === ch) {
+    obsFetched.value = true;
+    obsLoading.value = false;
+  }
 }
 
 function obsArgCommand(entry: ObsArgEntry): string {
@@ -548,13 +554,15 @@ function filteredCustom() {
 
 async function fetchCustomCommands() {
   if (!session.value) return;
+  const ch = session.value.channel;
   customLoading.value = true;
   try {
-    const res = await fetch(`${API}/custom-commands/${session.value.channel}`, {
+    const res = await fetch(`${API}/custom-commands/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) throw new Error();
     const data = (await res.json()) as { commands: CustomCommand[] };
+    if (session.value?.channel !== ch) return;
     customCommands.value = data.commands.map((c) => ({
       ...c,
       isActive: !!c.isActive,
@@ -562,27 +570,29 @@ async function fetchCustomCommands() {
       broadcasterOnly: !!c.broadcasterOnly,
     }));
   } catch {
-    customCommands.value = [];
+    if (session.value?.channel === ch) customCommands.value = [];
   } finally {
-    customLoading.value = false;
+    if (session.value?.channel === ch) customLoading.value = false;
   }
 }
 
 async function fetchCommands() {
   if (!session.value) return;
+  const ch = session.value.channel;
   loading.value = true;
   try {
-    const res = await fetch(`${API}/commands/${session.value.channel}`, {
+    const res = await fetch(`${API}/commands/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) throw new Error();
     const data = (await res.json()) as { commands: Command[]; prefix: string };
+    if (session.value?.channel !== ch) return;
     commands.value = data.commands;
     prefix.value = data.prefix;
   } catch {
-    commands.value = [];
+    if (session.value?.channel === ch) commands.value = [];
   } finally {
-    loading.value = false;
+    if (session.value?.channel === ch) loading.value = false;
   }
 }
 
@@ -860,11 +870,13 @@ async function runImport() {
 
 async function fetchSync() {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
-    const res = await fetch(`${API}/command-sync/${session.value.channel}`, {
+    const res = await fetch(`${API}/command-sync/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     const data = (await res.json()) as { sync: any };
+    if (session.value?.channel !== ch) return;
     syncConf.value = data.sync;
     syncFrom.value = data.sync?.sync_from ?? "";
   } catch { }

@@ -96,12 +96,15 @@ const manageableRewardOptions = computed(() =>
 );
 async function loadRewards() {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
-    const res = await fetch(`${API}/channelpoints/${session.value.channel}`, {
+    const res = await fetch(`${API}/channelpoints/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) return;
     const data = await res.json();
+    // >>> channel switched again while this was in flight - discard, don't clobber the newer load
+    if (session.value?.channel !== ch) return;
     rewardOptions.value = (data.rewards ?? []).map((r: any) => ({
       id: r.id,
       title: r.title,
@@ -109,7 +112,7 @@ async function loadRewards() {
       userInputRequired: !!r.userInputRequired,
     }));
   } catch {
-    rewardOptions.value = [];
+    if (session.value?.channel === ch) rewardOptions.value = [];
   }
 }
 
@@ -117,11 +120,12 @@ async function loadRewards() {
 const commandNames = ref<string[]>([]);
 async function loadCommandNames() {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
     const h = { Authorization: `Bearer ${session.value.token}` };
     const [builtinRes, customRes] = await Promise.all([
-      fetch(`${API}/commands/${session.value.channel}`, { headers: h }),
-      fetch(`${API}/custom-commands/${session.value.channel}`, { headers: h }),
+      fetch(`${API}/commands/${ch}`, { headers: h }),
+      fetch(`${API}/custom-commands/${ch}`, { headers: h }),
     ]);
     const names = new Set<string>();
     if (builtinRes.ok) {
@@ -132,9 +136,11 @@ async function loadCommandNames() {
       const d = await customRes.json();
       for (const c of d.commands ?? []) if (c?.name) names.add(c.name);
     }
+    // >>> channel switched again while this was in flight - discard
+    if (session.value?.channel !== ch) return;
     commandNames.value = [...names].sort();
   } catch {
-    commandNames.value = [];
+    if (session.value?.channel === ch) commandNames.value = [];
   }
 }
 
@@ -273,19 +279,24 @@ function showSuccess(msg: string) {
 
 async function load() {
   if (!session.value) return;
+  const ch = session.value.channel;
   loading.value = true;
   error.value = "";
   try {
-    const res = await fetch(`${API}/triggers/${session.value.channel}`, {
+    const res = await fetch(`${API}/triggers/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) throw new Error();
     const data = (await res.json()) as { triggers: Trigger[] };
+    // >>> channel switched again while this was in flight - a slower response
+    // >>> for the old channel must not clobber the newer channel's already-loaded list
+    if (session.value?.channel !== ch) return;
     triggers.value = data.triggers;
   } catch (e: any) {
-    error.value = "Could not load triggers: " + (e?.message ?? e);
+    if (session.value?.channel === ch)
+      error.value = "Could not load triggers: " + (e?.message ?? e);
   }
-  loading.value = false;
+  if (session.value?.channel === ch) loading.value = false;
 }
 
 function openNew() {

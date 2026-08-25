@@ -103,11 +103,16 @@ function toggleGroupOpen(id: number) {
 
 async function fetchGroups(tab: Tab) {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
-    const res = await fetch(`${API}/moderation/${session.value.channel}/${GROUP_PATH[tab]}/groups`, {
+    const res = await fetch(`${API}/moderation/${ch}/${GROUP_PATH[tab]}/groups`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
-    if (res.ok) modGroups[tab] = (await res.json()).items ?? [];
+    if (res.ok) {
+      const data = await res.json();
+      if (session.value?.channel !== ch) return;
+      modGroups[tab] = data.items ?? [];
+    }
   } catch { }
 }
 
@@ -395,19 +400,26 @@ function openEditNuke(n: NukeConfig) {
 async function load() {
   if (!session.value) return;
   loading.value = true; error.value = "";
+  const ch = session.value.channel;
   try {
     const h = { Authorization: `Bearer ${session.value.token}` };
-    const ch = session.value.channel;
     const [bRes, sRes, nRes] = await Promise.all([
       fetch(`${API}/moderation/${ch}/blocked-terms`, { headers: h }),
       fetch(`${API}/moderation/${ch}/spam-filters`, { headers: h }),
       fetch(`${API}/moderation/${ch}/nukes`, { headers: h }),
     ]);
-    if (bRes.ok) blockedTerms.value = (await bRes.json()).items ?? [];
-    if (sRes.ok) spamFilters.value = (await sRes.json()).items ?? [];
-    if (nRes.ok) nukes.value = (await nRes.json()).items ?? [];
-  } catch { error.value = t("mod.error.load") }
-  loading.value = false;
+    const [bData, sData, nData] = await Promise.all([
+      bRes.ok ? bRes.json() : null,
+      sRes.ok ? sRes.json() : null,
+      nRes.ok ? nRes.json() : null,
+    ]);
+    // >>> channel switched again while this was in flight - discard
+    if (session.value?.channel !== ch) return;
+    if (bData) blockedTerms.value = bData.items ?? [];
+    if (sData) spamFilters.value = sData.items ?? [];
+    if (nData) nukes.value = nData.items ?? [];
+  } catch { if (session.value?.channel === ch) error.value = t("mod.error.load") }
+  if (session.value?.channel === ch) loading.value = false;
 }
 
 async function savePanel() {
@@ -647,11 +659,13 @@ const curSync = computed(() => modSync[activeTab.value]);
 
 async function fetchModSync(tab: Tab) {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
-    const res = await fetch(`${API}/mod-sync/${tab}/${session.value.channel}`, {
+    const res = await fetch(`${API}/mod-sync/${tab}/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     const data = await res.json();
+    if (session.value?.channel !== ch) return;
     modSync[tab].conf = data.sync;
     modSync[tab].from = data.sync?.sync_from ?? "";
   } catch { }

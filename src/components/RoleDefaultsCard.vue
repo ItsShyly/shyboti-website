@@ -133,8 +133,9 @@ const syncing = ref(false);
 
 async function load() {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
-    const res = await fetch(`${API}/${rolesBase.value}/${session.value.channel}`, {
+    const res = await fetch(`${API}/${rolesBase.value}/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) return;
@@ -144,6 +145,8 @@ async function load() {
       chattersEnabled?: boolean;
       permissions: Perms;
     };
+    // >>> channel switched again while this was in flight - discard
+    if (session.value?.channel !== ch) return;
     enabled.value =
       (isChatter.value ? data.chattersEnabled : isVip.value ? data.vipsEnabled : data.modsEnabled) ??
       (!isVip.value && !isChatter.value);
@@ -153,12 +156,14 @@ async function load() {
 
 async function loadScopeStatus() {
   if (!isVip.value || !session.value) return;
+  const ch = session.value.channel;
   try {
-    const res = await fetch(`${API}/vips/${session.value.channel}/scope-status`, {
+    const res = await fetch(`${API}/vips/${ch}/scope-status`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) return;
     const data = (await res.json()) as { hasScope: boolean };
+    if (session.value?.channel !== ch) return;
     hasScope.value = data.hasScope;
   } catch {}
 }

@@ -96,18 +96,22 @@ const vipDefaults = ref<Perms>({ ...EMPTY_PERMS });
 
 async function loadDefaultsSnapshot() {
   if (!session.value) return;
+  const ch = session.value.channel;
   const headers = { Authorization: `Bearer ${session.value.token}` };
   try {
     const [modRes, vipRes] = await Promise.all([
-      fetch(`${API}/roles/${session.value.channel}`, { headers }),
-      fetch(`${API}/vip-roles/${session.value.channel}`, { headers }),
+      fetch(`${API}/roles/${ch}`, { headers }),
+      fetch(`${API}/vip-roles/${ch}`, { headers }),
     ]);
+    if (session.value?.channel !== ch) return;
     if (modRes.ok) {
       const d = (await modRes.json()) as { permissions: Perms };
+      if (session.value?.channel !== ch) return;
       Object.assign(modDefaults.value, EMPTY_PERMS, d.permissions);
     }
     if (vipRes.ok) {
       const d = (await vipRes.json()) as { permissions: Perms };
+      if (session.value?.channel !== ch) return;
       Object.assign(vipDefaults.value, EMPTY_PERMS, d.permissions);
     }
   } catch {}
@@ -119,12 +123,14 @@ const vipBadgeUrl = ref("");
 
 async function loadTwitchBadges() {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
-    const res = await fetch(`${API}/twitch/badges/${encodeURIComponent(session.value.channel)}`, {
+    const res = await fetch(`${API}/twitch/badges/${encodeURIComponent(ch)}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) return;
     const d = (await res.json()) as any;
+    if (session.value?.channel !== ch) return;
     const badgeMap = d?.badgeMap ?? {};
     modBadgeUrl.value = String(badgeMap["moderator/1"]?.image_url_2x ?? badgeMap["moderator/1"]?.image_url_1x ?? "");
     vipBadgeUrl.value = String(badgeMap["vip/1"]?.image_url_2x ?? badgeMap["vip/1"]?.image_url_1x ?? "");
@@ -138,36 +144,42 @@ const listLoading = ref(false);
 
 async function loadMods() {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
-    const res = await fetch(`${API}/mods/${session.value.channel}`, {
+    const res = await fetch(`${API}/mods/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) return;
     const data = (await res.json()) as { mods: RawRoleRow[] };
+    if (session.value?.channel !== ch) return;
     mods.value = data.mods ?? [];
   } catch {}
 }
 
 async function loadVips() {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
-    const res = await fetch(`${API}/vips/${session.value.channel}`, {
+    const res = await fetch(`${API}/vips/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) return;
     const data = (await res.json()) as { vips: RawRoleRow[] };
+    if (session.value?.channel !== ch) return;
     vips.value = data.vips ?? [];
   } catch {}
 }
 
 async function loadCustomUsers() {
   if (!session.value) return;
+  const ch = session.value.channel;
   try {
-    const res = await fetch(`${API}/users/${session.value.channel}`, {
+    const res = await fetch(`${API}/users/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) return;
     const data = (await res.json()) as { users: CustomUserRow[] };
+    if (session.value?.channel !== ch) return;
     customUsers.value = data.users ?? [];
   } catch {}
 }

@@ -193,10 +193,11 @@ watch(viewChannel, (newCh, oldCh) => {
 
 async function fetchActivity() {
   if (!session.value) return;
+  const target = viewChannel.value;
   loading.value = true;
   error.value = "";
   try {
-    if (viewChannel.value === ALL_CHANNELS) {
+    if (target === ALL_CHANNELS) {
       const all = availableChannels.value.length
         ? availableChannels.value
         : [session.value.channel];
@@ -213,20 +214,24 @@ async function fetchActivity() {
             .catch(() => ({ activity: [] as ActivityEntry[] })),
         ),
       );
+      // >>> selection changed again while this was in flight - discard
+      if (viewChannel.value !== target) return;
       const merged = results.flatMap((r) => r.activity);
       merged.sort((a, b) => b.timestamp - a.timestamp);
       activity.value = merged.slice(0, 200);
     } else {
-      const res = await fetch(`${API}/activity/${viewChannel.value}?limit=80`, {
+      const res = await fetch(`${API}/activity/${target}?limit=80`, {
         headers: { Authorization: `Bearer ${session.value.token}` },
       });
       if (!res.ok) throw new Error();
       const data = (await res.json()) as { activity: ActivityEntry[] };
+      if (viewChannel.value !== target) return;
       activity.value = data.activity;
     }
   } catch {
-    error.value = "Could not load activity.";
+    if (viewChannel.value === target) error.value = "Could not load activity.";
   }
+  if (viewChannel.value !== target) return;
   loading.value = false;
   // >>> collapse all days except today
   const today = fmtDate(Date.now());

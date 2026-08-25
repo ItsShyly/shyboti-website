@@ -65,15 +65,19 @@ const widgetUrl = (id: string) => `https://obs.shyboti.de/${id}`;
 
 async function load() {
   if (!session.value) return;
+  const ch = session.value.channel;
   loading.value = true;
   try {
-    const res = await fetch(`${API}/obs-widgets/${session.value.channel}`, {
+    const res = await fetch(`${API}/obs-widgets/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
-    if (res.ok)
-      widgets.value = ((await res.json()) as { widgets: Widget[] }).widgets;
+    if (res.ok) {
+      const d = (await res.json()) as { widgets: Widget[] };
+      if (session.value?.channel !== ch) return;
+      widgets.value = d.widgets;
+    }
   } catch { }
-  loading.value = false;
+  if (session.value?.channel === ch) loading.value = false;
 }
 
 function openNew() {

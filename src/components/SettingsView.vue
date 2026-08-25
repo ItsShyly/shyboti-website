@@ -75,18 +75,22 @@ function resetAllHiddenInfos() {
 
 async function load() {
   if (!session.value) return;
+  const ch = session.value.channel;
   isBroadcaster.value = session.value.login === session.value.channel;
   const headers = { Authorization: `Bearer ${session.value.token}` };
   try {
     const [sRes, oRes, nhRes] = await Promise.all([
-      fetch(`${API}/settings/${session.value.channel}`, { headers }),
+      fetch(`${API}/settings/${ch}`, { headers }),
       fetch(`${API}/log-optout`, { headers }),
       fetch(`${API}/name-history-optout`, { headers }),
     ]);
     if (sRes.ok) {
       const d = await sRes.json();
-      prefix.value = d.prefix ?? d.settings?.prefix ?? "+";
-      vanishHide.value = d.hide_vanish_timeouts ?? false;
+      // >>> channel switched again while this was in flight - discard
+      if (session.value?.channel === ch) {
+        prefix.value = d.prefix ?? d.settings?.prefix ?? "+";
+        vanishHide.value = d.hide_vanish_timeouts ?? false;
+      }
     }
     if (oRes.ok) {
       const d = await oRes.json();
@@ -101,14 +105,19 @@ async function load() {
 
 async function load7tvSet() {
   if (!session.value) return;
+  const ch = session.value.channel;
   emoteSetLoading.value = true;
   try {
-    const res = await fetch(`${API}/settings/7tv/${session.value.channel}`, {
+    const res = await fetch(`${API}/settings/7tv/${ch}`, {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
-    if (res.ok) emoteSet.value = await res.json();
+    if (res.ok) {
+      const d = await res.json();
+      if (session.value?.channel !== ch) return;
+      emoteSet.value = d;
+    }
   } catch { }
-  emoteSetLoading.value = false;
+  if (session.value?.channel === ch) emoteSetLoading.value = false;
 }
 
 async function loadAll() {
