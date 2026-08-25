@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import TypeaheadInput from "./shared/TypeaheadInput.vue";
 
 const { session, channelRole, adminMode } = useAuth();
 const { t } = useI18n();
@@ -524,33 +525,12 @@ async function saveActions() {
   }
 }
 
-// >>> command name picker for the run-command action - type-ahead like the top search bar
-const openPickerIndex = ref<number | null>(null);
-
-function commandMatches(query: string): string[] {
-  const q = query.trim().toLowerCase().replace(/^\+/, "");
-  const list = q
-    ? commandNames.value.filter((n) => n.includes(q))
-    : commandNames.value;
-  return list.slice(0, 30);
-}
-
-function openPicker(i: number) {
-  openPickerIndex.value = i;
-}
-
-// >>> small delay so a click on a result fires before the input's blur closes it
-function closePickerSoon() {
-  setTimeout(() => (openPickerIndex.value = null), 150);
-}
-
-function pickCommand(a: RewardAction, name: string) {
-  a.command = name;
+// >>> picking a command from the typeahead auto-fills args if still empty
+function onCommandSelected(a: RewardAction) {
   if (!a.args.trim()) a.args = "{user}";
-  openPickerIndex.value = null;
 }
 
-// >>> "+so @user" style preview - {user}/{input}/{display} shown as example values
+// >>> "+shoutout @user" style preview - {user}/{input}/{display} shown as example values
 function previewCommand(a: RewardAction): string {
   if (!a.command.trim()) return "";
   const args = a.args
@@ -855,20 +835,10 @@ function previewCommand(a: RewardAction): string {
               </div>
 
               <template v-if="a.type === 'run_command'">
-                <div class="ep-field-group cp-cmd-wrap">
+                <div class="ep-field-group">
                   <label class="ep-field-label">{{ t("cp.actions.command") }}</label>
-                  <div class="cp-cmd-input-wrap">
-                    <span class="cp-cmd-icon" v-html="iconSvgFor('search')"></span>
-                    <input v-model="a.command" class="ep-field-input cp-cmd-input"
-                      :placeholder="t('cp.actions.command_ph')" @focus="openPicker(i)"
-                      @input="openPicker(i)" @blur="closePickerSoon" />
-                  </div>
-                  <div v-if="openPickerIndex === i && commandMatches(a.command).length" class="cp-cmd-results">
-                    <button v-for="name in commandMatches(a.command)" :key="name" class="cp-cmd-result-item"
-                      @mousedown.prevent="pickCommand(a, name)">
-                      {{ channelPrefix }}{{ name }}
-                    </button>
-                  </div>
+                  <TypeaheadInput v-model="a.command" :items="commandNames"
+                    :placeholder="t('cp.actions.command_ph')" @select="onCommandSelected(a)" />
                 </div>
                 <div v-if="a.command.trim()" class="ep-field-group">
                   <label class="ep-field-label">{{ t("cp.actions.args") }}
@@ -947,12 +917,22 @@ function previewCommand(a: RewardAction): string {
   margin-top: 2px;
 }
 
-/* >>> ep-view is height:100% - without its own scroll, a long reward list
-   overflows the page box and renders under the site footer */
+/* >>> flex items default to min-height:auto, which refuses to shrink below
+   content - that let this page grow past main-panel and scroll past the
+   footer instead of scrolling internally. Both overrides are needed. */
+.ep-view {
+  min-height: 0;
+}
+
 .cp-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.cp-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .cp-row {
@@ -1154,63 +1134,6 @@ function previewCommand(a: RewardAction): string {
 .cp-add-action-btn {
   width: 100%;
   margin-top: 4px;
-}
-
-/* >>> mirrors App.vue's top search bar look, scoped locally here */
-.cp-cmd-wrap {
-  position: relative;
-}
-
-.cp-cmd-input-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.cp-cmd-icon {
-  position: absolute;
-  left: 9px;
-  width: 13px;
-  height: 13px;
-  color: #555;
-  pointer-events: none;
-  display: inline-flex;
-}
-
-.cp-cmd-input {
-  padding-left: 30px !important;
-}
-
-.cp-cmd-results {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: #1a1a1e;
-  border: 1px solid #2a2a30;
-  z-index: 20;
-  max-height: 220px;
-  overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
-}
-
-.cp-cmd-result-item {
-  display: block;
-  width: 100%;
-  padding: 7px 12px;
-  border: none;
-  background: transparent;
-  color: #ccc;
-  font-family: inherit;
-  font-size: 12px;
-  text-align: left;
-  cursor: pointer;
-  transition: background 0.1s;
-}
-
-.cp-cmd-result-item:hover {
-  background: #6f2bff18;
-  color: #e0e0e0;
 }
 
 .cp-cmd-preview {
