@@ -679,6 +679,7 @@ async function saveActions() {
             <ChannelPointActionsEditor v-if="!isNew && editTab === 'actions'" :actions="actionsList"
               :refund-on-failure="refundOnFailure" :always-refund="alwaysRefund" :manageable="true"
               :needs-input-warning="needsInputWarning" :command-names="commandNames" :channel-prefix="channelPrefix"
+              :reward-options="botRewards.map((r) => ({ id: r.id, title: r.title }))"
               @update:refund-on-failure="refundOnFailure = $event" @update:always-refund="alwaysRefund = $event" />
 
             <template v-else>
@@ -818,6 +819,7 @@ async function saveActions() {
             <ChannelPointActionsEditor :actions="actionsList" :refund-on-failure="refundOnFailure"
               :always-refund="alwaysRefund" :manageable="!!actionsReward?.manageable"
               :needs-input-warning="needsInputWarning" :command-names="commandNames" :channel-prefix="channelPrefix"
+              :reward-options="botRewards.map((r) => ({ id: r.id, title: r.title }))"
               @update:refund-on-failure="refundOnFailure = $event" @update:always-refund="alwaysRefund = $event" />
 
           </div>

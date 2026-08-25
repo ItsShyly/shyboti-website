@@ -20,6 +20,7 @@ import { useOverlayClose } from "../composables/useOverlayClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
+import TypeaheadInput from "./shared/TypeaheadInput.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
@@ -66,6 +67,11 @@ interface Trigger {
   condition: string;
   cooldown_sec: number;
   is_active: number;
+  event_reward_id: string;
+  action_reward_id: string;
+  action_reward_state: string;
+  linked_command: string;
+  action_extra: string;
 }
 
 const triggers = ref<Trigger[]>([]);
@@ -73,6 +79,53 @@ const loading = ref(false);
 const saving = ref<string | null>(null);
 const error = ref("");
 const success = ref("");
+
+// >>> bot-created rewards, for the Channel Point Reward event/action pickers -
+// >>> only bot-created ones can actually be toggled/watched via the api
+const rewardOptions = ref<{ id: string; title: string }[]>([]);
+const rewardTitleById = computed(() =>
+  Object.fromEntries(rewardOptions.value.map((r) => [r.id, r.title])),
+);
+async function loadRewards() {
+  if (!session.value) return;
+  try {
+    const res = await fetch(`${API}/channelpoints/${session.value.channel}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    rewardOptions.value = (data.rewards ?? [])
+      .filter((r: any) => r.manageable)
+      .map((r: any) => ({ id: r.id, title: r.title }));
+  } catch {
+    rewardOptions.value = [];
+  }
+}
+
+// >>> combined builtin + custom command names, for the run/create-command pickers
+const commandNames = ref<string[]>([]);
+async function loadCommandNames() {
+  if (!session.value) return;
+  try {
+    const h = { Authorization: `Bearer ${session.value.token}` };
+    const [builtinRes, customRes] = await Promise.all([
+      fetch(`${API}/commands/${session.value.channel}`, { headers: h }),
+      fetch(`${API}/custom-commands/${session.value.channel}`, { headers: h }),
+    ]);
+    const names = new Set<string>();
+    if (builtinRes.ok) {
+      const d = await builtinRes.json();
+      for (const c of d.commands ?? []) if (c?.name) names.add(c.name);
+    }
+    if (customRes.ok) {
+      const d = await customRes.json();
+      for (const c of d.commands ?? []) if (c?.name) names.add(c.name);
+    }
+    commandNames.value = [...names].sort();
+  } catch {
+    commandNames.value = [];
+  }
+}
 
 const editOpen = ref(false);
 const isNew = ref(false);
@@ -91,6 +144,11 @@ const editTrigger = ref<Partial<Trigger> & { name: string }>({
   condition: "",
   cooldown_sec: 30,
   is_active: 1,
+  event_reward_id: "",
+  action_reward_id: "",
+  action_reward_state: "activate",
+  linked_command: "",
+  action_extra: "",
 });
 
 // >>> static, not translated on purpose
@@ -118,6 +176,16 @@ const EVENT_TYPES = [
     label: "Schedule",
     hint: "At a specific time (cron-like)",
   },
+  {
+    value: "category",
+    label: "Category",
+    hint: "Stream category/game changed",
+  },
+  {
+    value: "channel_point_reward",
+    label: "Channel Point Reward",
+    hint: "A specific reward gets redeemed",
+  },
 ];
 
 const MATCH_TYPES = [
@@ -136,6 +204,9 @@ const ACTION_TYPES = [
   { value: "ban", label: "Ban user" },
   { value: "mod", label: "Mod user" },
   { value: "shoutout", label: "Shoutout" },
+  { value: "run_command", label: "Run a command" },
+  { value: "create_command", label: "Create a command" },
+  { value: "channel_point_reward", label: "Channel Point Reward" },
 ];
 
 function showSuccess(msg: string) {
@@ -176,6 +247,11 @@ function openNew() {
     condition: "",
     cooldown_sec: 30,
     is_active: 1,
+    event_reward_id: "",
+    action_reward_id: "",
+    action_reward_state: "activate",
+    linked_command: "",
+    action_extra: "",
   };
   editOpen.value = true;
   setTimeout(() => {
@@ -212,8 +288,23 @@ async function saveTrigger() {
   if (!session.value) return;
   const missing: string[] = [];
   if (!editTrigger.value.name?.trim()) missing.push(t("trigger.field.name"));
-  if (!editTrigger.value.response?.trim() && editTrigger.value.action_type !== "shoutout")
+  const responseOptional = [
+    "shoutout",
+    "channel_point_reward",
+    "create_command",
+  ].includes(editTrigger.value.action_type ?? "");
+  if (!editTrigger.value.response?.trim() && !responseOptional)
     missing.push(t("trigger.field.response"));
+  if (
+    editTrigger.value.action_type === "channel_point_reward" &&
+    !editTrigger.value.action_reward_id
+  )
+    missing.push(t("trigger.field.reward"));
+  if (
+    editTrigger.value.event_type === "channel_point_reward" &&
+    !editTrigger.value.event_reward_id
+  )
+    missing.push(t("trigger.field.reward"));
   if (missing.length) {
     error.value = t("edit.missing_fields") + missing.join(", ");
     return;
@@ -445,12 +536,16 @@ async function runSync() {
 onMounted(() => {
   load();
   fetchSync();
+  loadRewards();
+  loadCommandNames();
 });
 watch(
   () => session.value?.channel,
   () => {
     load();
     fetchSync();
+    loadRewards();
+    loadCommandNames();
   },
 );
 
@@ -560,8 +655,11 @@ defineExpose({
           <button class="ep-switch" :class="{ on: trigger.is_active, off: !trigger.is_active, disabled: !canToggle }"
             @click="canToggle && toggleActive(trigger)"><span class="ep-switch-knob"></span></button>
         </div>
-        <div class="trigger-info" @click="openEdit(trigger)">
-          <div class="trigger-name">{{ trigger.name }}</div>
+        <div class="trigger-info" @click="!trigger.linked_command && openEdit(trigger)">
+          <div v-if="trigger.linked_command" class="trigger-name">
+            <span class="ep-meta-pill linked-command"><span v-html="iconSvgFor('link')"></span> +{{ trigger.linked_command }}</span>
+          </div>
+          <div v-else class="trigger-name">{{ trigger.name }}</div>
           <div class="trigger-meta">
             <span class="ep-meta-pill event">{{
               eventLabel(trigger.event_type)
@@ -579,7 +677,10 @@ defineExpose({
             }}{{ trigger.response.length > 80 ? "…" : "" }}
           </div>
         </div>
-        <div class="ep-row-actions">
+        <div v-if="trigger.linked_command" class="ep-row-actions">
+          <span class="ep-field-hint">{{ t("trigger.edit_via_command") }}</span>
+        </div>
+        <div v-else class="ep-row-actions">
           <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(trigger)" :class="{ disabled: !canEdit }">
             {{ canEdit ? t("trigger.edit") : t("trigger.view") }}
           </button>
@@ -637,6 +738,13 @@ defineExpose({
               </div>
             </div>
 
+            <div v-if="editTrigger.event_type === 'channel_point_reward'" class="ep-field-group">
+              <label class="ep-field-label">{{ t("trigger.field.reward") }}</label>
+              <TypeaheadInput :model-value="rewardTitleById[editTrigger.event_reward_id ?? ''] ?? ''"
+                :items="rewardOptions.map((r) => r.title)" placeholder="pick a bot-created reward"
+                @select="(item: any) => (editTrigger.event_reward_id = rewardOptions.find((r) => r.title === item.label)?.id ?? '')" />
+            </div>
+
             <div class="ep-field-group">
               <label class="ep-field-label">{{
                 t("trigger.field.action")
@@ -649,7 +757,54 @@ defineExpose({
               </div>
             </div>
 
-            <div class="ep-field-group">
+            <template v-if="editTrigger.action_type === 'channel_point_reward'">
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.reward") }}</label>
+                <TypeaheadInput :model-value="rewardTitleById[editTrigger.action_reward_id ?? ''] ?? ''"
+                  :items="rewardOptions.map((r) => r.title)" placeholder="pick a bot-created reward"
+                  @select="(item: any) => (editTrigger.action_reward_id = rewardOptions.find((r) => r.title === item.label)?.id ?? '')" />
+              </div>
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.reward_state") }}</label>
+                <div class="action-grid">
+                  <button class="action-btn" :class="{ active: editTrigger.action_reward_state === 'activate' }"
+                    @click="editTrigger.action_reward_state = 'activate'">{{ t("trigger.reward_state.activate") }}</button>
+                  <button class="action-btn" :class="{ active: editTrigger.action_reward_state === 'deactivate' }"
+                    @click="editTrigger.action_reward_state = 'deactivate'">{{ t("trigger.reward_state.deactivate") }}</button>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="editTrigger.action_type === 'run_command'">
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.command") }}</label>
+                <TypeaheadInput :model-value="editTrigger.response ?? ''" :items="commandNames" placeholder="shoutout"
+                  @update:model-value="(v: string) => (editTrigger.response = v)" />
+              </div>
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.args") }}
+                  <span class="ep-field-hint">{{ t("trigger.field.placeholder_hint") }}</span>
+                </label>
+                <input v-model="editTrigger.action_extra" class="ep-field-input" />
+              </div>
+            </template>
+
+            <template v-else-if="editTrigger.action_type === 'create_command'">
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.command_name") }}
+                  <span class="ep-field-hint">{{ t("trigger.field.placeholder_hint") }}</span>
+                </label>
+                <input v-model="editTrigger.action_extra" class="ep-field-input" placeholder="{user}" />
+              </div>
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.command_response") }}
+                  <span class="ep-field-hint">{{ t("trigger.field.placeholder_hint") }}</span>
+                </label>
+                <input v-model="editTrigger.response" class="ep-field-input" placeholder="{input}" />
+              </div>
+            </template>
+
+            <div v-else class="ep-field-group">
               <label class="ep-field-label">
                 {{
                   editTrigger.action_type === "say"
@@ -821,6 +976,13 @@ defineExpose({
   color: #4ec9b0;
   border-color: #4ec9b044;
   background: #4ec9b011;
+}
+
+.ep-meta-pill.linked-command {
+  color: #9d6cff;
+  border-color: #9d6cff44;
+  background: #9d6cff11;
+  font-family: monospace;
 }
 
 .ep-meta-pill.cd {

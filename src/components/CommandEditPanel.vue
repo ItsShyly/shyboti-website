@@ -153,6 +153,81 @@ async function removeAlias(alias: string) {
 }
 // ^^^ built-in aliases + flags reference ^^^
 
+// vvv keywords - natural-language phrases that run this command, just triggers under the hood vvv
+interface KeywordTrigger { name: string; match_type: string; match_pattern: string; is_active: number }
+const keywords = ref<KeywordTrigger[]>([])
+const keywordSaving = ref(false)
+const keywordError = ref('')
+const newKeywordPattern = ref('')
+const newKeywordMatchType = ref('contains')
+const KEYWORD_MATCH_TYPES = [
+  { value: 'contains', label: 'contains' },
+  { value: 'exact', label: 'exact match' },
+  { value: 'starts', label: 'starts with' },
+  { value: 'ends', label: 'ends with' },
+  { value: 'regex', label: 'regex' },
+]
+
+async function loadKeywords() {
+  if (!session.value || !props.cmdName) return
+  try {
+    const res = await fetch(`${API}/triggers/${props.channel}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    if (!res.ok) return
+    const data = await res.json() as { triggers: KeywordTrigger[] }
+    keywords.value = data.triggers.filter((tr: any) => tr.linked_command === props.cmdName)
+  } catch {
+    keywords.value = []
+  }
+}
+
+async function addKeyword() {
+  if (!session.value || !props.cmdName) return
+  const pattern = newKeywordPattern.value.trim()
+  if (!pattern) return
+  keywordSaving.value = true
+  keywordError.value = ''
+  try {
+    const slug = props.cmdName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+    const genName = `kw-${slug}-${Math.random().toString(36).slice(2, 7)}`
+    const res = await fetch(`${API}/triggers/${props.channel}/${genName}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({
+        event_type: 'message',
+        match_type: newKeywordMatchType.value,
+        match_pattern: pattern,
+        action_type: 'run_command',
+        response: props.cmdName,
+        linked_command: props.cmdName,
+        cooldown_sec: 0,
+        is_active: 1,
+      })
+    })
+    if (!res.ok) throw new Error()
+    newKeywordPattern.value = ''
+    await loadKeywords()
+  } catch {
+    keywordError.value = t('edit.keyword_error')
+  }
+  keywordSaving.value = false
+}
+
+async function removeKeyword(name: string) {
+  if (!session.value) return
+  keywordSaving.value = true
+  try {
+    await fetch(`${API}/triggers/${props.channel}/${name}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${session.value.token}` }
+    })
+    await loadKeywords()
+  } catch { }
+  keywordSaving.value = false
+}
+// ^^^ keywords ^^^
+
 function addParam(type: 'text' | 'regex') {
   const prefix = type === 'regex' ? 'regex' : 'text'
   const existing = userParams.value.filter(p => p.type === type).map(p => p.key)
@@ -216,6 +291,7 @@ async function load() {
       }
       await loadAliases()
     }
+    await loadKeywords()
   } catch { }
   loading.value = false
 
@@ -361,7 +437,7 @@ onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 // ^^^ close confirm + shortcuts ^^^
 // >>> unlocks aliases right after the first save of a new command, no full reload
-watch(() => props.cmdName, (name, old) => { if (name && !old && props.open) loadAliases() })
+watch(() => props.cmdName, (name, old) => { if (name && !old && props.open) { loadAliases(); loadKeywords() } })
 
 watch(() => form.value.response, (src) => {
   if (props.isBuiltIn) return
@@ -900,6 +976,34 @@ function onNormalKeydown(e: KeyboardEvent) {
                   </span>
                 </div>
                 <div v-if="aliasError" class="alias-error">{{ aliasError }}</div>
+              </template>
+            </div>
+
+            <!-- >>> keywords - natural phrases that run this command without the prefix -->
+            <div class="ep-field-group">
+              <label class="ep-field-label">{{ t('edit.keywords') }} <span class="ep-field-hint">{{ t('edit.keywords_hint') }}</span></label>
+              <div v-if="aliasesNeedSave" class="arg-descs-empty">
+                {{ t('edit.aliases_save_first') }}
+              </div>
+              <template v-else>
+                <div class="alias-add-row">
+                  <select v-model="newKeywordMatchType" class="ep-field-select match-type">
+                    <option v-for="m in KEYWORD_MATCH_TYPES" :key="m.value" :value="m.value">{{ m.label }}</option>
+                  </select>
+                  <input v-model="newKeywordPattern" class="ep-field-input alias-add-input" :placeholder="t('edit.keywords_placeholder')"
+                    @keydown.enter="addKeyword" />
+                  <button class="arg-add-btn" type="button" :disabled="keywordSaving || !newKeywordPattern.trim()" @click="addKeyword">
+                    {{ t('edit.aliases_add') }}
+                  </button>
+                </div>
+                <div v-if="!keywords.length" class="arg-descs-empty">{{ t('edit.keywords_empty') }}</div>
+                <div v-else class="alias-chip-list">
+                  <span v-for="k in keywords" :key="k.name" class="alias-chip">
+                    {{ k.match_type }}: "{{ k.match_pattern }}"
+                    <button class="alias-chip-remove" type="button" :disabled="keywordSaving" @click="removeKeyword(k.name)" v-html="iconSvgFor('x')"></button>
+                  </span>
+                </div>
+                <div v-if="keywordError" class="alias-error">{{ keywordError }}</div>
               </template>
             </div>
           </template>

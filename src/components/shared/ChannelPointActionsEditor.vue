@@ -20,6 +20,7 @@ const props = defineProps<{
   needsInputWarning: boolean;
   commandNames: string[];
   channelPrefix: string;
+  rewardOptions: { id: string; title: string }[];
 }>();
 const emit = defineEmits<{
   (e: "update:refundOnFailure", v: boolean): void;
@@ -79,6 +80,12 @@ function onCommandSelected(a: RewardAction) {
           <option value="create_command">{{ t("cp.actions.type.create_command") }}</option>
           <option value="timeout_self">{{ t("cp.actions.type.timeout_self") }}</option>
           <option value="timeout_input_user">{{ t("cp.actions.type.timeout_input_user") }}</option>
+          <option value="say">{{ t("cp.actions.type.say") }}</option>
+          <option value="ban">{{ t("cp.actions.type.ban") }}</option>
+          <option value="shoutout">{{ t("cp.actions.type.shoutout") }}</option>
+          <option value="set_title">{{ t("cp.actions.type.set_title") }}</option>
+          <option value="set_category">{{ t("cp.actions.type.set_category") }}</option>
+          <option value="channel_point_reward">{{ t("cp.actions.type.channel_point_reward") }}</option>
         </select>
         <button class="ep-btn-action del" @click="removeAction(i)" v-html="iconSvgFor('trash')"></button>
       </div>
@@ -113,10 +120,44 @@ function onCommandSelected(a: RewardAction) {
         </div>
       </template>
 
-      <template v-else>
+      <template v-else-if="a.type === 'timeout_self' || a.type === 'timeout_input_user'">
         <div class="ep-field-group">
           <label class="ep-field-label">{{ t("cp.actions.seconds") }}</label>
           <input v-model.number="a.seconds" type="number" min="1" max="1209600" class="ep-field-input" />
+        </div>
+      </template>
+
+      <template v-else-if="a.type === 'say' || a.type === 'set_title' || a.type === 'set_category'">
+        <div class="ep-field-group">
+          <label class="ep-field-label">{{ t(`cp.actions.field.${a.type}`) }}
+            <span class="ep-field-hint">{{ t("cp.actions.response_hint") }}</span>
+          </label>
+          <input v-model="a.response" class="ep-field-input" />
+        </div>
+      </template>
+
+      <template v-else-if="a.type === 'shoutout'">
+        <div class="ep-field-group">
+          <label class="ep-field-label">{{ t("cp.actions.response") }}
+            <span class="ep-field-hint">{{ t("cp.actions.shoutout_hint") }}</span>
+          </label>
+          <input v-model="a.response" class="ep-field-input" />
+        </div>
+      </template>
+
+      <template v-else-if="a.type === 'channel_point_reward'">
+        <div class="ep-field-group">
+          <label class="ep-field-label">{{ t("cp.actions.reward") }}</label>
+          <TypeaheadInput :model-value="rewardOptions.find((r) => r.id === a.rewardId)?.title ?? ''"
+            :items="rewardOptions.map((r) => r.title)" placeholder="pick a bot-created reward"
+            @select="(item: any) => (a.rewardId = rewardOptions.find((r) => r.title === item.label)?.id ?? '')" />
+        </div>
+        <div class="ep-field-group">
+          <label class="ep-field-label">{{ t("cp.actions.reward_state") }}</label>
+          <select v-model="a.rewardState" class="ep-field-select">
+            <option value="activate">{{ t("cp.actions.reward_state.activate") }}</option>
+            <option value="deactivate">{{ t("cp.actions.reward_state.deactivate") }}</option>
+          </select>
         </div>
       </template>
     </div>

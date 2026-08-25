@@ -1,9 +1,15 @@
-// >>> shared between TwitchView.vue and ChannelPointActionsEditor.vue
+// >>> shared between TwitchView.vue, ChannelPointActionsEditor.vue and TriggersView.vue
 export type ActionType =
   | "run_command"
   | "create_command"
   | "timeout_self"
-  | "timeout_input_user";
+  | "timeout_input_user"
+  | "say"
+  | "ban"
+  | "shoutout"
+  | "set_title"
+  | "set_category"
+  | "channel_point_reward";
 
 export interface RewardAction {
   type: ActionType;
@@ -12,6 +18,8 @@ export interface RewardAction {
   name: string;
   response: string;
   seconds: number;
+  rewardId: string;
+  rewardState: "activate" | "deactivate";
 }
 
 export function blankAction(): RewardAction {
@@ -22,6 +30,8 @@ export function blankAction(): RewardAction {
     name: "{user}",
     response: "{input}",
     seconds: 600,
+    rewardId: "",
+    rewardState: "activate",
   };
 }
 
