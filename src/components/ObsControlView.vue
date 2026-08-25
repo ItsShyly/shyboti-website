@@ -808,7 +808,12 @@ async function poll() {
       const d = (await res.json()) as AgentStatus;
       if (gen !== requestGen.value) return;
       const wasConnected = obsConnected.value;
+      const prevScreenshots = agentStatus.value?.screenshots;
       agentStatus.value = d;
+      // >>> shot loop only (re)starts from local actions
+      if (d.screenshots !== prevScreenshots || (d.screenshots && !shotTimer)) {
+        restartShotLoop();
+      }
       // >>> OBS offline → clear cached scene/source so stale warnings disappear
       if (wasConnected && !d.obs_connected) {
         scenes.value = [];
@@ -1801,7 +1806,7 @@ watch(
             <span class="obs-live-stat-label">bitrate</span>
             <span class="obs-live-stat-value">{{
               bitrateLabel ?? "not streaming"
-              }}</span>
+            }}</span>
           </div>
           <div class="obs-live-stat">
             <span class="obs-live-stat-label">preview size</span>
@@ -1946,7 +1951,7 @@ watch(
               <label class="ep-field-label">sources
                 <span v-if="selectedScene" class="ep-field-hint">{{
                   selectedScene
-                }}</span></label>
+                  }}</span></label>
               <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
                 @click="openAddSource" v-html="iconSvgFor('plus')"></button>
             </div>
@@ -1999,7 +2004,7 @@ watch(
             <label class="ep-field-label">audio mixer
               <span v-if="selectedScene" class="ep-field-hint">{{
                 selectedScene
-              }}</span></label>
+                }}</span></label>
             <div class="obs-mixer-list">
               <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
                 :class="{ pending: isSourcePending(src) }">
@@ -2224,7 +2229,7 @@ watch(
                     <div class="ep-switch-knob"></div>
                   </div>
                   <span class="ep-switch-label">{{ enabledLocal ? "Connection enabled" : "Connection disabled"
-                  }}</span>
+                    }}</span>
                 </div>
                 <div class="ep-field-hint">Turn off to reject all agent connections.</div>
               </div>
@@ -2238,13 +2243,13 @@ watch(
                     <div class="ep-switch-knob"></div>
                   </div>
                   <span class="ep-switch-label">{{ screenshotsLocal ? "Scene previews on" : "Scene previews off"
-                  }}</span>
+                    }}</span>
                 </div>
                 <div class="ep-field-hint">Periodic screenshots of each scene.</div>
                 <div v-if="screenshotsLocal" class="ep-interval-row">
                   <span class="ep-switch-label">Refresh every</span>
-                  <input v-model.number="screenshotIntervalLocal" type="number" min="1" max="60"
-                    class="ep-field-input" @change="saveSettings" />
+                  <input v-model.number="screenshotIntervalLocal" type="number" min="1" max="60" class="ep-field-input"
+                    @change="saveSettings" />
                   <span class="ep-switch-label">seconds (min 1)</span>
                 </div>
                 <div class="ep-field-hint">Only the broadcaster can change this.</div>
