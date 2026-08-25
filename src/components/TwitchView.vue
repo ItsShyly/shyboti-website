@@ -483,6 +483,43 @@ function closeActions() {
   actionsOpen.value = false;
 }
 
+// >>> these action types read the viewer's typed input - useless without it
+function actionNeedsInput(a: RewardAction): boolean {
+  if (a.type === "timeout_input_user") return true;
+  if (a.type === "run_command") return a.args.includes("{input}");
+  if (a.type === "create_command") return a.response.includes("{input}");
+  return false;
+}
+
+// >>> can't enable it via API for rewards twitch's own dashboard made
+const needsInputWarning = computed(() => {
+  const r = actionsReward.value;
+  if (!r || r.userInputRequired || r.manageable) return false;
+  return actionsList.value.some(actionNeedsInput);
+});
+
+// >>> auto-enables "require text input" on the reward itself once an action needs it
+async function ensureUserInputEnabled() {
+  const r = actionsReward.value;
+  if (!r || !r.manageable || r.userInputRequired || !session.value) return;
+  if (!actionsList.value.some(actionNeedsInput)) return;
+  try {
+    const res = await fetch(
+      `${API}/channelpoints/${session.value.channel}/${r.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.value.token}`,
+        },
+        body: JSON.stringify({ userInputRequired: true }),
+      },
+    );
+    if (res.ok) r.userInputRequired = true; // <<< same object ref as in rewards.value
+  } catch {}
+}
+watch(actionsList, ensureUserInputEnabled, { deep: true });
+
 function addAction() {
   actionsList.value.push(blankAction());
 }
@@ -819,6 +856,11 @@ function previewCommand(a: RewardAction): string {
               {{ t("cp.actions.refund_locked_hint") }}
             </div>
 
+            <div v-if="needsInputWarning" class="cp-input-warning">
+              <span v-html="iconSvgFor('alert-triangle')"></span>
+              <span>{{ t("cp.actions.need_input_warning") }}</span>
+            </div>
+
             <div v-if="!actionsLoading && !actionsList.length" class="ep-empty cp-actions-empty">
               {{ t("cp.actions.empty") }}
             </div>
@@ -1111,6 +1153,23 @@ function previewCommand(a: RewardAction): string {
 .cp-actions-empty {
   padding: 20px;
   margin-bottom: 12px;
+}
+
+.cp-input-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11px;
+  color: #e5c07b;
+  background: rgba(229, 192, 123, 0.08);
+  border-left: 2px solid #e5c07b;
+  padding: 8px 10px;
+  margin-bottom: 14px;
+}
+
+.cp-input-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .cp-action-card {
