@@ -42,6 +42,9 @@ const canManage = computed(
     channelRole.value?.role === "broadcaster" ||
     !!(session.value?.isAdmin && adminMode.value),
 );
+// >>> the copy-rewards endpoint is site-admin only (requireAdmin), not
+// >>> broadcaster-or-admin like the rest of this page
+const isSiteAdminMode = computed(() => !!(session.value?.isAdmin && adminMode.value));
 
 const rewards = ref<Reward[]>([]);
 // >>> two groups: ours (fully editable) vs made in twitch's own dashboard (view-only)
@@ -88,6 +91,49 @@ async function load() {
 
 onMounted(load);
 watch(() => session.value?.channel, load);
+
+// vvv admin: copy every twitch-created reward as a bot-created one vvv
+const copyingRewards = ref(false);
+const copyConfirm = ref(false);
+const copyResultMsg = ref("");
+
+function requestCopyRewards() {
+  if (!isSiteAdminMode.value || copyingRewards.value) return;
+  if (!copyConfirm.value) {
+    copyConfirm.value = true;
+    setTimeout(() => (copyConfirm.value = false), 3000);
+    return;
+  }
+  copyConfirm.value = false;
+  copyTwitchRewards();
+}
+
+async function copyTwitchRewards() {
+  if (!session.value) return;
+  copyingRewards.value = true;
+  copyResultMsg.value = "";
+  error.value = "";
+  try {
+    const res = await fetch(
+      `${API}/admin/channelpoints/${session.value.channel}/copy-twitch-rewards`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.value.token}` },
+      },
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      error.value = errMsg(data.error);
+    } else {
+      copyResultMsg.value = `Created ${data.created}/${data.total} reward(s).`;
+      await load();
+    }
+  } catch {
+    error.value = errMsg("request_failed");
+  }
+  copyingRewards.value = false;
+}
+// ^^^ admin: copy twitch rewards ^^^
 
 // >>> combined builtin + custom command names, for the run-command picker
 const commandNames = ref<string[]>([]);
@@ -808,6 +854,10 @@ async function saveActions() {
         <div class="ep-view-sub">{{ rewards.length }} {{ t("cp.tab") }}</div>
       </div>
       <div class="ep-view-header-right">
+        <button v-if="isSiteAdminMode" class="ep-btn-reload" :class="{ confirm: copyConfirm }"
+          :disabled="copyingRewards" :title="t('cp.admin.copy_rewards_hint')" @click="requestCopyRewards">
+          {{ copyingRewards ? "…" : copyConfirm ? t("cp.admin.copy_rewards_confirm") : t("cp.admin.copy_rewards") }}
+        </button>
         <button class="ep-btn-reload" title="Reload" @click="reload" v-html="iconSvgFor('refresh-cw')"></button>
         <button class="ep-btn-new" :disabled="!canManage" @click="openNew">
           + {{ t("cp.new") }}
@@ -816,6 +866,7 @@ async function saveActions() {
     </div>
 
     <div v-if="error" class="ep-toast error">{{ error }}</div>
+    <div v-if="copyResultMsg" class="ep-toast success">{{ copyResultMsg }}</div>
 
     <div class="ep-tabs">
       <button class="ep-tab" :class="{ active: activeTab === 'channelpoints' }">
@@ -1123,6 +1174,13 @@ async function saveActions() {
   color: #4ec9b0;
   border-color: #4ec9b044;
   background: #4ec9b011;
+}
+
+.ep-btn-reload.confirm {
+  border-color: #e5c07b;
+  background: rgba(229, 192, 123, 0.15);
+  color: #e5c07b;
+  font-weight: 700;
 }
 
 .cp-explain {
