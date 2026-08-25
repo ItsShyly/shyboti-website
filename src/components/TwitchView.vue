@@ -43,7 +43,10 @@ const saving = ref(false);
 const deleteConfirm = ref(false);
 
 function errMsg(code: string | undefined): string {
-  return t(`cp.error.${code ?? "request_failed"}`) || t("cp.error.request_failed");
+  const key = `cp.error.${code ?? "request_failed"}`;
+  const msg = t(key);
+  // >>> unknown backend error code - don't leak the raw key/message into the UI
+  return msg && msg !== key ? msg : t("cp.error.request_failed");
 }
 
 async function load() {
