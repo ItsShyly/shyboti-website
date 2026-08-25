@@ -200,7 +200,6 @@ async function addKeyword() {
         match_pattern: pattern,
         action_type: 'run_command',
         response: props.cmdName,
-        linked_command: props.cmdName,
         cooldown_sec: 0,
         is_active: 1,
       })
@@ -1166,6 +1165,8 @@ function onNormalKeydown(e: KeyboardEvent) {
   font-size: 11px;
   cursor: pointer;
   transition: background .15s;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .arg-add-btn:hover {
@@ -1230,6 +1231,12 @@ function onNormalKeydown(e: KeyboardEvent) {
   flex: 1;
   min-width: 0;
   max-width: 200px;
+}
+
+.alias-add-row .match-type {
+  width: 120px;
+  flex-shrink: 0;
+  height: 32px;
 }
 
 .alias-error {

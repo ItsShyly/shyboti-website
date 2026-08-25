@@ -284,8 +284,25 @@ function insertRefToken(token: string) {
   editTrigger.value.response = insertTokenAtCursor(el, token);
 }
 
+// >>> matches the server's own rule for what counts as a "keyword" trigger
+function isKeywordTrigger(): boolean {
+  return (
+    (editTrigger.value.event_type ?? "message") === "message" &&
+    editTrigger.value.action_type === "run_command"
+  );
+}
+
 async function saveTrigger() {
   if (!session.value) return;
+  // >>> keyword-style triggers don't need a name, one gets generated below
+  if (isKeywordTrigger() && !editTrigger.value.name?.trim()) {
+    const slug = (editTrigger.value.response ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+    editTrigger.value.name = `kw-${slug || "cmd"}-${Math.random().toString(36).slice(2, 7)}`;
+  }
   const missing: string[] = [];
   if (!editTrigger.value.name?.trim()) missing.push(t("trigger.field.name"));
   const responseOptional = [
@@ -655,7 +672,7 @@ defineExpose({
           <button class="ep-switch" :class="{ on: trigger.is_active, off: !trigger.is_active, disabled: !canToggle }"
             @click="canToggle && toggleActive(trigger)"><span class="ep-switch-knob"></span></button>
         </div>
-        <div class="trigger-info" @click="!trigger.linked_command && openEdit(trigger)">
+        <div class="trigger-info" @click="openEdit(trigger)">
           <div v-if="trigger.linked_command" class="trigger-name">
             <span class="ep-meta-pill linked-command"><span v-html="iconSvgFor('link')"></span> +{{ trigger.linked_command }}</span>
           </div>
@@ -677,10 +694,7 @@ defineExpose({
             }}{{ trigger.response.length > 80 ? "…" : "" }}
           </div>
         </div>
-        <div v-if="trigger.linked_command" class="ep-row-actions">
-          <span class="ep-field-hint">{{ t("trigger.edit_via_command") }}</span>
-        </div>
-        <div v-else class="ep-row-actions">
+        <div class="ep-row-actions">
           <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(trigger)" :class="{ disabled: !canEdit }">
             {{ canEdit ? t("trigger.edit") : t("trigger.view") }}
           </button>

@@ -443,7 +443,6 @@ const translations: Record<Locale, Record<string, string>> = {
     "trigger.when.offline": "Offline only",
     "trigger.sync.config": "Import",
     "trigger.edit": "Edit",
-    "trigger.edit_via_command": "Edit via the command's Keywords",
     "trigger.view": "View",
     "trigger.share.title": "Share trigger",
     "trigger.share.sub":
@@ -1473,7 +1472,6 @@ const translations: Record<Locale, Record<string, string>> = {
     "trigger.when.offline": "Nur offline",
     "trigger.sync.config": "Importieren",
     "trigger.edit": "Bearbeiten",
-    "trigger.edit_via_command": "Bearbeiten über die Keywords des Commands",
     "trigger.view": "Ansehen",
     "trigger.share.title": "Trigger teilen",
     "trigger.share.sub":
