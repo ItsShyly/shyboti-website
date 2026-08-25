@@ -61,6 +61,8 @@ function onCommandSelected(a: RewardAction) {
       {{ t("cp.actions.refund_locked_hint") }}
     </div>
 
+    <hr class="cp-divider" />
+
     <div v-if="needsInputWarning" class="cp-input-warning">
       <span v-html="iconSvgFor('alert-triangle')"></span>
       <span>{{ t("cp.actions.need_input_warning") }}</span>
@@ -142,6 +144,12 @@ function onCommandSelected(a: RewardAction) {
 .cp-refund-hint {
   color: #e5c07b;
   margin: -6px 0 14px;
+}
+
+.cp-divider {
+  border: none;
+  border-top: 1px solid #2a2a30;
+  margin: 4px 0 18px;
 }
 
 .cp-input-warning {
