@@ -43,6 +43,9 @@ const canDelete = computed(
 const canViewObs = computed(
   () => channelRole.value?.permissions?.obs_view ?? false,
 );
+const canExtras = computed(
+  () => channelRole.value?.permissions?.commands_extras ?? false,
+);
 
 interface Command {
   name: string;
@@ -200,6 +203,26 @@ async function loadKeywordTags() {
 }
 onMounted(loadKeywordTags);
 watch(() => session.value?.channel, loadKeywordTags);
+
+// >>> command name -> its aliases (channel-created + global), for row-list tags
+const aliasesByCommand = ref<Record<string, string[]>>({});
+async function loadAliasTags() {
+  if (!session.value) return;
+  const ch = session.value.channel;
+  try {
+    const res = await fetch(`${API}/command-aliases/${ch}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { aliases: Record<string, string[]> };
+    if (session.value?.channel !== ch) return;
+    aliasesByCommand.value = data.aliases ?? {};
+  } catch {
+    if (session.value?.channel === ch) aliasesByCommand.value = {};
+  }
+}
+onMounted(loadAliasTags);
+watch(() => session.value?.channel, loadAliasTags);
 
 async function saveExtras() {
   if (!session.value) return;
@@ -427,8 +450,6 @@ async function doDeleteObsBinding(kind: "scene" | "source" | "arg", key: string)
   }
   await saveObsBindings();
 }
-
-const isBroadcaster = computed(() => channelRole.value?.role === "broadcaster");
 
 // >>> separate expand-sets for default vs custom
 const expandedDefault = ref<Set<string>>(new Set());
@@ -1135,7 +1156,8 @@ onUnmounted(() => {
       <button class="ep-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">
         {{ t("cmd.title_custom") }}
       </button>
-      <button class="ep-tab" :class="{ active: activeTab === 'Extras' }" @click="activeTab = 'Extras'">
+      <button v-if="canExtras" class="ep-tab" :class="{ active: activeTab === 'Extras' }"
+        @click="activeTab = 'Extras'">
         {{ t("cmd.title_extras") }}
       </button>
       <button v-if="canViewObs" class="ep-tab" :class="{ active: activeTab === 'Obs' }" @click="activeTab = 'Obs'">
@@ -1217,9 +1239,13 @@ onUnmounted(() => {
                 </div>
                 <div class="cmd-desc">
                   <span class="cmd-desc-text">{{ cmdDesc(cmd) }}</span>
-                  <span v-if="cmd.argVariants?.length" class="ep-meta-pill cmd-args">{{ cmd.argVariants.length }} args</span>
+                  <span v-for="al in (aliasesByCommand[cmd.name] ?? []).slice(0, 3)" :key="al"
+                    class="ep-meta-pill cmd-alias-tag">{{ prefix }}{{ al }}</span>
+                  <span v-if="(aliasesByCommand[cmd.name]?.length ?? 0) > 3" class="ep-meta-pill cmd-alias-tag">
+                    +{{ aliasesByCommand[cmd.name]!.length - 3 }}
+                  </span>
                   <span v-for="kw in (keywordsByCommand[cmd.name] ?? []).slice(0, 3)" :key="kw"
-                    class="ep-meta-pill cmd-keyword">{{ kw }}</span>
+                    class="ep-meta-pill cmd-keyword"><span v-html="iconSvgFor('link')"></span> {{ kw }}</span>
                   <span v-if="(keywordsByCommand[cmd.name]?.length ?? 0) > 3" class="ep-meta-pill cmd-keyword">
                     +{{ keywordsByCommand[cmd.name]!.length - 3 }}
                   </span>
@@ -1368,13 +1394,17 @@ onUnmounted(() => {
                 </div>
                 <div class="cmd-name">
                   <span class="cmd-cat-dot" style="background: #9d6cff"></span>{{ prefix }}{{ cmd.name
-                  }}<span v-if="cmd.alias" class="cmd-alias">= {{ prefix }}{{ cmd.alias }}</span>
+                  }}
                 </div>
                 <div class="cmd-desc">
                   <span class="cmd-desc-text">{{ cmd.description }}</span>
-                  <span v-if="cmd.arg_descs?.length" class="ep-meta-pill cmd-args">{{ cmd.arg_descs.length }} args</span>
+                  <span v-for="al in (aliasesByCommand[cmd.name] ?? []).slice(0, 3)" :key="al"
+                    class="ep-meta-pill cmd-alias-tag">{{ prefix }}{{ al }}</span>
+                  <span v-if="(aliasesByCommand[cmd.name]?.length ?? 0) > 3" class="ep-meta-pill cmd-alias-tag">
+                    +{{ aliasesByCommand[cmd.name]!.length - 3 }}
+                  </span>
                   <span v-for="kw in (keywordsByCommand[cmd.name] ?? []).slice(0, 3)" :key="kw"
-                    class="ep-meta-pill cmd-keyword">{{ kw }}</span>
+                    class="ep-meta-pill cmd-keyword"><span v-html="iconSvgFor('link')"></span> {{ kw }}</span>
                   <span v-if="(keywordsByCommand[cmd.name]?.length ?? 0) > 3" class="ep-meta-pill cmd-keyword">
                     +{{ keywordsByCommand[cmd.name]!.length - 3 }}
                   </span>
@@ -1622,7 +1652,7 @@ onUnmounted(() => {
       <!-- ^^^ obs tab ^^^ -->
 
       <!-- vvv extras tab vvv -->
-      <template v-if="activeTab === 'Extras'">
+      <template v-if="activeTab === 'Extras' && canExtras">
         <div v-if="extrasLoading" class="state-msg">Loading…</div>
         <div v-else-if="!botPresent" class="state-msg">{{ t("cmd.no_bot") }}</div>
         <template v-else>
@@ -1631,9 +1661,9 @@ onUnmounted(() => {
             <div class="extras-row">
               <div class="ep-switch" :class="{
                 on: mentionEnabled && has7tvSet,
-                disabled: !isBroadcaster || !has7tvSet,
+                disabled: !canExtras || !has7tvSet,
               }" @click="
-                isBroadcaster &&
+                canExtras &&
                 has7tvSet &&
                 ((mentionEnabled = !mentionEnabled), saveExtras())
                 "><span class="ep-switch-knob"></span></div>
@@ -1650,9 +1680,9 @@ onUnmounted(() => {
             <div class="extras-row">
               <div class="ep-switch" :class="{
                 on: replyAllEnabled && has7tvSet && mentionEnabled,
-                disabled: !isBroadcaster || !has7tvSet || !mentionEnabled,
+                disabled: !canExtras || !has7tvSet || !mentionEnabled,
               }" @click="
-                isBroadcaster &&
+                canExtras &&
                 has7tvSet &&
                 mentionEnabled &&
                 ((replyAllEnabled = !replyAllEnabled), saveExtras())
@@ -1670,9 +1700,9 @@ onUnmounted(() => {
             <div class="extras-row">
               <div class="ep-switch" :class="{
                 on: mentionOnlyOffline && has7tvSet && mentionEnabled,
-                disabled: !isBroadcaster || !has7tvSet || !mentionEnabled,
+                disabled: !canExtras || !has7tvSet || !mentionEnabled,
               }" @click="
-                isBroadcaster &&
+                canExtras &&
                 has7tvSet &&
                 mentionEnabled &&
                 ((mentionOnlyOffline = !mentionOnlyOffline), saveExtras())
@@ -1694,9 +1724,9 @@ onUnmounted(() => {
             <div class="extras-row">
               <div class="ep-switch" :class="{
                 on: botOnlineOnly,
-                disabled: !isBroadcaster,
+                disabled: !canExtras,
               }" @click="
-                isBroadcaster &&
+                canExtras &&
                 ((botOnlineOnly = !botOnlineOnly), saveExtras())
                 "><span class="ep-switch-knob"></span></div>
               <div class="extras-info">
@@ -1708,9 +1738,6 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div v-if="!isBroadcaster" class="extras-readonly-note">
-            {{ t("cmd.extras.readonly") }}
-          </div>
         </template>
       </template>
       <!-- ^^^ extras tab ^^^ -->
@@ -2178,13 +2205,6 @@ onUnmounted(() => {
   gap: 6px;
 }
 
-.cmd-alias {
-  font-size: 11px;
-  color: #6f2bff;
-  font-weight: 400;
-  margin-left: 6px;
-}
-
 .cmd-desc {
   display: flex;
   align-items: center;
@@ -2203,15 +2223,16 @@ onUnmounted(() => {
   flex-shrink: 1;
 }
 
-.ep-meta-pill.cmd-args,
+.ep-meta-pill.cmd-alias-tag,
 .ep-meta-pill.cmd-keyword {
   flex-shrink: 0;
 }
 
-.ep-meta-pill.cmd-args {
+.ep-meta-pill.cmd-alias-tag {
   color: #c792ea;
   border-color: #c792ea44;
   background: #c792ea11;
+  font-family: monospace;
 }
 
 .ep-meta-pill.cmd-keyword {

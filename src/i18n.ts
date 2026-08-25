@@ -170,8 +170,6 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.extras.online_only_label": "Only active while live",
     "cmd.extras.online_only_desc":
       "When enabled, the bot ignores commands, triggers and mentions while the channel is offline. Moderation keeps running.",
-    "cmd.extras.readonly": "Only the broadcaster can change these settings.",
-
     "settings.7tv.title": "7TV Emote Set",
     "settings.7tv.sub":
       "Used for emote-based features like @shyboti replies and emote spam filters.",
@@ -744,6 +742,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.commands_mod": "Moderator Status",
     "perm.commands_mod.desc":
       "Counts as a moderator for mod-only chat commands.",
+    "perm.commands_extras": "Extras tab",
+    "perm.commands_extras.desc":
+      "View and change the Extras tab's settings (mentions, reply-all, 7TV emote set).",
     "perm.automations_view": "View",
     "perm.automations_view.desc": "See timers and triggers.",
     "perm.automations_toggle": "Toggle",
@@ -1203,9 +1204,6 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.extras.online_only_label": "Nur während Live aktiv",
     "cmd.extras.online_only_desc":
       "Wenn aktiviert, ignoriert der Bot Commands, Trigger und Erwähnungen, solange der Kanal offline ist. Moderation läuft weiterhin.",
-    "cmd.extras.readonly":
-      "Nur der Broadcaster kann diese Einstellungen ändern.",
-
     "settings.7tv.title": "7TV Emote-Set",
     "settings.7tv.sub":
       "Wird für Emote-Funktionen wie @shyboti-Antworten und Emote-Spam-Filter verwendet.",
@@ -1774,6 +1772,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.commands_delete.desc": "Eigene Commands dauerhaft löschen.",
     "perm.commands_mod": "Moderator-Status",
     "perm.commands_mod.desc": "Zählt als Moderator für nur-Mod Chat-Commands.",
+    "perm.commands_extras": "Extras-Tab",
+    "perm.commands_extras.desc":
+      "Einstellungen im Extras-Tab ansehen und ändern (Erwähnungen, Reply-All, 7TV-Emote-Set).",
     "perm.automations_view": "Anzeigen",
     "perm.automations_view.desc": "Timer und Trigger sehen.",
     "perm.automations_toggle": "Umschalten",

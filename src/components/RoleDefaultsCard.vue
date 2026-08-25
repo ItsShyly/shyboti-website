@@ -67,6 +67,7 @@ const PERM_GROUPS = computed(() => [
       { key: "commands_edit" as keyof Perms, label: t("perm.commands_edit"), desc: t("perm.commands_edit.desc") },
       { key: "commands_delete" as keyof Perms, label: t("perm.commands_delete"), desc: t("perm.commands_delete.desc") },
       { key: "commands_mod" as keyof Perms, label: t("perm.commands_mod"), desc: t("perm.commands_mod.desc") },
+      { key: "commands_extras" as keyof Perms, label: t("perm.commands_extras"), desc: t("perm.commands_extras.desc") },
     ],
   },
   {
@@ -102,6 +103,7 @@ const DEFAULT_MOD_PERMS: Perms = {
   commands_edit: false,
   commands_delete: false,
   commands_mod: true,
+  commands_extras: false,
   automations_view: true,
   automations_toggle: true,
   automations_edit: false,
