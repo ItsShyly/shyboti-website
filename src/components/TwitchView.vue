@@ -42,11 +42,13 @@ const error = ref("");
 const saving = ref(false);
 const deleteConfirm = ref(false);
 
-function errMsg(code: string | undefined): string {
+// >>> known codes get a friendly translation - unknown ones show twitch's own
+// >>> text (detail) instead of a useless generic message
+function errMsg(code: string | undefined, detail?: string): string {
   const key = `cp.error.${code ?? "request_failed"}`;
   const msg = t(key);
-  // >>> unknown backend error code - don't leak the raw key/message into the UI
-  return msg && msg !== key ? msg : t("cp.error.request_failed");
+  if (msg && msg !== key) return msg;
+  return detail || t("cp.error.request_failed");
 }
 
 async function load() {
@@ -108,7 +110,11 @@ function validateForm(): boolean {
     colorErrorMsg.value = t("cp.error.invalid_color");
     ok = false;
   }
-  if (!Number.isInteger(form.cost) || form.cost < 1) {
+  if (
+    !Number.isSafeInteger(form.cost) ||
+    form.cost < 1 ||
+    form.cost > 100_000_000
+  ) {
     costErrorMsg.value = t("cp.error.invalid_cost");
     ok = false;
   }
@@ -119,7 +125,7 @@ function validateForm(): boolean {
   if (limitsEnabled.value) {
     const { globalCooldown, maxRedemptionsPerStream, maxRedemptionsPerUserPerStream } = form;
     const badValue = (n: number, max: number) =>
-      !Number.isInteger(n) || n < 0 || n > max;
+      !Number.isSafeInteger(n) || n < 0 || n > max;
     if (
       badValue(globalCooldown, 604_800) ||
       badValue(maxRedemptionsPerStream, 1_000_000) ||
@@ -133,8 +139,8 @@ function validateForm(): boolean {
 }
 
 // >>> maps a backend error code to whichever field it's actually about
-function applyBackendError(code: string | undefined) {
-  const msg = errMsg(code);
+function applyBackendError(code: string | undefined, detail?: string) {
+  const msg = errMsg(code, detail);
   switch (code) {
     case "duplicate_title":
       nameErrorMsg.value = msg;
@@ -270,7 +276,7 @@ async function savePanel() {
     });
     const data = await res.json();
     if (!res.ok) {
-      applyBackendError(data.error);
+      applyBackendError(data.error, data.detail);
       return;
     }
     editOpen.value = false;
