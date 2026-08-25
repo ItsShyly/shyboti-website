@@ -731,9 +731,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.dashboard": "View Dashboard",
     "perm.dashboard.desc": "Access the activity feed and dashboard.",
     "perm.commands_view": "View",
-    "perm.commands_view.desc": "See the commands list.",
+    "perm.commands_view.desc": "See the commands list, including the Extras tab.",
     "perm.commands_toggle": "Toggle",
-    "perm.commands_toggle.desc": "Enable or disable commands.",
+    "perm.commands_toggle.desc": "Enable or disable commands, and change Extras-tab settings.",
     "perm.commands_edit": "Edit",
     "perm.commands_edit.desc":
       "Edit responses, cooldowns, and settings. Create new commands.",
@@ -1759,9 +1759,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.dashboard": "Dashboard anzeigen",
     "perm.dashboard.desc": "Zugriff auf den Aktivitätsfeed und das Dashboard.",
     "perm.commands_view": "Anzeigen",
-    "perm.commands_view.desc": "Die Command-Liste sehen.",
+    "perm.commands_view.desc": "Die Command-Liste sehen, inklusive Extras-Tab.",
     "perm.commands_toggle": "Umschalten",
-    "perm.commands_toggle.desc": "Commands aktivieren oder deaktivieren.",
+    "perm.commands_toggle.desc": "Commands aktivieren/deaktivieren und Extras-Tab-Einstellungen ändern.",
     "perm.commands_edit": "Bearbeiten",
     "perm.commands_edit.desc":
       "Antworten, Cooldowns und Einstellungen bearbeiten. Neue Commands erstellen.",

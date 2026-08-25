@@ -132,6 +132,7 @@ async function addAlias() {
     } else {
       newAliasName.value = ''
       await loadAliases()
+      emit('saved', props.cmdName)
     }
   } catch {
     aliasError.value = t('edit.alias_error')
@@ -148,6 +149,7 @@ async function removeAlias(alias: string) {
       headers: { Authorization: `Bearer ${session.value.token}` }
     })
     await loadAliases()
+    emit('saved', props.cmdName)
   } catch { }
   aliasSaving.value = false
 }
@@ -207,6 +209,7 @@ async function addKeyword() {
     if (!res.ok) throw new Error()
     newKeywordPattern.value = ''
     await loadKeywords()
+    emit('saved', props.cmdName)
   } catch {
     keywordError.value = t('edit.keyword_error')
   }
@@ -222,6 +225,7 @@ async function removeKeyword(name: string) {
       headers: { Authorization: `Bearer ${session.value.token}` }
     })
     await loadKeywords()
+    emit('saved', props.cmdName)
   } catch { }
   keywordSaving.value = false
 }

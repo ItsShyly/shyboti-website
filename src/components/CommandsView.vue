@@ -127,6 +127,8 @@ function onEditSaved(name: string) {
   editingCmd.value = name;
   fetchCommands();
   fetchCustomCommands();
+  loadKeywordTags();
+  loadAliasTags();
 }
 
 function startCreate() {
