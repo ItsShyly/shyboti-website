@@ -87,6 +87,7 @@ type NavItem =
   | "moderation"
   | "roles"
   | "automations"
+  | "twitch"
   | "uploads"
   | "tools"
   | "settings";
@@ -192,6 +193,19 @@ function buildStaticIndex(): SearchResult[] {
       category: "Page",
       icon: "dot",
       action: () => router.push("/automations"),
+    },
+    {
+      label: "Twitch",
+      category: "Page",
+      icon: "dot",
+      action: () => router.push("/twitch"),
+    },
+    {
+      label: "Channel Points",
+      category: "Page",
+      icon: "dot",
+      action: () => router.push("/twitch"),
+      sub: "Twitch → Channel Points",
     },
     {
       label: "Timers",
@@ -1029,6 +1043,11 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <button class="sidebar-btn" :class="{ active: activeRoute === 'automations', locked: !session }"
           @click="nav('automations')">
           {{ t("nav.automations") }}
+          <span v-if="!session" class="lock-icon" v-html="iconSvg('lock')"></span>
+        </button>
+        <button class="sidebar-btn" :class="{ active: activeRoute === 'twitch', locked: !session }"
+          @click="nav('twitch')">
+          {{ t("nav.twitch") }}
           <span v-if="!session" class="lock-icon" v-html="iconSvg('lock')"></span>
         </button>
         <button v-if="!session || channelRole?.role === 'broadcaster' || (session.isAdmin && adminMode)"

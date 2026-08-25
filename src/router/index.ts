@@ -86,6 +86,10 @@ const router = createRouter({
       path: "/automations",
       component: lazy(() => import("../components/AutomationsView.vue")),
     },
+    {
+      path: "/twitch",
+      component: lazy(() => import("../components/TwitchView.vue")),
+    },
     { path: "/timers", redirect: "/automations?tab=timers" },
     { path: "/triggers", redirect: "/automations?tab=triggers" },
     {
