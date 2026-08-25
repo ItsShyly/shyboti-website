@@ -130,6 +130,7 @@ async function loadCommandNames() {
 }
 
 const editOpen = ref(false);
+const editTab = ref<"settings" | "advanced">("settings");
 const isNew = ref(false);
 const editOrigName = ref(""); // <<< old name, needed to delete on rename
 const overlay = useOverlayClose();
@@ -199,16 +200,11 @@ const MATCH_TYPES = [
   { value: "regex", label: "regex" },
 ];
 
-// >>> non-empty gates the trigger's own is_active instead of firing an action
+// >>> "" fires once (normal path), "while_active" keeps the reward synced and
+// >>> reverts it when the category changes away
 const CATEGORY_MODES = [
-  { value: "", label: "trigger.gate.none" },
-  { value: "enable_on_change", label: "trigger.gate.enable_on_change" },
-  { value: "disable_on_change", label: "trigger.gate.disable_on_change" },
-  { value: "enable_while_active", label: "trigger.gate.enable_while_active" },
-  {
-    value: "disable_while_active",
-    label: "trigger.gate.disable_while_active",
-  },
+  { value: "", label: "trigger.gate.once" },
+  { value: "while_active", label: "trigger.gate.while_active" },
 ];
 
 async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
@@ -231,6 +227,21 @@ async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
     return [];
   }
 }
+
+// >>> stale mode would otherwise linger once the combo it applies to breaks
+watch(
+  () => [editTrigger.value.event_type, editTrigger.value.action_type],
+  () => {
+    if (
+      editTrigger.value.event_category_mode &&
+      !(
+        editTrigger.value.event_type === "category" &&
+        editTrigger.value.action_type === "channel_point_reward"
+      )
+    )
+      editTrigger.value.event_category_mode = "";
+  },
+);
 
 const ACTION_TYPES = [
   { value: "say", label: "Send message" },
@@ -269,6 +280,7 @@ async function load() {
 
 function openNew() {
   error.value = "";
+  editTab.value = "settings";
   isNew.value = true;
   editOrigName.value = "";
   editTrigger.value = {
@@ -298,6 +310,7 @@ function openNew() {
 
 function openEdit(trigger: Trigger) {
   error.value = "";
+  editTab.value = "settings";
   isNew.value = false;
   editOrigName.value = trigger.name;
   editTrigger.value = { ...trigger };
@@ -314,6 +327,16 @@ function onEditorInput() {
   applyScriptHighlight(el);
 }
 
+// >>> say/create_command swap to different DOM nodes, editorRef needs re-populating
+watch(
+  () => editTrigger.value.action_type,
+  () => {
+    nextTick(() => {
+      if (editorRef.value) setEditorContent(editorRef.value, editTrigger.value.response ?? "");
+    });
+  },
+);
+
 // >>> inserts token at editor cursor
 function insertRefToken(token: string) {
   const el = editorRef.value;
@@ -329,37 +352,73 @@ function isKeywordTrigger(): boolean {
   );
 }
 
-// >>> gate-mode category triggers toggle is_active, never fire an action
+// >>> "while_active" category+reward triggers auto-revert instead of firing once
 function isCategoryGate(): boolean {
   return (
     editTrigger.value.event_type === "category" &&
-    !!editTrigger.value.event_category_mode
+    editTrigger.value.action_type === "channel_point_reward" &&
+    editTrigger.value.event_category_mode === "while_active"
   );
+}
+
+// >>> trigger's own name is meaningless/auto-generated for these - hide the
+// >>> name input and show what it's actually tied to instead
+function isAutoNamed(): boolean {
+  return (
+    isKeywordTrigger() ||
+    editTrigger.value.action_type === "channel_point_reward" ||
+    editTrigger.value.event_type === "channel_point_reward"
+  );
+}
+
+// >>> chat-message triggers have no "redeemer input" - the match itself is the message
+function placeholderHint(): string {
+  return editTrigger.value.event_type === "message"
+    ? t("trigger.field.placeholder_hint_msg")
+    : t("trigger.field.placeholder_hint");
+}
+
+function autoNamedTagLabel(): string {
+  if (isKeywordTrigger()) return "+" + (editTrigger.value.response ?? "");
+  const rid =
+    editTrigger.value.action_reward_id || editTrigger.value.event_reward_id || "";
+  return rewardTitleById.value[rid] ?? t("trigger.field.reward");
 }
 
 async function saveTrigger() {
   if (!session.value) return;
-  // >>> keyword-style triggers don't need a name, one gets generated below
-  if (isKeywordTrigger() && !editTrigger.value.name?.trim()) {
-    const slug = (editTrigger.value.response ?? "")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-    editTrigger.value.name = `kw-${slug || "cmd"}-${Math.random().toString(36).slice(2, 7)}`;
+  // >>> auto-named triggers (keyword/reward-tied) don't need a name, generated below
+  if (isAutoNamed() && !editTrigger.value.name?.trim()) {
+    let base = "trig";
+    if (isKeywordTrigger()) {
+      const slug = (editTrigger.value.response ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      base = `kw-${slug || "cmd"}`;
+    } else {
+      const rid =
+        editTrigger.value.action_reward_id ||
+        editTrigger.value.event_reward_id ||
+        "";
+      const slug = (rewardTitleById.value[rid] ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      base = `cp-${slug || "reward"}`;
+    }
+    editTrigger.value.name = `${base}-${Math.random().toString(36).slice(2, 7)}`;
   }
   const missing: string[] = [];
   if (!editTrigger.value.name?.trim()) missing.push(t("trigger.field.name"));
-  const gate = isCategoryGate();
-  const responseOptional =
-    gate ||
-    ["shoutout", "channel_point_reward", "create_command"].includes(
-      editTrigger.value.action_type ?? "",
-    );
+  const responseOptional = ["shoutout", "channel_point_reward", "create_command"].includes(
+    editTrigger.value.action_type ?? "",
+  );
   if (!editTrigger.value.response?.trim() && !responseOptional)
     missing.push(t("trigger.field.response"));
   if (
-    !gate &&
     editTrigger.value.action_type === "channel_point_reward" &&
     !editTrigger.value.action_reward_id
   )
@@ -371,7 +430,6 @@ async function saveTrigger() {
     missing.push(t("trigger.field.reward"));
   if (
     editTrigger.value.event_type === "category" &&
-    editTrigger.value.event_category_mode &&
     !editTrigger.value.required_game?.trim()
   )
     missing.push(t("trigger.field.category"));
@@ -769,7 +827,12 @@ defineExpose({
             <div>
               <div class="ep-panel-title">
                 {{ isNew ? t("trigger.edit_new") : t("trigger.edit_title") }}
-                <EditableNameHeader v-model="editTrigger.name" :orig-name="editOrigName" placeholder="hype-train" />
+                <span v-if="isAutoNamed()" class="ep-meta-pill linked-command">
+                  <span v-html="iconSvgFor(isKeywordTrigger() ? 'link' : 'zap')"></span>
+                  {{ autoNamedTagLabel() }}
+                </span>
+                <EditableNameHeader v-else v-model="editTrigger.name" :orig-name="editOrigName"
+                  placeholder="hype-train" />
               </div>
               <div class="ep-panel-sub">#{{ session?.channel }}</div>
             </div>
@@ -778,6 +841,15 @@ defineExpose({
 
           <div class="ep-panel-body">
             <div v-if="error" class="ep-toast error">{{ error }}</div>
+
+            <div class="ep-tabs">
+              <button class="ep-tab" :class="{ active: editTab === 'settings' }"
+                @click="editTab = 'settings'">{{ t("edit.tab_response") }}</button>
+              <button class="ep-tab" :class="{ active: editTab === 'advanced' }"
+                @click="editTab = 'advanced'">{{ t("edit.tab_behavior") }}</button>
+            </div>
+
+            <template v-if="editTab === 'settings'">
             <div class="ep-field-group">
               <label class="ep-field-label">{{
                 t("trigger.field.event")
@@ -812,27 +884,15 @@ defineExpose({
                 @select="(item: any) => (editTrigger.event_reward_id = rewardOptions.find((r) => r.title === item.label)?.id ?? '')" />
             </div>
 
-            <template v-if="editTrigger.event_type === 'category'">
-              <div class="ep-field-group">
-                <label class="ep-field-label">{{ t("trigger.field.category") }}</label>
-                <TypeaheadInput :model-value="editTrigger.required_game ?? ''" :fetch-items="fetchCategories"
-                  :min-chars="1" placeholder="Just Chatting"
-                  @update:model-value="(v: string) => (editTrigger.required_game = v)"
-                  @select="(item: any) => (editTrigger.required_game = item.label)" />
-              </div>
-              <div class="ep-field-group">
-                <label class="ep-field-label">{{ t("trigger.field.gate_mode") }}</label>
-                <div class="action-grid">
-                  <button v-for="m in CATEGORY_MODES" :key="m.value" class="action-btn"
-                    :class="{ active: editTrigger.event_category_mode === m.value }"
-                    @click="editTrigger.event_category_mode = m.value">
-                    {{ t(m.label) }}
-                  </button>
-                </div>
-              </div>
-            </template>
+            <div v-if="editTrigger.event_type === 'category'" class="ep-field-group">
+              <label class="ep-field-label">{{ t("trigger.field.category") }}</label>
+              <TypeaheadInput :model-value="editTrigger.required_game ?? ''" :fetch-items="fetchCategories"
+                :min-chars="1" placeholder="Just Chatting"
+                @update:model-value="(v: string) => (editTrigger.required_game = v)"
+                @select="(item: any) => (editTrigger.required_game = item.label)" />
+            </div>
 
-            <div v-if="!isCategoryGate()" class="ep-field-group">
+            <div class="ep-field-group">
               <label class="ep-field-label">{{
                 t("trigger.field.action")
                 }}</label>
@@ -843,12 +903,8 @@ defineExpose({
                 </button>
               </div>
             </div>
-            <div v-else class="ep-field-group">
-              <div class="ep-field-hint">{{ t("trigger.gate.hint") }}</div>
-            </div>
 
-            <template v-if="isCategoryGate()"></template>
-            <template v-else-if="editTrigger.action_type === 'channel_point_reward'">
+            <template v-if="editTrigger.action_type === 'channel_point_reward'">
               <div class="ep-field-group">
                 <label class="ep-field-label">{{ t("trigger.field.reward") }}</label>
                 <TypeaheadInput :model-value="rewardTitleById[editTrigger.action_reward_id ?? ''] ?? ''"
@@ -864,6 +920,17 @@ defineExpose({
                     @click="editTrigger.action_reward_state = 'deactivate'">{{ t("trigger.reward_state.deactivate") }}</button>
                 </div>
               </div>
+              <div v-if="editTrigger.event_type === 'category'" class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.gate_mode") }}</label>
+                <div class="action-grid">
+                  <button v-for="m in CATEGORY_MODES" :key="m.value" class="action-btn"
+                    :class="{ active: editTrigger.event_category_mode === m.value }"
+                    @click="editTrigger.event_category_mode = m.value">
+                    {{ t(m.label) }}
+                  </button>
+                </div>
+                <div v-if="isCategoryGate()" class="ep-field-hint">{{ t("trigger.gate.hint") }}</div>
+              </div>
             </template>
 
             <template v-else-if="editTrigger.action_type === 'run_command'">
@@ -874,7 +941,7 @@ defineExpose({
               </div>
               <div class="ep-field-group">
                 <label class="ep-field-label">{{ t("trigger.field.args") }}
-                  <span class="ep-field-hint">{{ t("trigger.field.placeholder_hint") }}</span>
+                  <span class="ep-field-hint">{{ placeholderHint() }}</span>
                 </label>
                 <input v-model="editTrigger.action_extra" class="ep-field-input" />
               </div>
@@ -883,15 +950,17 @@ defineExpose({
             <template v-else-if="editTrigger.action_type === 'create_command'">
               <div class="ep-field-group">
                 <label class="ep-field-label">{{ t("trigger.field.command_name") }}
-                  <span class="ep-field-hint">{{ t("trigger.field.placeholder_hint") }}</span>
+                  <span class="ep-field-hint">{{ placeholderHint() }}</span>
                 </label>
                 <input v-model="editTrigger.action_extra" class="ep-field-input" placeholder="{user}" />
               </div>
               <div class="ep-field-group">
                 <label class="ep-field-label">{{ t("trigger.field.command_response") }}
-                  <span class="ep-field-hint">{{ t("trigger.field.placeholder_hint") }}</span>
+                  <span class="ep-field-hint">{{ placeholderHint() }}</span>
                 </label>
-                <input v-model="editTrigger.response" class="ep-field-input" placeholder="{input}" />
+                <div ref="editorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
+                  data-placeholder="$user.mention just got a new command! PogChamp" @input="onEditorInput"></div>
+                <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
               </div>
             </template>
 
@@ -913,7 +982,9 @@ defineExpose({
                 @input="onEditorInput"></div>
               <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
             </div>
+            </template>
 
+            <template v-if="editTab === 'advanced'">
             <div class="ep-row-3">
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
@@ -927,7 +998,7 @@ defineExpose({
                   </option>
                 </select>
               </div>
-              <div class="ep-field-group">
+              <div v-if="editTrigger.event_type !== 'category'" class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("trigger.field.game")
                   }}</label>
@@ -948,6 +1019,7 @@ defineExpose({
               <input v-model="editTrigger.condition" class="ep-field-input ep-mono"
                 placeholder="$channel.game == Just Chatting" />
             </div>
+            </template>
 
             <div class="ep-panel-footer">
               <button v-if="!isNew && canDelete" class="ep-btn-delete" @click="

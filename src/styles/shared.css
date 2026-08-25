@@ -444,6 +444,7 @@
   flex-direction: column;
   gap: 16px;
   height: 100%;
+  min-height: 0;
 }
 .ep-view-header {
   display: flex;
@@ -509,6 +510,11 @@
   gap: 2px;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
+  scrollbar-width: none;
+}
+.ep-row-list::-webkit-scrollbar {
+  display: none;
 }
 .ep-list-row {
   display: flex;
