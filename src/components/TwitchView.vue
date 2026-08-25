@@ -37,6 +37,9 @@ const canManage = computed(
 );
 
 const rewards = ref<Reward[]>([]);
+// >>> two groups: ours (fully editable) vs made in twitch's own dashboard (view-only)
+const botRewards = computed(() => rewards.value.filter((r) => r.manageable));
+const twitchRewards = computed(() => rewards.value.filter((r) => !r.manageable));
 const loading = ref(false);
 const error = ref("");
 const saving = ref(false);
@@ -113,7 +116,7 @@ function validateForm(): boolean {
   if (
     !Number.isSafeInteger(form.cost) ||
     form.cost < 1 ||
-    form.cost > 100_000_000
+    form.cost > 1_000_000_000
   ) {
     costErrorMsg.value = t("cp.error.invalid_cost");
     ok = false;
@@ -348,6 +351,123 @@ async function toggleEnabled(r: Reward) {
 function reload() {
   load();
 }
+
+// vvv shyboti actions panel - works on any reward, bot-created or not vvv
+
+type ActionType =
+  | "run_command"
+  | "create_command"
+  | "timeout_self"
+  | "timeout_input_user";
+
+interface RewardAction {
+  type: ActionType;
+  command: string;
+  args: string;
+  name: string;
+  response: string;
+  seconds: number;
+}
+
+function blankAction(): RewardAction {
+  return {
+    type: "run_command",
+    command: "",
+    args: "",
+    name: "{user}",
+    response: "{input}",
+    seconds: 600,
+  };
+}
+
+const actionsOpen = ref(false);
+const actionsReward = ref<Reward | null>(null);
+const actionsList = ref<RewardAction[]>([]);
+const refundOnFailure = ref(false);
+const alwaysRefund = ref(false);
+const actionsLoading = ref(false);
+const actionsSaving = ref(false);
+const actionsError = ref("");
+
+async function openActions(r: Reward) {
+  if (!canManage.value || !session.value) return;
+  actionsReward.value = r;
+  actionsOpen.value = true;
+  actionsError.value = "";
+  actionsList.value = [];
+  refundOnFailure.value = false;
+  alwaysRefund.value = false;
+  actionsLoading.value = true;
+  try {
+    const res = await fetch(
+      `${API}/channelpoints/${session.value.channel}/${r.id}/rules`,
+      { headers: { Authorization: `Bearer ${session.value.token}` } },
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      actionsError.value = errMsg(data.error);
+      return;
+    }
+    actionsList.value = (data.actions ?? []).map((a: any) => ({
+      ...blankAction(),
+      ...a,
+    }));
+    refundOnFailure.value = !!data.refundOnFailure;
+    alwaysRefund.value = !!data.alwaysRefund;
+  } catch {
+    actionsError.value = errMsg("request_failed");
+  } finally {
+    actionsLoading.value = false;
+  }
+}
+
+function closeActions() {
+  actionsOpen.value = false;
+}
+
+function addAction() {
+  actionsList.value.push(blankAction());
+}
+
+function removeAction(index: number) {
+  actionsList.value.splice(index, 1);
+}
+
+async function saveActions() {
+  if (!session.value || !actionsReward.value) return;
+  actionsSaving.value = true;
+  actionsError.value = "";
+  try {
+    const res = await fetch(
+      `${API}/channelpoints/${session.value.channel}/${actionsReward.value.id}/rules`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.value.token}`,
+        },
+        body: JSON.stringify({
+          actions: actionsList.value,
+          refundOnFailure: refundOnFailure.value,
+          alwaysRefund: alwaysRefund.value,
+          rewardTitle: actionsReward.value.title,
+        }),
+      },
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      actionsError.value = errMsg(data.error);
+      return;
+    }
+    actionsOpen.value = false;
+  } catch {
+    actionsError.value = errMsg("request_failed");
+  } finally {
+    actionsSaving.value = false;
+  }
+}
+
+// ^^^ shyboti actions panel ^^^
 </script>
 
 <template>
@@ -393,29 +513,67 @@ function reload() {
 
     <div v-else-if="!rewards.length" class="ep-empty">{{ t("cp.empty") }}</div>
 
-    <div v-else class="ep-row-list">
-      <div v-for="r in rewards" :key="r.id" class="ep-list-row cp-row" :class="{ inactive: !r.isEnabled }">
-        <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
-        <div class="cp-main">
-          <div class="cp-title-row">
-            <span class="cp-title">{{ r.title }}</span>
-            <span v-if="!r.manageable" class="item-badge cp-locked-badge" :title="t('cp.locked_hint')"
-              v-html="iconSvgFor('lock')"></span>
-          </div>
-          <div class="cp-cost">
-            <span class="cp-cost-dot"></span>
-            <span>{{ r.cost }}</span>
-          </div>
+    <template v-else>
+      <div v-if="botRewards.length" class="cp-group">
+        <div class="cp-group-header">
+          <span>{{ t("cp.group.bot") }}</span>
+          <span class="cp-group-count">{{ botRewards.length }}</span>
         </div>
-        <div class="ep-row-actions">
-          <button class="ep-switch"
-            :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: !r.manageable || !canManage }"
-            :title="t('cp.enabled')" @click="toggleEnabled(r)"><span class="ep-switch-knob"></span></button>
-          <button v-if="r.manageable && canManage" class="ep-btn-action edit" @click="openEdit(r)">{{ t("cp.edit") }}</button>
-          <span v-else-if="!r.manageable" class="cp-locked-label">{{ t("cp.locked") }}</span>
+        <div class="ep-row-list">
+          <div v-for="r in botRewards" :key="r.id" class="ep-list-row cp-row" :class="{ inactive: !r.isEnabled }">
+            <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
+            <div class="cp-main">
+              <div class="cp-title-row">
+                <span class="cp-title">{{ r.title }}</span>
+              </div>
+              <div class="cp-cost">
+                <span class="cp-cost-dot"></span>
+                <span>{{ r.cost }}</span>
+              </div>
+            </div>
+            <div class="ep-row-actions">
+              <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: !canManage }"
+                :title="t('cp.enabled')" @click="toggleEnabled(r)"><span class="ep-switch-knob"></span></button>
+              <div class="cp-action-slot">
+                <button v-if="canManage" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn") }}</button>
+                <button v-if="canManage" class="ep-btn-action edit" @click="openEdit(r)">{{ t("cp.edit") }}</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+
+      <div v-if="twitchRewards.length" class="cp-group">
+        <div class="cp-group-header">
+          <span>{{ t("cp.group.twitch") }}</span>
+          <span class="cp-group-count">{{ twitchRewards.length }}</span>
+        </div>
+        <div class="ep-row-list">
+          <div v-for="r in twitchRewards" :key="r.id" class="ep-list-row cp-row" :class="{ inactive: !r.isEnabled }">
+            <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
+            <div class="cp-main">
+              <div class="cp-title-row">
+                <span class="cp-title">{{ r.title }}</span>
+              </div>
+              <div class="cp-cost">
+                <span class="cp-cost-dot"></span>
+                <span>{{ r.cost }}</span>
+              </div>
+            </div>
+            <div class="ep-row-actions">
+              <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: true }"
+                :title="t('cp.locked_hint')"><span class="ep-switch-knob"></span></button>
+              <div class="cp-action-slot">
+                <button v-if="canManage" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn") }}</button>
+                <button class="ep-btn-action locked" disabled :title="t('cp.locked_hint')">
+                  <span v-html="iconSvgFor('lock')"></span>{{ t("cp.locked") }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
 
     <!-- vvv edit panel vvv -->
     <Teleport to="body">
@@ -463,7 +621,7 @@ function reload() {
 
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("cp.field.cost") }}</label>
-              <input v-model.number="form.cost" type="number" min="1" class="ep-field-input"
+              <input v-model.number="form.cost" type="number" min="1" max="1000000000" class="ep-field-input"
                 :class="{ 'cp-field-invalid': costErrorMsg }" />
               <div v-if="costErrorMsg" class="cp-field-error">{{ costErrorMsg }}</div>
             </div>
@@ -543,6 +701,117 @@ function reload() {
     </Teleport>
     <!-- ^^^ edit panel ^^^ -->
 
+    <!-- vvv shyboti actions panel vvv -->
+    <Teleport to="body">
+      <div v-if="actionsOpen" class="ep-overlay" v-bind="overlay.handlers(closeActions)">
+        <div class="ep-panel">
+
+          <div class="ep-panel-header">
+            <div>
+              <div class="ep-panel-title">{{ t("cp.actions.panel_title") }}</div>
+              <div class="ep-panel-sub">{{ actionsReward?.title }}</div>
+            </div>
+            <button class="ep-panel-close" @click="closeActions" v-html="iconSvgFor('x')"></button>
+          </div>
+
+          <div class="ep-panel-body">
+
+            <div v-if="actionsError" class="cp-panel-error">{{ actionsError }}</div>
+
+            <div class="ep-field-group cp-toggle-row" :class="{ 'cp-refund-locked': !actionsReward?.manageable }">
+              <div>
+                <div class="ep-field-label">{{ t("cp.actions.refund_on_failure") }}</div>
+                <div class="ep-field-hint">{{ t("cp.actions.refund_on_failure_hint") }}</div>
+              </div>
+              <button class="ep-switch" :class="{ on: refundOnFailure, disabled: !actionsReward?.manageable }"
+                @click="actionsReward?.manageable && (refundOnFailure = !refundOnFailure)"><span class="ep-switch-knob"></span></button>
+            </div>
+
+            <div class="ep-field-group cp-toggle-row" :class="{ 'cp-refund-locked': !actionsReward?.manageable }">
+              <div>
+                <div class="ep-field-label">{{ t("cp.actions.always_refund") }}</div>
+                <div class="ep-field-hint">{{ t("cp.actions.always_refund_hint") }}</div>
+              </div>
+              <button class="ep-switch" :class="{ on: alwaysRefund, disabled: !actionsReward?.manageable }"
+                @click="actionsReward?.manageable && (alwaysRefund = !alwaysRefund)"><span class="ep-switch-knob"></span></button>
+            </div>
+
+            <div v-if="!actionsReward?.manageable" class="ep-field-hint cp-refund-hint">
+              {{ t("cp.actions.refund_locked_hint") }}
+            </div>
+
+            <div v-if="!actionsLoading && !actionsList.length" class="ep-empty cp-actions-empty">
+              {{ t("cp.actions.empty") }}
+            </div>
+
+            <div v-for="(a, i) in actionsList" :key="i" class="cp-action-card">
+              <div class="cp-action-card-header">
+                <select v-model="a.type" class="ep-field-select">
+                  <option value="run_command">{{ t("cp.actions.type.run_command") }}</option>
+                  <option value="create_command">{{ t("cp.actions.type.create_command") }}</option>
+                  <option value="timeout_self">{{ t("cp.actions.type.timeout_self") }}</option>
+                  <option value="timeout_input_user">{{ t("cp.actions.type.timeout_input_user") }}</option>
+                </select>
+                <button class="ep-btn-action del" @click="removeAction(i)" v-html="iconSvgFor('trash')"></button>
+              </div>
+
+              <template v-if="a.type === 'run_command'">
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{ t("cp.actions.command") }}</label>
+                  <input v-model="a.command" class="ep-field-input" :placeholder="t('cp.actions.command_ph')" />
+                </div>
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{ t("cp.actions.args") }}
+                    <span class="ep-field-hint">{{ t("cp.actions.args_hint") }}</span>
+                  </label>
+                  <input v-model="a.args" class="ep-field-input" />
+                </div>
+              </template>
+
+              <template v-else-if="a.type === 'create_command'">
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{ t("cp.actions.name") }}
+                    <span class="ep-field-hint">{{ t("cp.actions.name_hint") }}</span>
+                  </label>
+                  <input v-model="a.name" class="ep-field-input" />
+                </div>
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{ t("cp.actions.response") }}
+                    <span class="ep-field-hint">{{ t("cp.actions.response_hint") }}</span>
+                  </label>
+                  <input v-model="a.response" class="ep-field-input" />
+                </div>
+              </template>
+
+              <template v-else>
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{ t("cp.actions.seconds") }}</label>
+                  <input v-model.number="a.seconds" type="number" min="1" max="1209600" class="ep-field-input" />
+                </div>
+              </template>
+            </div>
+
+            <button class="ep-btn-cancel cp-add-action-btn" @click="addAction">
+              + {{ t("cp.actions.add") }}
+            </button>
+
+          </div>
+
+          <div class="ep-panel-footer">
+            <div></div>
+            <div class="ep-footer-right">
+              <button class="ep-btn-cancel" @click="closeActions">{{ t("cp.panel.cancel") }}</button>
+              <button class="ep-btn-save" @click="saveActions" :disabled="actionsSaving">
+                {{ actionsSaving ? '…' : t("cp.panel.save") }}
+              </button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </Teleport>
+    <!-- ^^^ shyboti actions panel ^^^ -->
+
   </div>
 </template>
 
@@ -606,11 +875,6 @@ function reload() {
   white-space: nowrap;
 }
 
-.cp-locked-badge {
-  display: inline-flex;
-  color: #999;
-}
-
 .cp-cost {
   display: flex;
   align-items: center;
@@ -626,10 +890,55 @@ function reload() {
   border-radius: 50%;
 }
 
-.cp-locked-label {
+.cp-group {
+  margin-bottom: 20px;
+}
+
+.cp-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
   font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
   color: #999;
-  padding: 0 6px;
+}
+
+.cp-group-count {
+  color: #666;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* >>> fixed width so the enable switch lines up across both groups,
+   regardless of "Edit" vs the longer locked label */
+.cp-action-slot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.ep-btn-action.actions {
+  border-color: #4ec9b044;
+  color: #4ec9b0;
+}
+
+.ep-btn-action.actions:hover {
+  background: rgba(78, 201, 176, 0.1);
+}
+
+.ep-btn-action.locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-color: #333;
+  color: #777;
 }
 
 .cp-field-invalid {
@@ -686,5 +995,42 @@ function reload() {
   border: 1px solid #f1494944;
   padding: 8px 10px;
   margin-bottom: 14px;
+}
+
+.cp-refund-locked {
+  opacity: 0.45;
+}
+
+.cp-refund-hint {
+  color: #e5c07b;
+  margin: -6px 0 14px;
+}
+
+.cp-actions-empty {
+  padding: 20px;
+  margin-bottom: 12px;
+}
+
+.cp-action-card {
+  background: #1a1a1e;
+  border: 1px solid #2a2a30;
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: 0;
+}
+
+.cp-action-card-header {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cp-action-card-header .ep-field-select {
+  flex: 1;
+}
+
+.cp-add-action-btn {
+  width: 100%;
+  margin-top: 4px;
 }
 </style>
