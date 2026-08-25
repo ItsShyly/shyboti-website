@@ -92,30 +92,18 @@ async function load() {
 onMounted(load);
 watch(() => session.value?.channel, load);
 
-// vvv admin: copy every twitch-created reward as a bot-created one vvv
-const copyingRewards = ref(false);
-const copyConfirm = ref(false);
+// vvv admin: copy one twitch-created reward as a bot-created one vvv
+const copyingRewardId = ref<string | null>(null);
 const copyResultMsg = ref("");
 
-function requestCopyRewards() {
-  if (!isSiteAdminMode.value || copyingRewards.value) return;
-  if (!copyConfirm.value) {
-    copyConfirm.value = true;
-    setTimeout(() => (copyConfirm.value = false), 3000);
-    return;
-  }
-  copyConfirm.value = false;
-  copyTwitchRewards();
-}
-
-async function copyTwitchRewards() {
-  if (!session.value) return;
-  copyingRewards.value = true;
+async function copyReward(r: Reward) {
+  if (!session.value || !isSiteAdminMode.value || copyingRewardId.value) return;
+  copyingRewardId.value = r.id;
   copyResultMsg.value = "";
   error.value = "";
   try {
     const res = await fetch(
-      `${API}/admin/channelpoints/${session.value.channel}/copy-twitch-rewards`,
+      `${API}/admin/channelpoints/${session.value.channel}/${r.id}/copy`,
       {
         method: "POST",
         headers: { Authorization: `Bearer ${session.value.token}` },
@@ -123,19 +111,20 @@ async function copyTwitchRewards() {
     );
     const data = await res.json();
     if (!res.ok) {
-      error.value = errMsg(data.error);
+      error.value =
+        data.error === "already_exists"
+          ? `"${data.title}" already exists.`
+          : errMsg(data.error, data.detail);
     } else {
-      copyResultMsg.value =
-        `Created ${data.created}/${data.total} reward(s)` +
-        (data.skipped ? `, ${data.skipped} already existed.` : ".");
+      copyResultMsg.value = `Created "${data.title}".`;
       await load();
     }
   } catch {
     error.value = errMsg("request_failed");
   }
-  copyingRewards.value = false;
+  copyingRewardId.value = null;
 }
-// ^^^ admin: copy twitch rewards ^^^
+// ^^^ admin: copy twitch reward ^^^
 
 // >>> combined builtin + custom command names, for the run-command picker
 const commandNames = ref<string[]>([]);
@@ -856,10 +845,6 @@ async function saveActions() {
         <div class="ep-view-sub">{{ rewards.length }} {{ t("cp.tab") }}</div>
       </div>
       <div class="ep-view-header-right">
-        <button v-if="isSiteAdminMode" class="ep-btn-reload" :class="{ confirm: copyConfirm }"
-          :disabled="copyingRewards" :title="t('cp.admin.copy_rewards_hint')" @click="requestCopyRewards">
-          {{ copyingRewards ? "…" : copyConfirm ? t("cp.admin.copy_rewards_confirm") : t("cp.admin.copy_rewards") }}
-        </button>
         <button class="ep-btn-reload" title="Reload" @click="reload" v-html="iconSvgFor('refresh-cw')"></button>
         <button class="ep-btn-new" :disabled="!canManage" @click="openNew">
           + {{ t("cp.new") }}
@@ -962,6 +947,8 @@ async function saveActions() {
                   :title="t('cp.locked_hint')"><span class="ep-switch-knob"></span></button>
                 <div class="cp-action-slot">
                   <button v-if="canManage" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn") }}</button>
+                  <button v-if="isSiteAdminMode" class="ep-btn-action copy" :disabled="copyingRewardId === r.id"
+                    :title="t('cp.admin.copy_reward_hint')" @click="copyReward(r)" v-html="iconSvgFor('copy')"></button>
                   <button class="ep-btn-action locked" disabled :title="t('cp.locked_hint')"
                     v-html="iconSvgFor('lock')"></button>
                 </div>

@@ -281,10 +281,8 @@ const translations: Record<Locale, Record<string, string>> = {
       "Rewards created here can be edited or deleted. Rewards made in Twitch's own Creator Dashboard show up too, but are view-only - Twitch's API doesn't allow editing those.",
     "cp.locked": "View only",
     "cp.locked_hint": "Made in Twitch's dashboard - view only here",
-    "cp.admin.copy_rewards": "Copy all Twitch rewards",
-    "cp.admin.copy_rewards_confirm": "Click again to confirm",
-    "cp.admin.copy_rewards_hint":
-      'Admin: duplicate every Twitch-created reward as a bot-created one (title + " (shyboti)")',
+    "cp.admin.copy_reward_hint":
+      'Admin: duplicate this reward as a bot-created one (title + " (shyboti)")',
     "cp.gate.only_active_on": "Only active on",
     "cp.cost": "Cost",
     "cp.enabled": "Enabled",
@@ -1344,10 +1342,8 @@ const translations: Record<Locale, Record<string, string>> = {
       "Hier erstellte Belohnungen können bearbeitet oder gelöscht werden. Im Twitch Creator Dashboard erstellte Belohnungen werden ebenfalls angezeigt, sind hier aber nur ansehbar - Twitchs API erlaubt kein Bearbeiten davon.",
     "cp.locked": "Nur ansehbar",
     "cp.locked_hint": "Im Twitch Dashboard erstellt - hier nur ansehbar",
-    "cp.admin.copy_rewards": "Twitch-Rewards kopieren",
-    "cp.admin.copy_rewards_confirm": "Nochmal klicken zum Bestätigen",
-    "cp.admin.copy_rewards_hint":
-      'Admin: dupliziert jede Twitch-erstellte Belohnung als bot-erstellte (Titel + " (shyboti)")',
+    "cp.admin.copy_reward_hint":
+      'Admin: dupliziert diese Belohnung als bot-erstellte (Titel + " (shyboti)")',
     "cp.gate.only_active_on": "Nur aktiv bei",
     "cp.cost": "Kosten",
     "cp.enabled": "Aktiviert",
