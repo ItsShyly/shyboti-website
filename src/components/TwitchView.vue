@@ -125,7 +125,9 @@ async function copyTwitchRewards() {
     if (!res.ok) {
       error.value = errMsg(data.error);
     } else {
-      copyResultMsg.value = `Created ${data.created}/${data.total} reward(s).`;
+      copyResultMsg.value =
+        `Created ${data.created}/${data.total} reward(s)` +
+        (data.skipped ? `, ${data.skipped} already existed.` : ".");
       await load();
     }
   } catch {
