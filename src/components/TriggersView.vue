@@ -885,7 +885,7 @@ defineExpose({
           <div class="ep-panel-body">
             <div v-if="error" class="ep-toast error">{{ error }}</div>
 
-            <div class="ep-tabs">
+            <div v-if="!isAutoNamed()" class="ep-tabs">
               <button class="ep-tab" :class="{ active: editTab === 'settings' }"
                 @click="editTab = 'settings'">{{ t("edit.tab_response") }}</button>
               <button class="ep-tab" :class="{ active: editTab === 'advanced' }"
@@ -1041,7 +1041,7 @@ defineExpose({
             </div>
             </template>
 
-            <template v-if="editTab === 'advanced'">
+            <template v-if="editTab === 'advanced' && !isAutoNamed()">
             <div class="ep-row-3">
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
