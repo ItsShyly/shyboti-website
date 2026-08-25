@@ -21,6 +21,7 @@ import { iconSvg as iconSvgFor } from "../composables/icons";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
+import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
@@ -72,6 +73,7 @@ interface Trigger {
   action_reward_state: string;
   linked_command: string;
   action_extra: string;
+  event_category_mode: string;
 }
 
 const triggers = ref<Trigger[]>([]);
@@ -149,6 +151,7 @@ const editTrigger = ref<Partial<Trigger> & { name: string }>({
   action_reward_state: "activate",
   linked_command: "",
   action_extra: "",
+  event_category_mode: "",
 });
 
 // >>> static, not translated on purpose
@@ -195,6 +198,39 @@ const MATCH_TYPES = [
   { value: "ends", label: "ends with" },
   { value: "regex", label: "regex" },
 ];
+
+// >>> non-empty gates the trigger's own is_active instead of firing an action
+const CATEGORY_MODES = [
+  { value: "", label: "trigger.gate.none" },
+  { value: "enable_on_change", label: "trigger.gate.enable_on_change" },
+  { value: "disable_on_change", label: "trigger.gate.disable_on_change" },
+  { value: "enable_while_active", label: "trigger.gate.enable_while_active" },
+  {
+    value: "disable_while_active",
+    label: "trigger.gate.disable_while_active",
+  },
+];
+
+async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
+  if (!session.value) return [];
+  try {
+    const res = await fetch(
+      `${API}/obs/twitch/categories?q=${encodeURIComponent(query)}`,
+      { headers: { Authorization: `Bearer ${session.value.token}` } },
+    );
+    if (!res.ok) return [];
+    const d = (await res.json()) as {
+      categories: { id: string; name: string; box_art_url: string }[];
+    };
+    return (d.categories ?? []).map((c) => ({
+      id: c.id,
+      label: c.name,
+      iconUrl: c.box_art_url,
+    }));
+  } catch {
+    return [];
+  }
+}
 
 const ACTION_TYPES = [
   { value: "say", label: "Send message" },
@@ -252,6 +288,7 @@ function openNew() {
     action_reward_state: "activate",
     linked_command: "",
     action_extra: "",
+    event_category_mode: "",
   };
   editOpen.value = true;
   setTimeout(() => {
@@ -292,6 +329,14 @@ function isKeywordTrigger(): boolean {
   );
 }
 
+// >>> gate-mode category triggers toggle is_active, never fire an action
+function isCategoryGate(): boolean {
+  return (
+    editTrigger.value.event_type === "category" &&
+    !!editTrigger.value.event_category_mode
+  );
+}
+
 async function saveTrigger() {
   if (!session.value) return;
   // >>> keyword-style triggers don't need a name, one gets generated below
@@ -305,14 +350,16 @@ async function saveTrigger() {
   }
   const missing: string[] = [];
   if (!editTrigger.value.name?.trim()) missing.push(t("trigger.field.name"));
-  const responseOptional = [
-    "shoutout",
-    "channel_point_reward",
-    "create_command",
-  ].includes(editTrigger.value.action_type ?? "");
+  const gate = isCategoryGate();
+  const responseOptional =
+    gate ||
+    ["shoutout", "channel_point_reward", "create_command"].includes(
+      editTrigger.value.action_type ?? "",
+    );
   if (!editTrigger.value.response?.trim() && !responseOptional)
     missing.push(t("trigger.field.response"));
   if (
+    !gate &&
     editTrigger.value.action_type === "channel_point_reward" &&
     !editTrigger.value.action_reward_id
   )
@@ -322,6 +369,12 @@ async function saveTrigger() {
     !editTrigger.value.event_reward_id
   )
     missing.push(t("trigger.field.reward"));
+  if (
+    editTrigger.value.event_type === "category" &&
+    editTrigger.value.event_category_mode &&
+    !editTrigger.value.required_game?.trim()
+  )
+    missing.push(t("trigger.field.category"));
   if (missing.length) {
     error.value = t("edit.missing_fields") + missing.join(", ");
     return;
@@ -759,7 +812,27 @@ defineExpose({
                 @select="(item: any) => (editTrigger.event_reward_id = rewardOptions.find((r) => r.title === item.label)?.id ?? '')" />
             </div>
 
-            <div class="ep-field-group">
+            <template v-if="editTrigger.event_type === 'category'">
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.category") }}</label>
+                <TypeaheadInput :model-value="editTrigger.required_game ?? ''" :fetch-items="fetchCategories"
+                  :min-chars="1" placeholder="Just Chatting"
+                  @update:model-value="(v: string) => (editTrigger.required_game = v)"
+                  @select="(item: any) => (editTrigger.required_game = item.label)" />
+              </div>
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.gate_mode") }}</label>
+                <div class="action-grid">
+                  <button v-for="m in CATEGORY_MODES" :key="m.value" class="action-btn"
+                    :class="{ active: editTrigger.event_category_mode === m.value }"
+                    @click="editTrigger.event_category_mode = m.value">
+                    {{ t(m.label) }}
+                  </button>
+                </div>
+              </div>
+            </template>
+
+            <div v-if="!isCategoryGate()" class="ep-field-group">
               <label class="ep-field-label">{{
                 t("trigger.field.action")
                 }}</label>
@@ -770,8 +843,12 @@ defineExpose({
                 </button>
               </div>
             </div>
+            <div v-else class="ep-field-group">
+              <div class="ep-field-hint">{{ t("trigger.gate.hint") }}</div>
+            </div>
 
-            <template v-if="editTrigger.action_type === 'channel_point_reward'">
+            <template v-if="isCategoryGate()"></template>
+            <template v-else-if="editTrigger.action_type === 'channel_point_reward'">
               <div class="ep-field-group">
                 <label class="ep-field-label">{{ t("trigger.field.reward") }}</label>
                 <TypeaheadInput :model-value="rewardTitleById[editTrigger.action_reward_id ?? ''] ?? ''"
