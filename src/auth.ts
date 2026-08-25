@@ -18,7 +18,6 @@ export interface RolePermissions {
   commands_edit: boolean;
   commands_delete: boolean;
   commands_mod: boolean;
-  commands_extras: boolean;
   // vvv Automations vvv
   automations_view: boolean;
   automations_toggle: boolean;

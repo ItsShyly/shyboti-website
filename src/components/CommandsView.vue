@@ -17,17 +17,20 @@ import CommandEditPanel from "./CommandEditPanel.vue";
 import ObsCommandEditPanel from "./ObsCommandEditPanel.vue";
 import type { ObsSceneBind, ObsSourceBind, ObsArgEntry } from "./ObsCommandEditPanel.vue";
 
-const { session, channelRole } = useAuth();
+const { session, channelRole, adminMode } = useAuth();
 const { t } = useI18n();
 
+// >>> a site admin browsing in admin mode bypasses whatever role they'd
+// >>> otherwise resolve to in this channel (e.g. an unrelated VIP grant there)
+const isAdminBypass = computed(() => !!(session.value?.isAdmin && adminMode.value));
 const canView = computed(
-  () => channelRole.value?.permissions.commands_view ?? false,
+  () => (channelRole.value?.permissions.commands_view ?? false) || isAdminBypass.value,
 );
 // >>> avoids a false needs-bot flash before load
 const botPresent = computed(() => channelRole.value?.botPresent ?? true);
 const canToggle = computed(
   () =>
-    (channelRole.value?.permissions.commands_toggle ?? false) &&
+    ((channelRole.value?.permissions.commands_toggle ?? false) || isAdminBypass.value) &&
     botPresent.value,
 );
 const canEdit = computed(
@@ -42,9 +45,6 @@ const canDelete = computed(
 );
 const canViewObs = computed(
   () => channelRole.value?.permissions?.obs_view ?? false,
-);
-const canExtras = computed(
-  () => channelRole.value?.permissions?.commands_extras ?? false,
 );
 
 interface Command {
@@ -1156,7 +1156,7 @@ onUnmounted(() => {
       <button class="ep-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">
         {{ t("cmd.title_custom") }}
       </button>
-      <button v-if="canExtras" class="ep-tab" :class="{ active: activeTab === 'Extras' }"
+      <button v-if="canView" class="ep-tab" :class="{ active: activeTab === 'Extras' }"
         @click="activeTab = 'Extras'">
         {{ t("cmd.title_extras") }}
       </button>
@@ -1652,7 +1652,7 @@ onUnmounted(() => {
       <!-- ^^^ obs tab ^^^ -->
 
       <!-- vvv extras tab vvv -->
-      <template v-if="activeTab === 'Extras' && canExtras">
+      <template v-if="activeTab === 'Extras' && canView">
         <div v-if="extrasLoading" class="state-msg">Loading…</div>
         <div v-else-if="!botPresent" class="state-msg">{{ t("cmd.no_bot") }}</div>
         <template v-else>
@@ -1661,9 +1661,9 @@ onUnmounted(() => {
             <div class="extras-row">
               <div class="ep-switch" :class="{
                 on: mentionEnabled && has7tvSet,
-                disabled: !canExtras || !has7tvSet,
+                disabled: !canToggle || !has7tvSet,
               }" @click="
-                canExtras &&
+                canToggle &&
                 has7tvSet &&
                 ((mentionEnabled = !mentionEnabled), saveExtras())
                 "><span class="ep-switch-knob"></span></div>
@@ -1680,9 +1680,9 @@ onUnmounted(() => {
             <div class="extras-row">
               <div class="ep-switch" :class="{
                 on: replyAllEnabled && has7tvSet && mentionEnabled,
-                disabled: !canExtras || !has7tvSet || !mentionEnabled,
+                disabled: !canToggle || !has7tvSet || !mentionEnabled,
               }" @click="
-                canExtras &&
+                canToggle &&
                 has7tvSet &&
                 mentionEnabled &&
                 ((replyAllEnabled = !replyAllEnabled), saveExtras())
@@ -1700,9 +1700,9 @@ onUnmounted(() => {
             <div class="extras-row">
               <div class="ep-switch" :class="{
                 on: mentionOnlyOffline && has7tvSet && mentionEnabled,
-                disabled: !canExtras || !has7tvSet || !mentionEnabled,
+                disabled: !canToggle || !has7tvSet || !mentionEnabled,
               }" @click="
-                canExtras &&
+                canToggle &&
                 has7tvSet &&
                 mentionEnabled &&
                 ((mentionOnlyOffline = !mentionOnlyOffline), saveExtras())
@@ -1724,9 +1724,9 @@ onUnmounted(() => {
             <div class="extras-row">
               <div class="ep-switch" :class="{
                 on: botOnlineOnly,
-                disabled: !canExtras,
+                disabled: !canToggle,
               }" @click="
-                canExtras &&
+                canToggle &&
                 ((botOnlineOnly = !botOnlineOnly), saveExtras())
                 "><span class="ep-switch-knob"></span></div>
               <div class="extras-info">

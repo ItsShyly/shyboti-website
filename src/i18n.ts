@@ -742,9 +742,6 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.commands_mod": "Moderator Status",
     "perm.commands_mod.desc":
       "Counts as a moderator for mod-only chat commands.",
-    "perm.commands_extras": "Extras tab",
-    "perm.commands_extras.desc":
-      "View and change the Extras tab's settings (mentions, reply-all, 7TV emote set).",
     "perm.automations_view": "View",
     "perm.automations_view.desc": "See timers and triggers.",
     "perm.automations_toggle": "Toggle",
@@ -1772,9 +1769,6 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.commands_delete.desc": "Eigene Commands dauerhaft löschen.",
     "perm.commands_mod": "Moderator-Status",
     "perm.commands_mod.desc": "Zählt als Moderator für nur-Mod Chat-Commands.",
-    "perm.commands_extras": "Extras-Tab",
-    "perm.commands_extras.desc":
-      "Einstellungen im Extras-Tab ansehen und ändern (Erwähnungen, Reply-All, 7TV-Emote-Set).",
     "perm.automations_view": "Anzeigen",
     "perm.automations_view.desc": "Timer und Trigger sehen.",
     "perm.automations_toggle": "Umschalten",
