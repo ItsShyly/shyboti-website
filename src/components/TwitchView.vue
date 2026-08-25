@@ -123,6 +123,39 @@ async function loadCommandNames() {
 onMounted(loadCommandNames);
 watch(() => session.value?.channel, loadCommandNames);
 
+// >>> reward id -> target category, for rewards with a "while_active" category
+// >>> gate trigger - shown as a row tag so it's not a silent surprise
+const categoryGateByReward = ref<Record<string, string>>({});
+async function loadCategoryGates() {
+  if (!session.value) return;
+  const ch = session.value.channel;
+  try {
+    const res = await fetch(`${API}/triggers/${ch}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    if (!res.ok) return;
+    const data = (await res.json()) as { triggers: any[] };
+    if (session.value?.channel !== ch) return;
+    const map: Record<string, string> = {};
+    for (const tr of data.triggers ?? []) {
+      if (
+        tr.event_type === "category" &&
+        tr.action_type === "channel_point_reward" &&
+        tr.event_category_mode === "while_active" &&
+        tr.action_reward_id &&
+        tr.required_game
+      ) {
+        map[tr.action_reward_id] = tr.required_game;
+      }
+    }
+    categoryGateByReward.value = map;
+  } catch {
+    if (session.value?.channel === ch) categoryGateByReward.value = {};
+  }
+}
+onMounted(loadCategoryGates);
+watch(() => session.value?.channel, loadCategoryGates);
+
 // vvv edit panel vvv
 
 const editOpen = ref(false);
@@ -722,6 +755,9 @@ async function saveActions() {
                 <div class="cp-cost">
                   <span class="cp-cost-dot"></span>
                   <span>{{ r.cost }}</span>
+                  <span v-if="categoryGateByReward[r.id]" class="ep-meta-pill game">
+                    {{ t("cp.gate.only_active_on") }} {{ categoryGateByReward[r.id] }}
+                  </span>
                 </div>
               </div>
               <div class="ep-row-actions">
@@ -752,6 +788,9 @@ async function saveActions() {
                 <div class="cp-cost">
                   <span class="cp-cost-dot"></span>
                   <span>{{ r.cost }}</span>
+                  <span v-if="categoryGateByReward[r.id]" class="ep-meta-pill game">
+                    {{ t("cp.gate.only_active_on") }} {{ categoryGateByReward[r.id] }}
+                  </span>
                 </div>
               </div>
               <div class="ep-row-actions">
