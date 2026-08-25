@@ -5,7 +5,12 @@ import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
-import TypeaheadInput from "./shared/TypeaheadInput.vue";
+import ChannelPointActionsEditor from "./shared/ChannelPointActionsEditor.vue";
+import {
+  blankAction,
+  actionNeedsInput,
+  type RewardAction,
+} from "../composables/channelPointActions";
 
 const { session, channelRole, adminMode } = useAuth();
 const { t } = useI18n();
@@ -116,6 +121,8 @@ const editOpen = ref(false);
 const isNew = ref(false);
 const editingId = ref<string | null>(null);
 const limitsEnabled = ref(false);
+// >>> "actions" tab only applies to bot-created rewards being edited, never to a new one
+const editTab = ref<"settings" | "actions">("settings");
 
 // >>> per-field messages, shown inline instead of a generic toast
 const nameErrorMsg = ref("");
@@ -234,6 +241,7 @@ function openEdit(r: Reward) {
   isNew.value = false;
   editingId.value = r.id;
   deleteConfirm.value = false;
+  editTab.value = "settings";
   clearFieldErrors();
   limitsEnabled.value = !!(
     r.globalCooldown ||
@@ -252,6 +260,7 @@ function openEdit(r: Reward) {
     maxRedemptionsPerUserPerStream: r.maxRedemptionsPerUserPerStream ?? 0,
   });
   editOpen.value = true;
+  loadActionsFor(r); // <<< preloads the actions tab so switching to it is instant
 }
 
 function closePanel() {
@@ -410,34 +419,10 @@ function reload() {
   load();
 }
 
-// vvv shyboti actions panel - works on any reward, bot-created or not vvv
+// vvv shyboti actions - standalone panel for twitch-created, tab for bot-created vvv
 
-type ActionType =
-  | "run_command"
-  | "create_command"
-  | "timeout_self"
-  | "timeout_input_user";
-
-interface RewardAction {
-  type: ActionType;
-  command: string;
-  args: string;
-  name: string;
-  response: string;
-  seconds: number;
-}
-
-function blankAction(): RewardAction {
-  return {
-    type: "run_command",
-    command: "",
-    args: "",
-    name: "{user}",
-    response: "{input}",
-    seconds: 600,
-  };
-}
-
+// >>> "actions" panel is only the standalone flow now (twitch-created rewards);
+// >>> bot-created rewards get the same state via the settings panel's actions tab
 const actionsOpen = ref(false);
 const actionsReward = ref<Reward | null>(null);
 const actionsList = ref<RewardAction[]>([]);
@@ -447,10 +432,10 @@ const actionsLoading = ref(false);
 const actionsSaving = ref(false);
 const actionsError = ref("");
 
-async function openActions(r: Reward) {
-  if (!canManage.value || !session.value) return;
+// >>> shared by openEdit (bot-created, tab) and openActions (twitch-created, standalone)
+async function loadActionsFor(r: Reward) {
+  if (!session.value) return;
   actionsReward.value = r;
-  actionsOpen.value = true;
   actionsError.value = "";
   actionsList.value = [];
   refundOnFailure.value = false;
@@ -479,16 +464,14 @@ async function openActions(r: Reward) {
   }
 }
 
-function closeActions() {
-  actionsOpen.value = false;
+function openActions(r: Reward) {
+  if (!canManage.value) return;
+  actionsOpen.value = true;
+  loadActionsFor(r);
 }
 
-// >>> these action types read the viewer's typed input - useless without it
-function actionNeedsInput(a: RewardAction): boolean {
-  if (a.type === "timeout_input_user") return true;
-  if (a.type === "run_command") return a.args.includes("{input}");
-  if (a.type === "create_command") return a.response.includes("{input}");
-  return false;
+function closeActions() {
+  actionsOpen.value = false;
 }
 
 // >>> can't enable it via API for rewards twitch's own dashboard made
@@ -520,14 +503,6 @@ async function ensureUserInputEnabled() {
 }
 watch(actionsList, ensureUserInputEnabled, { deep: true });
 
-function addAction() {
-  actionsList.value.push(blankAction());
-}
-
-function removeAction(index: number) {
-  actionsList.value.splice(index, 1);
-}
-
 async function saveActions() {
   if (!session.value || !actionsReward.value) return;
   actionsSaving.value = true;
@@ -554,7 +529,9 @@ async function saveActions() {
       actionsError.value = errMsg(data.error);
       return;
     }
+    // >>> closes whichever context triggered the save (standalone panel or edit-panel tab)
     actionsOpen.value = false;
+    editOpen.value = false;
   } catch {
     actionsError.value = errMsg("request_failed");
   } finally {
@@ -562,25 +539,7 @@ async function saveActions() {
   }
 }
 
-// >>> picking a command from the typeahead auto-fills args if still empty
-function onCommandSelected(a: RewardAction) {
-  if (!a.args.trim()) a.args = "{user}";
-}
-
-// >>> "+shoutout @user" style preview - {user}/{input}/{display} shown as example values
-function previewCommand(a: RewardAction): string {
-  if (!a.command.trim()) return "";
-  const args = a.args
-    .split("{input}")
-    .join("hello there")
-    .split("{user}")
-    .join("@user")
-    .split("{display}")
-    .join("DisplayName");
-  return `${channelPrefix.value}${a.command.trim().replace(/^\+/, "")}${args ? " " + args : ""}`;
-}
-
-// ^^^ shyboti actions panel ^^^
+// ^^^ shyboti actions ^^^
 </script>
 
 <template>
@@ -649,7 +608,6 @@ function previewCommand(a: RewardAction): string {
                 <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: !canManage }"
                   :title="t('cp.enabled')" @click="toggleEnabled(r)"><span class="ep-switch-knob"></span></button>
                 <div class="cp-action-slot">
-                  <button v-if="canManage" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn") }}</button>
                   <button v-if="canManage" class="ep-btn-action edit" @click="openEdit(r)">{{ t("cp.edit") }}</button>
                   <button v-if="canManage" class="ep-btn-action del" :class="{ confirm: rowDeleteConfirmId === r.id }"
                     :title="t('cp.panel.delete')" @click="requestRowDelete(r)" v-html="iconSvgFor('trash')"></button>
@@ -704,9 +662,26 @@ function previewCommand(a: RewardAction): string {
             <button class="ep-panel-close" @click="closePanel" v-html="iconSvgFor('x')"></button>
           </div>
 
+          <div v-if="!isNew" class="ep-tabs">
+            <button class="ep-tab" :class="{ active: editTab === 'settings' }" @click="editTab = 'settings'">
+              {{ t("cp.panel.tab.settings") }}
+            </button>
+            <button class="ep-tab" :class="{ active: editTab === 'actions' }" @click="editTab = 'actions'">
+              {{ t("cp.panel.tab.actions") }}
+            </button>
+          </div>
+
           <div class="ep-panel-body">
 
-            <div v-if="panelError" class="cp-panel-error">{{ panelError }}</div>
+            <div v-if="panelError && (isNew || editTab === 'settings')" class="cp-panel-error">{{ panelError }}</div>
+            <div v-if="actionsError && !isNew && editTab === 'actions'" class="cp-panel-error">{{ actionsError }}</div>
+
+            <ChannelPointActionsEditor v-if="!isNew && editTab === 'actions'" :actions="actionsList"
+              :refund-on-failure="refundOnFailure" :always-refund="alwaysRefund" :manageable="true"
+              :needs-input-warning="needsInputWarning" :command-names="commandNames" :channel-prefix="channelPrefix"
+              @update:refund-on-failure="refundOnFailure = $event" @update:always-refund="alwaysRefund = $event" />
+
+            <template v-else>
 
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("cp.field.title") }}
@@ -796,17 +771,23 @@ function previewCommand(a: RewardAction): string {
               </div>
             </div>
 
+            </template>
+
           </div>
 
           <div class="ep-panel-footer">
-            <button v-if="!isNew" class="ep-btn-delete" :class="{ confirm: deleteConfirm }" @click="requestDelete"
-              :disabled="saving">
+            <button v-if="!isNew && editTab === 'settings'" class="ep-btn-delete" :class="{ confirm: deleteConfirm }"
+              @click="requestDelete" :disabled="saving">
               {{ saving ? '…' : deleteConfirm ? t('cp.panel.sure') : t('cp.panel.delete') }}
             </button>
             <div v-else></div>
             <div class="ep-footer-right">
               <button class="ep-btn-cancel" @click="closePanel">{{ t("cp.panel.cancel") }}</button>
-              <button class="ep-btn-save" @click="savePanel" :disabled="saving || saveDisabled">
+              <button v-if="!isNew && editTab === 'actions'" class="ep-btn-save" @click="saveActions"
+                :disabled="actionsSaving">
+                {{ actionsSaving ? '…' : t("cp.panel.save") }}
+              </button>
+              <button v-else class="ep-btn-save" @click="savePanel" :disabled="saving || saveDisabled">
                 {{ saving ? '…' : t("cp.panel.save") }}
               </button>
             </div>
@@ -834,89 +815,10 @@ function previewCommand(a: RewardAction): string {
 
             <div v-if="actionsError" class="cp-panel-error">{{ actionsError }}</div>
 
-            <div class="ep-field-group cp-toggle-row" :class="{ 'cp-refund-locked': !actionsReward?.manageable }">
-              <div>
-                <div class="ep-field-label">{{ t("cp.actions.refund_on_failure") }}</div>
-                <div class="ep-field-hint">{{ t("cp.actions.refund_on_failure_hint") }}</div>
-              </div>
-              <button class="ep-switch" :class="{ on: refundOnFailure, disabled: !actionsReward?.manageable }"
-                @click="actionsReward?.manageable && (refundOnFailure = !refundOnFailure)"><span class="ep-switch-knob"></span></button>
-            </div>
-
-            <div class="ep-field-group cp-toggle-row" :class="{ 'cp-refund-locked': !actionsReward?.manageable }">
-              <div>
-                <div class="ep-field-label">{{ t("cp.actions.always_refund") }}</div>
-                <div class="ep-field-hint">{{ t("cp.actions.always_refund_hint") }}</div>
-              </div>
-              <button class="ep-switch" :class="{ on: alwaysRefund, disabled: !actionsReward?.manageable }"
-                @click="actionsReward?.manageable && (alwaysRefund = !alwaysRefund)"><span class="ep-switch-knob"></span></button>
-            </div>
-
-            <div v-if="!actionsReward?.manageable" class="ep-field-hint cp-refund-hint">
-              {{ t("cp.actions.refund_locked_hint") }}
-            </div>
-
-            <div v-if="needsInputWarning" class="cp-input-warning">
-              <span v-html="iconSvgFor('alert-triangle')"></span>
-              <span>{{ t("cp.actions.need_input_warning") }}</span>
-            </div>
-
-            <div v-if="!actionsLoading && !actionsList.length" class="ep-empty cp-actions-empty">
-              {{ t("cp.actions.empty") }}
-            </div>
-
-            <div v-for="(a, i) in actionsList" :key="i" class="cp-action-card">
-              <div class="cp-action-card-header">
-                <select v-model="a.type" class="ep-field-select">
-                  <option value="run_command">{{ t("cp.actions.type.run_command") }}</option>
-                  <option value="create_command">{{ t("cp.actions.type.create_command") }}</option>
-                  <option value="timeout_self">{{ t("cp.actions.type.timeout_self") }}</option>
-                  <option value="timeout_input_user">{{ t("cp.actions.type.timeout_input_user") }}</option>
-                </select>
-                <button class="ep-btn-action del" @click="removeAction(i)" v-html="iconSvgFor('trash')"></button>
-              </div>
-
-              <template v-if="a.type === 'run_command'">
-                <div class="ep-field-group">
-                  <label class="ep-field-label">{{ t("cp.actions.command") }}</label>
-                  <TypeaheadInput v-model="a.command" :items="commandNames"
-                    :placeholder="t('cp.actions.command_ph')" @select="onCommandSelected(a)" />
-                </div>
-                <div v-if="a.command.trim()" class="ep-field-group">
-                  <label class="ep-field-label">{{ t("cp.actions.args") }}
-                    <span class="ep-field-hint">{{ t("cp.actions.args_hint") }}</span>
-                  </label>
-                  <input v-model="a.args" class="ep-field-input" />
-                  <div class="ep-field-hint cp-cmd-preview">{{ previewCommand(a) }}</div>
-                </div>
-              </template>
-
-              <template v-else-if="a.type === 'create_command'">
-                <div class="ep-field-group">
-                  <label class="ep-field-label">{{ t("cp.actions.name") }}
-                    <span class="ep-field-hint">{{ t("cp.actions.name_hint") }}</span>
-                  </label>
-                  <input v-model="a.name" class="ep-field-input" />
-                </div>
-                <div class="ep-field-group">
-                  <label class="ep-field-label">{{ t("cp.actions.response") }}
-                    <span class="ep-field-hint">{{ t("cp.actions.response_hint") }}</span>
-                  </label>
-                  <input v-model="a.response" class="ep-field-input" />
-                </div>
-              </template>
-
-              <template v-else>
-                <div class="ep-field-group">
-                  <label class="ep-field-label">{{ t("cp.actions.seconds") }}</label>
-                  <input v-model.number="a.seconds" type="number" min="1" max="1209600" class="ep-field-input" />
-                </div>
-              </template>
-            </div>
-
-            <button class="ep-btn-cancel cp-add-action-btn" @click="addAction">
-              + {{ t("cp.actions.add") }}
-            </button>
+            <ChannelPointActionsEditor :actions="actionsList" :refund-on-failure="refundOnFailure"
+              :always-refund="alwaysRefund" :manageable="!!actionsReward?.manageable"
+              :needs-input-warning="needsInputWarning" :command-names="commandNames" :channel-prefix="channelPrefix"
+              @update:refund-on-failure="refundOnFailure = $event" @update:always-refund="alwaysRefund = $event" />
 
           </div>
 
@@ -1141,62 +1043,6 @@ function previewCommand(a: RewardAction): string {
   margin-bottom: 14px;
 }
 
-.cp-refund-locked {
-  opacity: 0.45;
-}
-
-.cp-refund-hint {
-  color: #e5c07b;
-  margin: -6px 0 14px;
-}
-
-.cp-actions-empty {
-  padding: 20px;
-  margin-bottom: 12px;
-}
-
-.cp-input-warning {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: 11px;
-  color: #e5c07b;
-  background: rgba(229, 192, 123, 0.08);
-  border-left: 2px solid #e5c07b;
-  padding: 8px 10px;
-  margin-bottom: 14px;
-}
-
-.cp-input-warning svg {
-  flex-shrink: 0;
-  margin-top: 1px;
-}
-
-.cp-action-card {
-  background: #1a1a1e;
-  border: 1px solid #2a2a30;
-  padding: 12px;
-  margin-bottom: 10px;
-  border-radius: 0;
-}
-
-.cp-action-card-header {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.cp-action-card-header .ep-field-select {
-  flex: 1;
-}
-
-.cp-add-action-btn {
-  width: 100%;
-  margin-top: 4px;
-}
-
-.cp-cmd-preview {
-  font-family: monospace;
-  margin-top: 4px;
-}
+/* >>> refund/action-card/command-preview styles now live in
+   ChannelPointActionsEditor.vue, which owns that markup */
 </style>
