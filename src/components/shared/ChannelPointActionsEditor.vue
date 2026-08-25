@@ -4,6 +4,7 @@
 import { useI18n } from "../../i18n";
 import { iconSvg as iconSvgFor } from "../../composables/icons";
 import TypeaheadInput from "./TypeaheadInput.vue";
+import type { TypeaheadItem } from "./TypeaheadInput.vue";
 import {
   blankAction,
   previewCommand,
@@ -21,10 +22,18 @@ const props = defineProps<{
   commandNames: string[];
   channelPrefix: string;
   rewardOptions: { id: string; title: string }[];
+  // >>> "Only activate on Category" - not a real redemption action (it's driven
+  // >>> by category changes, not this reward's own redemption), but presented
+  // >>> here since it's still a per-reward on/off behavior. Bot-created only.
+  gateEnabled: boolean;
+  gateCategory: string;
+  fetchCategories: (query: string) => Promise<TypeaheadItem[]>;
 }>();
 const emit = defineEmits<{
   (e: "update:refundOnFailure", v: boolean): void;
   (e: "update:alwaysRefund", v: boolean): void;
+  (e: "update:gateEnabled", v: boolean): void;
+  (e: "update:gateCategory", v: string): void;
 }>();
 
 function addAction() {
@@ -63,6 +72,20 @@ function onCommandSelected(a: RewardAction) {
     </div>
 
     <hr class="cp-divider" />
+
+    <div v-if="manageable" class="cp-action-card">
+      <div class="cp-action-card-header">
+        <div class="cp-gate-title">{{ t("cp.actions.type.category_gate") }}</div>
+        <button class="ep-switch" :class="{ on: gateEnabled }"
+          @click="emit('update:gateEnabled', !gateEnabled)"><span class="ep-switch-knob"></span></button>
+      </div>
+      <div v-if="gateEnabled" class="ep-field-group">
+        <label class="ep-field-label">{{ t("trigger.field.category") }}</label>
+        <TypeaheadInput :model-value="gateCategory" :fetch-items="fetchCategories" :min-chars="1"
+          placeholder="Just Chatting" @update:model-value="(v: string) => emit('update:gateCategory', v)"
+          @select="(item: any) => emit('update:gateCategory', item.label)" />
+      </div>
+    </div>
 
     <div v-if="needsInputWarning" class="cp-input-warning">
       <span v-html="iconSvgFor('alert-triangle')"></span>
@@ -227,6 +250,15 @@ function onCommandSelected(a: RewardAction) {
   display: flex;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.cp-gate-title {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
 }
 
 .cp-action-card-header .ep-field-select {

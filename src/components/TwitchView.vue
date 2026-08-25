@@ -6,7 +6,6 @@ import { useI18n } from "../i18n";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import ChannelPointActionsEditor from "./shared/ChannelPointActionsEditor.vue";
-import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 import {
   blankAction,
@@ -176,10 +175,9 @@ const limitsEnabled = ref(false);
 // >>> "actions" tab only applies to bot-created rewards being edited, never to a new one
 const editTab = ref<"settings" | "actions">("settings");
 
-// vvv category gate - toggles this reward on/off based on the live category vvv
+// vvv category gate - "Only activate on Category" reward action vvv
 const gateEnabled = ref(false);
 const gateCategory = ref("");
-const gateDirection = ref<"activate" | "deactivate">("activate");
 // >>> the linked trigger's name, once saved once - drives update-vs-create on save
 const gateTriggerName = ref<string | null>(null);
 
@@ -230,7 +228,7 @@ async function syncCategoryGate(rewardId: string, rewardTitle: string) {
         event_type: "category",
         action_type: "channel_point_reward",
         action_reward_id: rewardId,
-        action_reward_state: gateDirection.value,
+        action_reward_state: "activate",
         event_category_mode: "while_active",
         required_game: gateCategory.value.trim(),
         match_pattern: "",
@@ -373,7 +371,6 @@ function openEdit(r: Reward) {
   const gate = categoryGates.value[r.id];
   gateEnabled.value = !!gate;
   gateCategory.value = gate?.category ?? "";
-  gateDirection.value = gate?.state ?? "activate";
   gateTriggerName.value = gate?.name ?? null;
   Object.assign(form, {
     title: r.title,
@@ -448,10 +445,6 @@ async function savePanel() {
     if (!res.ok) {
       applyBackendError(data.error, data.detail);
       return;
-    }
-    if (!isNew.value && editingId.value) {
-      await syncCategoryGate(editingId.value, form.title.trim());
-      await loadCategoryGates();
     }
     editOpen.value = false;
     await load();
@@ -772,6 +765,11 @@ async function saveActions() {
     }
     linkedTriggerNames.value = actionsList.value.map((a) => a._triggerName!);
 
+    if (reward.manageable) {
+      await syncCategoryGate(reward.id, reward.title);
+      await loadCategoryGates();
+    }
+
     // >>> closes whichever context triggered the save (standalone panel or edit-panel tab)
     actionsOpen.value = false;
     editOpen.value = false;
@@ -929,7 +927,9 @@ async function saveActions() {
               :refund-on-failure="refundOnFailure" :always-refund="alwaysRefund" :manageable="true"
               :needs-input-warning="needsInputWarning" :command-names="commandNames" :channel-prefix="channelPrefix"
               :reward-options="botRewards.map((r) => ({ id: r.id, title: r.title }))"
-              @update:refund-on-failure="refundOnFailure = $event" @update:always-refund="alwaysRefund = $event" />
+              :gate-enabled="gateEnabled" :gate-category="gateCategory" :fetch-categories="fetchCategories"
+              @update:refund-on-failure="refundOnFailure = $event" @update:always-refund="alwaysRefund = $event"
+              @update:gate-enabled="gateEnabled = $event" @update:gate-category="gateCategory = $event" />
 
             <template v-else>
 
@@ -1021,30 +1021,6 @@ async function saveActions() {
               </div>
             </div>
 
-            <div v-if="!isNew" class="ep-field-group cp-toggle-row">
-              <div>
-                <div class="ep-field-label">{{ t("cp.field.category_gate") }}</div>
-                <div class="ep-field-hint">{{ t("cp.field.category_gate_hint") }}</div>
-              </div>
-              <button class="ep-switch" :class="{ on: gateEnabled }"
-                @click="gateEnabled = !gateEnabled"><span class="ep-switch-knob"></span></button>
-            </div>
-            <template v-if="!isNew && gateEnabled">
-              <div class="ep-field-group">
-                <label class="ep-field-label">{{ t("trigger.field.category") }}</label>
-                <TypeaheadInput :model-value="gateCategory" :fetch-items="fetchCategories" :min-chars="1"
-                  placeholder="Just Chatting" @update:model-value="(v: string) => (gateCategory = v)"
-                  @select="(item: any) => (gateCategory = item.label)" />
-              </div>
-              <div class="ep-field-group">
-                <label class="ep-field-label">{{ t("trigger.field.reward_state") }}</label>
-                <select v-model="gateDirection" class="ep-field-select">
-                  <option value="activate">{{ t("trigger.reward_state.activate") }}</option>
-                  <option value="deactivate">{{ t("trigger.reward_state.deactivate") }}</option>
-                </select>
-              </div>
-            </template>
-
             </template>
 
           </div>
@@ -1093,7 +1069,9 @@ async function saveActions() {
               :always-refund="alwaysRefund" :manageable="!!actionsReward?.manageable"
               :needs-input-warning="needsInputWarning" :command-names="commandNames" :channel-prefix="channelPrefix"
               :reward-options="botRewards.map((r) => ({ id: r.id, title: r.title }))"
-              @update:refund-on-failure="refundOnFailure = $event" @update:always-refund="alwaysRefund = $event" />
+              :gate-enabled="gateEnabled" :gate-category="gateCategory" :fetch-categories="fetchCategories"
+              @update:refund-on-failure="refundOnFailure = $event" @update:always-refund="alwaysRefund = $event"
+              @update:gate-enabled="gateEnabled = $event" @update:gate-category="gateCategory = $event" />
 
           </div>
 
