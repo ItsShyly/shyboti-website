@@ -257,6 +257,7 @@ const ACTION_TYPES = [
   { value: "set_title", label: "Set stream title" },
   { value: "set_category", label: "Set stream category" },
   { value: "timeout", label: "Timeout user" },
+  { value: "timeout_input_user", label: "Timeout user named in input" },
   { value: "ban", label: "Ban user" },
   { value: "mod", label: "Mod user" },
   { value: "shoutout", label: "Shoutout" },
@@ -353,12 +354,11 @@ function insertRefToken(token: string) {
   editTrigger.value.response = insertTokenAtCursor(el, token);
 }
 
-// >>> matches the server's own rule for what counts as a "keyword" trigger
-function isKeywordTrigger(): boolean {
-  return (
-    (editTrigger.value.event_type ?? "message") === "message" &&
-    editTrigger.value.action_type === "run_command"
-  );
+// >>> matches the server's own rule for what counts as a "keyword" trigger.
+// >>> Takes an optional row (for the list) - defaults to the edit form's own state
+function isKeywordTrigger(row?: Partial<Trigger>): boolean {
+  const tr = row ?? editTrigger.value;
+  return (tr.event_type ?? "message") === "message" && tr.action_type === "run_command";
 }
 
 // >>> "while_active" category+reward triggers auto-revert instead of firing once
@@ -371,12 +371,14 @@ function isCategoryGate(): boolean {
 }
 
 // >>> trigger's own name is meaningless/auto-generated for these - hide the
-// >>> name input and show what it's actually tied to instead
-function isAutoNamed(): boolean {
+// >>> name input/row name and show what it's actually tied to instead. Takes
+// >>> an optional row (for the list) - defaults to the edit form's own state
+function isAutoNamed(row?: Partial<Trigger>): boolean {
+  const tr = row ?? editTrigger.value;
   return (
-    isKeywordTrigger() ||
-    editTrigger.value.action_type === "channel_point_reward" ||
-    editTrigger.value.event_type === "channel_point_reward"
+    isKeywordTrigger(row) ||
+    tr.action_type === "channel_point_reward" ||
+    tr.event_type === "channel_point_reward"
   );
 }
 
@@ -408,10 +410,10 @@ function needsInputWarning(): boolean {
   return currentActionUsesInput();
 }
 
-function autoNamedTagLabel(): string {
-  if (isKeywordTrigger()) return "+" + (editTrigger.value.response ?? "");
-  const rid =
-    editTrigger.value.action_reward_id || editTrigger.value.event_reward_id || "";
+function autoNamedTagLabel(row?: Partial<Trigger>): string {
+  const tr = row ?? editTrigger.value;
+  if (isKeywordTrigger(row)) return "+" + (tr.response ?? "");
+  const rid = tr.action_reward_id || tr.event_reward_id || "";
   return rewardTitleById.value[rid] ?? t("trigger.field.reward");
 }
 
@@ -814,8 +816,8 @@ defineExpose({
             @click="canToggle && toggleActive(trigger)"><span class="ep-switch-knob"></span></button>
         </div>
         <div class="trigger-info" @click="openEdit(trigger)">
-          <div v-if="trigger.linked_command" class="trigger-name">
-            <span class="ep-meta-pill linked-command"><span v-html="iconSvgFor('link')"></span> +{{ trigger.linked_command }}</span>
+          <div v-if="isAutoNamed(trigger)" class="trigger-name">
+            <span class="ep-meta-pill linked-command"><span v-html="iconSvgFor('link')"></span> {{ autoNamedTagLabel(trigger) }}</span>
           </div>
           <div v-else class="trigger-name">{{ trigger.name }}</div>
           <div class="trigger-meta">
@@ -858,7 +860,7 @@ defineExpose({
               <div class="ep-panel-title">
                 {{ isNew ? t("trigger.edit_new") : t("trigger.edit_title") }}
                 <span v-if="isAutoNamed()" class="ep-meta-pill linked-command">
-                  <span v-html="iconSvgFor(isKeywordTrigger() ? 'link' : 'zap')"></span>
+                  <span v-html="iconSvgFor('link')"></span>
                   {{ autoNamedTagLabel() }}
                 </span>
                 <EditableNameHeader v-else v-model="editTrigger.name" :orig-name="editOrigName"

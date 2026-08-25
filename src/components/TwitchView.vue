@@ -432,6 +432,75 @@ const actionsLoading = ref(false);
 const actionsSaving = ref(false);
 const actionsError = ref("");
 
+// >>> actions live as channel_triggers rows (event_type "channel_point_reward"),
+// >>> not in channel_point_rules anymore - these convert between the two shapes
+function triggerToRewardAction(tr: any): RewardAction {
+  const base = { ...blankAction(), _triggerName: tr.name as string };
+  switch (tr.action_type) {
+    case "run_command":
+      return { ...base, type: "run_command", command: tr.response ?? "", args: tr.action_extra ?? "" };
+    case "create_command":
+      return { ...base, type: "create_command", response: tr.response ?? "", name: tr.action_extra ?? "" };
+    case "timeout":
+      return { ...base, type: "timeout_self", seconds: parseInt(tr.response) || 600 };
+    case "timeout_input_user":
+      return { ...base, type: "timeout_input_user", seconds: parseInt(tr.response) || 600 };
+    case "shoutout":
+      return { ...base, type: "shoutout", response: tr.response ?? "" };
+    case "set_title":
+      return { ...base, type: "set_title", response: tr.response ?? "" };
+    case "set_category":
+      return { ...base, type: "set_category", response: tr.response ?? "" };
+    case "channel_point_reward":
+      return {
+        ...base,
+        type: "channel_point_reward",
+        rewardId: tr.action_reward_id ?? "",
+        rewardState: tr.action_reward_state === "deactivate" ? "deactivate" : "activate",
+      };
+    case "ban":
+      return { ...base, type: "ban" };
+    default:
+      return { ...base, type: "say", response: tr.response ?? "" };
+  }
+}
+
+function rewardActionToTriggerFields(a: RewardAction) {
+  const blank = { action_extra: "", action_reward_id: "", action_reward_state: "activate" as const };
+  switch (a.type) {
+    case "run_command":
+      return { action_type: "run_command", response: a.command, ...blank, action_extra: a.args };
+    case "create_command":
+      return { action_type: "create_command", response: a.response, ...blank, action_extra: a.name };
+    case "timeout_self":
+      return { action_type: "timeout", response: String(a.seconds), ...blank };
+    case "timeout_input_user":
+      return { action_type: "timeout_input_user", response: String(a.seconds), ...blank };
+    case "say":
+      return { action_type: "say", response: a.response, ...blank };
+    case "ban":
+      return { action_type: "ban", response: "", ...blank };
+    case "shoutout":
+      return { action_type: "shoutout", response: a.response, ...blank };
+    case "set_title":
+      return { action_type: "set_title", response: a.response, ...blank };
+    case "set_category":
+      return { action_type: "set_category", response: a.response, ...blank };
+    case "channel_point_reward":
+      return {
+        action_type: "channel_point_reward",
+        response: "",
+        action_extra: "",
+        action_reward_id: a.rewardId,
+        action_reward_state: a.rewardState,
+      };
+  }
+}
+
+// >>> trigger names this reward's actions were saved under - diffed on the
+// >>> next save to know which ones got removed from the list
+const linkedTriggerNames = ref<string[]>([]);
+
 // >>> shared by openEdit (bot-created, tab) and openActions (twitch-created, standalone)
 async function loadActionsFor(r: Reward) {
   if (!session.value) return;
@@ -440,23 +509,30 @@ async function loadActionsFor(r: Reward) {
   actionsList.value = [];
   refundOnFailure.value = false;
   alwaysRefund.value = false;
+  linkedTriggerNames.value = [];
   actionsLoading.value = true;
   try {
-    const res = await fetch(
-      `${API}/channelpoints/${session.value.channel}/${r.id}/rules`,
-      { headers: { Authorization: `Bearer ${session.value.token}` } },
-    );
-    const data = await res.json();
-    if (!res.ok) {
+    const h = { Authorization: `Bearer ${session.value.token}` };
+    const [rulesRes, triggersRes] = await Promise.all([
+      fetch(`${API}/channelpoints/${session.value.channel}/${r.id}/rules`, { headers: h }),
+      fetch(`${API}/triggers/${session.value.channel}`, { headers: h }),
+    ]);
+    const data = await rulesRes.json();
+    if (!rulesRes.ok) {
       actionsError.value = errMsg(data.error);
       return;
     }
-    actionsList.value = (data.actions ?? []).map((a: any) => ({
-      ...blankAction(),
-      ...a,
-    }));
     refundOnFailure.value = !!data.refundOnFailure;
     alwaysRefund.value = !!data.alwaysRefund;
+
+    if (triggersRes.ok) {
+      const td = (await triggersRes.json()) as { triggers: any[] };
+      const linked = (td.triggers ?? []).filter(
+        (tr) => tr.event_type === "channel_point_reward" && tr.event_reward_id === r.id,
+      );
+      actionsList.value = linked.map(triggerToRewardAction);
+      linkedTriggerNames.value = linked.map((tr) => tr.name);
+    }
   } catch {
     actionsError.value = errMsg("request_failed");
   } finally {
@@ -503,32 +579,68 @@ async function ensureUserInputEnabled() {
 }
 watch(actionsList, ensureUserInputEnabled, { deep: true });
 
+function slugify(s: string): string {
+  return s.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
 async function saveActions() {
   if (!session.value || !actionsReward.value) return;
   actionsSaving.value = true;
   actionsError.value = "";
+  const channel = session.value.channel;
+  const token = session.value.token;
+  const reward = actionsReward.value;
   try {
-    const res = await fetch(
-      `${API}/channelpoints/${session.value.channel}/${actionsReward.value.id}/rules`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.value.token}`,
-        },
-        body: JSON.stringify({
-          actions: actionsList.value,
-          refundOnFailure: refundOnFailure.value,
-          alwaysRefund: alwaysRefund.value,
-          rewardTitle: actionsReward.value.title,
-        }),
-      },
-    );
-    const data = await res.json();
-    if (!res.ok) {
+    const rulesRes = await fetch(`${API}/channelpoints/${channel}/${reward.id}/rules`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        refundOnFailure: refundOnFailure.value,
+        alwaysRefund: alwaysRefund.value,
+        rewardTitle: reward.title,
+      }),
+    });
+    if (!rulesRes.ok) {
+      const data = await rulesRes.json().catch(() => ({}));
       actionsError.value = errMsg(data.error);
       return;
     }
+
+    // >>> delete trigger rows for actions removed from the list
+    const stillLinked = new Set(actionsList.value.map((a) => a._triggerName).filter(Boolean));
+    for (const name of linkedTriggerNames.value) {
+      if (stillLinked.has(name)) continue;
+      await fetch(`${API}/triggers/${channel}/${name}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
+
+    // >>> upsert each action as its own trigger row
+    for (const a of actionsList.value) {
+      const name = a._triggerName || `cp-${slugify(reward.title) || "reward"}-${Math.random().toString(36).slice(2, 7)}`;
+      const fields = rewardActionToTriggerFields(a);
+      const res = await fetch(`${API}/triggers/${channel}/${name}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          event_type: "channel_point_reward",
+          event_reward_id: reward.id,
+          match_pattern: "",
+          match_type: "contains",
+          enabled_when: "always",
+          required_game: "",
+          condition: "",
+          cooldown_sec: 0,
+          is_active: 1,
+          ...fields,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      a._triggerName = name;
+    }
+    linkedTriggerNames.value = actionsList.value.map((a) => a._triggerName!);
+
     // >>> closes whichever context triggered the save (standalone panel or edit-panel tab)
     actionsOpen.value = false;
     editOpen.value = false;

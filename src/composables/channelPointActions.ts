@@ -20,6 +20,8 @@ export interface RewardAction {
   seconds: number;
   rewardId: string;
   rewardState: "activate" | "deactivate";
+  // >>> the channel_triggers row backing this action, once saved once
+  _triggerName?: string;
 }
 
 export function blankAction(): RewardAction {
