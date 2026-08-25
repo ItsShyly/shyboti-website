@@ -120,7 +120,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.access.everyone": "Everyone",
     "cmd.access.mod": "Mod only",
     "cmd.access.bc": "BC only",
-    "cmd.arg_access_title": "Access for this subcommand specifically, independent of the command's own access level",
+    "cmd.arg_access_title":
+      "Access for this subcommand specifically, independent of the command's own access level",
     "cmd.edit": "Edit",
     "cmd.view": "View",
     "cmd.blocked": "Blocked",
@@ -170,7 +171,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.extras.online_only_label": "Only active while live",
     "cmd.extras.online_only_desc":
       "When enabled, the bot ignores commands, triggers and mentions while the channel is offline. Moderation keeps running.",
-    "cmd.default_alias_changed_hint": "A default alias was removed for this command",
+    "cmd.default_alias_changed_hint":
+      "A default alias was removed for this command",
     "cmd.reset_alias_conflict_prefix": "Can't restore - already used by",
     "cmd.reset_alias_conflict_suffix": "Remove it there first.",
     "settings.7tv.title": "7TV Emote Set",
@@ -275,7 +277,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cp.empty": "No custom rewards yet.",
     "cp.group.bot": "Bot created",
     "cp.group.twitch": "Twitch created",
-    "cp.explain": "Rewards created here can be edited or deleted. Rewards made in Twitch's own Creator Dashboard show up too, but are view-only - Twitch's API doesn't allow editing those.",
+    "cp.explain":
+      "Rewards created here can be edited or deleted. Rewards made in Twitch's own Creator Dashboard show up too, but are view-only - Twitch's API doesn't allow editing those.",
     "cp.locked": "View only",
     "cp.locked_hint": "Made in Twitch's dashboard - view only here",
     "cp.gate.only_active_on": "Only active on",
@@ -283,28 +286,34 @@ const translations: Record<Locale, Record<string, string>> = {
     "cp.enabled": "Enabled",
     "cp.edit": "Edit",
     "cp.error.not_connected": "This channel isn't connected to the dashboard.",
-    "cp.error.missing_scope": "The dashboard needs to reconnect with channel points permission.",
+    "cp.error.missing_scope":
+      "The dashboard needs to reconnect with channel points permission.",
     "cp.error.bot_not_ready": "Bot isn't ready yet, try again shortly.",
     "cp.error.user_lookup_failed": "Couldn't resolve this channel.",
-    "cp.error.not_manageable": "Twitch only lets the app that made a reward edit it.",
+    "cp.error.not_manageable":
+      "Twitch only lets the app that made a reward edit it.",
     "cp.error.duplicate_title": "A reward with this name already exists.",
     "cp.error.invalid_cost": "Cost has to be a whole number of at least 1.",
     "cp.error.invalid_color": "Not a valid hex color, e.g. #9146FF.",
     "cp.error.invalid_prompt": "Description is too long (max 200 characters).",
     "cp.error.invalid_cooldown": "Cooldown looks off - check the number below.",
-    "cp.error.invalid_limits": "Cooldown/limits look off - check the numbers below.",
+    "cp.error.invalid_limits":
+      "Cooldown/limits look off - check the numbers below.",
     "cp.error.request_failed": "Something went wrong talking to Twitch.",
     "cp.field.title": "Reward Name",
     "cp.field.title_ph": "Hydrate!",
     "cp.field.prompt": "Description",
     "cp.field.prompt_hint": "optional",
     "cp.field.user_input": "Require Viewer to Enter Text",
-    "cp.field.user_input_hint": "Shows a required text field to viewers when redeeming.",
+    "cp.field.user_input_hint":
+      "Shows a required text field to viewers when redeeming.",
     "cp.field.cost": "Cost",
     "cp.field.color": "Background Color",
-    "cp.field.color_hint": "The API doesn't support custom reward icons - this color is all viewers see.",
+    "cp.field.color_hint":
+      "The API doesn't support custom reward icons - this color is all viewers see.",
     "cp.field.skip_queue": "Skip Reward Requests Queue",
-    "cp.field.skip_queue_hint": "Redemptions are marked fulfilled automatically, no review needed.",
+    "cp.field.skip_queue_hint":
+      "Redemptions are marked fulfilled automatically, no review needed.",
     "cp.field.limits": "Cooldown & Limits",
     "cp.field.limits_hint": "Use redemption cooldowns and limits for viewers.",
     "cp.field.cooldown": "Redemption Cooldown",
@@ -326,16 +335,21 @@ const translations: Record<Locale, Record<string, string>> = {
     "cp.actions.empty": "No actions yet - add one below.",
     "cp.actions.add": "Add Action",
     "cp.actions.refund_on_failure": "Refund on Failure",
-    "cp.actions.refund_on_failure_hint": "Give the points back if any action fails.",
+    "cp.actions.refund_on_failure_hint":
+      "Give the points back if any action fails.",
     "cp.actions.always_refund": "Always Refund",
-    "cp.actions.always_refund_hint": "Never actually spend the viewer's points, just react.",
-    "cp.actions.refund_locked_hint": "Twitch only lets the app that made a reward refund/fulfill it - these won't work for this reward.",
-    "cp.actions.need_input_warning": "You first need to activate \"Require Viewer to Enter Text\" in the Channel Point reward on Twitch.",
+    "cp.actions.always_refund_hint":
+      "Never actually spend the viewer's points, just react.",
+    "cp.actions.refund_locked_hint":
+      "Twitch only lets the app that made a reward refund/fulfill it - these won't work for this reward.",
+    "cp.actions.need_input_warning":
+      'You first need to activate "Require Viewer to Enter Text" in the Channel Point reward on Twitch.',
     "cp.actions.type": "Action",
     "cp.actions.type.run_command": "Run a command",
     "cp.actions.type.create_command": "Create a command",
     "cp.actions.type.timeout_self": "Timeout the redeemer",
-    "cp.actions.type.timeout_input_user": "Timeout the user named in their input",
+    "cp.actions.type.timeout_input_user":
+      "Timeout the user named in their input",
     "cp.actions.type.say": "Send a message",
     "cp.actions.type.ban": "Ban the redeemer",
     "cp.actions.type.shoutout": "Shoutout",
@@ -346,7 +360,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cp.actions.field.say": "Message",
     "cp.actions.field.set_title": "Title",
     "cp.actions.field.set_category": "Category",
-    "cp.actions.shoutout_hint": "Optional - who to shout out, leave blank for the redeemer",
+    "cp.actions.shoutout_hint":
+      "Optional - who to shout out, leave blank for the redeemer",
     "cp.actions.reward": "Reward",
     "cp.actions.reward_state": "Set it to",
     "cp.actions.reward_state.activate": "Enabled",
@@ -354,7 +369,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cp.actions.command": "Command",
     "cp.actions.command_ph": "shoutout",
     "cp.actions.args": "Arguments",
-    "cp.actions.args_hint": "optional - {input}/{user}/{display} placeholders work",
+    "cp.actions.args_hint":
+      "optional - {input}/{user}/{display} placeholders work",
     "cp.actions.name": "Command Name",
     "cp.actions.name_hint": "{input}/{user}/{display} placeholders work",
     "cp.actions.response": "Response",
@@ -435,11 +451,14 @@ const translations: Record<Locale, Record<string, string>> = {
     "trigger.field.gate_mode": "Timing",
     "trigger.gate.once": "Fire once",
     "trigger.gate.while_active": "While category is active",
-    "trigger.gate.hint": "Sets the reward to the state above while the category matches, and reverts it when it changes.",
+    "trigger.gate.hint":
+      "Sets the reward to the state above while the category matches, and reverts it when it changes.",
     "trigger.field.command": "Command",
     "trigger.field.args": "Arguments",
-    "trigger.field.placeholder_hint": "{input}/{user}/{display} placeholders work",
-    "trigger.field.placeholder_hint_msg": "{message}/{user}/{display} placeholders work",
+    "trigger.field.placeholder_hint":
+      "{input}/{user}/{display} placeholders work",
+    "trigger.field.placeholder_hint_msg":
+      "{message}/{user}/{display} placeholders work",
     "trigger.field.command_name": "Command Name",
     "trigger.field.command_response": "Response",
     "trigger.field.value": "Value",
@@ -734,9 +753,11 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.dashboard": "View Dashboard",
     "perm.dashboard.desc": "Access the activity feed and dashboard.",
     "perm.commands_view": "View",
-    "perm.commands_view.desc": "See the commands list, including the Extras tab.",
+    "perm.commands_view.desc":
+      "See the commands list, including the Extras tab.",
     "perm.commands_toggle": "Toggle",
-    "perm.commands_toggle.desc": "Enable or disable commands, and change Extras-tab settings.",
+    "perm.commands_toggle.desc":
+      "Enable or disable commands, and change Extras-tab settings.",
     "perm.commands_edit": "Edit",
     "perm.commands_edit.desc":
       "Edit responses, cooldowns, and settings. Create new commands.",
@@ -902,7 +923,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.ask": "Ask the bot a yes/no question.",
     "cmddesc.song": "Show the currently playing song.",
     "cmddesc.gpt":
-      "Talk to Shyboti. Authorized moderators from the dashboard are also able to let shyboti create commands, timers, and triggers - just describe what you need.",
+      "Talk to Shyboti. You can also ask to create/edit commands, timers, triggers, and filters.",
     "cmddesc.7tv": "Look up or manage 7TV emotes.",
     "cmddesc.say": "Make the bot send a message.",
     "cmddesc.to": "Alias for +timeout - times out a user for a set duration.",
@@ -1153,7 +1174,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.access.everyone": "Jeder",
     "cmd.access.mod": "Nur Mods",
     "cmd.access.bc": "Nur BC",
-    "cmd.arg_access_title": "Zugriff nur für diesen Subcommand, unabhängig vom Zugriff des Commands selbst",
+    "cmd.arg_access_title":
+      "Zugriff nur für diesen Subcommand, unabhängig vom Zugriff des Commands selbst",
     "cmd.edit": "Edit",
     "cmd.view": "Ansehen",
     "cmd.blocked": "Gesperrt",
@@ -1204,8 +1226,10 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.extras.online_only_label": "Nur während Live aktiv",
     "cmd.extras.online_only_desc":
       "Wenn aktiviert, ignoriert der Bot Commands, Trigger und Erwähnungen, solange der Kanal offline ist. Moderation läuft weiterhin.",
-    "cmd.default_alias_changed_hint": "Ein Standard-Alias wurde für diesen Command entfernt",
-    "cmd.reset_alias_conflict_prefix": "Kann nicht wiederhergestellt werden - wird bereits benutzt von",
+    "cmd.default_alias_changed_hint":
+      "Ein Standard-Alias wurde für diesen Command entfernt",
+    "cmd.reset_alias_conflict_prefix":
+      "Kann nicht wiederhergestellt werden - wird bereits benutzt von",
     "cmd.reset_alias_conflict_suffix": "Zuerst dort entfernen.",
     "settings.7tv.title": "7TV Emote-Set",
     "settings.7tv.sub":
@@ -1312,38 +1336,51 @@ const translations: Record<Locale, Record<string, string>> = {
     "cp.empty": "Noch keine eigenen Belohnungen.",
     "cp.group.bot": "Vom Bot erstellt",
     "cp.group.twitch": "Von Twitch erstellt",
-    "cp.explain": "Hier erstellte Belohnungen können bearbeitet oder gelöscht werden. Im Twitch Creator Dashboard erstellte Belohnungen werden ebenfalls angezeigt, sind hier aber nur ansehbar - Twitchs API erlaubt kein Bearbeiten davon.",
+    "cp.explain":
+      "Hier erstellte Belohnungen können bearbeitet oder gelöscht werden. Im Twitch Creator Dashboard erstellte Belohnungen werden ebenfalls angezeigt, sind hier aber nur ansehbar - Twitchs API erlaubt kein Bearbeiten davon.",
     "cp.locked": "Nur ansehbar",
     "cp.locked_hint": "Im Twitch Dashboard erstellt - hier nur ansehbar",
     "cp.gate.only_active_on": "Nur aktiv bei",
     "cp.cost": "Kosten",
     "cp.enabled": "Aktiviert",
     "cp.edit": "Bearbeiten",
-    "cp.error.not_connected": "Dieser Channel ist nicht mit dem Dashboard verbunden.",
-    "cp.error.missing_scope": "Das Dashboard muss mit Channel-Points-Berechtigung neu verbunden werden.",
-    "cp.error.bot_not_ready": "Bot ist noch nicht bereit, versuch's gleich nochmal.",
+    "cp.error.not_connected":
+      "Dieser Channel ist nicht mit dem Dashboard verbunden.",
+    "cp.error.missing_scope":
+      "Das Dashboard muss mit Channel-Points-Berechtigung neu verbunden werden.",
+    "cp.error.bot_not_ready":
+      "Bot ist noch nicht bereit, versuch's gleich nochmal.",
     "cp.error.user_lookup_failed": "Konnte diesen Channel nicht auflösen.",
-    "cp.error.not_manageable": "Twitch erlaubt nur der App, die eine Belohnung erstellt hat, sie zu bearbeiten.",
-    "cp.error.duplicate_title": "Eine Belohnung mit diesem Namen existiert schon.",
+    "cp.error.not_manageable":
+      "Twitch erlaubt nur der App, die eine Belohnung erstellt hat, sie zu bearbeiten.",
+    "cp.error.duplicate_title":
+      "Eine Belohnung mit diesem Namen existiert schon.",
     "cp.error.invalid_cost": "Kosten müssen eine ganze Zahl ab 1 sein.",
     "cp.error.invalid_color": "Kein gültiger Hex-Farbcode, z.B. #9146FF.",
     "cp.error.invalid_prompt": "Beschreibung ist zu lang (max. 200 Zeichen).",
-    "cp.error.invalid_cooldown": "Cooldown sieht falsch aus - Zahl unten prüfen.",
-    "cp.error.invalid_limits": "Cooldown/Limits sehen falsch aus - Zahlen unten prüfen.",
-    "cp.error.request_failed": "Bei der Twitch-Anfrage ist etwas schiefgelaufen.",
+    "cp.error.invalid_cooldown":
+      "Cooldown sieht falsch aus - Zahl unten prüfen.",
+    "cp.error.invalid_limits":
+      "Cooldown/Limits sehen falsch aus - Zahlen unten prüfen.",
+    "cp.error.request_failed":
+      "Bei der Twitch-Anfrage ist etwas schiefgelaufen.",
     "cp.field.title": "Name der Belohnung",
     "cp.field.title_ph": "Trink Wasser!",
     "cp.field.prompt": "Beschreibung",
     "cp.field.prompt_hint": "optional",
     "cp.field.user_input": "Texteingabe vom Zuschauer verlangen",
-    "cp.field.user_input_hint": "Zeigt Zuschauern beim Einlösen ein Pflicht-Textfeld.",
+    "cp.field.user_input_hint":
+      "Zeigt Zuschauern beim Einlösen ein Pflicht-Textfeld.",
     "cp.field.cost": "Kosten",
     "cp.field.color": "Hintergrundfarbe",
-    "cp.field.color_hint": "Die API unterstützt keine eigenen Icons - Zuschauer sehen nur diese Farbe.",
+    "cp.field.color_hint":
+      "Die API unterstützt keine eigenen Icons - Zuschauer sehen nur diese Farbe.",
     "cp.field.skip_queue": "Anfragen-Warteschlange überspringen",
-    "cp.field.skip_queue_hint": "Einlösungen werden automatisch als erfüllt markiert, keine Prüfung nötig.",
+    "cp.field.skip_queue_hint":
+      "Einlösungen werden automatisch als erfüllt markiert, keine Prüfung nötig.",
     "cp.field.limits": "Cooldown & Limits",
-    "cp.field.limits_hint": "Cooldowns und Limits für Zuschauer-Einlösungen nutzen.",
+    "cp.field.limits_hint":
+      "Cooldowns und Limits für Zuschauer-Einlösungen nutzen.",
     "cp.field.cooldown": "Einlöse-Cooldown",
     "cp.field.cooldown_hint": "Sekunden, bis zu 7 Tage",
     "cp.field.max_stream": "Limit pro Stream",
@@ -1363,11 +1400,15 @@ const translations: Record<Locale, Record<string, string>> = {
     "cp.actions.empty": "Noch keine Aktionen - unten eine hinzufügen.",
     "cp.actions.add": "Aktion hinzufügen",
     "cp.actions.refund_on_failure": "Bei Fehler erstatten",
-    "cp.actions.refund_on_failure_hint": "Gibt die Punkte zurück, wenn eine Aktion fehlschlägt.",
+    "cp.actions.refund_on_failure_hint":
+      "Gibt die Punkte zurück, wenn eine Aktion fehlschlägt.",
     "cp.actions.always_refund": "Immer erstatten",
-    "cp.actions.always_refund_hint": "Punkte des Zuschauers werden nie wirklich ausgegeben, nur reagiert.",
-    "cp.actions.refund_locked_hint": "Twitch erlaubt nur der App, die eine Belohnung erstellt hat, sie zu erstatten/erfüllen - das funktioniert hier nicht.",
-    "cp.actions.need_input_warning": "Du musst zuerst \"Texteingabe vom Zuschauer verlangen\" bei der Channel-Points-Belohnung auf Twitch aktivieren.",
+    "cp.actions.always_refund_hint":
+      "Punkte des Zuschauers werden nie wirklich ausgegeben, nur reagiert.",
+    "cp.actions.refund_locked_hint":
+      "Twitch erlaubt nur der App, die eine Belohnung erstellt hat, sie zu erstatten/erfüllen - das funktioniert hier nicht.",
+    "cp.actions.need_input_warning":
+      'Du musst zuerst "Texteingabe vom Zuschauer verlangen" bei der Channel-Points-Belohnung auf Twitch aktivieren.',
     "cp.actions.type": "Aktion",
     "cp.actions.type.run_command": "Command ausführen",
     "cp.actions.type.create_command": "Command erstellen",
@@ -1383,7 +1424,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cp.actions.field.say": "Nachricht",
     "cp.actions.field.set_title": "Titel",
     "cp.actions.field.set_category": "Kategorie",
-    "cp.actions.shoutout_hint": "Optional - wer geshoutoutet wird, leer lassen für den Einlöser",
+    "cp.actions.shoutout_hint":
+      "Optional - wer geshoutoutet wird, leer lassen für den Einlöser",
     "cp.actions.reward": "Belohnung",
     "cp.actions.reward_state": "Setze auf",
     "cp.actions.reward_state.activate": "Aktiviert",
@@ -1391,11 +1433,14 @@ const translations: Record<Locale, Record<string, string>> = {
     "cp.actions.command": "Command",
     "cp.actions.command_ph": "shoutout",
     "cp.actions.args": "Argumente",
-    "cp.actions.args_hint": "optional - {input}/{user}/{display} Platzhalter funktionieren",
+    "cp.actions.args_hint":
+      "optional - {input}/{user}/{display} Platzhalter funktionieren",
     "cp.actions.name": "Command-Name",
-    "cp.actions.name_hint": "{input}/{user}/{display} Platzhalter funktionieren",
+    "cp.actions.name_hint":
+      "{input}/{user}/{display} Platzhalter funktionieren",
     "cp.actions.response": "Antwort",
-    "cp.actions.response_hint": "{input}/{user}/{display} Platzhalter funktionieren",
+    "cp.actions.response_hint":
+      "{input}/{user}/{display} Platzhalter funktionieren",
     "cp.actions.seconds": "Sekunden",
     "cp.actions.remove": "Entfernen",
 
@@ -1473,11 +1518,14 @@ const translations: Record<Locale, Record<string, string>> = {
     "trigger.field.gate_mode": "Zeitpunkt",
     "trigger.gate.once": "Einmal auslösen",
     "trigger.gate.while_active": "Solange Kategorie aktiv ist",
-    "trigger.gate.hint": "Setzt die Belohnung auf den Status oben, solange die Kategorie passt, und macht es rückgängig bei Änderung.",
+    "trigger.gate.hint":
+      "Setzt die Belohnung auf den Status oben, solange die Kategorie passt, und macht es rückgängig bei Änderung.",
     "trigger.field.command": "Command",
     "trigger.field.args": "Argumente",
-    "trigger.field.placeholder_hint": "{input}/{user}/{display} Platzhalter funktionieren",
-    "trigger.field.placeholder_hint_msg": "{message}/{user}/{display} Platzhalter funktionieren",
+    "trigger.field.placeholder_hint":
+      "{input}/{user}/{display} Platzhalter funktionieren",
+    "trigger.field.placeholder_hint_msg":
+      "{message}/{user}/{display} Platzhalter funktionieren",
     "trigger.field.command_name": "Command-Name",
     "trigger.field.command_response": "Antwort",
     "trigger.field.value": "Wert",
@@ -1767,7 +1815,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.commands_view": "Anzeigen",
     "perm.commands_view.desc": "Die Command-Liste sehen, inklusive Extras-Tab.",
     "perm.commands_toggle": "Umschalten",
-    "perm.commands_toggle.desc": "Commands aktivieren/deaktivieren und Extras-Tab-Einstellungen ändern.",
+    "perm.commands_toggle.desc":
+      "Commands aktivieren/deaktivieren und Extras-Tab-Einstellungen ändern.",
     "perm.commands_edit": "Bearbeiten",
     "perm.commands_edit.desc":
       "Antworten, Cooldowns und Einstellungen bearbeiten. Neue Commands erstellen.",
@@ -1937,7 +1986,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmddesc.ask": "Stelle dem Bot eine Ja/Nein-Frage.",
     "cmddesc.song": "Zeigt den aktuell gespielten Song.",
     "cmddesc.gpt":
-      "Unterhalte dich mit Shyboti. Berechtigte Mods aus dem Dashbaord können auch Commands, timer sowie trigger erstellen lassen - einfach beschreiben was du brauchst.",
+      "Unterhalte dich mit Shyboti. Du kannst auch Commands, Timer, Trigger und Filter erstellen/bearbeiten lassen.",
     "cmddesc.7tv": "7TV-Emotes nachschlagen oder verwalten.",
     "cmddesc.say": "Lässt den Bot eine Nachricht senden.",
     "cmddesc.to":
