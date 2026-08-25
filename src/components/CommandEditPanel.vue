@@ -85,15 +85,33 @@ async function resetToDefault() {
   }
   resetConfirm.value = false
   resetting.value = true
+  saveError.value = ''
   try {
-    await fetch(`${API}/commands/${props.channel}/${props.cmdName}/reset`, {
+    const res = await fetch(`${API}/commands/${props.channel}/${props.cmdName}/reset`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${session.value.token}` }
     })
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({})) as {
+        error?: string
+        conflicts?: { alias: string; command: string }[]
+      }
+      if (data.error === 'alias_conflict' && data.conflicts?.length) {
+        const list = data.conflicts.map(c => `+${c.alias} (${props.prefix ?? '+'}${c.command})`).join(', ')
+        saveError.value = `${t('cmd.reset_alias_conflict_prefix')} ${list}. ${t('cmd.reset_alias_conflict_suffix')}`
+      } else {
+        saveError.value = t('edit.rename_error')
+      }
+      resetting.value = false
+      return
+    }
     builtinRenamedTo.value = null
     form.value.name = props.cmdName
     await loadAliases()
-  } catch { }
+    emit('saved', props.cmdName)
+  } catch {
+    saveError.value = t('edit.rename_error')
+  }
   resetting.value = false
 }
 const builtinFlags = computed(() => props.isBuiltIn ? (COMMAND_FLAGS[props.cmdName] ?? []) : [])

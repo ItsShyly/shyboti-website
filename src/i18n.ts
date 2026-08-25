@@ -170,6 +170,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.extras.online_only_label": "Only active while live",
     "cmd.extras.online_only_desc":
       "When enabled, the bot ignores commands, triggers and mentions while the channel is offline. Moderation keeps running.",
+    "cmd.default_alias_changed_hint": "A default alias was removed for this command",
+    "cmd.reset_alias_conflict_prefix": "Can't restore - already used by",
+    "cmd.reset_alias_conflict_suffix": "Remove it there first.",
     "settings.7tv.title": "7TV Emote Set",
     "settings.7tv.sub":
       "Used for emote-based features like @shyboti replies and emote spam filters.",
@@ -1201,6 +1204,9 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.extras.online_only_label": "Nur während Live aktiv",
     "cmd.extras.online_only_desc":
       "Wenn aktiviert, ignoriert der Bot Commands, Trigger und Erwähnungen, solange der Kanal offline ist. Moderation läuft weiterhin.",
+    "cmd.default_alias_changed_hint": "Ein Standard-Alias wurde für diesen Command entfernt",
+    "cmd.reset_alias_conflict_prefix": "Kann nicht wiederhergestellt werden - wird bereits benutzt von",
+    "cmd.reset_alias_conflict_suffix": "Zuerst dort entfernen.",
     "settings.7tv.title": "7TV Emote-Set",
     "settings.7tv.sub":
       "Wird für Emote-Funktionen wie @shyboti-Antworten und Emote-Spam-Filter verwendet.",

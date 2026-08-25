@@ -208,6 +208,9 @@ watch(() => session.value?.channel, loadKeywordTags);
 
 // >>> command name -> its aliases (channel-created + global), for row-list tags
 const aliasesByCommand = ref<Record<string, string[]>>({});
+// >>> built-ins that had a default alias removed - shows the same "customized"
+// >>> hint as a rename, since it's silently no longer shipping with defaults
+const commandsWithRemovedDefaultAlias = ref<Set<string>>(new Set());
 async function loadAliasTags() {
   if (!session.value) return;
   const ch = session.value.channel;
@@ -216,11 +219,18 @@ async function loadAliasTags() {
       headers: { Authorization: `Bearer ${session.value.token}` },
     });
     if (!res.ok) return;
-    const data = (await res.json()) as { aliases: Record<string, string[]> };
+    const data = (await res.json()) as {
+      aliases: Record<string, string[]>;
+      removedDefaults?: string[];
+    };
     if (session.value?.channel !== ch) return;
     aliasesByCommand.value = data.aliases ?? {};
+    commandsWithRemovedDefaultAlias.value = new Set(data.removedDefaults ?? []);
   } catch {
-    if (session.value?.channel === ch) aliasesByCommand.value = {};
+    if (session.value?.channel === ch) {
+      aliasesByCommand.value = {};
+      commandsWithRemovedDefaultAlias.value = new Set();
+    }
   }
 }
 onMounted(loadAliasTags);
@@ -1238,6 +1248,8 @@ onUnmounted(() => {
                   <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
                   {{ prefix }}{{ cmd.renamedTo || cmd.name }}
                   <span v-if="cmd.renamedTo" class="cmd-renamed-hint" :title="`Default: ${prefix}${cmd.name}`">↺</span>
+                  <span v-if="commandsWithRemovedDefaultAlias.has(cmd.name)" class="cmd-renamed-hint"
+                    :title="t('cmd.default_alias_changed_hint')">↺</span>
                 </div>
                 <div class="cmd-desc">
                   <span class="cmd-desc-text">{{ cmdDesc(cmd) }}</span>
