@@ -6,6 +6,8 @@ import { useI18n } from "../i18n";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import ChannelPointActionsEditor from "./shared/ChannelPointActionsEditor.vue";
+import TypeaheadInput from "./shared/TypeaheadInput.vue";
+import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 import {
   blankAction,
   actionNeedsInput,
@@ -123,9 +125,14 @@ async function loadCommandNames() {
 onMounted(loadCommandNames);
 watch(() => session.value?.channel, loadCommandNames);
 
-// >>> reward id -> target category, for rewards with a "while_active" category
-// >>> gate trigger - shown as a row tag so it's not a silent surprise
-const categoryGateByReward = ref<Record<string, string>>({});
+// >>> reward id -> its "while_active" category gate trigger (if any) - shown
+// >>> as a row tag, and lets the reward panel edit that same trigger directly
+interface CategoryGate {
+  name: string;
+  category: string;
+  state: "activate" | "deactivate";
+}
+const categoryGates = ref<Record<string, CategoryGate>>({});
 async function loadCategoryGates() {
   if (!session.value) return;
   const ch = session.value.channel;
@@ -136,7 +143,7 @@ async function loadCategoryGates() {
     if (!res.ok) return;
     const data = (await res.json()) as { triggers: any[] };
     if (session.value?.channel !== ch) return;
-    const map: Record<string, string> = {};
+    const map: Record<string, CategoryGate> = {};
     for (const tr of data.triggers ?? []) {
       if (
         tr.event_type === "category" &&
@@ -145,12 +152,16 @@ async function loadCategoryGates() {
         tr.action_reward_id &&
         tr.required_game
       ) {
-        map[tr.action_reward_id] = tr.required_game;
+        map[tr.action_reward_id] = {
+          name: tr.name,
+          category: tr.required_game,
+          state: tr.action_reward_state === "deactivate" ? "deactivate" : "activate",
+        };
       }
     }
-    categoryGateByReward.value = map;
+    categoryGates.value = map;
   } catch {
-    if (session.value?.channel === ch) categoryGateByReward.value = {};
+    if (session.value?.channel === ch) categoryGates.value = {};
   }
 }
 onMounted(loadCategoryGates);
@@ -164,6 +175,76 @@ const editingId = ref<string | null>(null);
 const limitsEnabled = ref(false);
 // >>> "actions" tab only applies to bot-created rewards being edited, never to a new one
 const editTab = ref<"settings" | "actions">("settings");
+
+// vvv category gate - toggles this reward on/off based on the live category vvv
+const gateEnabled = ref(false);
+const gateCategory = ref("");
+const gateDirection = ref<"activate" | "deactivate">("activate");
+// >>> the linked trigger's name, once saved once - drives update-vs-create on save
+const gateTriggerName = ref<string | null>(null);
+
+async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
+  if (!session.value) return [];
+  try {
+    const res = await fetch(
+      `${API}/obs/twitch/categories?q=${encodeURIComponent(query)}`,
+      { headers: { Authorization: `Bearer ${session.value.token}` } },
+    );
+    if (!res.ok) return [];
+    const d = (await res.json()) as {
+      categories: { id: string; name: string; box_art_url: string }[];
+    };
+    return (d.categories ?? []).map((c) => ({
+      id: c.id,
+      label: c.name,
+      iconUrl: c.box_art_url,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// >>> creates/updates/deletes the one trigger backing this reward's gate
+async function syncCategoryGate(rewardId: string, rewardTitle: string) {
+  if (!session.value) return;
+  const ch = session.value.channel;
+  const auth = { Authorization: `Bearer ${session.value.token}` };
+  try {
+    if (!gateEnabled.value || !gateCategory.value.trim()) {
+      if (gateTriggerName.value) {
+        await fetch(`${API}/triggers/${ch}/${gateTriggerName.value}`, {
+          method: "DELETE",
+          headers: auth,
+        });
+        gateTriggerName.value = null;
+      }
+      return;
+    }
+    const name =
+      gateTriggerName.value ||
+      `cp-gate-${slugify(rewardTitle) || "reward"}-${Math.random().toString(36).slice(2, 7)}`;
+    await fetch(`${API}/triggers/${ch}/${name}`, {
+      method: "PUT",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        event_type: "category",
+        action_type: "channel_point_reward",
+        action_reward_id: rewardId,
+        action_reward_state: gateDirection.value,
+        event_category_mode: "while_active",
+        required_game: gateCategory.value.trim(),
+        match_pattern: "",
+        match_type: "contains",
+        enabled_when: "always",
+        condition: "",
+        cooldown_sec: 0,
+        is_active: 1,
+      }),
+    });
+    gateTriggerName.value = name;
+  } catch {}
+}
+// ^^^ category gate ^^^
 
 // >>> per-field messages, shown inline instead of a generic toast
 const nameErrorMsg = ref("");
@@ -289,6 +370,11 @@ function openEdit(r: Reward) {
     r.maxRedemptionsPerStream ||
     r.maxRedemptionsPerUserPerStream
   );
+  const gate = categoryGates.value[r.id];
+  gateEnabled.value = !!gate;
+  gateCategory.value = gate?.category ?? "";
+  gateDirection.value = gate?.state ?? "activate";
+  gateTriggerName.value = gate?.name ?? null;
   Object.assign(form, {
     title: r.title,
     prompt: r.prompt,
@@ -362,6 +448,10 @@ async function savePanel() {
     if (!res.ok) {
       applyBackendError(data.error, data.detail);
       return;
+    }
+    if (!isNew.value && editingId.value) {
+      await syncCategoryGate(editingId.value, form.title.trim());
+      await loadCategoryGates();
     }
     editOpen.value = false;
     await load();
@@ -755,8 +845,8 @@ async function saveActions() {
                 <div class="cp-cost">
                   <span class="cp-cost-dot"></span>
                   <span>{{ r.cost }}</span>
-                  <span v-if="categoryGateByReward[r.id]" class="ep-meta-pill game">
-                    {{ t("cp.gate.only_active_on") }} {{ categoryGateByReward[r.id] }}
+                  <span v-if="categoryGates[r.id]" class="ep-meta-pill game">
+                    {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
                   </span>
                 </div>
               </div>
@@ -788,8 +878,8 @@ async function saveActions() {
                 <div class="cp-cost">
                   <span class="cp-cost-dot"></span>
                   <span>{{ r.cost }}</span>
-                  <span v-if="categoryGateByReward[r.id]" class="ep-meta-pill game">
-                    {{ t("cp.gate.only_active_on") }} {{ categoryGateByReward[r.id] }}
+                  <span v-if="categoryGates[r.id]" class="ep-meta-pill game">
+                    {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
                   </span>
                 </div>
               </div>
@@ -930,6 +1020,30 @@ async function saveActions() {
                 <div v-if="limitsErrorMsg" class="cp-field-error">{{ limitsErrorMsg }}</div>
               </div>
             </div>
+
+            <div v-if="!isNew" class="ep-field-group cp-toggle-row">
+              <div>
+                <div class="ep-field-label">{{ t("cp.field.category_gate") }}</div>
+                <div class="ep-field-hint">{{ t("cp.field.category_gate_hint") }}</div>
+              </div>
+              <button class="ep-switch" :class="{ on: gateEnabled }"
+                @click="gateEnabled = !gateEnabled"><span class="ep-switch-knob"></span></button>
+            </div>
+            <template v-if="!isNew && gateEnabled">
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.category") }}</label>
+                <TypeaheadInput :model-value="gateCategory" :fetch-items="fetchCategories" :min-chars="1"
+                  placeholder="Just Chatting" @update:model-value="(v: string) => (gateCategory = v)"
+                  @select="(item: any) => (gateCategory = item.label)" />
+              </div>
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.reward_state") }}</label>
+                <select v-model="gateDirection" class="ep-field-select">
+                  <option value="activate">{{ t("trigger.reward_state.activate") }}</option>
+                  <option value="deactivate">{{ t("trigger.reward_state.deactivate") }}</option>
+                </select>
+              </div>
+            </template>
 
             </template>
 
