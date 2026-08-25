@@ -80,7 +80,82 @@ const editOpen = ref(false);
 const isNew = ref(false);
 const editingId = ref<string | null>(null);
 const limitsEnabled = ref(false);
-const nameError = ref(false);
+
+// >>> per-field messages, shown inline instead of a generic toast
+const nameErrorMsg = ref("");
+const promptErrorMsg = ref("");
+const costErrorMsg = ref("");
+const colorErrorMsg = ref("");
+const limitsErrorMsg = ref("");
+// >>> catch-all for errors that aren't tied to one field (missing_scope etc)
+const panelError = ref("");
+
+function clearFieldErrors() {
+  nameErrorMsg.value = "";
+  promptErrorMsg.value = "";
+  costErrorMsg.value = "";
+  colorErrorMsg.value = "";
+  limitsErrorMsg.value = "";
+  panelError.value = "";
+}
+
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+// >>> catches obvious mistakes before hitting twitch at all
+function validateForm(): boolean {
+  let ok = true;
+  if (!HEX_COLOR_RE.test(form.backgroundColor)) {
+    colorErrorMsg.value = t("cp.error.invalid_color");
+    ok = false;
+  }
+  if (!Number.isInteger(form.cost) || form.cost < 1) {
+    costErrorMsg.value = t("cp.error.invalid_cost");
+    ok = false;
+  }
+  if (form.prompt.length > 200) {
+    promptErrorMsg.value = t("cp.error.invalid_prompt");
+    ok = false;
+  }
+  if (limitsEnabled.value) {
+    const { globalCooldown, maxRedemptionsPerStream, maxRedemptionsPerUserPerStream } = form;
+    const badValue = (n: number, max: number) =>
+      !Number.isInteger(n) || n < 0 || n > max;
+    if (
+      badValue(globalCooldown, 604_800) ||
+      badValue(maxRedemptionsPerStream, 1_000_000) ||
+      badValue(maxRedemptionsPerUserPerStream, 1_000_000)
+    ) {
+      limitsErrorMsg.value = t("cp.error.invalid_limits");
+      ok = false;
+    }
+  }
+  return ok;
+}
+
+// >>> maps a backend error code to whichever field it's actually about
+function applyBackendError(code: string | undefined) {
+  const msg = errMsg(code);
+  switch (code) {
+    case "duplicate_title":
+      nameErrorMsg.value = msg;
+      break;
+    case "invalid_cost":
+      costErrorMsg.value = msg;
+      break;
+    case "invalid_color":
+      colorErrorMsg.value = msg;
+      break;
+    case "invalid_prompt":
+      promptErrorMsg.value = msg;
+      break;
+    case "invalid_cooldown":
+    case "invalid_limits":
+      limitsErrorMsg.value = msg;
+      break;
+    default:
+      panelError.value = msg;
+  }
+}
 
 const DEFAULT_COLOR = "#9146FF";
 const form = reactive({
@@ -99,7 +174,7 @@ function openNew() {
   isNew.value = true;
   editingId.value = null;
   limitsEnabled.value = false;
-  nameError.value = false;
+  clearFieldErrors();
   Object.assign(form, {
     title: "",
     prompt: "",
@@ -119,7 +194,7 @@ function openEdit(r: Reward) {
   isNew.value = false;
   editingId.value = r.id;
   deleteConfirm.value = false;
-  nameError.value = false;
+  clearFieldErrors();
   limitsEnabled.value = !!(
     r.globalCooldown ||
     r.maxRedemptionsPerStream ||
@@ -143,16 +218,28 @@ function closePanel() {
   editOpen.value = false;
 }
 
-// >>> clears the red border once the user changes the conflicting name
-watch(() => form.title, () => (nameError.value = false));
+// >>> clear each field's red border once the user changes that field
+watch(() => form.title, () => (nameErrorMsg.value = ""));
+watch(() => form.prompt, () => (promptErrorMsg.value = ""));
+watch(() => form.cost, () => (costErrorMsg.value = ""));
+watch(() => form.backgroundColor, () => (colorErrorMsg.value = ""));
+watch(
+  [
+    () => form.globalCooldown,
+    () => form.maxRedemptionsPerStream,
+    () => form.maxRedemptionsPerUserPerStream,
+    limitsEnabled,
+  ],
+  () => (limitsErrorMsg.value = ""),
+);
 
 const saveDisabled = computed(() => !form.title.trim() || form.cost < 1);
 
 async function savePanel() {
   if (!session.value || saveDisabled.value) return;
+  clearFieldErrors();
+  if (!validateForm()) return;
   saving.value = true;
-  error.value = "";
-  nameError.value = false;
   const body = {
     title: form.title.trim(),
     prompt: form.prompt.trim(),
@@ -183,14 +270,13 @@ async function savePanel() {
     });
     const data = await res.json();
     if (!res.ok) {
-      error.value = errMsg(data.error);
-      if (data.error === "duplicate_title") nameError.value = true;
+      applyBackendError(data.error);
       return;
     }
     editOpen.value = false;
     await load();
   } catch {
-    error.value = errMsg("request_failed");
+    panelError.value = errMsg("request_failed");
   } finally {
     saving.value = false;
   }
@@ -217,13 +303,13 @@ async function deleteReward() {
     );
     const data = await res.json();
     if (!res.ok) {
-      error.value = errMsg(data.error);
+      panelError.value = errMsg(data.error);
       return;
     }
     editOpen.value = false;
     await load();
   } catch {
-    error.value = errMsg("request_failed");
+    panelError.value = errMsg("request_failed");
   } finally {
     saving.value = false;
     deleteConfirm.value = false;
@@ -340,20 +426,24 @@ function reload() {
 
           <div class="ep-panel-body">
 
+            <div v-if="panelError" class="cp-panel-error">{{ panelError }}</div>
+
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("cp.field.title") }}
                 <span class="ep-field-hint">{{ form.title.length }}/45</span>
               </label>
-              <input v-model="form.title" maxlength="45" class="ep-field-input" :class="{ 'cp-field-invalid': nameError }"
-                :placeholder="t('cp.field.title_ph')" />
-              <div v-if="nameError" class="cp-field-error">{{ t("cp.error.duplicate_title") }}</div>
+              <input v-model="form.title" maxlength="45" class="ep-field-input"
+                :class="{ 'cp-field-invalid': nameErrorMsg }" :placeholder="t('cp.field.title_ph')" />
+              <div v-if="nameErrorMsg" class="cp-field-error">{{ nameErrorMsg }}</div>
             </div>
 
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("cp.field.prompt") }}
                 <span class="ep-field-hint">{{ t("cp.field.prompt_hint") }} · {{ form.prompt.length }}/200</span>
               </label>
-              <textarea v-model="form.prompt" maxlength="200" class="ep-field-input cp-textarea"></textarea>
+              <textarea v-model="form.prompt" maxlength="200" class="ep-field-input cp-textarea"
+                :class="{ 'cp-field-invalid': promptErrorMsg }"></textarea>
+              <div v-if="promptErrorMsg" class="cp-field-error">{{ promptErrorMsg }}</div>
             </div>
 
             <div class="ep-field-group cp-toggle-row">
@@ -367,16 +457,20 @@ function reload() {
 
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("cp.field.cost") }}</label>
-              <input v-model.number="form.cost" type="number" min="1" class="ep-field-input" />
+              <input v-model.number="form.cost" type="number" min="1" class="ep-field-input"
+                :class="{ 'cp-field-invalid': costErrorMsg }" />
+              <div v-if="costErrorMsg" class="cp-field-error">{{ costErrorMsg }}</div>
             </div>
 
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t("cp.field.color") }}</label>
               <div class="cp-color-row">
                 <input type="color" v-model="form.backgroundColor" class="cp-color-pick" />
-                <input v-model="form.backgroundColor" class="ep-field-input" placeholder="#9146FF" />
+                <input v-model="form.backgroundColor" class="ep-field-input"
+                  :class="{ 'cp-field-invalid': colorErrorMsg }" placeholder="#9146FF" />
               </div>
-              <div class="ep-field-hint">{{ t("cp.field.color_hint") }}</div>
+              <div v-if="colorErrorMsg" class="cp-field-error">{{ colorErrorMsg }}</div>
+              <div v-else class="ep-field-hint">{{ t("cp.field.color_hint") }}</div>
             </div>
 
             <div class="ep-field-group cp-toggle-row">
@@ -398,7 +492,7 @@ function reload() {
                   @click="limitsEnabled = !limitsEnabled"><span class="ep-switch-knob"></span></button>
               </div>
 
-              <div v-if="limitsEnabled" class="cp-limits-box">
+              <div v-if="limitsEnabled" class="cp-limits-box" :class="{ 'cp-field-invalid': limitsErrorMsg }">
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{ t("cp.field.cooldown") }}
                     <span class="ep-field-hint">{{ t("cp.field.cooldown_hint") }}</span>
@@ -418,6 +512,7 @@ function reload() {
                   <input v-model.number="form.maxRedemptionsPerUserPerStream" type="number" min="0"
                     class="ep-field-input" />
                 </div>
+                <div v-if="limitsErrorMsg" class="cp-field-error">{{ limitsErrorMsg }}</div>
               </div>
             </div>
 
@@ -574,6 +669,16 @@ function reload() {
   margin-top: 10px;
   padding: 10px;
   background: #1a1a1e;
+  border: 1px solid transparent;
   border-radius: 0;
+}
+
+.cp-panel-error {
+  font-size: 12px;
+  color: #f14949;
+  background: #1c1215;
+  border: 1px solid #f1494944;
+  padding: 8px 10px;
+  margin-bottom: 14px;
 }
 </style>
