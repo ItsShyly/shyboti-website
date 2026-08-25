@@ -79,6 +79,36 @@ async function load() {
 onMounted(load);
 watch(() => session.value?.channel, load);
 
+// >>> combined builtin + custom command names, for the run-command picker
+const commandNames = ref<string[]>([]);
+const channelPrefix = ref("+");
+
+async function loadCommandNames() {
+  if (!session.value) return;
+  try {
+    const h = { Authorization: `Bearer ${session.value.token}` };
+    const [builtinRes, customRes] = await Promise.all([
+      fetch(`${API}/commands/${session.value.channel}`, { headers: h }),
+      fetch(`${API}/custom-commands/${session.value.channel}`, { headers: h }),
+    ]);
+    const names = new Set<string>();
+    if (builtinRes.ok) {
+      const d = await builtinRes.json();
+      channelPrefix.value = d.prefix || "+";
+      for (const c of d.commands ?? []) if (c?.name) names.add(c.name);
+    }
+    if (customRes.ok) {
+      const d = await customRes.json();
+      for (const c of d.commands ?? []) if (c?.name) names.add(c.name);
+    }
+    commandNames.value = [...names].sort();
+  } catch {
+    commandNames.value = [];
+  }
+}
+onMounted(loadCommandNames);
+watch(() => session.value?.channel, loadCommandNames);
+
 // vvv edit panel vvv
 
 const editOpen = ref(false);
@@ -291,6 +321,24 @@ async function savePanel() {
   }
 }
 
+// >>> shared by the panel's delete button and each row's inline trash icon
+async function deleteRewardById(id: string): Promise<string | null> {
+  if (!session.value) return "request_failed";
+  try {
+    const res = await fetch(
+      `${API}/channelpoints/${session.value.channel}/${id}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.value.token}` },
+      },
+    );
+    const data = await res.json();
+    return res.ok ? null : (data.error ?? "request_failed");
+  } catch {
+    return "request_failed";
+  }
+}
+
 function requestDelete() {
   if (!deleteConfirm.value) {
     deleteConfirm.value = true;
@@ -300,29 +348,38 @@ function requestDelete() {
 }
 
 async function deleteReward() {
-  if (!session.value || !editingId.value) return;
+  if (!editingId.value) return;
   saving.value = true;
-  try {
-    const res = await fetch(
-      `${API}/channelpoints/${session.value.channel}/${editingId.value}`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${session.value.token}` },
-      },
-    );
-    const data = await res.json();
-    if (!res.ok) {
-      panelError.value = errMsg(data.error);
-      return;
-    }
-    editOpen.value = false;
-    await load();
-  } catch {
-    panelError.value = errMsg("request_failed");
-  } finally {
-    saving.value = false;
-    deleteConfirm.value = false;
+  const err = await deleteRewardById(editingId.value);
+  saving.value = false;
+  deleteConfirm.value = false;
+  if (err) {
+    panelError.value = errMsg(err);
+    return;
   }
+  editOpen.value = false;
+  await load();
+}
+
+// >>> inline trash icon in the row itself, same confirm-click pattern
+const rowDeleteConfirmId = ref<string | null>(null);
+
+function requestRowDelete(r: Reward) {
+  if (rowDeleteConfirmId.value !== r.id) {
+    rowDeleteConfirmId.value = r.id;
+    return;
+  }
+  deleteRowReward(r.id);
+}
+
+async function deleteRowReward(id: string) {
+  rowDeleteConfirmId.value = null;
+  const err = await deleteRewardById(id);
+  if (err) {
+    error.value = errMsg(err);
+    return;
+  }
+  await load();
 }
 
 async function toggleEnabled(r: Reward) {
@@ -467,6 +524,45 @@ async function saveActions() {
   }
 }
 
+// >>> command name picker for the run-command action - type-ahead like the top search bar
+const openPickerIndex = ref<number | null>(null);
+
+function commandMatches(query: string): string[] {
+  const q = query.trim().toLowerCase().replace(/^\+/, "");
+  const list = q
+    ? commandNames.value.filter((n) => n.includes(q))
+    : commandNames.value;
+  return list.slice(0, 30);
+}
+
+function openPicker(i: number) {
+  openPickerIndex.value = i;
+}
+
+// >>> small delay so a click on a result fires before the input's blur closes it
+function closePickerSoon() {
+  setTimeout(() => (openPickerIndex.value = null), 150);
+}
+
+function pickCommand(a: RewardAction, name: string) {
+  a.command = name;
+  if (!a.args.trim()) a.args = "{user}";
+  openPickerIndex.value = null;
+}
+
+// >>> "+so @user" style preview - {user}/{input}/{display} shown as example values
+function previewCommand(a: RewardAction): string {
+  if (!a.command.trim()) return "";
+  const args = a.args
+    .split("{input}")
+    .join("hello there")
+    .split("{user}")
+    .join("@user")
+    .split("{display}")
+    .join("DisplayName");
+  return `${channelPrefix.value}${a.command.trim().replace(/^\+/, "")}${args ? " " + args : ""}`;
+}
+
 // ^^^ shyboti actions panel ^^^
 </script>
 
@@ -498,82 +594,85 @@ async function saveActions() {
       <span>{{ t("cp.explain") }}</span>
     </div>
 
-    <div v-if="loading" class="ep-row-list">
-      <div class="ep-skeleton-row" v-for="i in 4" :key="i">
-        <div class="ep-skeleton-block ep-skeleton-square"></div>
-        <div class="ep-skeleton-lines">
-          <div class="ep-skeleton-block ep-skeleton-line title"></div>
-          <div class="ep-skeleton-block ep-skeleton-line meta"></div>
-        </div>
-        <div class="ep-skeleton-actions">
-          <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+    <div class="cp-scroll">
+      <div v-if="loading" class="ep-row-list">
+        <div class="ep-skeleton-row" v-for="i in 4" :key="i">
+          <div class="ep-skeleton-block ep-skeleton-square"></div>
+          <div class="ep-skeleton-lines">
+            <div class="ep-skeleton-block ep-skeleton-line title"></div>
+            <div class="ep-skeleton-block ep-skeleton-line meta"></div>
+          </div>
+          <div class="ep-skeleton-actions">
+            <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+          </div>
         </div>
       </div>
+
+      <div v-else-if="!rewards.length" class="ep-empty">{{ t("cp.empty") }}</div>
+
+      <template v-else>
+        <div v-if="botRewards.length" class="cp-group">
+          <div class="cp-group-header">
+            <span>{{ t("cp.group.bot") }}</span>
+            <span class="cp-group-count">{{ botRewards.length }}</span>
+          </div>
+          <div class="ep-row-list">
+            <div v-for="r in botRewards" :key="r.id" class="ep-list-row cp-row" :class="{ inactive: !r.isEnabled }">
+              <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
+              <div class="cp-main">
+                <div class="cp-title-row">
+                  <span class="cp-title">{{ r.title }}</span>
+                </div>
+                <div class="cp-cost">
+                  <span class="cp-cost-dot"></span>
+                  <span>{{ r.cost }}</span>
+                </div>
+              </div>
+              <div class="ep-row-actions">
+                <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: !canManage }"
+                  :title="t('cp.enabled')" @click="toggleEnabled(r)"><span class="ep-switch-knob"></span></button>
+                <div class="cp-action-slot">
+                  <button v-if="canManage" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn") }}</button>
+                  <button v-if="canManage" class="ep-btn-action edit" @click="openEdit(r)">{{ t("cp.edit") }}</button>
+                  <button v-if="canManage" class="ep-btn-action del" :class="{ confirm: rowDeleteConfirmId === r.id }"
+                    :title="t('cp.panel.delete')" @click="requestRowDelete(r)" v-html="iconSvgFor('trash')"></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="twitchRewards.length" class="cp-group">
+          <div class="cp-group-header">
+            <span>{{ t("cp.group.twitch") }}</span>
+            <span class="cp-group-count">{{ twitchRewards.length }}</span>
+          </div>
+          <div class="ep-row-list">
+            <div v-for="r in twitchRewards" :key="r.id" class="ep-list-row cp-row" :class="{ inactive: !r.isEnabled }">
+              <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
+              <div class="cp-main">
+                <div class="cp-title-row">
+                  <span class="cp-title">{{ r.title }}</span>
+                </div>
+                <div class="cp-cost">
+                  <span class="cp-cost-dot"></span>
+                  <span>{{ r.cost }}</span>
+                </div>
+              </div>
+              <div class="ep-row-actions">
+                <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: true }"
+                  :title="t('cp.locked_hint')"><span class="ep-switch-knob"></span></button>
+                <div class="cp-action-slot">
+                  <button v-if="canManage" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn") }}</button>
+                  <button class="ep-btn-action locked" disabled :title="t('cp.locked_hint')"
+                    v-html="iconSvgFor('lock')"></button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
-
-    <div v-else-if="!rewards.length" class="ep-empty">{{ t("cp.empty") }}</div>
-
-    <template v-else>
-      <div v-if="botRewards.length" class="cp-group">
-        <div class="cp-group-header">
-          <span>{{ t("cp.group.bot") }}</span>
-          <span class="cp-group-count">{{ botRewards.length }}</span>
-        </div>
-        <div class="ep-row-list">
-          <div v-for="r in botRewards" :key="r.id" class="ep-list-row cp-row" :class="{ inactive: !r.isEnabled }">
-            <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
-            <div class="cp-main">
-              <div class="cp-title-row">
-                <span class="cp-title">{{ r.title }}</span>
-              </div>
-              <div class="cp-cost">
-                <span class="cp-cost-dot"></span>
-                <span>{{ r.cost }}</span>
-              </div>
-            </div>
-            <div class="ep-row-actions">
-              <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: !canManage }"
-                :title="t('cp.enabled')" @click="toggleEnabled(r)"><span class="ep-switch-knob"></span></button>
-              <div class="cp-action-slot">
-                <button v-if="canManage" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn") }}</button>
-                <button v-if="canManage" class="ep-btn-action edit" @click="openEdit(r)">{{ t("cp.edit") }}</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="twitchRewards.length" class="cp-group">
-        <div class="cp-group-header">
-          <span>{{ t("cp.group.twitch") }}</span>
-          <span class="cp-group-count">{{ twitchRewards.length }}</span>
-        </div>
-        <div class="ep-row-list">
-          <div v-for="r in twitchRewards" :key="r.id" class="ep-list-row cp-row" :class="{ inactive: !r.isEnabled }">
-            <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
-            <div class="cp-main">
-              <div class="cp-title-row">
-                <span class="cp-title">{{ r.title }}</span>
-              </div>
-              <div class="cp-cost">
-                <span class="cp-cost-dot"></span>
-                <span>{{ r.cost }}</span>
-              </div>
-            </div>
-            <div class="ep-row-actions">
-              <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: true }"
-                :title="t('cp.locked_hint')"><span class="ep-switch-knob"></span></button>
-              <div class="cp-action-slot">
-                <button v-if="canManage" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn") }}</button>
-                <button class="ep-btn-action locked" disabled :title="t('cp.locked_hint')">
-                  <span v-html="iconSvgFor('lock')"></span>{{ t("cp.locked") }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </template>
 
     <!-- vvv edit panel vvv -->
     <Teleport to="body">
@@ -756,15 +855,27 @@ async function saveActions() {
               </div>
 
               <template v-if="a.type === 'run_command'">
-                <div class="ep-field-group">
+                <div class="ep-field-group cp-cmd-wrap">
                   <label class="ep-field-label">{{ t("cp.actions.command") }}</label>
-                  <input v-model="a.command" class="ep-field-input" :placeholder="t('cp.actions.command_ph')" />
+                  <div class="cp-cmd-input-wrap">
+                    <span class="cp-cmd-icon" v-html="iconSvgFor('search')"></span>
+                    <input v-model="a.command" class="ep-field-input cp-cmd-input"
+                      :placeholder="t('cp.actions.command_ph')" @focus="openPicker(i)"
+                      @input="openPicker(i)" @blur="closePickerSoon" />
+                  </div>
+                  <div v-if="openPickerIndex === i && commandMatches(a.command).length" class="cp-cmd-results">
+                    <button v-for="name in commandMatches(a.command)" :key="name" class="cp-cmd-result-item"
+                      @mousedown.prevent="pickCommand(a, name)">
+                      {{ channelPrefix }}{{ name }}
+                    </button>
+                  </div>
                 </div>
-                <div class="ep-field-group">
+                <div v-if="a.command.trim()" class="ep-field-group">
                   <label class="ep-field-label">{{ t("cp.actions.args") }}
                     <span class="ep-field-hint">{{ t("cp.actions.args_hint") }}</span>
                   </label>
                   <input v-model="a.args" class="ep-field-input" />
+                  <div class="ep-field-hint cp-cmd-preview">{{ previewCommand(a) }}</div>
                 </div>
               </template>
 
@@ -834,6 +945,14 @@ async function saveActions() {
 .cp-explain svg {
   flex-shrink: 0;
   margin-top: 2px;
+}
+
+/* >>> ep-view is height:100% - without its own scroll, a long reward list
+   overflows the page box and renders under the site footer */
+.cp-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .cp-row {
@@ -919,9 +1038,10 @@ async function saveActions() {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 8px;
-  width: 160px;
+  gap: 6px;
+  width: 220px;
   flex-shrink: 0;
+  flex-wrap: nowrap;
 }
 
 .ep-btn-action.actions {
@@ -936,7 +1056,9 @@ async function saveActions() {
 .ep-btn-action.locked {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  width: 30px;
+  padding: 0;
   border-color: #333;
   color: #777;
 }
@@ -1031,6 +1153,68 @@ async function saveActions() {
 
 .cp-add-action-btn {
   width: 100%;
+  margin-top: 4px;
+}
+
+/* >>> mirrors App.vue's top search bar look, scoped locally here */
+.cp-cmd-wrap {
+  position: relative;
+}
+
+.cp-cmd-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.cp-cmd-icon {
+  position: absolute;
+  left: 9px;
+  width: 13px;
+  height: 13px;
+  color: #555;
+  pointer-events: none;
+  display: inline-flex;
+}
+
+.cp-cmd-input {
+  padding-left: 30px !important;
+}
+
+.cp-cmd-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #1a1a1e;
+  border: 1px solid #2a2a30;
+  z-index: 20;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+.cp-cmd-result-item {
+  display: block;
+  width: 100%;
+  padding: 7px 12px;
+  border: none;
+  background: transparent;
+  color: #ccc;
+  font-family: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.cp-cmd-result-item:hover {
+  background: #6f2bff18;
+  color: #e0e0e0;
+}
+
+.cp-cmd-preview {
+  font-family: monospace;
   margin-top: 4px;
 }
 </style>
