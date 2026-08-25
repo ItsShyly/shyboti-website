@@ -80,6 +80,7 @@ const editOpen = ref(false);
 const isNew = ref(false);
 const editingId = ref<string | null>(null);
 const limitsEnabled = ref(false);
+const nameError = ref(false);
 
 const DEFAULT_COLOR = "#9146FF";
 const form = reactive({
@@ -98,6 +99,7 @@ function openNew() {
   isNew.value = true;
   editingId.value = null;
   limitsEnabled.value = false;
+  nameError.value = false;
   Object.assign(form, {
     title: "",
     prompt: "",
@@ -117,6 +119,7 @@ function openEdit(r: Reward) {
   isNew.value = false;
   editingId.value = r.id;
   deleteConfirm.value = false;
+  nameError.value = false;
   limitsEnabled.value = !!(
     r.globalCooldown ||
     r.maxRedemptionsPerStream ||
@@ -140,12 +143,16 @@ function closePanel() {
   editOpen.value = false;
 }
 
+// >>> clears the red border once the user changes the conflicting name
+watch(() => form.title, () => (nameError.value = false));
+
 const saveDisabled = computed(() => !form.title.trim() || form.cost < 1);
 
 async function savePanel() {
   if (!session.value || saveDisabled.value) return;
   saving.value = true;
   error.value = "";
+  nameError.value = false;
   const body = {
     title: form.title.trim(),
     prompt: form.prompt.trim(),
@@ -177,6 +184,7 @@ async function savePanel() {
     const data = await res.json();
     if (!res.ok) {
       error.value = errMsg(data.error);
+      if (data.error === "duplicate_title") nameError.value = true;
       return;
     }
     editOpen.value = false;
@@ -336,7 +344,9 @@ function reload() {
               <label class="ep-field-label">{{ t("cp.field.title") }}
                 <span class="ep-field-hint">{{ form.title.length }}/45</span>
               </label>
-              <input v-model="form.title" maxlength="45" class="ep-field-input" :placeholder="t('cp.field.title_ph')" />
+              <input v-model="form.title" maxlength="45" class="ep-field-input" :class="{ 'cp-field-invalid': nameError }"
+                :placeholder="t('cp.field.title_ph')" />
+              <div v-if="nameError" class="cp-field-error">{{ t("cp.error.duplicate_title") }}</div>
             </div>
 
             <div class="ep-field-group">
@@ -519,6 +529,17 @@ function reload() {
   font-size: 12px;
   color: #999;
   padding: 0 6px;
+}
+
+.cp-field-invalid {
+  border-color: #f1494966 !important;
+  background: #1c1215 !important;
+}
+
+.cp-field-error {
+  font-size: 11px;
+  color: #f14949;
+  margin-top: 4px;
 }
 
 .cp-textarea {
