@@ -82,11 +82,17 @@ const saving = ref<string | null>(null);
 const error = ref("");
 const success = ref("");
 
-// >>> bot-created rewards, for the Channel Point Reward event/action pickers -
-// >>> only bot-created ones can actually be toggled/watched via the api
-const rewardOptions = ref<{ id: string; title: string }[]>([]);
+// >>> all rewards (bot + twitch-created) - the event side can watch redemptions
+// >>> on any reward, only the action side is limited to ones we can toggle
+const rewardOptions = ref<
+  { id: string; title: string; manageable: boolean; userInputRequired: boolean }[]
+>([]);
 const rewardTitleById = computed(() =>
   Object.fromEntries(rewardOptions.value.map((r) => [r.id, r.title])),
+);
+// >>> only bot-created rewards can actually be toggled via the api
+const manageableRewardOptions = computed(() =>
+  rewardOptions.value.filter((r) => r.manageable),
 );
 async function loadRewards() {
   if (!session.value) return;
@@ -96,9 +102,12 @@ async function loadRewards() {
     });
     if (!res.ok) return;
     const data = await res.json();
-    rewardOptions.value = (data.rewards ?? [])
-      .filter((r: any) => r.manageable)
-      .map((r: any) => ({ id: r.id, title: r.title }));
+    rewardOptions.value = (data.rewards ?? []).map((r: any) => ({
+      id: r.id,
+      title: r.title,
+      manageable: !!r.manageable,
+      userInputRequired: !!r.userInputRequired,
+    }));
   } catch {
     rewardOptions.value = [];
   }
@@ -376,6 +385,27 @@ function placeholderHint(): string {
   return editTrigger.value.event_type === "message"
     ? t("trigger.field.placeholder_hint_msg")
     : t("trigger.field.placeholder_hint");
+}
+
+// >>> true wherever the current action's text field(s) actually use {input}
+function currentActionUsesInput(): boolean {
+  const at = editTrigger.value.action_type;
+  if (at === "run_command") return (editTrigger.value.action_extra ?? "").includes("{input}");
+  if (at === "create_command")
+    return (
+      (editTrigger.value.action_extra ?? "").includes("{input}") ||
+      (editTrigger.value.response ?? "").includes("{input}")
+    );
+  if (at === "channel_point_reward") return false;
+  return (editTrigger.value.response ?? "").includes("{input}");
+}
+
+// >>> {input} is empty for a twitch-created reward with input collection off
+function needsInputWarning(): boolean {
+  if (editTrigger.value.event_type !== "channel_point_reward") return false;
+  const r = rewardOptions.value.find((r) => r.id === editTrigger.value.event_reward_id);
+  if (!r || r.manageable || r.userInputRequired) return false;
+  return currentActionUsesInput();
 }
 
 function autoNamedTagLabel(): string {
@@ -880,7 +910,7 @@ defineExpose({
             <div v-if="editTrigger.event_type === 'channel_point_reward'" class="ep-field-group">
               <label class="ep-field-label">{{ t("trigger.field.reward") }}</label>
               <TypeaheadInput :model-value="rewardTitleById[editTrigger.event_reward_id ?? ''] ?? ''"
-                :items="rewardOptions.map((r) => r.title)" placeholder="pick a bot-created reward"
+                :items="rewardOptions.map((r) => r.title)" placeholder="pick a reward"
                 @select="(item: any) => (editTrigger.event_reward_id = rewardOptions.find((r) => r.title === item.label)?.id ?? '')" />
             </div>
 
@@ -908,8 +938,8 @@ defineExpose({
               <div class="ep-field-group">
                 <label class="ep-field-label">{{ t("trigger.field.reward") }}</label>
                 <TypeaheadInput :model-value="rewardTitleById[editTrigger.action_reward_id ?? ''] ?? ''"
-                  :items="rewardOptions.map((r) => r.title)" placeholder="pick a bot-created reward"
-                  @select="(item: any) => (editTrigger.action_reward_id = rewardOptions.find((r) => r.title === item.label)?.id ?? '')" />
+                  :items="manageableRewardOptions.map((r) => r.title)" placeholder="pick a bot-created reward"
+                  @select="(item: any) => (editTrigger.action_reward_id = manageableRewardOptions.find((r) => r.title === item.label)?.id ?? '')" />
               </div>
               <div class="ep-field-group">
                 <label class="ep-field-label">{{ t("trigger.field.reward_state") }}</label>
@@ -945,6 +975,10 @@ defineExpose({
                 </label>
                 <input v-model="editTrigger.action_extra" class="ep-field-input" />
               </div>
+              <div v-if="needsInputWarning()" class="cp-input-warning">
+                <span v-html="iconSvgFor('alert-triangle')"></span>
+                <span>{{ t("cp.actions.need_input_warning") }}</span>
+              </div>
             </template>
 
             <template v-else-if="editTrigger.action_type === 'create_command'">
@@ -962,6 +996,10 @@ defineExpose({
                   data-placeholder="$user.mention just got a new command! PogChamp" @input="onEditorInput"></div>
                 <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
               </div>
+              <div v-if="needsInputWarning()" class="cp-input-warning">
+                <span v-html="iconSvgFor('alert-triangle')"></span>
+                <span>{{ t("cp.actions.need_input_warning") }}</span>
+              </div>
             </template>
 
             <div v-else class="ep-field-group">
@@ -974,13 +1012,19 @@ defineExpose({
                 <span class="ep-field-hint">{{
                   editTrigger.action_type === "shoutout"
                     ? "Optional - who to shout out. Leave blank to shout out whoever/whatever triggered this (the raider, for raids)."
-                    : t("trigger.field.resp_hint")
+                    : editTrigger.event_type === "channel_point_reward"
+                      ? t("trigger.field.resp_hint_cp")
+                      : t("trigger.field.resp_hint")
                   }}</span>
               </label>
               <div ref="editorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
                 :data-placeholder="editTrigger.action_type === 'shoutout' ? 'leave blank for the raider, or e.g. $user.name' : '$user.mention just triggered this! PogChamp'"
                 @input="onEditorInput"></div>
               <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
+              <div v-if="needsInputWarning()" class="cp-input-warning">
+                <span v-html="iconSvgFor('alert-triangle')"></span>
+                <span>{{ t("cp.actions.need_input_warning") }}</span>
+              </div>
             </div>
             </template>
 
@@ -1082,6 +1126,22 @@ defineExpose({
 </template>
 
 <style scoped>
+.cp-input-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11px;
+  color: #e5c07b;
+  background: rgba(229, 192, 123, 0.08);
+  border-left: 2px solid #e5c07b;
+  padding: 8px 10px;
+}
+
+.cp-input-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
 .view-header-left {
   display: flex;
   align-items: center;

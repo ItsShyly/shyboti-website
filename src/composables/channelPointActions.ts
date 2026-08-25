@@ -35,11 +35,14 @@ export function blankAction(): RewardAction {
   };
 }
 
-// >>> these action types read the viewer's typed input - useless without it
+// >>> true wherever the viewer's typed input is actually used in a text field
 export function actionNeedsInput(a: RewardAction): boolean {
   if (a.type === "timeout_input_user") return true;
   if (a.type === "run_command") return a.args.includes("{input}");
-  if (a.type === "create_command") return a.response.includes("{input}");
+  if (a.type === "create_command")
+    return a.name.includes("{input}") || a.response.includes("{input}");
+  if (a.type === "say" || a.type === "set_title" || a.type === "set_category" || a.type === "shoutout")
+    return a.response.includes("{input}");
   return false;
 }
 
