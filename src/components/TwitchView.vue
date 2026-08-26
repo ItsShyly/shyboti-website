@@ -7,6 +7,7 @@ import { useOverlayClose } from "../composables/useOverlayClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import ChannelPointActionsEditor from "./shared/ChannelPointActionsEditor.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
+import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
 import {
   blankAction,
   actionNeedsInput,
@@ -560,6 +561,28 @@ function requestRowDelete(r: Reward) {
   deleteRowReward(r.id);
 }
 
+// >>> mobile kebab menu items, desktop keeps the inline row buttons
+function botRewardKebabItems(r: Reward): KebabMenuItem[] {
+  const items: KebabMenuItem[] = [];
+  if (canManage.value) {
+    items.push({
+      key: "edit",
+      label: t("cp.edit"),
+      icon: "edit",
+      onClick: () => openEdit(r),
+    });
+    items.push({
+      key: "delete",
+      label:
+        rowDeleteConfirmId.value === r.id ? t("cmd.delete_sure") : t("cmd.delete"),
+      icon: "trash",
+      danger: true,
+      onClick: () => requestRowDelete(r),
+    });
+  }
+  return items;
+}
+
 async function deleteRowReward(id: string) {
   rowDeleteConfirmId.value = null;
   const err = await deleteRewardById(id);
@@ -722,6 +745,29 @@ function openActions(r: Reward) {
   if (!canManage.value) return;
   actionsOpen.value = true;
   loadActionsFor(r);
+}
+
+// >>> mobile kebab menu items, desktop keeps the inline row buttons
+function twitchRewardKebabItems(r: Reward): KebabMenuItem[] {
+  const items: KebabMenuItem[] = [];
+  if (canManage.value) {
+    items.push({
+      key: "actions",
+      label: t("cp.actions.btn"),
+      icon: "zap",
+      onClick: () => openActions(r),
+    });
+  }
+  if (isSiteAdminMode.value) {
+    items.push({
+      key: "copy",
+      label: t("cp.admin.copy_reward_hint"),
+      icon: "copy",
+      disabled: copyingRewardId.value === r.id,
+      onClick: () => copyReward(r),
+    });
+  }
+  return items;
 }
 
 function closeActions() {
@@ -914,6 +960,7 @@ async function saveActions() {
                   <button v-if="canManage" class="ep-btn-action del" :class="{ confirm: rowDeleteConfirmId === r.id }"
                     :title="t('cp.panel.delete')" @click="requestRowDelete(r)" v-html="iconSvgFor('trash')"></button>
                 </div>
+                <RowKebabMenu :items="botRewardKebabItems(r)" @click.stop />
               </div>
             </div>
           </div>
@@ -952,6 +999,7 @@ async function saveActions() {
                   <button class="ep-btn-action locked" disabled :title="t('cp.locked_hint')"
                     v-html="iconSvgFor('lock')"></button>
                 </div>
+                <RowKebabMenu :items="twitchRewardKebabItems(r)" @click.stop />
               </div>
             </div>
           </div>
@@ -1377,33 +1425,20 @@ async function saveActions() {
    ChannelPointActionsEditor.vue, which owns that markup */
 
 @media (max-width: 680px) {
-  /* >>> the fixed "auto" action column squeezed .cp-main, truncating titles
-     way too early - give title its own full-width row, actions below it */
+  /* >>> single line: swatch, title(+cost stacked under it), toggle, kebab.
+     edit/delete/actions/copy move into the kebab so titles keep full width */
   .cp-row {
-    grid-template-columns: 32px 1fr;
-    grid-template-areas:
-      "swatch main"
-      "actions actions";
-    row-gap: 10px;
+    grid-template-columns: 32px 1fr auto;
+    gap: 10px;
   }
 
   .cp-swatch {
-    grid-area: swatch;
     width: 32px;
     height: 32px;
   }
 
-  .cp-main {
-    grid-area: main;
-  }
-
-  .cp-row .ep-row-actions {
-    grid-area: actions;
-    justify-content: flex-end;
-  }
-
   .cp-action-slot {
-    width: auto;
+    display: none;
   }
 }
 </style>

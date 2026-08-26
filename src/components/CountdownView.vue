@@ -12,6 +12,7 @@ import { useOverlayClose } from "../composables/useOverlayClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
+import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
@@ -299,6 +300,37 @@ const shareSaving = ref(false);
 const shareSuccess = ref("");
 const shareError = ref("");
 
+// >>> mobile kebab menu items, desktop keeps the inline row buttons
+function countdownKebabItems(cd: Countdown): KebabMenuItem[] {
+  const items: KebabMenuItem[] = [
+    {
+      key: "edit",
+      label: canEdit.value ? t("countdown.edit") : t("countdown.view"),
+      icon: "edit",
+      onClick: () => openEdit(cd),
+    },
+  ];
+  if (canEdit.value) {
+    items.push({
+      key: "share",
+      label: t("countdown.share"),
+      icon: "corner-up-right",
+      onClick: () => openShare(cd.name),
+    });
+  }
+  if (canDelete.value) {
+    items.push({
+      key: "delete",
+      label: t("cmd.delete"),
+      icon: "trash",
+      danger: true,
+      disabled: saving.value === cd.name,
+      onClick: () => deleteCountdown(cd.name),
+    });
+  }
+  return items;
+}
+
 function openShare(name: string) {
   shareCountdown.value = name;
   shareTarget.value = "";
@@ -460,6 +492,7 @@ defineExpose({
             <span v-html="iconSvgFor('trash')"></span>
           </button>
         </div>
+        <RowKebabMenu :items="countdownKebabItems(cd)" @click.stop />
       </div>
     </div>
 
@@ -747,12 +780,23 @@ defineExpose({
 
 @media (max-width: 680px) {
   .countdown-row {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 8px;
+  }
+
+  .cd-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .cd-controls {
     gap: 4px;
+  }
+
+  /* >>> edit/share/delete move into the kebab on phone */
+  .countdown-row > .ep-row-actions {
+    display: none;
   }
 }
 </style>

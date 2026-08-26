@@ -16,6 +16,7 @@ import { iconSvg as iconSvgFor } from "../composables/icons";
 import CommandEditPanel from "./CommandEditPanel.vue";
 import ObsCommandEditPanel from "./ObsCommandEditPanel.vue";
 import type { ObsSceneBind, ObsSourceBind, ObsArgEntry } from "./ObsCommandEditPanel.vue";
+import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
 
 const { session, channelRole, adminMode } = useAuth();
 const { t } = useI18n();
@@ -728,6 +729,89 @@ function restrictionLabel(cmd: {
   return t("cmd.access.everyone");
 }
 
+// >>> mobile kebab menu items, desktop keeps the inline row buttons
+function builtInKebabItems(cmd: Command): KebabMenuItem[] {
+  return [
+    {
+      key: "access",
+      label: `Access: ${restrictionLabel(cmd)}`,
+      icon: "lock",
+      disabled: !canToggle.value,
+      onClick: () => cycleRestriction(cmd),
+    },
+    {
+      key: "edit",
+      label: BLOCKED.includes(cmd.name)
+        ? t("cmd.blocked")
+        : canEdit.value
+          ? t("cmd.edit")
+          : t("cmd.no_access"),
+      icon: "edit",
+      disabled: !canEdit.value || BLOCKED.includes(cmd.name),
+      onClick: () => openEdit(cmd.name, true),
+    },
+  ];
+}
+
+function customKebabItems(cmd: CustomCommand): KebabMenuItem[] {
+  const items: KebabMenuItem[] = [
+    {
+      key: "access",
+      label: `Access: ${restrictionLabel(cmd)}`,
+      icon: "lock",
+      disabled: !canToggle.value,
+      onClick: () => cycleRestriction(cmd),
+    },
+    {
+      key: "edit",
+      label: canEdit.value ? t("cmd.edit") : t("cmd.view"),
+      icon: "edit",
+      onClick: () => openEdit(cmd.name, false),
+    },
+    {
+      key: "share",
+      label: "Share",
+      icon: "corner-up-right",
+      onClick: () => openShare(cmd.name),
+    },
+  ];
+  if (canDelete.value) {
+    items.push({
+      key: "delete",
+      label: deleteConfirmName.value === cmd.name ? t("cmd.delete_sure") : t("cmd.delete"),
+      icon: "trash",
+      danger: true,
+      onClick: () => deleteCustom(cmd.name),
+    });
+  }
+  return items;
+}
+
+function obsBindingKebabItems(
+  kind: "scene" | "source" | "arg",
+  command: string,
+  deleteKey: string,
+): KebabMenuItem[] {
+  return [
+    {
+      key: "edit",
+      label: t("cmd.edit"),
+      icon: "edit",
+      onClick: () => openObsEdit({ kind, command }),
+    },
+    {
+      key: "delete",
+      label:
+        obsDeleteConfirm.value === `${kind}:${deleteKey}`
+          ? t("cmd.delete_sure")
+          : t("cmd.delete"),
+      icon: "trash",
+      danger: true,
+      onClick: () => deleteObsBinding(kind, deleteKey),
+    },
+  ];
+}
+
 function argAccessLabel(access: string): string {
   if (access === "broadcaster") return t("cmd.access.bc");
   if (access === "mod") return t("cmd.access.mod");
@@ -1313,6 +1397,7 @@ onUnmounted(() => {
                     }}
                   </button>
                 </div>
+                <RowKebabMenu :items="builtInKebabItems(cmd)" @click.stop />
               </div>
               <template v-if="expandedDefault.has(cmd.name) && cmd.argVariants?.length">
                 <div v-for="(v, vi) in cmd.argVariants" :key="vi" class="arg-variant-row">
@@ -1476,6 +1561,7 @@ onUnmounted(() => {
                     <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
                 </div>
+                <RowKebabMenu :items="customKebabItems(cmd)" @click.stop />
               </div>
               <template v-if="expandedCustom.has(cmd.name)">
                 <div v-for="(v, vi) in getCustomArgVariants(cmd)" :key="vi" class="arg-variant-row">
@@ -1572,6 +1658,7 @@ onUnmounted(() => {
                     <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
                 </div>
+                <RowKebabMenu :items="obsBindingKebabItems('scene', b.command, b.command)" @click.stop />
               </div>
 
               <div v-for="b in obsSourceBindings" :key="'so' + b.command" class="table-row custom-row">
@@ -1614,6 +1701,7 @@ onUnmounted(() => {
                     <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
                 </div>
+                <RowKebabMenu :items="obsBindingKebabItems('source', b.command, b.command)" @click.stop />
               </div>
 
               <div v-for="(entry, action) in obsArgCommands" :key="'arg' + action" class="table-row custom-row">
@@ -1658,6 +1746,7 @@ onUnmounted(() => {
                     <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
                 </div>
+                <RowKebabMenu :items="obsBindingKebabItems('arg', obsArgCommand(entry), String(action))" @click.stop />
               </div>
             </div>
           </template>
@@ -2534,32 +2623,19 @@ onUnmounted(() => {
     display: none;
   }
 
-  /* >>> card layout: row 1 = toggle+name+edit (never breaks), row 2 = access+cooldown.
-     order + a zero-height 100%-basis breaker (the now-hidden desc cell) force the
-     wrap point instead of leaving it to chance, which used to strand "Edit" alone */
+  /* >>> single line on phone: chevron, toggle, name, kebab. access/edit/share/
+     delete move into the kebab, cooldowns live in the edit panel only */
   .table-row,
   .custom-row {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
     height: auto;
     padding: 10px 12px;
-    gap: 6px 10px;
-  }
-
-  .table-row>*:nth-child(1),
-  .custom-row>*:nth-child(1) {
-    order: 1;
-  }
-
-  .table-row>*:nth-child(2),
-  .custom-row>*:nth-child(2) {
-    order: 2;
+    gap: 8px;
   }
 
   .table-row>.cmd-name,
   .custom-row>.cmd-name {
-    order: 3;
     flex: 1;
     min-width: 0;
   }
@@ -2571,37 +2647,17 @@ onUnmounted(() => {
     min-width: 0;
   }
 
-  .table-row>*:nth-child(4),
-  .custom-row>*:nth-child(4) {
-    order: 5;
-    flex-basis: 100%;
-    height: 0;
-    min-height: 0;
-    padding: 0;
-    margin: 0;
-    overflow: hidden;
-  }
-
+  .table-row>.cmd-desc,
+  .custom-row>.cmd-desc,
   .table-row>*:nth-child(5),
-  .custom-row>*:nth-child(5) {
-    order: 6;
-  }
-
+  .custom-row>*:nth-child(5),
   .table-row>*:nth-child(6),
-  .custom-row>*:nth-child(6) {
-    display: none;
-  }
-
+  .custom-row>*:nth-child(6),
   .table-row>*:nth-child(7),
-  .custom-row>*:nth-child(7) {
-    order: 7;
-  }
-
+  .custom-row>*:nth-child(7),
   .table-row>*:nth-child(8),
   .custom-row>*:nth-child(8) {
-    order: 4;
-    flex-shrink: 0;
-    margin-left: auto;
+    display: none;
   }
 
   .custom-header {

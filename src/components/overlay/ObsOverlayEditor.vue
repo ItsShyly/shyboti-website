@@ -26,6 +26,7 @@ import ObsOverlayElementGallery from "./ObsOverlayElementGallery.vue";
 import ObsOverlayVariablePicker from "./ObsOverlayVariablePicker.vue";
 import ObsOverlayStylePanel from "./ObsOverlayStylePanel.vue";
 import ObsOverlayLayersPanel from "./ObsOverlayLayersPanel.vue";
+import RowKebabMenu, { type KebabMenuItem } from "../shared/RowKebabMenu.vue";
 
 const props = defineProps<{
   channel: string;
@@ -73,6 +74,39 @@ const previewValues = ref<Record<string, string>>({});
 const snapEnabled = ref(true);
 // >>> mobile only - side panels become slide-in drawers instead of eating the canvas
 const mobileDrawer = ref<"gallery" | "props" | null>(null);
+const ovlModalRef = ref<HTMLElement | null>(null);
+const landscapeLocked = ref(false);
+
+// >>> real orientation lock (needs fullscreen on most browsers), not a CSS
+// >>> rotate hack - a fake rotate would desync touch coords from the canvas
+async function toggleLandscapeLock() {
+  const orientation = (screen as any).orientation;
+  if (landscapeLocked.value) {
+    try {
+      orientation?.unlock?.();
+    } catch { }
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen();
+      } catch { }
+    }
+    landscapeLocked.value = false;
+    return;
+  }
+  try {
+    if (!document.fullscreenElement && ovlModalRef.value?.requestFullscreen) {
+      await ovlModalRef.value.requestFullscreen();
+    }
+    if (orientation?.lock) await orientation.lock("landscape");
+    landscapeLocked.value = true;
+  } catch {
+    // >>> orientation lock unsupported (iOS Safari etc) - fullscreen alone still helps
+    landscapeLocked.value = !!document.fullscreenElement;
+  }
+}
+function onFullscreenChange() {
+  if (!document.fullscreenElement) landscapeLocked.value = false;
+}
 
 // vvv "saved X ago" ticks without re-saving vvv
 const lastSavedAt = ref<number | null>(null);
@@ -936,6 +970,32 @@ watch(liveUpdate, (on) => {
 });
 // ^^^ live cursor share ^^^
 
+// >>> mobile topbar kebab - backdrop + live update/cursor, moved off the bar
+const moreMenuItems = computed<KebabMenuItem[]>(() => {
+  const items: KebabMenuItem[] = [
+    { key: "bg-checker", label: "Backdrop: Checkered", onClick: () => pickBackdrop("checker") },
+    { key: "bg-white", label: "Backdrop: White", onClick: () => pickBackdrop("white") },
+    { key: "bg-black", label: "Backdrop: Black", onClick: () => pickBackdrop("black") },
+  ];
+  if (props.obsReady) {
+    items.push({ key: "bg-scene", label: "Backdrop: Scene", onClick: () => pickBackdrop("scene") });
+  }
+  if (props.obsReady && overlayVisible.value) {
+    items.push({
+      key: "live-update",
+      label: liveUpdate.value ? "Live Update: on" : "Live Update: off",
+      onClick: () => toggleLiveUpdate(),
+    });
+    items.push({
+      key: "live-cursor",
+      label: liveCursor.value ? "Live Cursor: on" : "Live Cursor: off",
+      disabled: !liveUpdate.value,
+      onClick: () => toggleLiveCursor(),
+    });
+  }
+  return items;
+});
+
 // vvv multi-editor sync, other sessions on same overlay vvv
 let editStream: EventSource | null = null;
 function connectEditStream() {
@@ -1050,6 +1110,7 @@ onMounted(() => {
   window.addEventListener("keydown", onKeydown);
   // >>> capture phase, bubble would never see canvas clicks
   window.addEventListener("mousedown", onWindowMousedownForMenu, true);
+  document.addEventListener("fullscreenchange", onFullscreenChange);
   previewTimer = setInterval(() => {
     fetchPreviewValues();
     fetchCounterValues();
@@ -1060,6 +1121,7 @@ onUnmounted(() => {
   window.removeEventListener("keydown", onKeydown);
   if (clockTimer) clearInterval(clockTimer);
   window.removeEventListener("mousedown", onWindowMousedownForMenu, true);
+  document.removeEventListener("fullscreenchange", onFullscreenChange);
   if (previewTimer) clearInterval(previewTimer);
   if (liveUpdateTimer) clearTimeout(liveUpdateTimer);
   if (liveCursor.value) sendCursorLeave();
@@ -1070,7 +1132,7 @@ onUnmounted(() => {
 <template>
   <Teleport to="body">
     <div class="ovl-overlay">
-      <div class="ovl-modal">
+      <div class="ovl-modal" ref="ovlModalRef">
         <div class="ovl-topbar">
           <div class="ovl-switcher">
             <button class="ovl-switcher-nav" title="Previous overlay" :disabled="overlays.length < 2"
@@ -1090,37 +1152,38 @@ onUnmounted(() => {
               @click="deleteOverlay" v-html="iconSvgFor('trash')"></button>
           </div>
           <div class="ovl-topbar-actions">
-            <div class="ovl-backdrop-swatches" title="Canvas backdrop (editor-only, never rendered live)">
+            <div class="ovl-backdrop-swatches ovl-mobile-hide" title="Canvas backdrop (editor-only, never rendered live)">
               <button v-for="b in (['checker', 'white', 'black'] as const)" :key="b" class="ovl-backdrop-swatch"
                 :class="[b, { active: stageBackdrop === b }]" :title="b" @click="pickBackdrop(b)"></button>
               <button v-if="obsReady" class="ovl-backdrop-swatch scene"
                 :class="{ active: stageBackdrop === 'scene' }" title="preview the real scene behind the canvas"
                 @click="pickBackdrop('scene')" v-html="iconSvgFor('monitor')"></button>
             </div>
-            <button class="ovl-btn-cancel" :class="{ on: snapEnabled }" @click="snapEnabled = !snapEnabled"
+            <button class="ovl-btn-cancel ovl-mobile-hide" :class="{ on: snapEnabled }" @click="snapEnabled = !snapEnabled"
               :title="snapEnabled ? 'Snapping on - click to disable' : 'Snapping off - click to enable'">
               <span v-html="iconSvgFor('maximize')"></span> Snap
             </button>
-            <button class="ovl-btn-cancel" :disabled="!historyPast.length" @click="undo" title="Undo (Ctrl+Z)">
+            <button class="ovl-btn-cancel ovl-mobile-hide" :disabled="!historyPast.length" @click="undo" title="Undo (Ctrl+Z)">
               <span v-html="iconSvgFor('corner-up-left')"></span>
             </button>
-            <button class="ovl-btn-cancel" :disabled="!historyFuture.length" @click="redo" title="Redo (Ctrl+Y)">
+            <button class="ovl-btn-cancel ovl-mobile-hide" :disabled="!historyFuture.length" @click="redo" title="Redo (Ctrl+Y)">
               <span v-html="iconSvgFor('corner-up-right')"></span>
             </button>
-            <button v-if="obsReady && overlayVisible" class="ovl-btn-cancel" :class="{ on: liveUpdate }"
+            <button v-if="obsReady && overlayVisible" class="ovl-btn-cancel ovl-mobile-hide" :class="{ on: liveUpdate }"
               @click="toggleLiveUpdate"
               title="Auto-save every change as you make it, not just when you click Save">
               Live Update
             </button>
-            <button v-if="obsReady && overlayVisible" class="ovl-btn-cancel ovl-btn-icon-only"
+            <button v-if="obsReady && overlayVisible" class="ovl-btn-cancel ovl-btn-icon-only ovl-mobile-hide"
               :class="{ on: liveCursor }" :disabled="!liveUpdate" @click="toggleLiveCursor"
               :title="liveUpdate ? 'Show your cursor + name live on stream' : 'Turn on Live Update first'">
               <span v-html="iconSvgFor('mouse-pointer')"></span>
             </button>
-            <button class="ovl-btn-cancel" :disabled="!dirty || saving" @click="discard">Discard</button>
-            <button class="ovl-btn-save" :disabled="!dirty || saving" @click="save()">
+            <button class="ovl-btn-cancel ovl-mobile-hide" :disabled="!dirty || saving" @click="discard">Discard</button>
+            <button class="ovl-btn-save ovl-mobile-hide" :disabled="!dirty || saving" @click="save()">
               {{ saving ? "Saving…" : "Save" }}
             </button>
+            <RowKebabMenu :items="moreMenuItems" @click.stop />
             <button class="ovl-close-btn" title="Close (Esc)" @click="requestClose" v-html="iconSvgFor('x')"></button>
           </div>
         </div>
@@ -1169,6 +1232,24 @@ onUnmounted(() => {
               <button @click="removeFromScene">Remove from scene</button>
             </div>
           </div>
+        </div>
+
+        <!-- >>> mobile-only, replaces the desktop topbar's icon cluster with
+             a curated thumb-reachable bar instead of horizontal-scrolling it -->
+        <div class="ovl-mobile-toolbar">
+          <button class="ovl-mobile-tool" :class="{ on: snapEnabled }" @click="snapEnabled = !snapEnabled"
+            title="Snap"><span v-html="iconSvgFor('maximize')"></span></button>
+          <button class="ovl-mobile-tool" :disabled="!historyPast.length" @click="undo" title="Undo">
+            <span v-html="iconSvgFor('corner-up-left')"></span></button>
+          <button class="ovl-mobile-tool" :disabled="!historyFuture.length" @click="redo" title="Redo">
+            <span v-html="iconSvgFor('corner-up-right')"></span></button>
+          <button class="ovl-mobile-tool" :class="{ on: landscapeLocked }" @click="toggleLandscapeLock"
+            title="Switch to landscape"><span v-html="iconSvgFor('rotate-cw')"></span></button>
+          <div class="ovl-mobile-toolbar-spacer"></div>
+          <button class="ovl-mobile-tool-text" :disabled="!dirty || saving" @click="discard">Discard</button>
+          <button class="ovl-mobile-tool-text save" :disabled="!dirty || saving" @click="save()">
+            {{ saving ? "…" : "Save" }}
+          </button>
         </div>
 
         <div class="ovl-content">
@@ -1996,25 +2077,92 @@ onUnmounted(() => {
   display: none;
 }
 
+/* >>> mobile-only bottom toolbar, replaces the desktop topbar cluster */
+.ovl-mobile-toolbar {
+  display: none;
+}
+
+.ovl-mobile-tool {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #2a2a30;
+  background: #111217;
+  color: #999;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ovl-mobile-tool.on {
+  background: #6f2bff33;
+  border-color: #6f2bff88;
+  color: #cbb2ff;
+}
+
+.ovl-mobile-tool:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ovl-mobile-toolbar-spacer {
+  flex: 1;
+}
+
+.ovl-mobile-tool-text {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid #2a2a30;
+  background: #111217;
+  color: #ccc;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.ovl-mobile-tool-text:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.ovl-mobile-tool-text.save {
+  background: #6f2bff;
+  border-color: #6f2bff;
+  color: #fff;
+  font-weight: 700;
+}
+
+/* >>> fullscreen (entered for the landscape switch) fills the real screen,
+   not the desktop-sized modal caps */
+.ovl-modal:fullscreen {
+  max-width: none;
+  max-height: none;
+}
+
 @media (max-width: 680px) {
   .ovl-modal {
     max-height: 100%;
   }
 
-  /* >>> too many controls to fit - scroll instead of clipping/overlapping */
+  /* >>> curated bar instead of horizontal-scrolling every desktop icon */
   .ovl-topbar {
-    flex-wrap: wrap;
-    gap: 8px;
+    flex-wrap: nowrap;
   }
 
-  .ovl-topbar-actions {
-    overflow-x: auto;
-    scrollbar-width: none;
-    max-width: 100%;
+  .ovl-mobile-hide {
+    display: none !important;
   }
 
-  .ovl-topbar-actions::-webkit-scrollbar {
-    display: none;
+  .ovl-mobile-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    flex-shrink: 0;
+    border-bottom: 1px solid #1e1e22;
+    background: #0d0d10;
   }
 
   .ovl-activate-bar {

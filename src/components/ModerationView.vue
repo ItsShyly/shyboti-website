@@ -7,6 +7,7 @@ import { useOverlayClose } from "../composables/useOverlayClose";
 import { REGEX_REF_GROUPS, looksLikeRegex } from "../composables/regexReference";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import RefPanel from "./shared/RefPanel.vue";
+import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
@@ -151,6 +152,64 @@ async function removeFromGroup(tab: Tab, id: number) {
   const item = itemsOf(tab).find((i) => i.id === id);
   if (item) item.group_id = null;
   await putGroupId(tab, id, null);
+}
+
+// >>> mobile kebab menu items, desktop keeps the inline row buttons
+function blockedKebabItems(term: BlockedTerm): KebabMenuItem[] {
+  const items: KebabMenuItem[] = [];
+  if (!canManage.value) return items;
+  if (term.group_id) {
+    items.push({
+      key: "ungroup",
+      label: "Remove from group",
+      icon: "corner-up-left",
+      onClick: () => removeFromGroup("blocked", term.id),
+    });
+  }
+  items.push(
+    { key: "edit", label: t("mod.edit"), icon: "edit", onClick: () => openEditBlocked(term) },
+    { key: "share", label: t("mod.share"), icon: "corner-up-right", onClick: () => openShare("blocked", term.id, term.term) },
+    { key: "delete", label: t("cmd.delete"), icon: "trash", danger: true, onClick: () => deleteRow("blocked", term.id) },
+  );
+  return items;
+}
+
+function spamKebabItems(f: SpamFilter): KebabMenuItem[] {
+  const items: KebabMenuItem[] = [];
+  if (!canManage.value) return items;
+  if (f.group_id) {
+    items.push({
+      key: "ungroup",
+      label: "Remove from group",
+      icon: "corner-up-left",
+      onClick: () => removeFromGroup("spam", f.id),
+    });
+  }
+  items.push(
+    { key: "edit", label: t("mod.edit"), icon: "edit", onClick: () => openEditSpam(f) },
+    { key: "share", label: t("mod.share"), icon: "corner-up-right", onClick: () => openShare("spam", f.id, spamLabel(f).name) },
+    { key: "delete", label: t("cmd.delete"), icon: "trash", danger: true, onClick: () => deleteRow("spam", f.id) },
+  );
+  return items;
+}
+
+function nukeKebabItems(n: NukeConfig): KebabMenuItem[] {
+  const items: KebabMenuItem[] = [];
+  if (!canManage.value) return items;
+  if (n.group_id) {
+    items.push({
+      key: "ungroup",
+      label: "Remove from group",
+      icon: "corner-up-left",
+      onClick: () => removeFromGroup("nukes", n.id),
+    });
+  }
+  items.push(
+    { key: "edit", label: t("mod.edit"), icon: "edit", onClick: () => openEditNuke(n) },
+    { key: "share", label: t("mod.share"), icon: "corner-up-right", onClick: () => openShare("nukes", n.id, n.label) },
+    { key: "delete", label: t("cmd.delete"), icon: "trash", danger: true, onClick: () => deleteRow("nukes", n.id) },
+  );
+  return items;
 }
 
 // >>> create-only, no editing existing groups
@@ -930,6 +989,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   <button v-if="canManage" class="ep-btn-action del"
                     @click.stop="deleteRow('blocked', term.id)" v-html="iconSvgFor('trash')"></button>
                 </div>
+                <RowKebabMenu :items="blockedKebabItems(term)" @click.stop />
               </div>
             </div>
           </div>
@@ -986,6 +1046,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     @click.stop="openShare('spam', f.id, spamLabel(f).name)" v-html="iconSvgFor('corner-up-right')"></button>
                   <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)" v-html="iconSvgFor('trash')"></button>
                 </div>
+                <RowKebabMenu :items="spamKebabItems(f)" @click.stop />
               </div>
             </div>
           </div>
@@ -1071,6 +1132,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     @click.stop="openShare('nukes', n.id, n.label)" v-html="iconSvgFor('corner-up-right')"></button>
                   <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('nukes', n.id)" v-html="iconSvgFor('trash')"></button>
                 </div>
+                <RowKebabMenu :items="nukeKebabItems(n)" @click.stop />
               </div>
             </div>
           </div>
@@ -1759,6 +1821,13 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   .ep-btn-action {
     padding: 0 8px;
     font-size: 10px
+  }
+
+  /* >>> ungroup/edit/share/delete move into the kebab on phone,
+     group header's own share/delete stay inline (only 2 buttons) */
+  .mod-item-row > .ep-row-actions,
+  .nuke-item-row > .ep-row-actions {
+    display: none;
   }
 }
 </style>

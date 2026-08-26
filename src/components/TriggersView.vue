@@ -22,6 +22,7 @@ import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
+import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
@@ -554,6 +555,35 @@ const shareSaving = ref(false);
 const shareSuccess = ref("");
 const shareError = ref("");
 
+// >>> mobile kebab menu items, desktop keeps the inline row buttons
+function triggerKebabItems(trigger: Trigger): KebabMenuItem[] {
+  const items: KebabMenuItem[] = [
+    {
+      key: "edit",
+      label: canEdit.value ? t("trigger.edit") : t("trigger.view"),
+      icon: "edit",
+      onClick: () => openEdit(trigger),
+    },
+    {
+      key: "share",
+      label: "Share",
+      icon: "corner-up-right",
+      onClick: () => openShare(trigger.name),
+    },
+  ];
+  if (canDelete.value) {
+    items.push({
+      key: "delete",
+      label: t("cmd.delete"),
+      icon: "trash",
+      danger: true,
+      disabled: saving.value === trigger.name,
+      onClick: () => deleteTrigger(trigger.name),
+    });
+  }
+  return items;
+}
+
 function openShare(name: string) {
   shareTrigger.value = name;
   shareTarget.value = "";
@@ -860,6 +890,7 @@ defineExpose({
             <span v-html="iconSvgFor('trash')"></span>
           </button>
         </div>
+        <RowKebabMenu :items="triggerKebabItems(trigger)" @click.stop />
       </div>
     </div>
 
@@ -1314,13 +1345,9 @@ defineExpose({
     gap: 8px;
   }
 
-  .ep-row-actions {
-    gap: 4px;
-  }
-
-  .ep-btn-action {
-    padding: 0 8px;
-    font-size: 10px;
+  /* >>> edit/share/delete move into the kebab on phone */
+  .trigger-row > .ep-row-actions {
+    display: none;
   }
 
   .ep-sync-row {

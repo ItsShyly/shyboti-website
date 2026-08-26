@@ -21,6 +21,7 @@ import { useOverlayClose } from "../composables/useOverlayClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
+import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
@@ -266,6 +267,35 @@ const shareTarget = ref("");
 const shareSaving = ref(false);
 const shareSuccess = ref("");
 const shareError = ref("");
+
+// >>> mobile kebab menu items, desktop keeps the inline row buttons
+function timerKebabItems(timer: Timer): KebabMenuItem[] {
+  const items: KebabMenuItem[] = [
+    {
+      key: "edit",
+      label: canEdit.value ? t("timer.edit") : t("timer.view"),
+      icon: "edit",
+      onClick: () => openEdit(timer),
+    },
+    {
+      key: "share",
+      label: t("timer.share"),
+      icon: "corner-up-right",
+      onClick: () => openShare(timer.name),
+    },
+  ];
+  if (canDelete.value) {
+    items.push({
+      key: "delete",
+      label: t("cmd.delete"),
+      icon: "trash",
+      danger: true,
+      disabled: saving.value === timer.name,
+      onClick: () => deleteTimer(timer.name),
+    });
+  }
+  return items;
+}
 
 function openShare(name: string) {
   shareTimer.value = name;
@@ -552,6 +582,7 @@ defineExpose({
             <span v-html="iconSvgFor('trash')"></span>
           </button>
         </div>
+        <RowKebabMenu :items="timerKebabItems(timer)" @click.stop />
       </div>
     </div>
 
@@ -811,13 +842,9 @@ defineExpose({
     gap: 8px;
   }
 
-  .ep-row-actions {
-    gap: 4px;
-  }
-
-  .ep-btn-action {
-    padding: 0 8px;
-    font-size: 10px;
+  /* >>> edit/share/delete move into the kebab on phone */
+  .timer-row > .ep-row-actions {
+    display: none;
   }
 
   .ep-sync-row {
