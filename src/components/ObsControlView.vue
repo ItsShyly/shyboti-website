@@ -10,6 +10,7 @@ import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 import ObsOverlayEditor from "./overlay/ObsOverlayEditor.vue";
+import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 
 const { session, channelRole } = useAuth();
@@ -1052,6 +1053,27 @@ async function refreshScenes() {
   } catch { }
 }
 
+// >>> lets a plain vertical mouse wheel scroll the horizontal scene strip
+function onSceneStripWheel(e: WheelEvent) {
+  const el = e.currentTarget as HTMLElement;
+  if (el.scrollWidth <= el.clientWidth) return;
+  e.preventDefault();
+  el.scrollLeft += e.deltaY;
+}
+
+// >>> mobile-only, the top bar's gear/refresh buttons collapse into this
+const topbarKebabItems = computed<KebabMenuItem[]>(() => {
+  const items: KebabMenuItem[] = [];
+  if (obsConnected.value && canFilterScenes.value) {
+    items.push({ key: "refresh", label: "Refresh scene list", icon: "refresh-cw", onClick: refreshScenes });
+    items.push({ key: "filter", label: "Filter scenes", icon: "tool", onClick: openFilter });
+  }
+  if (isBroadcaster.value) {
+    items.push({ key: "settings", label: "OBS settings", icon: "settings", onClick: openSettings });
+  }
+  return items;
+});
+
 async function prefetchSourceNames(sceneName: string) {
   if (!session.value) return;
   const gen = requestGen.value;
@@ -1732,7 +1754,7 @@ watch(
     <!-- vvv top bar - mode/connection/gear controls + the sources/mixer drawer toggle vvv -->
     <div class="obs-topbar">
       <div class="obs-topbar-left">
-        <div class="obsconn-title-slim">OBS Control</div>
+        <div class="obsconn-title-slim obs-topbar-mobile-hide">OBS Control</div>
 
         <div class="obs-mode-toggle-slim" :title="editMode
           ? 'Changes stage here until you press Save.'
@@ -1749,7 +1771,7 @@ watch(
         <div class="obs-status-bar-slim" :class="connStatusClass"
           :title="agentStatus?.version ? `v${agentStatus.version}` : ''">
           <div class="obs-status-dot"></div>
-          <span class="obs-status-text">{{ connStatusLabel }}</span>
+          <span class="obs-status-text obs-topbar-mobile-hide">{{ connStatusLabel }}</span>
         </div>
       </div>
 
@@ -1758,21 +1780,23 @@ watch(
         v-html="iconSvgFor('chevron-down')"></button>
 
       <div class="obs-topbar-right">
-        <div v-if="agentConnected && obsConnected && bitrateLabel" class="obs-topbar-stat" :class="{ bad: bitrateBad }">
+        <div v-if="agentConnected && obsConnected && bitrateLabel"
+          class="obs-topbar-stat obs-topbar-mobile-hide" :class="{ bad: bitrateBad }">
           {{ bitrateLabel }}
         </div>
 
-        <button v-if="obsConnected && canFilterScenes" class="obs-refresh-btn" @click="refreshScenes"
-          title="Refresh scene list" v-html="iconSvgFor('refresh-cw')">
+        <button v-if="obsConnected && canFilterScenes" class="obs-refresh-btn obs-topbar-mobile-hide"
+          @click="refreshScenes" title="Refresh scene list" v-html="iconSvgFor('refresh-cw')">
         </button>
-        <button v-if="obsConnected && canFilterScenes" class="obsconn-gear-btn" title="Filter scenes"
-          @click="openFilter">
+        <button v-if="obsConnected && canFilterScenes" class="obsconn-gear-btn obs-topbar-mobile-hide"
+          title="Filter scenes" @click="openFilter">
           <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z" stroke="currentColor" stroke-width="1.5"
               stroke-linejoin="round" />
           </svg>
         </button>
-        <button v-if="isBroadcaster" class="obsconn-gear-btn" title="OBS settings" @click="openSettings">
+        <button v-if="isBroadcaster" class="obsconn-gear-btn obs-topbar-mobile-hide" title="OBS settings"
+          @click="openSettings">
           <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5" />
             <path
@@ -1781,6 +1805,8 @@ watch(
           </svg>
           <span v-if="!loading && !agentStatus?.paired" class="obs-gear-badge" title="OBS agent not set up yet">!</span>
         </button>
+
+        <RowKebabMenu :items="topbarKebabItems" @click.stop />
       </div>
 
       <!-- >>> no backdrop, stays open so scenes stay clickable while it's open -->
@@ -1933,13 +1959,16 @@ watch(
           </template>
 
           <div v-if="agentConnected && obsConnected" class="ep-field-group obs-box obs-box-cat">
-            <div v-if="selectedScene" class="obs-drawer-preview-mini">
+            <div class="obs-drawer-preview-mini">
               <div class="obs-drawer-preview-mini-thumb">
-                <img v-if="sceneShots[selectedScene]" :src="sceneShots[selectedScene]" :alt="selectedScene" />
-                <div v-else class="obs-scene-thumb-empty">{{ agentStatus?.screenshots ? "…" : "" }}</div>
+                <img v-if="selectedScene && sceneShots[selectedScene]" :src="sceneShots[selectedScene]"
+                  :alt="selectedScene" />
+                <div v-else class="obs-scene-thumb-empty">{{ selectedScene && agentStatus?.screenshots ? "…" : "" }}
+                </div>
               </div>
               <div class="obs-drawer-preview-mini-info">
-                <div class="obs-drawer-preview-mini-name">{{ selectedScene }}</div>
+                <div class="obs-drawer-preview-mini-label">previewing</div>
+                <div class="obs-drawer-preview-mini-name">{{ selectedScene || "no scene selected" }}</div>
               </div>
             </div>
             <label class="ep-field-label">Switch categories</label>
@@ -2050,7 +2079,7 @@ watch(
           </div>
         </div>
 
-        <div class="obs-scene-strip">
+        <div class="obs-scene-strip" @wheel="onSceneStripWheel">
           <div v-for="s in visibleScenes" :key="s.sceneName" class="obs-scene-card" :class="{
             picked: s.sceneName === selectedScene,
             live: s.sceneName === currentScene,
@@ -3216,6 +3245,25 @@ watch(
   overflow-x: auto;
   flex-shrink: 0;
   scrollbar-width: thin;
+  scrollbar-color: #3a3a44 #111217;
+  padding-bottom: 4px;
+}
+
+.obs-scene-strip::-webkit-scrollbar {
+  height: 8px;
+}
+
+.obs-scene-strip::-webkit-scrollbar-track {
+  background: #111217;
+}
+
+.obs-scene-strip::-webkit-scrollbar-thumb {
+  background: #3a3a44;
+  border-radius: 4px;
+}
+
+.obs-scene-strip::-webkit-scrollbar-thumb:hover {
+  background: #6f2bff88;
 }
 
 .obs-scenes-footer {
@@ -3226,7 +3274,7 @@ watch(
 }
 
 .obs-scene-card {
-  width: 130px;
+  width: 145px;
   flex-shrink: 0;
   padding: 0 0 6px;
   border: 1px solid #2a2a30;
@@ -4246,13 +4294,14 @@ watch(
   }
 
   /* >>> side-by-side program/preview don't fit a phone width - stack instead,
-     arrow rotates to point down since it now swaps top into bottom */
+     live on top (matches "what's actually on stream" being the priority),
+     preview below it, arrow rotates to point up since it swaps bottom into top */
   .obs-program-preview {
-    flex-direction: column;
+    flex-direction: column-reverse;
   }
 
   .obs-take-btn svg {
-    transform: rotate(90deg);
+    transform: rotate(-90deg);
   }
 
   .obs-scene-card {
@@ -4394,9 +4443,54 @@ watch(
 }
 
 @media (max-width: 680px) {
+  /* >>> thin single line - most controls move into the kebab */
   .obs-topbar {
     margin: -14px -14px 0;
-    padding: 8px 14px;
+    padding: 6px 10px;
+  }
+
+  .obs-topbar-left,
+  .obs-topbar-right {
+    flex-wrap: nowrap;
+  }
+
+  .obs-topbar-mobile-hide {
+    display: none !important;
+  }
+
+  .obs-mode-toggle-slim {
+    padding: 3px 6px;
+  }
+
+  .obs-status-bar-slim {
+    padding: 5px;
+  }
+
+  /* >>> claw back every bit of vertical space so scenes need no scrolling */
+  .obsconn-page {
+    gap: 4px;
+  }
+
+  .obsconn-body {
+    gap: 6px;
+  }
+
+  .obs-live-mode-banner {
+    padding: 4px 10px;
+    font-size: 10px;
+  }
+
+  .obs-pp-label {
+    padding: 3px 6px;
+  }
+
+  .obs-pp-name-row {
+    padding: 4px 8px;
+  }
+
+  .obs-scenes-footer {
+    flex-wrap: wrap;
+    gap: 6px;
   }
 }
 
