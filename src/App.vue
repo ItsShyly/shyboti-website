@@ -2148,6 +2148,8 @@ body.snippet-dragging * {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  /* >>> safety net - a page-level width bug should clip, not scroll the whole app */
+  overflow-x: hidden;
   min-height: 0;
   min-width: 0;
   scrollbar-width: none;

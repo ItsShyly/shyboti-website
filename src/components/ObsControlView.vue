@@ -2514,6 +2514,21 @@ watch(
   }
 }
 
+@media (max-width: 680px) {
+  /* >>> was width:max-content, wider than the phone viewport - caused
+     page-wide horizontal scroll and made the two header rows misalign */
+  .mode-bar {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .obsconn-header-right {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
 .obsconn-title {
   font-size: 20px;
   font-weight: 700;

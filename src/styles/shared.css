@@ -32,6 +32,18 @@
   .ep-panel {
     width: 100vw !important;
   }
+  /* >>> title block wouldn't shrink, pushing the close X off-screen */
+  .ep-panel-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .ep-panel-header > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+  .ep-name-rename-input {
+    width: 120px;
+  }
 }
 
 .ep-panel-header {

@@ -160,7 +160,7 @@ const panState = ref<{
   startPanY: number;
 } | null>(null);
 function onStageMouseDown(e: MouseEvent) {
-  if (e.target !== stageRef.value) return; // <<< items handle their own mousedown
+  if (e.target !== stageRef.value) return; // <<< items handle their own pointerdown
   if (e.button === 0) {
     startMarquee(e);
     return;
@@ -172,8 +172,8 @@ function onStageMouseDown(e: MouseEvent) {
     startPanX: panX.value,
     startPanY: panY.value,
   };
-  window.addEventListener("mousemove", onPanMove);
-  window.addEventListener("mouseup", onPanEnd);
+  window.addEventListener("pointermove", onPanMove);
+  window.addEventListener("pointerup", onPanEnd);
 }
 function onPanMove(e: MouseEvent) {
   const p = panState.value;
@@ -184,8 +184,8 @@ function onPanMove(e: MouseEvent) {
   panY.value = clampPan(p.startPanY + dy, "y");
 }
 function onPanEnd() {
-  window.removeEventListener("mousemove", onPanMove);
-  window.removeEventListener("mouseup", onPanEnd);
+  window.removeEventListener("pointermove", onPanMove);
+  window.removeEventListener("pointerup", onPanEnd);
   panState.value = null;
 }
 // ^^^ pan-drag ^^^
@@ -205,16 +205,16 @@ function startMarquee(e: MouseEvent) {
   if (!p) return;
   marqueeState.value = { startX: p.x, startY: p.y, additive: e.shiftKey || e.ctrlKey || e.metaKey };
   marqueeCurrent.value = p;
-  window.addEventListener("mousemove", onMarqueeMove);
-  window.addEventListener("mouseup", onMarqueeEnd);
+  window.addEventListener("pointermove", onMarqueeMove);
+  window.addEventListener("pointerup", onMarqueeEnd);
 }
 function onMarqueeMove(e: MouseEvent) {
   if (!marqueeState.value) return;
   marqueeCurrent.value = stageCanvasPoint(e);
 }
 function onMarqueeEnd() {
-  window.removeEventListener("mousemove", onMarqueeMove);
-  window.removeEventListener("mouseup", onMarqueeEnd);
+  window.removeEventListener("pointermove", onMarqueeMove);
+  window.removeEventListener("pointerup", onMarqueeEnd);
   const m = marqueeState.value;
   const cur = marqueeCurrent.value;
   marqueeState.value = null;
@@ -268,8 +268,8 @@ function onMinimapRectMouseDown(e: MouseEvent) {
     startPanX: panX.value,
     startPanY: panY.value,
   };
-  window.addEventListener("mousemove", onMinimapRectMove);
-  window.addEventListener("mouseup", onMinimapRectEnd);
+  window.addEventListener("pointermove", onMinimapRectMove);
+  window.addEventListener("pointerup", onMinimapRectEnd);
 }
 function onMinimapRectMove(e: MouseEvent) {
   const d = minimapDragState.value;
@@ -281,8 +281,8 @@ function onMinimapRectMove(e: MouseEvent) {
   panY.value = clampPan(d.startPanY - (e.clientY - d.startY) * factor, "y");
 }
 function onMinimapRectEnd() {
-  window.removeEventListener("mousemove", onMinimapRectMove);
-  window.removeEventListener("mouseup", onMinimapRectEnd);
+  window.removeEventListener("pointermove", onMinimapRectMove);
+  window.removeEventListener("pointerup", onMinimapRectEnd);
   minimapDragState.value = null;
 }
 // ^^^ minimap rect drag ^^^
@@ -432,8 +432,8 @@ function onItemMouseDown(el: OverlayElement, e: MouseEvent) {
     if (it) origins[id] = { x: it.x, y: it.y };
   }
   dragState.value = { id: el.id, startMouseX: e.clientX, startMouseY: e.clientY, origins };
-  window.addEventListener("mousemove", onDragMove);
-  window.addEventListener("mouseup", onDragEnd);
+  window.addEventListener("pointermove", onDragMove);
+  window.addEventListener("pointerup", onDragEnd);
 }
 function onDragMove(e: MouseEvent) {
   const d = dragState.value;
@@ -463,8 +463,8 @@ function onDragMove(e: MouseEvent) {
   );
 }
 function onDragEnd() {
-  window.removeEventListener("mousemove", onDragMove);
-  window.removeEventListener("mouseup", onDragEnd);
+  window.removeEventListener("pointermove", onDragMove);
+  window.removeEventListener("pointerup", onDragEnd);
   const d = dragState.value;
   dragState.value = null;
   const preview = dragPreview.value;
@@ -553,8 +553,8 @@ function onHandleMouseDown(el: OverlayElement, corner: Corner, e: MouseEvent) {
     startH: el.h,
     startFontSize: el.style.fontSize,
   };
-  window.addEventListener("mousemove", onResizeMove);
-  window.addEventListener("mouseup", onResizeEnd);
+  window.addEventListener("pointermove", onResizeMove);
+  window.addEventListener("pointerup", onResizeEnd);
 }
 function onResizeMove(e: MouseEvent) {
   const r = resizeState.value;
@@ -582,8 +582,8 @@ function onResizeMove(e: MouseEvent) {
   emitLivePreview([{ id: r.id, patch }]);
 }
 function onResizeEnd() {
-  window.removeEventListener("mousemove", onResizeMove);
-  window.removeEventListener("mouseup", onResizeEnd);
+  window.removeEventListener("pointermove", onResizeMove);
+  window.removeEventListener("pointerup", onResizeEnd);
   const r = resizeState.value;
   resizeState.value = null;
   const preview = resizePreview.value;
@@ -643,8 +643,8 @@ function onGroupHandleMouseDown(corner: Corner, e: MouseEvent) {
     startBox: { ...box },
     members: members.map((el) => ({ id: el.id, x: el.x, y: el.y, w: el.w, h: el.h, fontSize: el.style.fontSize })),
   };
-  window.addEventListener("mousemove", onGroupResizeMove);
-  window.addEventListener("mouseup", onGroupResizeEnd);
+  window.addEventListener("pointermove", onGroupResizeMove);
+  window.addEventListener("pointerup", onGroupResizeEnd);
 }
 function onGroupResizeMove(e: MouseEvent) {
   const r = groupResizeState.value;
@@ -686,8 +686,8 @@ function onGroupResizeMove(e: MouseEvent) {
   );
 }
 function onGroupResizeEnd() {
-  window.removeEventListener("mousemove", onGroupResizeMove);
-  window.removeEventListener("mouseup", onGroupResizeEnd);
+  window.removeEventListener("pointermove", onGroupResizeMove);
+  window.removeEventListener("pointerup", onGroupResizeEnd);
   const preview = groupResizePreview.value;
   groupResizeState.value = null;
   groupResizePreview.value = {};
@@ -721,8 +721,8 @@ function onRotateMouseDown(el: OverlayElement, e: MouseEvent) {
   e.preventDefault();
   e.stopPropagation();
   rotateState.value = { id: el.id };
-  window.addEventListener("mousemove", onRotateMove);
-  window.addEventListener("mouseup", onRotateEnd);
+  window.addEventListener("pointermove", onRotateMove);
+  window.addEventListener("pointerup", onRotateEnd);
 }
 function onRotateMove(e: MouseEvent) {
   const r = rotateState.value;
@@ -741,8 +741,8 @@ function onRotateMove(e: MouseEvent) {
   emitLivePreview([{ id: r.id, patch: { rotation: angle } }]);
 }
 function onRotateEnd() {
-  window.removeEventListener("mousemove", onRotateMove);
-  window.removeEventListener("mouseup", onRotateEnd);
+  window.removeEventListener("pointermove", onRotateMove);
+  window.removeEventListener("pointerup", onRotateEnd);
   const r = rotateState.value;
   rotateState.value = null;
   const preview = rotatePreview.value;
@@ -752,6 +752,51 @@ function onRotateEnd() {
   emit("update-element", r.id, { rotation: preview.rotation });
 }
 // ^^^ rotate handle ^^^
+
+// vvv pinch-to-zoom (2-finger touch) - raw touch events in capture phase
+// vvv so an item's pointerdown stopPropagation can't block the 2nd finger
+let pinchStartDist = 0;
+let pinchStartZoom = 1;
+function onViewportTouchStart(e: TouchEvent) {
+  if (e.touches.length !== 2) return;
+  e.preventDefault();
+  // >>> a 2nd finger landing mid-gesture should zoom, not also drag/resize
+  dragState.value = null;
+  resizeState.value = null;
+  groupResizeState.value = null;
+  rotateState.value = null;
+  marqueeState.value = null;
+  marqueeCurrent.value = null;
+  panState.value = null;
+  const [a, b] = [e.touches[0]!, e.touches[1]!];
+  pinchStartDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  pinchStartZoom = zoomLevel.value;
+}
+function onViewportTouchMove(e: TouchEvent) {
+  if (e.touches.length !== 2 || !pinchStartDist) return;
+  e.preventDefault();
+  const [a, b] = [e.touches[0]!, e.touches[1]!];
+  const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  setZoom(pinchStartZoom * (dist / pinchStartDist));
+}
+function onViewportTouchEnd(e: TouchEvent) {
+  if (e.touches.length < 2) pinchStartDist = 0;
+}
+onMounted(() => {
+  const vp = viewportRef.value;
+  vp?.addEventListener("touchstart", onViewportTouchStart, { passive: false, capture: true });
+  vp?.addEventListener("touchmove", onViewportTouchMove, { passive: false, capture: true });
+  vp?.addEventListener("touchend", onViewportTouchEnd, true);
+  vp?.addEventListener("touchcancel", onViewportTouchEnd, true);
+});
+onUnmounted(() => {
+  const vp = viewportRef.value;
+  vp?.removeEventListener("touchstart", onViewportTouchStart, true);
+  vp?.removeEventListener("touchmove", onViewportTouchMove, true);
+  vp?.removeEventListener("touchend", onViewportTouchEnd, true);
+  vp?.removeEventListener("touchcancel", onViewportTouchEnd, true);
+});
+// ^^^ pinch-to-zoom ^^^
 
 // >>> border/font px must scale down with display too
 function shapeStyle(el: OverlayElement) {
@@ -1058,8 +1103,8 @@ function onWindowMousedown(e: MouseEvent) {
   if (!(e.target as HTMLElement).closest(".ovl-ctx-menu")) contextMenu.value = null;
 }
 // >>> capture phase, item handlers stop the bubble otherwise
-onMounted(() => window.addEventListener("mousedown", onWindowMousedown, true));
-onUnmounted(() => window.removeEventListener("mousedown", onWindowMousedown, true));
+onMounted(() => window.addEventListener("pointerdown", onWindowMousedown, true));
+onUnmounted(() => window.removeEventListener("pointerdown", onWindowMousedown, true));
 // ^^^ context menu ^^^
 
 const guideStyleX = computed(() => {
@@ -1073,8 +1118,8 @@ const guideStyleY = computed(() => {
 </script>
 
 <template>
-  <div ref="viewportRef" class="ovl-stage-viewport" @wheel="onWheel" @mousemove="onStageMouseMove">
-  <div ref="stageRef" class="ovl-stage" :style="[stageStyle, zoomStyle]" @mousedown="onStageMouseDown"
+  <div ref="viewportRef" class="ovl-stage-viewport" @wheel="onWheel" @pointermove="onStageMouseMove">
+  <div ref="stageRef" class="ovl-stage" :style="[stageStyle, zoomStyle]" @pointerdown="onStageMouseDown"
     @contextmenu.prevent>
     <div v-if="backdrop === 'scene' && sceneShotUrl" class="ovl-scene-backdrop" :style="sceneBackdropStyle"></div>
     <div v-if="guideStyleX" class="ovl-guide ovl-guide-v" :style="guideStyleX"></div>
@@ -1084,7 +1129,7 @@ const guideStyleY = computed(() => {
     <div v-for="el in sortedElements" :key="el.id" class="ovl-item" :class="{
       selected: selectedIds.includes(el.id),
       locked: el.locked,
-    }" :style="displayStyle(el)" @mousedown="onItemMouseDown(el, $event)"
+    }" :style="displayStyle(el)" @pointerdown="onItemMouseDown(el, $event)"
       @contextmenu="onItemContextMenu(el, $event)">
       <img v-if="el.type === 'image'" :src="el.content" class="ovl-item-img" draggable="false" />
       <iframe v-else-if="el.type === 'video' && youtubeVideoId(el.content)" :id="`el-video-${el.id}`"
@@ -1099,28 +1144,28 @@ const guideStyleY = computed(() => {
       <div v-else-if="isCountdownLike(el.type)" class="ovl-item-text" :style="textStyle(el)"
         @dblclick.stop="startCountdownEdit(el)">
         <div v-if="countdownEditId === el.id" class="ovl-item-text-edit" contenteditable="true"
-          :data-cd-edit-id="el.id" @mousedown.stop @blur="commitCountdownEdit(el)"
+          :data-cd-edit-id="el.id" @pointerdown.stop @blur="commitCountdownEdit(el)"
           @keydown.enter.prevent="($event.target as HTMLElement).blur()"></div>
         <span v-else>{{ countdownCanvasText(el) }}</span>
       </div>
       <div v-else class="ovl-item-text" :style="textStyle(el)" @dblclick.stop="startEdit(el)">
         <div v-if="editingId === el.id" class="ovl-item-text-edit" contenteditable="true" :data-edit-id="el.id"
-          @mousedown.stop @blur="commitEdit(el)" @input="onTextEditInput(el)"
+          @pointerdown.stop @blur="commitEdit(el)" @input="onTextEditInput(el)"
           @keydown.enter.prevent="($event.target as HTMLElement).blur()"></div>
         <span v-else>{{ displayText(el) }}</span>
       </div>
       <span class="ovl-item-label">{{ el.type }}</span>
       <template v-if="selectedIds.length === 1 && el.id === selectedIds[0] && !el.locked">
         <span class="ovl-handle tl" title="Drag to resize (hold Ctrl or Alt to also scale font-size)"
-          @mousedown="onHandleMouseDown(el, 'tl', $event)"></span>
+          @pointerdown="onHandleMouseDown(el, 'tl', $event)"></span>
         <span class="ovl-handle tr" title="Drag to resize (hold Ctrl or Alt to also scale font-size)"
-          @mousedown="onHandleMouseDown(el, 'tr', $event)"></span>
+          @pointerdown="onHandleMouseDown(el, 'tr', $event)"></span>
         <span class="ovl-handle bl" title="Drag to resize (hold Ctrl or Alt to also scale font-size)"
-          @mousedown="onHandleMouseDown(el, 'bl', $event)"></span>
+          @pointerdown="onHandleMouseDown(el, 'bl', $event)"></span>
         <span class="ovl-handle br" title="Drag to resize (hold Ctrl or Alt to also scale font-size)"
-          @mousedown="onHandleMouseDown(el, 'br', $event)"></span>
+          @pointerdown="onHandleMouseDown(el, 'br', $event)"></span>
         <span class="ovl-rotate-handle" title="Drag to rotate (hold Shift for free angle)"
-          @mousedown="onRotateMouseDown(el, $event)">
+          @pointerdown="onRotateMouseDown(el, $event)">
           <span class="ovl-rotate-stem"></span>
           <span class="ovl-rotate-knob"></span>
         </span>
@@ -1129,19 +1174,19 @@ const guideStyleY = computed(() => {
 
     <div v-if="selectionBounds" class="ovl-group-box" :style="groupBoxStyle">
       <span class="ovl-handle tl" title="Drag to resize the group (hold Ctrl or Alt to also scale font-size)"
-        @mousedown="onGroupHandleMouseDown('tl', $event)"></span>
+        @pointerdown="onGroupHandleMouseDown('tl', $event)"></span>
       <span class="ovl-handle tr" title="Drag to resize the group (hold Ctrl or Alt to also scale font-size)"
-        @mousedown="onGroupHandleMouseDown('tr', $event)"></span>
+        @pointerdown="onGroupHandleMouseDown('tr', $event)"></span>
       <span class="ovl-handle bl" title="Drag to resize the group (hold Ctrl or Alt to also scale font-size)"
-        @mousedown="onGroupHandleMouseDown('bl', $event)"></span>
+        @pointerdown="onGroupHandleMouseDown('bl', $event)"></span>
       <span class="ovl-handle br" title="Drag to resize the group (hold Ctrl or Alt to also scale font-size)"
-        @mousedown="onGroupHandleMouseDown('br', $event)"></span>
+        @pointerdown="onGroupHandleMouseDown('br', $event)"></span>
     </div>
   </div>
 
   <!-- sibling of stage, fixed pos breaks under a transform -->
   <div v-if="contextMenu" class="ovl-ctx-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
-    @mousedown.stop>
+    @pointerdown.stop>
     <template v-if="contextMenuElement?.type === 'video' && !youtubeVideoId(contextMenuElement.content)">
       <button @click="ctxToggleMute">{{ contextMenuElement.data.muted !== false ? "Unmute" : "Mute" }}</button>
       <div class="ovl-ctx-volume">
@@ -1180,7 +1225,7 @@ const guideStyleY = computed(() => {
   <div v-if="zoomLevel > 1" class="ovl-minimap">
     <div class="ovl-minimap-inner" :style="minimapInnerStyle">
       <div v-for="el in sortedElements" :key="'mm' + el.id" class="ovl-minimap-el" :style="minimapElStyle(el)"></div>
-      <div class="ovl-minimap-viewport" :style="minimapViewportStyle()" @mousedown="onMinimapRectMouseDown"></div>
+      <div class="ovl-minimap-viewport" :style="minimapViewportStyle()" @pointerdown="onMinimapRectMouseDown"></div>
     </div>
     <button class="ovl-minimap-reset" title="Reset zoom" @click="resetZoom" v-html="RESET_ZOOM_ICON"></button>
   </div>
@@ -1196,6 +1241,8 @@ const guideStyleY = computed(() => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  /* >>> disable native touch scroll/pinch so drag+pinch reach our own handlers */
+  touch-action: none;
 }
 
 .ovl-stage {
@@ -1207,6 +1254,7 @@ const guideStyleY = computed(() => {
   overflow: hidden;
   border: 1px solid #2a2a30;
   user-select: none;
+  touch-action: none;
 }
 
 .ovl-guide {
@@ -1250,6 +1298,7 @@ const guideStyleY = computed(() => {
   border: 1px solid transparent;
   cursor: move;
   transform-origin: 0 0;
+  touch-action: none;
 }
 
 .ovl-item.locked {
@@ -1413,6 +1462,7 @@ const guideStyleY = computed(() => {
   background: #f14949;
   border: 1px solid #fff;
   z-index: 2;
+  touch-action: none;
 }
 
 .ovl-group-box {
@@ -1462,6 +1512,7 @@ const guideStyleY = computed(() => {
   align-items: center;
   cursor: grab;
   z-index: 3;
+  touch-action: none;
 }
 
 .ovl-rotate-stem {
@@ -1535,5 +1586,16 @@ const guideStyleY = computed(() => {
 .ovl-minimap-reset svg {
   width: 12px;
   height: 12px;
+}
+
+@media (max-width: 680px) {
+  /* >>> 10px handles are too small to grab with a finger - invisible
+     ::before expands the tappable area without changing how it looks */
+  .ovl-handle::before,
+  .ovl-rotate-handle::before {
+    content: "";
+    position: absolute;
+    inset: -14px;
+  }
 }
 </style>

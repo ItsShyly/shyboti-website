@@ -1269,8 +1269,9 @@ onUnmounted(() => {
               @duplicate-element="duplicateSelected" @live-preview="onLivePreview" @cursor-move="onCursorMove"
               @video-command="onVideoCommand" />
 
-            <!-- >>> mobile-only FABs - side panels are drawers now, these open them -->
-            <div class="ovl-mobile-fabs">
+            <!-- >>> mobile-only FABs - side panels are drawers now, these open them.
+                 hidden while a drawer is open so they don't float on top of it -->
+            <div v-if="!mobileDrawer" class="ovl-mobile-fabs">
               <button class="ovl-mobile-fab" title="Add element" @click="mobileDrawer = 'gallery'"
                 v-html="iconSvgFor('plus')"></button>
               <button class="ovl-mobile-fab" title="Properties &amp; layers" @click="mobileDrawer = 'props'"
@@ -2165,14 +2166,11 @@ onUnmounted(() => {
     background: #0d0d10;
   }
 
+  /* >>> was overflow-x:auto - that also computes overflow-y to auto per spec,
+     which clipped the "Manage" dropdown below it. wrap instead of scroll */
   .ovl-activate-bar {
-    overflow-x: auto;
-    scrollbar-width: none;
-    flex-wrap: nowrap;
-  }
-
-  .ovl-activate-bar::-webkit-scrollbar {
-    display: none;
+    flex-wrap: wrap;
+    row-gap: 6px;
   }
 
   /* >>> canvas owns the screen - side panels become drawers, opened by the FABs below */
@@ -2227,10 +2225,12 @@ onUnmounted(() => {
     display: flex;
     flex-direction: column;
     gap: 10px;
-    position: absolute;
+    /* >>> fixed to the real viewport, not .ovl-content - a relative/absolute
+       chain here was landing under the canvas stage and eating the taps */
+    position: fixed;
     right: 12px;
-    bottom: 12px;
-    z-index: 100;
+    bottom: 16px;
+    z-index: 220;
   }
 
   .ovl-mobile-fab {

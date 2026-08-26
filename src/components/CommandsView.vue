@@ -2634,6 +2634,14 @@ onUnmounted(() => {
     gap: 8px;
   }
 
+  /* >>> fixed width regardless of content - was collapsing on rows with no
+     arg variants, shifting the toggle left/right row to row */
+  .table-row>.row-chevron-cell,
+  .custom-row>.row-chevron-cell {
+    width: 20px;
+    flex-shrink: 0;
+  }
+
   .table-row>.cmd-name,
   .custom-row>.cmd-name {
     flex: 1;
