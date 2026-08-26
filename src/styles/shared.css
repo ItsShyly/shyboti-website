@@ -525,6 +525,12 @@
   border-bottom: 1px solid #1e1e1e;
   transition: background 0.1s;
 }
+/* >>> fallback for rows without their own mobile tuning - wrap instead of overflow */
+@media (max-width: 680px) {
+  .ep-list-row {
+    flex-wrap: wrap;
+  }
+}
 .ep-list-row:hover {
   background: #1c1c20;
 }
@@ -853,6 +859,7 @@
   top: calc(100% + 6px);
   right: 0;
   width: 280px;
+  max-width: calc(100vw - 24px);
   background: #1a1a1e;
   border: 1px solid #2a2a30;
   padding: 10px;

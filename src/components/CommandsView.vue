@@ -2543,6 +2543,11 @@ onUnmounted(() => {
     gap: 8px;
   }
 
+  .table-row>*:nth-child(4),
+  .table-row>*:nth-child(6) {
+    display: none;
+  }
+
   .custom-row {
     display: flex;
     flex-wrap: wrap;

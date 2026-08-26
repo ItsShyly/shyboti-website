@@ -504,6 +504,7 @@ watch(
 .health-tile {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 20px;
   padding: 10px 14px;
   margin-bottom: 14px;
@@ -779,11 +780,13 @@ watch(
 .log-controls {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   width: 100%;
 }
 .log-search {
   flex: 1;
+  min-width: 140px;
   height: 30px;
   padding: 0 10px;
   border: 1px solid #2a2a30;
