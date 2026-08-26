@@ -2093,6 +2093,8 @@ watch(
             </div>
             <div class="obs-scene-name-row">
               <div class="obs-scene-name">{{ s.sceneName }}</div>
+              <button class="obs-scene-fs-btn" title="Edit stream overlay"
+                @click.stop="openOverlayEditor(s.sceneName)" v-html="iconSvgFor('edit')"></button>
             </div>
           </div>
           <div v-if="!scenes.length" class="ep-empty">
@@ -3216,7 +3218,9 @@ watch(
   transition: background 0.15s, border-color 0.15s;
 }
 
-.obs-take-btn svg {
+/* >>> :deep - the icon is injected via v-html, so it never gets the
+   scoped-CSS attribute a plain descendant selector needs to match it */
+.obs-take-btn :deep(svg) {
   width: 20px;
   height: 20px;
 }
@@ -3345,7 +3349,7 @@ watch(
   flex-shrink: 0;
 }
 
-.obs-scene-fs-btn svg {
+.obs-scene-fs-btn :deep(svg) {
   width: 11px;
   height: 11px;
 }
@@ -4300,7 +4304,7 @@ watch(
     flex-direction: column-reverse;
   }
 
-  .obs-take-btn svg {
+  .obs-take-btn :deep(svg) {
     transform: rotate(-90deg);
   }
 
