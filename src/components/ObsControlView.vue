@@ -3733,9 +3733,19 @@ watch(
   min-height: 280px;
 }
 
-/* >>> collapsed sources/mixer shouldn't stay forced to the expanded height */
+/* >>> collapsed sources/mixer shouldn't stay forced to the expanded height -
+   min-height:0 alone wasn't enough, .obs-boxes-row's align-items:stretch
+   was still stretching it to match its tallest sibling */
 .obs-box.collapsed {
   min-height: 0;
+}
+
+@media (min-width: 901px) {
+  /* >>> only above 900px - below that .obs-boxes-row is column-direction,
+     where align-self controls width instead and would shrink the box */
+  .obs-box.collapsed {
+    align-self: flex-start;
+  }
 }
 
 .obs-box-cat {
