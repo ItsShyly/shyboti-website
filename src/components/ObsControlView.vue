@@ -237,6 +237,9 @@ function isTargetMissing(c: UnifiedCommand): boolean {
   return false;
 }
 
+// >>> sources/mixer/categories drawer, opens up from the bottom bar
+const boxesOpen = ref(false);
+
 // >>> settings panel (broadcaster only)
 const showSettings = ref(false);
 const settingsSaving = ref(false);
@@ -389,7 +392,6 @@ function lockForNavigation() {
   requestGen.value++;
   locked.value = true;
   editMode.value = true; // <<< never carry an armed live-mode into a new channel/page
-  pendingSceneName.value = null;
   pendingSourceEdits.value = {};
   pendingCategory.value = null;
 }
@@ -397,7 +399,6 @@ function lockForNavigation() {
 
 // vvv live/edit mode + staged changes vvv
 const editMode = ref(true); // <<< default: edit mode, nothing applies until Save
-const pendingSceneName = ref<string | null>(null);
 interface SourceTransform {
   positionX: number;
   positionY: number;
@@ -497,8 +498,6 @@ const pendingCreates = ref<PendingCreate[]>([]);
 
 const pendingChanges = computed(() => {
   const list: string[] = [];
-  if (pendingSceneName.value && pendingSceneName.value !== currentScene.value)
-    list.push(`Scene → ${pendingSceneName.value}`);
   for (const e of Object.values(pendingSourceEdits.value)) {
     if (pendingEditIsNoop(e)) continue;
     const label = e.scene === selectedScene.value ? e.sourceName : `${e.sourceName} (${e.scene})`;
@@ -526,13 +525,6 @@ function effectiveVisible(src: any): boolean {
 function effectiveMuted(src: any): boolean {
   return getPendingEdit(src)?.muted ?? !!src.muted;
 }
-function isScenePending(name: string): boolean {
-  return (
-    editMode.value &&
-    pendingSceneName.value === name &&
-    name !== currentScene.value
-  );
-}
 function isSourcePending(src: any): boolean {
   if (!editMode.value) return false;
   const e = getPendingEdit(src);
@@ -547,21 +539,21 @@ function isCategoryPending(categoryId: string): boolean {
   );
 }
 
+// >>> always just previews - same in both modes, never switches live on its own
 function onSceneClick(name: string) {
   if (locked.value) return;
-  if (!editMode.value) {
-    switchScene(name);
-    return;
-  }
-  // >>> clicking browses only, doesn't stage a scene switch
   selectedScene.value = name;
   loadSources(name);
 }
 
-// >>> explicit switch-on-save, separate from browsing
-function stageSceneSwitch(name: string) {
-  if (locked.value || !editMode.value) return;
-  pendingSceneName.value = pendingSceneName.value === name ? null : name;
+// >>> the only way to actually go live with the previewed scene - immediate,
+// >>> not staged, same in both edit and live mode
+const canTakeToProgram = computed(
+  () => !locked.value && !!selectedScene.value && selectedScene.value !== currentScene.value,
+);
+function takeToProgram() {
+  if (!canTakeToProgram.value) return;
+  switchScene(selectedScene.value);
 }
 
 // >>> one editor for the whole channel, not per-scene
@@ -638,19 +630,12 @@ function setMode(next: boolean) {
   if (locked.value || next === editMode.value) return;
   if (next === false && hasPending.value) discardChanges(); // <<< live mode has no staging concept
   editMode.value = next;
-  // >>> live mode snaps back to the actual live scene
-  if (next === false && currentScene.value && currentScene.value !== selectedScene.value) {
-    selectedScene.value = currentScene.value;
-    loadSources(currentScene.value);
-  }
 }
 
 async function saveChanges() {
   if (locked.value || !hasPending.value) return;
   const gen = requestGen.value;
   const tasks: Promise<any>[] = [];
-  if (pendingSceneName.value && pendingSceneName.value !== currentScene.value)
-    tasks.push(switchScene(pendingSceneName.value));
   for (const e of Object.values(pendingSourceEdits.value)) {
     if (pendingEditIsNoop(e)) continue;
     const ref_ = { sceneItemId: e.sceneItemId, sourceName: e.sourceName };
@@ -677,7 +662,6 @@ async function saveChanges() {
     );
   await Promise.all(tasks);
   if (gen === requestGen.value) {
-    pendingSceneName.value = null;
     pendingSourceEdits.value = {};
     pendingCreates.value = [];
     pendingCategory.value = null;
@@ -685,7 +669,6 @@ async function saveChanges() {
 }
 
 function discardChanges() {
-  pendingSceneName.value = null;
   pendingSourceEdits.value = {};
   pendingCreates.value = [];
   pendingCategory.value = null;
@@ -734,19 +717,10 @@ const agentConnected = computed(() => agentStatus.value?.connected ?? false);
 const obsConnected = computed(() => agentStatus.value?.obs_connected ?? false);
 const currentScene = computed(() => agentStatus.value?.current_scene ?? "");
 const hiddenScenes = computed(() => new Set(agentStatus.value?.hidden_scenes ?? []));
-// >>> hidden filter doesn't apply to the live scene row
-const nonLiveScenes = computed(() =>
-  scenes.value.filter(
-    (s) => s.sceneName !== currentScene.value && !hiddenScenes.value.has(s.sceneName),
-  ),
+// >>> one unified strip now (program/preview panels show live vs previewed)
+const visibleScenes = computed(() =>
+  scenes.value.filter((s) => !hiddenScenes.value.has(s.sceneName)),
 );
-
-// >>> only live mode follows the actual live scene
-watch(currentScene, (name) => {
-  if (!name || editMode.value) return;
-  selectedScene.value = name;
-  loadSources(name);
-});
 const connStatusLabel = computed(() => {
   if (!agentStatus.value?.paired) return "not set up";
   if (!agentConnected.value) return "agent offline";
@@ -1755,83 +1729,6 @@ watch(
 
 <template>
   <div class="obsconn-page">
-    <div class="obsconn-header">
-      <div>
-        <div class="obsconn-title">OBS Control</div>
-      </div>
-      <div class="mode-bar">
-        <div class="mode-bar-left">
-          <span class="ep-field-label" style="margin: 0">mode</span>
-          <div class="switch" :class="editMode ? 'edit' : 'live'" @click="setMode(!editMode)">
-            <div class="knob"></div>
-          </div>
-          <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? "Edit" : "Live" }}</span>
-        </div>
-        <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> leaving -
-          loading fresh state…</span>
-        <span v-else class="mode-hint">{{
-          editMode
-            ? "Changes stage here until you press Save."
-            : "Changes apply to your stream instantly."
-        }}</span>
-      </div>
-
-      <div class="obsconn-header-right">
-        <div class="obs-status-bar" :class="connStatusClass">
-          <div class="obs-status-dot"></div>
-          <span class="obs-status-text">{{ connStatusLabel }}</span>
-          <span v-if="agentStatus?.version" class="obs-status-version">v{{ agentStatus.version }}</span>
-        </div>
-        <button v-if="obsConnected && canFilterScenes" class="obs-refresh-btn" @click="refreshScenes"
-          title="Refresh scene list" v-html="iconSvgFor('refresh-cw')">
-        </button>
-        <button v-if="obsConnected && canFilterScenes" class="obsconn-gear-btn" title="Filter scenes"
-          @click="openFilter">
-          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z" stroke="currentColor" stroke-width="1.5"
-              stroke-linejoin="round" />
-          </svg>
-        </button>
-        <button v-if="isBroadcaster" class="obsconn-gear-btn" title="OBS settings" @click="openSettings">
-          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5" />
-            <path
-              d="M16.2 12.3a1.4 1.4 0 00.3 1.5l.05.05a1.65 1.65 0 11-2.35 2.35l-.05-.05a1.4 1.4 0 00-1.5-.3 1.4 1.4 0 00-.85 1.28v.14a1.65 1.65 0 11-3.3 0v-.07a1.4 1.4 0 00-.92-1.28 1.4 1.4 0 00-1.5.3l-.05.05A1.65 1.65 0 113.63 13.9l.05-.05a1.4 1.4 0 00.3-1.5 1.4 1.4 0 00-1.28-.85h-.14a1.65 1.65 0 110-3.3h.07a1.4 1.4 0 001.28-.92 1.4 1.4 0 00-.3-1.5l-.05-.05A1.65 1.65 0 116.09 3.38l.05.05a1.4 1.4 0 001.5.3h.06a1.4 1.4 0 00.85-1.28V2.3a1.65 1.65 0 113.3 0v.07a1.4 1.4 0 00.85 1.28h.06a1.4 1.4 0 001.5-.3l.05-.05a1.65 1.65 0 112.35 2.35l-.05.05a1.4 1.4 0 00-.3 1.5v.06a1.4 1.4 0 001.28.85h.14a1.65 1.65 0 110 3.3h-.07a1.4 1.4 0 00-1.28.85z"
-              stroke="currentColor" stroke-width="1.3" />
-          </svg>
-          <span v-if="!loading && !agentStatus?.paired" class="obs-gear-badge" title="OBS agent not set up yet">!</span>
-        </button>
-        <div v-if="agentConnected && obsConnected" class="obs-live-stats">
-          <div class="obs-live-stat" :class="{ bad: bitrateBad }">
-            <span class="obs-live-stat-label">bitrate</span>
-            <span class="obs-live-stat-value">{{
-              bitrateLabel ?? "not streaming"
-            }}</span>
-          </div>
-          <div class="obs-live-stat">
-            <span class="obs-live-stat-label">preview size</span>
-            <span class="obs-live-stat-value">{{
-              liveShotStats.kb != null
-                ? liveShotStats.kb + " kb"
-                : agentStatus?.screenshots
-                  ? "--"
-                  : "off"
-            }}</span>
-          </div>
-          <div class="obs-live-stat">
-            <span class="obs-live-stat-label">preview cpu</span>
-            <span class="obs-live-stat-value">{{
-              liveShotStats.cpuMs != null
-                ? liveShotStats.cpuMs + " ms"
-                : agentStatus?.screenshots
-                  ? "--"
-                  : "off"
-            }}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div class="obsconn-body" :class="{ 'obs-locked': locked }">
       <template v-if="loading">
         <div class="obs-loading">
@@ -1872,63 +1769,68 @@ watch(
       </template>
 
       <template v-if="agentConnected && obsConnected">
-        <div class="ep-field-group">
+        <div class="obs-program-preview">
+          <div class="obs-pp-pane obs-pp-preview" :class="{ empty: !selectedScene }">
+            <div class="obs-pp-label">preview</div>
+            <div class="obs-pp-thumb">
+              <img v-if="selectedScene && sceneShots[selectedScene]" :src="sceneShots[selectedScene]"
+                :alt="selectedScene" />
+              <div v-else class="obs-scene-thumb-empty">
+                {{ selectedScene ? (agentStatus?.screenshots ? "…" : "previews off") : "pick a scene below" }}
+              </div>
+            </div>
+            <div class="obs-pp-name-row">
+              <div class="obs-pp-name">{{ selectedScene || "—" }}</div>
+              <button v-if="selectedScene" class="obs-scene-fs-btn" title="Edit stream overlay"
+                @click.stop="openOverlayEditor(selectedScene)" v-html="iconSvgFor('edit')"></button>
+            </div>
+          </div>
 
-          <div class="ep-field-label obs-section-label">
-          </div>
-          <div class="obs-scenes">
-            <!-- >>> avoids a layout jump from an extra async fetch -->
-            <div class="obs-scenes-live-row" v-if="currentScene">
-              <div class="obs-live-scene-wrap">
-                <div class="obs-scene-card obs-scene-card-live active"
-                  :class="{ picked: currentScene === selectedScene }" @click="onSceneClick(currentScene)">
-                  <div class="obs-scene-thumb">
-                    <img v-if="sceneShots[currentScene]" :src="sceneShots[currentScene]" :alt="currentScene" />
-                    <div v-else class="obs-scene-thumb-empty">
-                      {{ agentStatus?.screenshots ? "…" : "previews off" }}
-                    </div>
-                  </div>
-                  <div class="obs-scene-name-row">
-                    <div class="obs-scene-name">{{ currentScene }}</div>
-                    <button class="obs-scene-fs-btn" title="Edit stream overlay"
-                      @click.stop="openOverlayEditor(currentScene)" v-html="iconSvgFor('edit')"></button>
-                  </div>
-                  <div class="obs-scene-live">live</div>
-                </div>
+          <button class="obs-take-btn" :disabled="!canTakeToProgram"
+            title="Take the previewed scene live - the only thing that actually switches" @click="takeToProgram"
+            v-html="iconSvgFor('arrow-right')"></button>
+
+          <div class="obs-pp-pane obs-pp-program">
+            <div class="obs-pp-label">live</div>
+            <div class="obs-pp-thumb">
+              <img v-if="currentScene && sceneShots[currentScene]" :src="sceneShots[currentScene]"
+                :alt="currentScene" />
+              <div v-else class="obs-scene-thumb-empty">
+                {{ agentStatus?.screenshots ? "…" : "previews off" }}
               </div>
             </div>
-            <div class="obs-scenes-others">
-              <div v-for="s in nonLiveScenes" :key="s.sceneName" class="obs-scene-card"
-                :class="{ picked: s.sceneName === selectedScene, pending: isScenePending(s.sceneName) }"
-                @click="onSceneClick(s.sceneName)">
-                <div class="obs-scene-thumb">
-                  <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
-                  <div v-else class="obs-scene-thumb-empty">
-                    {{ agentStatus?.screenshots ? "…" : "previews off" }}
-                  </div>
-                  <span v-if="isScenePending(s.sceneName)" class="obs-scene-pending-tag">pending</span>
-                  <button v-if="editMode" class="obs-scene-stage-btn" :class="{ active: isScenePending(s.sceneName) }"
-                    :title="isScenePending(s.sceneName) ? 'Unstage - keep current scene live' : 'Switch to this scene on Save'"
-                    @click.stop="stageSceneSwitch(s.sceneName)" v-html="iconSvgFor('play')">
-                  </button>
-                </div>
-                <div class="obs-scene-name-row">
-                  <div class="obs-scene-name">{{ s.sceneName }}</div>
-                  <button class="obs-scene-fs-btn" title="Edit stream overlay"
-                    @click.stop="openOverlayEditor(s.sceneName)" v-html="iconSvgFor('edit')"></button>
-                </div>
-              </div>
-            </div>
-            <div v-if="!scenes.length" class="ep-empty">
-              <button class="ep-btn-cancel" @click="refreshScenes">
-                load scenes
-              </button>
+            <div class="obs-pp-name-row">
+              <div class="obs-pp-name">{{ currentScene || "—" }}</div>
             </div>
           </div>
-          <button v-if="
-            canForcePreview && scenes.length > 0 && !videoMixProjectorOpen
-          " class="ep-btn-new" @click="forceAllPreviews()" :disabled="forcePreviewLoading"
-            style="width: 200px; display: block; margin: 0 auto">
+        </div>
+
+        <div class="obs-scene-strip">
+          <div v-for="s in visibleScenes" :key="s.sceneName" class="obs-scene-card" :class="{
+            picked: s.sceneName === selectedScene,
+            live: s.sceneName === currentScene,
+          }" @click="onSceneClick(s.sceneName)">
+            <div class="obs-scene-thumb">
+              <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
+              <div v-else class="obs-scene-thumb-empty">
+                {{ agentStatus?.screenshots ? "…" : "previews off" }}
+              </div>
+              <span v-if="s.sceneName === currentScene" class="obs-scene-live-tag">live</span>
+            </div>
+            <div class="obs-scene-name-row">
+              <div class="obs-scene-name">{{ s.sceneName }}</div>
+            </div>
+          </div>
+          <div v-if="!scenes.length" class="ep-empty">
+            <button class="ep-btn-cancel" @click="refreshScenes">
+              load scenes
+            </button>
+          </div>
+        </div>
+
+        <div class="obs-scenes-footer">
+          <button v-if="canForcePreview && scenes.length > 0 && !videoMixProjectorOpen" class="ep-btn-cancel"
+            @click="forceAllPreviews()" :disabled="forcePreviewLoading">
             {{ forcePreviewLoading ? "Opening…" : "Force all previews" }}
           </button>
           <div v-if="canForcePreview" class="obs-projector-state">
@@ -1941,6 +1843,98 @@ watch(
       <ObsOverlayEditor v-if="overlayEditorOpen && session" :channel="session.channel" :auth-headers="authHeaders"
         :scenes="scenes.map((s) => s.sceneName)" :current-scene="currentScene" :initial-scene="overlayEditorScene"
         :obs-ready="agentConnected && obsConnected" @close="closeOverlayEditor" />
+
+      <div v-if="bindingsSaving || bindingsSaved" class="obsconn-autosave">
+        {{ bindingsSaving ? "saving…" : "saved" }}
+      </div>
+    </div>
+
+    <!-- vvv bottom bar - mode/connection/gear controls + the sources/mixer drawer toggle vvv -->
+    <div class="obs-bottombar">
+      <div class="obsconn-title-slim">OBS Control</div>
+
+      <div class="obs-mode-toggle-slim" :title="editMode
+        ? 'Changes stage here until you press Save.'
+        : 'Changes apply to your stream instantly.'
+        " @click="setMode(!editMode)">
+        <div class="switch" :class="editMode ? 'edit' : 'live'">
+          <div class="knob"></div>
+        </div>
+        <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? "Edit" : "Live" }}</span>
+      </div>
+
+      <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> leaving…</span>
+
+      <div class="obs-status-bar-slim" :class="connStatusClass"
+        :title="agentStatus?.version ? `v${agentStatus.version}` : ''">
+        <div class="obs-status-dot"></div>
+        <span class="obs-status-text">{{ connStatusLabel }}</span>
+      </div>
+
+      <div v-if="agentConnected && obsConnected && bitrateLabel" class="obs-bottombar-stat"
+        :class="{ bad: bitrateBad }">
+        {{ bitrateLabel }}
+      </div>
+
+      <div class="obs-bottombar-spacer"></div>
+
+      <button v-if="obsConnected && canFilterScenes" class="obs-refresh-btn" @click="refreshScenes"
+        title="Refresh scene list" v-html="iconSvgFor('refresh-cw')">
+      </button>
+      <button v-if="obsConnected && canFilterScenes" class="obsconn-gear-btn" title="Filter scenes"
+        @click="openFilter">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z" stroke="currentColor" stroke-width="1.5"
+            stroke-linejoin="round" />
+        </svg>
+      </button>
+      <button v-if="isBroadcaster" class="obsconn-gear-btn" title="OBS settings" @click="openSettings">
+        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5" />
+          <path
+            d="M16.2 12.3a1.4 1.4 0 00.3 1.5l.05.05a1.65 1.65 0 11-2.35 2.35l-.05-.05a1.4 1.4 0 00-1.5-.3 1.4 1.4 0 00-.85 1.28v.14a1.65 1.65 0 11-3.3 0v-.07a1.4 1.4 0 00-.92-1.28 1.4 1.4 0 00-1.5.3l-.05.05A1.65 1.65 0 113.63 13.9l.05-.05a1.4 1.4 0 00.3-1.5 1.4 1.4 0 00-1.28-.85h-.14a1.65 1.65 0 110-3.3h.07a1.4 1.4 0 001.28-.92 1.4 1.4 0 00-.3-1.5l-.05-.05A1.65 1.65 0 116.09 3.38l.05.05a1.4 1.4 0 001.5.3h.06a1.4 1.4 0 00.85-1.28V2.3a1.65 1.65 0 113.3 0v.07a1.4 1.4 0 00.85 1.28h.06a1.4 1.4 0 001.5-.3l.05-.05a1.65 1.65 0 112.35 2.35l-.05.05a1.4 1.4 0 00-.3 1.5v.06a1.4 1.4 0 001.28.85h.14a1.65 1.65 0 110 3.3h-.07a1.4 1.4 0 00-1.28.85z"
+            stroke="currentColor" stroke-width="1.3" />
+        </svg>
+        <span v-if="!loading && !agentStatus?.paired" class="obs-gear-badge" title="OBS agent not set up yet">!</span>
+      </button>
+
+      <button v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-drawer-toggle"
+        :class="{ open: boxesOpen }" @click="boxesOpen = !boxesOpen">
+        <span v-html="iconSvgFor('chevron-up')"></span> Sources &amp; Mixer
+      </button>
+
+      <div v-if="boxesOpen" class="obs-drawer-backdrop" @click="boxesOpen = false"></div>
+      <div class="obs-drawer" :class="{ open: boxesOpen }">
+      <button class="obs-drawer-handle" @click="boxesOpen = false">
+        <span v-html="iconSvgFor('chevron-down')"></span> close
+      </button>
+
+      <div v-if="agentConnected && obsConnected" class="obs-live-stats">
+        <div class="obs-live-stat" :class="{ bad: bitrateBad }">
+          <span class="obs-live-stat-label">bitrate</span>
+          <span class="obs-live-stat-value">{{ bitrateLabel ?? "not streaming" }}</span>
+        </div>
+        <div class="obs-live-stat">
+          <span class="obs-live-stat-label">preview size</span>
+          <span class="obs-live-stat-value">{{
+            liveShotStats.kb != null
+              ? liveShotStats.kb + " kb"
+              : agentStatus?.screenshots
+                ? "--"
+                : "off"
+          }}</span>
+        </div>
+        <div class="obs-live-stat">
+          <span class="obs-live-stat-label">preview cpu</span>
+          <span class="obs-live-stat-value">{{
+            liveShotStats.cpuMs != null
+              ? liveShotStats.cpuMs + " ms"
+              : agentStatus?.screenshots
+                ? "--"
+                : "off"
+          }}</span>
+        </div>
+      </div>
 
       <!-- >>> builder still works even if obs isn't connected -->
       <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"
@@ -2085,11 +2079,10 @@ watch(
           </button>
         </div>
       </div>
+      </div>
+      <!-- ^^^ drawer ^^^ -->
     </div>
-
-    <div v-if="bindingsSaving || bindingsSaved" class="obsconn-autosave">
-      {{ bindingsSaving ? "saving…" : "saved" }}
-    </div>
+    <!-- ^^^ bottom bar ^^^ -->
   </div>
 
   <!-- >>> broadcaster only -->
@@ -2459,7 +2452,7 @@ watch(
   <!-- >>> site-wide, sits under navbar regardless of tab -->
   <Teleport to="body">
     <div v-if="!editMode" class="obs-live-mode-banner">
-      <span class="dot"></span>Live mode is on - scene, source and category changes apply to your stream instantly
+      <span class="dot"></span>Live mode is on - source and category changes apply to your stream instantly
     </div>
   </Teleport>
 
@@ -2479,74 +2472,15 @@ watch(
 
 <style scoped>
 /* >>> page chrome, now a routed page not a modal */
+/* >>> fills whatever height .main-panel gives it - the scene/preview area
+   below grows into the leftover space instead of the page scrolling */
 .obsconn-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-}
-
-/* >>> grid centers on full width, not leftover space */
-.obsconn-header {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.obsconn-header>.mode-bar {
-  justify-self: center;
-}
-
-.obsconn-header-right {
-  justify-self: end;
-}
-
-@media (max-width: 900px) {
-  .obsconn-header {
-    grid-template-columns: 1fr;
-    justify-items: start;
-  }
-
-  .obsconn-header>.mode-bar,
-  .obsconn-header-right {
-    justify-self: stretch;
-  }
-}
-
-@media (max-width: 680px) {
-  /* >>> was width:max-content, wider than the phone viewport - caused
-     page-wide horizontal scroll and made the two header rows misalign */
-  .mode-bar {
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-  }
-
-  .obsconn-header-right {
-    width: 100%;
-    box-sizing: border-box;
-  }
-}
-
-.obsconn-title {
-  font-size: 20px;
-  font-weight: 700;
-  color: #e0e0e0;
-}
-
-.obsconn-sub {
-  font-size: 12px;
-  color: #555;
-  margin-top: 2px;
-}
-
-.obsconn-header-right {
-  display: flex;
-  align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex: 1;
+  min-height: 0;
+  position: relative;
 }
 
 .obsconn-gear-btn {
@@ -2595,7 +2529,9 @@ watch(
 .obsconn-body {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
 }
 
 .obsconn-settings-panel {
@@ -3001,14 +2937,15 @@ watch(
 }
 
 /* >>> status bar */
-.obs-status-bar {
+.obs-status-bar-slim {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  margin-bottom: 2px;
+  gap: 6px;
+  padding: 5px 9px;
   border: 1px solid;
-  font-size: 11px;
+  font-size: 10px;
+  flex-shrink: 0;
+  cursor: default;
 }
 
 .obs-status-dot {
@@ -3019,15 +2956,10 @@ watch(
 }
 
 .obs-status-text {
-  flex: 1;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-}
-
-.obs-status-version {
-  font-size: 9px;
-  color: #444;
+  white-space: nowrap;
 }
 
 .status-none {
@@ -3144,41 +3076,146 @@ watch(
   color: #9d6cff;
 }
 
-/* >>> live scene big & centered, rest small below */
-.obs-scenes {
+/* >>> OBS-studio style: preview (staged pick) left, program (live) right,
+   a take button between them is the only thing that actually switches */
+.obs-program-preview {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 14px;
+  flex: 1;
+  min-height: 0;
 }
 
-.obs-scenes-live-row {
+.obs-pp-pane {
+  flex: 1;
+  min-width: 0;
   display: flex;
+  flex-direction: column;
+  border: 1px solid #2a2a30;
+  background: #111217;
+  min-height: 0;
+}
+
+.obs-pp-preview {
+  border-color: #6f2bff55;
+}
+
+.obs-pp-preview.empty {
+  border-style: dashed;
+}
+
+.obs-pp-program {
+  border-color: #f1494955;
+}
+
+.obs-pp-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 5px 8px;
+  flex-shrink: 0;
+}
+
+.obs-pp-preview .obs-pp-label {
+  color: #9d6cff;
+}
+
+.obs-pp-program .obs-pp-label {
+  color: #f14949;
+}
+
+.obs-pp-thumb {
+  flex: 1;
+  min-height: 0;
+  background: #0a0a0d;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  align-items: stretch;
+  overflow: hidden;
+}
+
+.obs-pp-thumb img {
   width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
-/* >>> sized to match the card, ignores stats overlay */
-.obs-live-scene-wrap {
-  position: relative;
-}
-
-.obs-scenes-others {
+.obs-pp-name-row {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-top: 1px solid #1e1e24;
+  flex-shrink: 0;
+}
+
+.obs-pp-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
+}
+
+.obs-take-btn {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1px solid #6f2bff88;
+  background: #6f2bff22;
+  color: #c4a0ff;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.obs-take-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.obs-take-btn:hover:not(:disabled) {
+  background: #6f2bff44;
+  transform: scale(1.06);
+}
+
+.obs-take-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+/* >>> scene picker strip - clicking one only sets preview, never switches live */
+.obs-scene-strip {
+  display: flex;
   gap: 10px;
-  width: 100%;
+  overflow-x: auto;
+  flex-shrink: 0;
+  scrollbar-width: thin;
+}
+
+.obs-scenes-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .obs-scene-card {
-  width: 200px;
-  padding: 0 0 8px;
+  width: 130px;
+  flex-shrink: 0;
+  padding: 0 0 6px;
   border: 1px solid #2a2a30;
   background: #111217;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   color: #888;
   position: relative;
   transition:
@@ -3187,26 +3224,21 @@ watch(
   overflow: hidden;
 }
 
-.obs-scene-card-live {
-  width: 500px;
-  max-width: 100%;
-}
-
 .obs-scene-card:hover {
   border-color: #3a3a44;
   color: #aaa;
 }
 
-.obs-scene-card.active {
+.obs-scene-card.picked {
   border-color: #6f2bff;
   color: #c4a0ff;
 }
 
-.obs-scene-card.picked:not(.active) {
-  border-color: #2a2a42;
+.obs-scene-card.live {
+  border-color: #f1494988;
 }
 
-.obs-scene-live {
+.obs-scene-live-tag {
   position: absolute;
   top: 5px;
   right: 6px;
@@ -4154,19 +4186,18 @@ watch(
     width: 100%;
   }
 
-  .obs-scenes-others {
-    gap: 8px;
-  }
-
-  .obs-scenes-others .obs-scene-card {
-    width: calc(50% - 4px);
-  }
-
-  .obs-live-scene-wrap {
-    display: flex;
+  /* >>> side-by-side program/preview don't fit a phone width - stack instead,
+     arrow rotates to point down since it now swaps top into bottom */
+  .obs-program-preview {
     flex-direction: column;
-    align-items: center;
-    width: 100%;
+  }
+
+  .obs-take-btn svg {
+    transform: rotate(90deg);
+  }
+
+  .obs-scene-card {
+    width: 100px;
   }
 
   .obs-live-stats {
@@ -4239,16 +4270,16 @@ watch(
   }
 }
 
-/* >>> in-flow so it reserves space, was overlapping mode-bar */
 .obs-live-stats {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   align-items: center;
   gap: 6px;
-  flex-basis: 100%;
-  margin-top: 6px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #1e1e22;
 }
 
 .obs-live-stat {
@@ -4277,6 +4308,135 @@ watch(
 
 .obs-live-stat.bad .obs-live-stat-value {
   color: #f14949;
+}
+
+/* >>> bottom bar - everything that used to be the header, plus the
+   sources/mixer drawer toggle. keeps the main panel free for scenes only */
+.obs-bottombar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #1e1e22;
+  background: #0d0d10;
+  flex-shrink: 0;
+}
+
+.obsconn-title-slim {
+  font-size: 12px;
+  font-weight: 700;
+  color: #888;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.obs-bottombar-stat {
+  font-size: 11px;
+  font-family: "Consolas", "Fira Mono", monospace;
+  color: #9d6cff;
+  padding: 4px 8px;
+  border: 1px solid #1e1e24;
+  flex-shrink: 0;
+}
+
+.obs-bottombar-stat.bad {
+  color: #f14949;
+}
+
+.obs-bottombar-spacer {
+  flex: 1;
+}
+
+.obs-drawer-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid #6f2bff66;
+  background: #6f2bff15;
+  color: #9d6cff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.obs-drawer-toggle:hover {
+  background: #6f2bff30;
+}
+
+.obs-drawer-toggle svg {
+  width: 12px;
+  height: 12px;
+  transition: transform 0.15s;
+}
+
+.obs-drawer-toggle.open svg {
+  transform: rotate(180deg);
+}
+
+.obs-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 90;
+}
+
+/* >>> dropup - anchored to the bottom bar (its parent), opens above it */
+.obs-drawer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  margin-bottom: 4px;
+  max-height: 65vh;
+  overflow-y: auto;
+  background: #16161a;
+  border: 1px solid #2a2a30;
+  border-bottom: none;
+  padding: 12px;
+  z-index: 95;
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+  scrollbar-width: none;
+}
+
+.obs-drawer::-webkit-scrollbar {
+  display: none;
+}
+
+.obs-drawer.open {
+  transform: translateY(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.obs-drawer-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 26px;
+  margin-bottom: 10px;
+  border: 1px solid #2a2a30;
+  background: transparent;
+  color: #666;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.obs-drawer-handle:hover {
+  color: #9d6cff;
+  border-color: #6f2bff66;
 }
 
 /* >>> command/rule builder tab switch */
@@ -4329,67 +4489,60 @@ watch(
 
 /* vvv live/edit mode + staged changes vvv */
 /* >>> lives in the header row, sized to content not stretched */
-.mode-bar {
+.obs-mode-toggle-slim {
   display: flex;
   align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding: 6px 12px;
+  gap: 6px;
+  padding: 4px 8px;
   border: 1px solid #1e1e22;
   background: #0d0d10;
-  width: max-content;
-  max-width: 480px;
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
-.mode-bar-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.mode-bar .switch {
+.obs-mode-toggle-slim .switch {
   position: relative;
-  width: 40px;
-  height: 22px;
+  width: 32px;
+  height: 18px;
   border: 1px solid #2a2a30;
   background: #111217;
   cursor: pointer;
   flex-shrink: 0;
 }
 
-.mode-bar .switch .knob {
+.obs-mode-toggle-slim .switch .knob {
   position: absolute;
   top: 2px;
   left: 2px;
-  width: 16px;
-  height: 16px;
+  width: 12px;
+  height: 12px;
   background: #555;
   transition: left 0.15s, background 0.15s;
 }
 
-.mode-bar .switch.live {
+.obs-mode-toggle-slim .switch.live {
   border-color: #f1494966;
   background: #f1494914;
 }
 
-.mode-bar .switch.live .knob {
-  left: 20px;
+.obs-mode-toggle-slim .switch.live .knob {
+  left: 16px;
   background: #f14949;
 }
 
-.mode-bar .switch.edit {
+.obs-mode-toggle-slim .switch.edit {
   border-color: #e5c07b55;
   background: #e5c07b0e;
 }
 
-.mode-bar .switch.edit .knob {
+.obs-mode-toggle-slim .switch.edit .knob {
   background: #e5c07b;
 }
 
 .mode-state {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-  min-width: 32px;
+  min-width: 26px;
 }
 
 .mode-state.edit {
@@ -4416,62 +4569,10 @@ watch(
   pointer-events: none;
 }
 
-.obs-scene-card.pending {
-  border-color: #e5c07b;
-  color: #f0d9a0;
-}
-
-.obs-scene-pending-tag {
-  position: absolute;
-  top: 5px;
-  left: 6px;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: #20180a;
-  background: #e5c07b;
-  padding: 2px 5px;
-  z-index: 1;
-}
-
 .obs-source-row.pending,
 .obs-mixer-row.pending {
   border-left: 2px solid #e5c07b;
   background: #e5c07b0d;
-}
-
-/* >>> switch-on-save, separate from clicking the card */
-.obs-scene-stage-btn {
-  position: absolute;
-  top: 5px;
-  right: 6px;
-  width: 22px;
-  height: 22px;
-  border: 1px solid #2a2a30;
-  background: #0d0d10cc;
-  color: #666;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 2;
-  transition: color 0.15s, border-color 0.15s, background 0.15s;
-}
-
-.obs-scene-stage-btn svg {
-  width: 10px;
-  height: 10px;
-}
-
-.obs-scene-stage-btn:hover {
-  color: #9d6cff;
-  border-color: #6f2bff66;
-}
-
-.obs-scene-stage-btn.active {
-  color: #20180a;
-  background: #e5c07b;
-  border-color: #e5c07b;
 }
 
 .pending-tag {
@@ -4538,12 +4639,13 @@ watch(
   }
 }
 
-/* >>> floating save bar for staged changes */
+/* >>> floating save bar for staged changes - sits just above the OBS page's
+   own bottom bar (not fixed to it, this is a site-wide teleport) */
 .obs-save-bar {
   position: fixed;
   left: 200px;
   right: 0;
-  bottom: 0;
+  bottom: 50px;
   background: #17130a;
   border-top: 1px solid #e5c07b73;
   padding: 10px 20px;
