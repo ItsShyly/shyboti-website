@@ -4304,6 +4304,31 @@ watch(
     transform: rotate(-90deg);
   }
 
+  /* >>> drawer covers most of a phone screen at 65vh - keep it shorter */
+  .obs-drawer {
+    max-height: 40vh;
+  }
+
+  /* >>> redundant with the big preview pane right above the drawer toggle,
+     just clutter on a small screen */
+  .obs-drawer-preview-mini {
+    display: none;
+  }
+
+  /* >>> a source row's content shouldn't be able to push wider than its box */
+  .obs-box,
+  .obs-source-row {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  /* >>> .obs-box's min-height (280px, sized for sources/mixer) was beating
+     this box's own max-height (min-height wins CSS's min/max conflict rule),
+     forcing empty space under a short category list */
+  .obs-box-cat {
+    min-height: 0;
+  }
+
   .obs-scene-card {
     width: 100px;
   }
