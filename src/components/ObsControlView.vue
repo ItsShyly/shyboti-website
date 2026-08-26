@@ -1786,7 +1786,7 @@ watch(
       <!-- >>> no backdrop, stays open so scenes stay clickable while it's open -->
       <div class="obs-drawer" :class="{ open: boxesOpen }">
         <div v-if="agentConnected && obsConnected" class="obs-live-stats">
-          <div>
+          <div class="flex">
             <div class="obs-live-stat" :class="{ bad: bitrateBad }">
               <span class="obs-live-stat-label">bitrate</span>
               <span class="obs-live-stat-value">{{ bitrateLabel ?? "not streaming" }}</span>
@@ -1939,7 +1939,6 @@ watch(
                 <div v-else class="obs-scene-thumb-empty">{{ agentStatus?.screenshots ? "…" : "" }}</div>
               </div>
               <div class="obs-drawer-preview-mini-info">
-                <div class="obs-drawer-preview-mini-label">previewing</div>
                 <div class="obs-drawer-preview-mini-name">{{ selectedScene }}</div>
               </div>
             </div>
@@ -2476,6 +2475,10 @@ watch(
 </template>
 
 <style scoped>
+.flex {
+  display: flex;
+}
+
 /* >>> page chrome, now a routed page not a modal */
 /* >>> fills whatever height .main-panel gives it - the scene/preview area
    below grows into the leftover space instead of the page scrolling */
@@ -3626,22 +3629,22 @@ watch(
   flex: 0 0 590px;
   max-width: 590px;
   width: 590px;
-  max-height: 200px
 }
 
 /* >>> reminds which scene is staged while the drawer covers the big preview pane */
 .obs-drawer-preview-mini {
   display: flex;
-  align-items: center;
   gap: 8px;
   margin-bottom: 10px;
   padding-bottom: 10px;
   border-bottom: 1px solid #1e1e22;
+  flex-direction: column;
+  align-items: center;
 }
 
 .obs-drawer-preview-mini-thumb {
-  width: 46px;
-  height: 26px;
+  width: 515px;
+  height: 290px;
   flex-shrink: 0;
   background: #0a0a0d;
   overflow: hidden;
@@ -4330,7 +4333,7 @@ watch(
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-  justify-content: flex-start;
+  justify-content: space-between;
   align-items: center;
   gap: 6px;
   margin-bottom: 10px;
@@ -4469,7 +4472,7 @@ watch(
   right: 0;
   top: 100%;
   margin-top: 4px;
-  max-height: 65vh;
+  max-height: 67vh;
   overflow-y: auto;
   background: #16161a;
   border: 1px solid #2a2a30;
@@ -4491,7 +4494,7 @@ watch(
   transform: translateY(0);
   opacity: 1;
   pointer-events: auto;
-  min-height: 55vh;
+  min-height: 60vh;
 }
 
 .obs-drawer-handle {
