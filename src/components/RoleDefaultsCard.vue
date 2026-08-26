@@ -93,6 +93,13 @@ const PERM_GROUPS = computed(() => [
       { key: "obs_force_preview" as keyof Perms, label: t("perm.obs_force_preview"), desc: t("perm.obs_force_preview.desc") },
     ],
   },
+  {
+    label: t("perm.group.channelpoints"),
+    perms: [
+      { key: "channelpoints_view" as keyof Perms, label: t("perm.channelpoints_view"), desc: t("perm.channelpoints_view.desc") },
+      { key: "channelpoints_edit" as keyof Perms, label: t("perm.channelpoints_edit"), desc: t("perm.channelpoints_edit.desc") },
+    ],
+  },
 ]);
 
 const DEFAULT_MOD_PERMS: Perms = {
@@ -111,6 +118,8 @@ const DEFAULT_MOD_PERMS: Perms = {
   obs_view: false,
   obs_edit: false,
   obs_force_preview: false,
+  channelpoints_view: false,
+  channelpoints_edit: false,
 };
 
 // >>> mirrors apiServer.ts defaults, keep in sync

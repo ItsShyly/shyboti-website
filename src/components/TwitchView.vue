@@ -38,14 +38,16 @@ interface Reward {
 type Tab = "channelpoints";
 const activeTab = ref<Tab>("channelpoints");
 
-const canManage = computed(
-  () =>
-    channelRole.value?.role === "broadcaster" ||
-    !!(session.value?.isAdmin && adminMode.value),
-);
 // >>> the copy-rewards endpoint is site-admin only (requireAdmin), not
 // >>> broadcaster-or-admin like the rest of this page
 const isSiteAdminMode = computed(() => !!(session.value?.isAdmin && adminMode.value));
+// >>> admin mode always sees/edits, regardless of any role permission
+const canView = computed(
+  () => !!channelRole.value?.permissions.channelpoints_view || isSiteAdminMode.value,
+);
+const canEdit = computed(
+  () => !!channelRole.value?.permissions.channelpoints_edit || isSiteAdminMode.value,
+);
 
 const rewards = ref<Reward[]>([]);
 // >>> two groups: ours (fully editable) vs made in twitch's own dashboard (view-only)
@@ -412,7 +414,7 @@ function openNew() {
 }
 
 function openEdit(r: Reward) {
-  if (!r.manageable || !canManage.value) return;
+  if (!r.manageable || !canEdit.value) return;
   isNew.value = false;
   editingId.value = r.id;
   deleteConfirm.value = false;
@@ -564,7 +566,7 @@ function requestRowDelete(r: Reward) {
 // >>> mobile kebab menu items, desktop keeps the inline row buttons
 function botRewardKebabItems(r: Reward): KebabMenuItem[] {
   const items: KebabMenuItem[] = [];
-  if (canManage.value) {
+  if (canEdit.value) {
     items.push({
       key: "edit",
       label: t("cp.edit"),
@@ -594,7 +596,7 @@ async function deleteRowReward(id: string) {
 }
 
 async function toggleEnabled(r: Reward) {
-  if (!r.manageable || !canManage.value || !session.value) return;
+  if (!r.manageable || !canEdit.value || !session.value) return;
   const next = !r.isEnabled;
   r.isEnabled = next; // <<< optimistic, reverted on failure below
   try {
@@ -742,7 +744,7 @@ async function loadActionsFor(r: Reward) {
 }
 
 function openActions(r: Reward) {
-  if (!canManage.value) return;
+  if (!canEdit.value) return;
   actionsOpen.value = true;
   loadActionsFor(r);
 }
@@ -750,7 +752,7 @@ function openActions(r: Reward) {
 // >>> mobile kebab menu items, desktop keeps the inline row buttons
 function twitchRewardKebabItems(r: Reward): KebabMenuItem[] {
   const items: KebabMenuItem[] = [];
-  if (canManage.value) {
+  if (canEdit.value) {
     items.push({
       key: "actions",
       label: t("cp.actions.btn"),
@@ -890,14 +892,17 @@ async function saveActions() {
         <div class="ep-view-title">{{ t("twitch.title") }}</div>
         <div class="ep-view-sub">{{ rewards.length }} {{ t("cp.tab") }}</div>
       </div>
-      <div class="ep-view-header-right">
+      <div v-if="canView" class="ep-view-header-right">
         <button class="ep-btn-reload" title="Reload" @click="reload" v-html="iconSvgFor('refresh-cw')"></button>
-        <button class="ep-btn-new" :disabled="!canManage" @click="openNew">
+        <button v-if="canEdit" class="ep-btn-new" @click="openNew">
           + {{ t("cp.new") }}
         </button>
       </div>
     </div>
 
+    <div v-if="!canView" class="ep-empty">{{ t("cp.no_access") }}</div>
+
+    <template v-else>
     <div v-if="error" class="ep-toast error">{{ error }}</div>
     <div v-if="copyResultMsg" class="ep-toast success">{{ copyResultMsg }}</div>
 
@@ -953,11 +958,11 @@ async function saveActions() {
                 </div>
               </div>
               <div class="ep-row-actions">
-                <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: !canManage }"
+                <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: !canEdit }"
                   :title="t('cp.enabled')" @click="toggleEnabled(r)"><span class="ep-switch-knob"></span></button>
                 <div class="cp-action-slot">
-                  <button v-if="canManage" class="ep-btn-action edit" @click="openEdit(r)">{{ t("cp.edit") }}</button>
-                  <button v-if="canManage" class="ep-btn-action del" :class="{ confirm: rowDeleteConfirmId === r.id }"
+                  <button v-if="canEdit" class="ep-btn-action edit" @click="openEdit(r)">{{ t("cp.edit") }}</button>
+                  <button v-if="canEdit" class="ep-btn-action del" :class="{ confirm: rowDeleteConfirmId === r.id }"
                     :title="t('cp.panel.delete')" @click="requestRowDelete(r)" v-html="iconSvgFor('trash')"></button>
                 </div>
                 <RowKebabMenu :items="botRewardKebabItems(r)" @click.stop />
@@ -993,7 +998,7 @@ async function saveActions() {
                 <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: true }"
                   :title="t('cp.locked_hint')"><span class="ep-switch-knob"></span></button>
                 <div class="cp-action-slot">
-                  <button v-if="canManage" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn") }}</button>
+                  <button v-if="canEdit" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn") }}</button>
                   <button v-if="isSiteAdminMode" class="ep-btn-action copy" :disabled="copyingRewardId === r.id"
                     :title="t('cp.admin.copy_reward_hint')" @click="copyReward(r)" v-html="iconSvgFor('copy')"></button>
                   <button class="ep-btn-action locked" disabled :title="t('cp.locked_hint')"
@@ -1006,6 +1011,7 @@ async function saveActions() {
         </div>
       </template>
     </div>
+    </template>
 
     <!-- vvv edit panel vvv -->
     <Teleport to="body">

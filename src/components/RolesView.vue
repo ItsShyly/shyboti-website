@@ -70,6 +70,13 @@ const PERM_GROUPS = computed(() => [
       { key: "obs_force_preview" as keyof Perms, label: t("perm.obs_force_preview") },
     ],
   },
+  {
+    label: t("perm.group.channelpoints"),
+    perms: [
+      { key: "channelpoints_view" as keyof Perms, label: t("perm.channelpoints_view") },
+      { key: "channelpoints_edit" as keyof Perms, label: t("perm.channelpoints_edit") },
+    ],
+  },
 ]);
 
 const EMPTY_PERMS: Perms = {
@@ -88,6 +95,8 @@ const EMPTY_PERMS: Perms = {
   obs_view: false,
   obs_edit: false,
   obs_force_preview: false,
+  channelpoints_view: false,
+  channelpoints_edit: false,
 };
 
 // >>> read-only snapshot for expand-panel comparisons, RoleDefaultsCard owns the real editable copy

@@ -275,6 +275,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cp.tab": "Channel Points",
     "cp.new": "New Reward",
     "cp.empty": "No custom rewards yet.",
+    "cp.no_access": "You don't have access to Channel Points.",
     "cp.group.bot": "Bot created",
     "cp.group.twitch": "Twitch created",
     "cp.explain":
@@ -791,6 +792,11 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.obs_force_preview": "Force Preview",
     "perm.obs_force_preview.desc":
       "Be able to Force scene previews (opens an OBS projector, only possible if scene previews are enabled).",
+    "perm.group.channelpoints": "Channel Points",
+    "perm.channelpoints_view": "View",
+    "perm.channelpoints_view.desc": "Access the Channel Points page and see rewards.",
+    "perm.channelpoints_edit": "Edit",
+    "perm.channelpoints_edit.desc": "Create, edit, delete, and toggle channel point rewards.",
 
     // vvv Logs vvv
     "logs.title": "Logs",
@@ -1336,6 +1342,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cp.tab": "Channel Points",
     "cp.new": "Neue Belohnung",
     "cp.empty": "Noch keine eigenen Belohnungen.",
+    "cp.no_access": "Du hast keinen Zugriff auf Channel Points.",
     "cp.group.bot": "Vom Bot erstellt",
     "cp.group.twitch": "Von Twitch erstellt",
     "cp.explain":
@@ -1855,6 +1862,12 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.obs_force_preview": "Force Preview",
     "perm.obs_force_preview.desc":
       "Möglichkeit Scene Previews zu forcen (Öffnen eines OBS-Projektors. Nur möglich, wenn Szenenpreviews aktiviert sind).",
+    "perm.group.channelpoints": "Kanalpunkte",
+    "perm.channelpoints_view": "Anzeigen",
+    "perm.channelpoints_view.desc": "Zugriff auf die Kanalpunkte-Seite und Rewards anzeigen.",
+    "perm.channelpoints_edit": "Bearbeiten",
+    "perm.channelpoints_edit.desc":
+      "Kanalpunkte-Rewards erstellen, bearbeiten, löschen und umschalten.",
 
     // vvv Logs vvv
     "logs.title": "Logs",

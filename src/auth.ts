@@ -30,6 +30,9 @@ export interface RolePermissions {
   obs_view: boolean;
   obs_edit: boolean;
   obs_force_preview: boolean;
+  // vvv Channel Points vvv
+  channelpoints_view: boolean;
+  channelpoints_edit: boolean;
 }
 
 export interface ChannelRole {
