@@ -1867,7 +1867,7 @@ watch(
                 <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
                   @click="openAddSource" v-html="iconSvgFor('plus')"></button>
               </div>
-              <div v-if="!sourcesCollapsed" class="obs-source-list">
+              <div v-show="!sourcesCollapsed" class="obs-source-list">
                 <!-- >>> background refreshes stay silent, no flash over rows -->
                 <template v-if="sourcesLoading && !sources.length">
                   <div class="obs-source-row" v-for="i in 4" :key="i">
@@ -1922,7 +1922,7 @@ watch(
                     selectedScene
                   }}</span></label>
               </div>
-              <div v-if="!mixerCollapsed" class="obs-mixer-list">
+              <div v-show="!mixerCollapsed" class="obs-mixer-list">
                 <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
                   :class="{ pending: isSourcePending(src) }">
                   <div class="obs-mixer-top">
@@ -1984,7 +1984,7 @@ watch(
               </div>
             </div>
             <label class="ep-field-label">Switch categories</label>
-            <div class="obs-category-strip">
+            <div class="obs-category-strip" @wheel="onSceneStripWheel">
               <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
                 :class="{ disabled: !canFilterScenes, active: c.category_id === currentCategoryId, pending: isCategoryPending(c.category_id), switching: switchingCategory === c.category_id }"
                 :disabled="switchingCategory === c.category_id" :title="c.category_name" @click="onCategoryClick(c)">
@@ -3488,6 +3488,23 @@ watch(
   height: 11px;
 }
 
+/* >>> collapsing is a phone-only concept - desktop always shows content,
+   v-show's inline display:none gets beaten back by this !important */
+@media (min-width: 681px) {
+  .obs-box-collapse-label {
+    cursor: default;
+  }
+
+  .obs-box-collapse-chevron {
+    display: none;
+  }
+
+  .obs-source-list,
+  .obs-mixer-list {
+    display: flex !important;
+  }
+}
+
 .obs-add-source-btn {
   width: 22px;
   height: 22px;
@@ -3733,20 +3750,10 @@ watch(
   min-height: 280px;
 }
 
-/* >>> collapsed sources/mixer shouldn't stay forced to the expanded height -
-   min-height:0 alone wasn't enough, .obs-boxes-row's align-items:stretch
-   was still stretching it to match its tallest sibling */
+/* >>> collapsing is phone-only (see the 681px+ override above), so this
+   only ever matters in the column-direction mobile layout */
 .obs-box.collapsed {
   min-height: 0;
-}
-
-@media (min-width: 901px) {
-
-  /* >>> only above 900px - below that .obs-boxes-row is column-direction,
-     where align-self controls width instead and would shrink the box */
-  .obs-box.collapsed {
-    align-self: flex-start;
-  }
 }
 
 .obs-box-cat {
@@ -4377,9 +4384,11 @@ watch(
     transform: rotate(-90deg);
   }
 
-  /* >>> drawer covers most of a phone screen at 65vh - keep it shorter */
+  /* >>> no cap on phone - drawer just grows to fit its (now much more
+     compact) content instead of scrolling internally */
   .obs-drawer {
-    max-height: 40vh;
+    max-height: none;
+    min-height: 0;
   }
 
   /* >>> redundant with the big preview pane right above the drawer toggle,
@@ -4393,6 +4402,73 @@ watch(
   .obs-source-row {
     box-sizing: border-box;
     max-width: 100%;
+  }
+
+  /* >>> way denser - this is low-value secondary info on a phone, not
+     something that needs desktop-sized breathing room */
+  .obs-boxes-row {
+    gap: 8px;
+  }
+
+  .obs-box {
+    padding: 8px 10px;
+    min-height: 0;
+  }
+
+  .obs-box .ep-field-label {
+    font-size: 10px;
+  }
+
+  .obs-source-row {
+    padding: 3px 6px;
+    gap: 6px;
+    font-size: 10px;
+  }
+
+  .obs-source-name {
+    font-size: 10px;
+  }
+
+  .obs-vis-btn,
+  .obs-mute-btn {
+    height: 18px;
+    padding: 0 6px;
+    font-size: 9px;
+  }
+
+  .obs-mixer-row {
+    padding: 4px 6px;
+    gap: 3px;
+  }
+
+  .obs-mixer-slider-row {
+    gap: 6px;
+  }
+
+  /* >>> scrolls sideways instead of wrapping to many rows, like the scene strip */
+  .obs-category-strip {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #3a3a44 #111217;
+    padding-bottom: 4px;
+  }
+
+  .obs-category-strip::-webkit-scrollbar {
+    height: 8px;
+  }
+
+  .obs-category-strip::-webkit-scrollbar-track {
+    background: #111217;
+  }
+
+  .obs-category-strip::-webkit-scrollbar-thumb {
+    background: #3a3a44;
+    border-radius: 4px;
+  }
+
+  .obs-category-card {
+    flex-shrink: 0;
   }
 
   /* >>> .obs-box's min-height (280px, sized for sources/mixer) was beating
