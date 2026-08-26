@@ -1758,8 +1758,7 @@ watch(
         v-html="iconSvgFor('chevron-down')"></button>
 
       <div class="obs-topbar-right">
-        <div v-if="agentConnected && obsConnected && bitrateLabel" class="obs-topbar-stat"
-          :class="{ bad: bitrateBad }">
+        <div v-if="agentConnected && obsConnected && bitrateLabel" class="obs-topbar-stat" :class="{ bad: bitrateBad }">
           {{ bitrateLabel }}
         </div>
 
@@ -1786,176 +1785,185 @@ watch(
 
       <!-- >>> no backdrop, stays open so scenes stay clickable while it's open -->
       <div class="obs-drawer" :class="{ open: boxesOpen }">
-      <button class="obs-drawer-handle" @click="boxesOpen = false">
-        <span v-html="iconSvgFor('chevron-up')"></span> close
-      </button>
-
-      <div v-if="agentConnected && obsConnected" class="obs-live-stats">
-        <div class="obs-live-stat" :class="{ bad: bitrateBad }">
-          <span class="obs-live-stat-label">bitrate</span>
-          <span class="obs-live-stat-value">{{ bitrateLabel ?? "not streaming" }}</span>
-        </div>
-        <div class="obs-live-stat">
-          <span class="obs-live-stat-label">preview size</span>
-          <span class="obs-live-stat-value">{{
-            liveShotStats.kb != null
-              ? liveShotStats.kb + " kb"
-              : agentStatus?.screenshots
-                ? "--"
-                : "off"
-          }}</span>
-        </div>
-        <div class="obs-live-stat">
-          <span class="obs-live-stat-label">preview cpu</span>
-          <span class="obs-live-stat-value">{{
-            liveShotStats.cpuMs != null
-              ? liveShotStats.cpuMs + " ms"
-              : agentStatus?.screenshots
-                ? "--"
-                : "off"
-          }}</span>
-        </div>
-        <button class="ep-btn-cancel obs-link-btn" @click="router.push('/commands')">
-          OBS commands
-        </button>
-        <button class="ep-btn-cancel obs-link-btn" @click="router.push('/automations?tab=obs')">
-          OBS automations
-        </button>
-      </div>
-
-      <!-- >>> builder still works even if obs isn't connected -->
-      <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"
-        :class="{ 'obs-boxes-single': !(agentConnected && obsConnected) }">
-        <template v-if="agentConnected && obsConnected">
-          <div class="ep-field-group obs-box">
-            <div class="obs-box-label-row">
-              <label class="ep-field-label">sources
-                <span v-if="selectedScene" class="ep-field-hint">{{
-                  selectedScene
-                  }}</span></label>
-              <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
-                @click="openAddSource" v-html="iconSvgFor('plus')"></button>
+        <div v-if="agentConnected && obsConnected" class="obs-live-stats">
+          <div>
+            <div class="obs-live-stat" :class="{ bad: bitrateBad }">
+              <span class="obs-live-stat-label">bitrate</span>
+              <span class="obs-live-stat-value">{{ bitrateLabel ?? "not streaming" }}</span>
             </div>
-            <div class="obs-source-list">
-              <!-- >>> background refreshes stay silent, no flash over rows -->
-              <template v-if="sourcesLoading && !sources.length">
-                <div class="obs-source-row" v-for="i in 4" :key="i">
-                  <div class="ep-skeleton-block" style="height:10px;width:40%;"></div>
-                  <div class="ep-skeleton-block ep-skeleton-btn"></div>
-                </div>
-              </template>
-              <div v-for="(src, i) in sources as any[]" :key="src.sceneItemId" class="obs-source-row"
-                :class="{ pending: isSourcePending(src), dragging: dragSourceIndex === i }" draggable="true"
-                @dragstart="onSourceDragStart(i)" @dragover.prevent @drop="onSourceDrop(i)"
-                @dblclick="onSourceRowDblClick(src)">
-                <span class="obs-drag-handle" title="Drag to reorder" v-html="iconSvgFor('grip')"></span>
-                <span class="obs-source-name">{{ src.sourceName }}</span>
-                <span v-if="isSourcePending(src)" class="pending-tag">pending</span>
-                <button class="obs-vis-btn" :class="{ on: effectiveVisible(src) }"
-                  :disabled="pendingSources.has(src.sceneItemId)" @click.stop="onToggleVisible(src)">
-                  {{ effectiveVisible(src) ? "visible" : "hidden" }}
-                </button>
-                <template v-if="src.isAudioSource">
-                  <button class="obs-mute-btn" :class="{ muted: effectiveMuted(src) }"
-                    :disabled="pendingSources.has(src.sceneItemId)" @click.stop="onToggleMute(src)">
-                    {{ effectiveMuted(src) ? "muted" : "unmuted" }}
-                  </button>
-                </template>
-              </div>
-              <div v-for="c in pendingCreates.filter((c) => c.scene === selectedScene)" :key="c.id"
-                class="obs-source-row pending">
-                <span class="obs-source-name">{{ c.name }}</span>
-                <span class="pending-tag">pending (new)</span>
-                <button class="ep-btn-action del" title="Cancel" @click="removePendingCreate(c.id)">
-                  <span v-html="iconSvgFor('x')"></span>
-                </button>
-              </div>
-              <div v-if="!sources.length && !sourcesLoading && !pendingCreates.some((c) => c.scene === selectedScene)"
-                class="ep-empty">
-                {{
-                  selectedScene
-                    ? "no sources in this scene"
-                    : "pick a scene above"
-                }}
-              </div>
+            <div class="obs-live-stat">
+              <span class="obs-live-stat-label">preview size</span>
+              <span class="obs-live-stat-value">{{
+                liveShotStats.kb != null
+                  ? liveShotStats.kb + " kb"
+                  : agentStatus?.screenshots
+                    ? "--"
+                    : "off"
+              }}</span>
+            </div>
+            <div class="obs-live-stat">
+              <span class="obs-live-stat-label">preview cpu</span>
+              <span class="obs-live-stat-value">{{
+                liveShotStats.cpuMs != null
+                  ? liveShotStats.cpuMs + " ms"
+                  : agentStatus?.screenshots
+                    ? "--"
+                    : "off"
+              }}</span>
             </div>
           </div>
+          <div> <button class="ep-btn-cancel obs-link-btn" @click="router.push('/commands')">
+              OBS commands
+            </button>
+            <button class="ep-btn-cancel obs-link-btn" @click="router.push('/automations?tab=obs')">
+              OBS automations
+            </button>
+          </div>
+        </div>
 
-          <div class="ep-field-group obs-box">
-            <label class="ep-field-label">audio mixer
-              <span v-if="selectedScene" class="ep-field-hint">{{
-                selectedScene
-                }}</span></label>
-            <div class="obs-mixer-list">
-              <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
-                :class="{ pending: isSourcePending(src) }">
-                <div class="obs-mixer-top">
+        <!-- >>> builder still works even if obs isn't connected -->
+        <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"
+          :class="{ 'obs-boxes-single': !(agentConnected && obsConnected) }">
+          <template v-if="agentConnected && obsConnected">
+            <div class="ep-field-group obs-box">
+              <div class="obs-box-label-row">
+                <label class="ep-field-label">sources
+                  <span v-if="selectedScene" class="ep-field-hint">{{
+                    selectedScene
+                  }}</span></label>
+                <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
+                  @click="openAddSource" v-html="iconSvgFor('plus')"></button>
+              </div>
+              <div class="obs-source-list">
+                <!-- >>> background refreshes stay silent, no flash over rows -->
+                <template v-if="sourcesLoading && !sources.length">
+                  <div class="obs-source-row" v-for="i in 4" :key="i">
+                    <div class="ep-skeleton-block" style="height:10px;width:40%;"></div>
+                    <div class="ep-skeleton-block ep-skeleton-btn"></div>
+                  </div>
+                </template>
+                <div v-for="(src, i) in sources as any[]" :key="src.sceneItemId" class="obs-source-row"
+                  :class="{ pending: isSourcePending(src), dragging: dragSourceIndex === i }" draggable="true"
+                  @dragstart="onSourceDragStart(i)" @dragover.prevent @drop="onSourceDrop(i)"
+                  @dblclick="onSourceRowDblClick(src)">
+                  <span class="obs-drag-handle" title="Drag to reorder" v-html="iconSvgFor('grip')"></span>
                   <span class="obs-source-name">{{ src.sourceName }}</span>
                   <span v-if="isSourcePending(src)" class="pending-tag">pending</span>
-                  <button class="obs-mute-btn" :class="{ muted: effectiveMuted(src) }"
-                    :disabled="pendingSources.has(src.sceneItemId)" @click="onToggleMute(src)">
-                    {{ effectiveMuted(src) ? "muted" : "unmuted" }}
+                  <button class="obs-vis-btn" :class="{ on: effectiveVisible(src) }"
+                    :disabled="pendingSources.has(src.sceneItemId)" @click.stop="onToggleVisible(src)">
+                    {{ effectiveVisible(src) ? "visible" : "hidden" }}
+                  </button>
+                  <template v-if="src.isAudioSource">
+                    <button class="obs-mute-btn" :class="{ muted: effectiveMuted(src) }"
+                      :disabled="pendingSources.has(src.sceneItemId)" @click.stop="onToggleMute(src)">
+                      {{ effectiveMuted(src) ? "muted" : "unmuted" }}
+                    </button>
+                  </template>
+                </div>
+                <div v-for="c in pendingCreates.filter((c) => c.scene === selectedScene)" :key="c.id"
+                  class="obs-source-row pending">
+                  <span class="obs-source-name">{{ c.name }}</span>
+                  <span class="pending-tag">pending (new)</span>
+                  <button class="ep-btn-action del" title="Cancel" @click="removePendingCreate(c.id)">
+                    <span v-html="iconSvgFor('x')"></span>
                   </button>
                 </div>
-                <div class="obs-mixer-slider-row">
-                  <input type="range" min="0" max="100" :value="sliderOverride[src.sceneItemId] ??
-                    getPendingEdit(src)?.volumePercent ??
-                    src.volumePercent ??
-                    100
-                    " class="obs-mixer-slider" @input="
-                      onVolumeInput(
-                        src,
-                        +($event.target as HTMLInputElement).value,
-                      )
-                      " @change="
-                        onVolumeCommit(
+                <div v-if="!sources.length && !sourcesLoading && !pendingCreates.some((c) => c.scene === selectedScene)"
+                  class="ep-empty">
+                  {{
+                    selectedScene
+                      ? "no sources in this scene"
+                      : "pick a scene above"
+                  }}
+                </div>
+              </div>
+            </div>
+
+            <div class="ep-field-group obs-box">
+              <label class="ep-field-label">audio mixer
+                <span v-if="selectedScene" class="ep-field-hint">{{
+                  selectedScene
+                }}</span></label>
+              <div class="obs-mixer-list">
+                <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
+                  :class="{ pending: isSourcePending(src) }">
+                  <div class="obs-mixer-top">
+                    <span class="obs-source-name">{{ src.sourceName }}</span>
+                    <span v-if="isSourcePending(src)" class="pending-tag">pending</span>
+                    <button class="obs-mute-btn" :class="{ muted: effectiveMuted(src) }"
+                      :disabled="pendingSources.has(src.sceneItemId)" @click="onToggleMute(src)">
+                      {{ effectiveMuted(src) ? "muted" : "unmuted" }}
+                    </button>
+                  </div>
+                  <div class="obs-mixer-slider-row">
+                    <input type="range" min="0" max="100" :value="sliderOverride[src.sceneItemId] ??
+                      getPendingEdit(src)?.volumePercent ??
+                      src.volumePercent ??
+                      100
+                      " class="obs-mixer-slider" @input="
+                        onVolumeInput(
                           src,
                           +($event.target as HTMLInputElement).value,
                         )
-                        " />
-                  <span class="obs-mixer-db">{{
-                    volumeToDb(
-                      sliderOverride[src.sceneItemId] ??
-                      getPendingEdit(src)?.volumePercent ??
-                      src.volumePercent,
-                    )
+                        " @change="
+                          onVolumeCommit(
+                            src,
+                            +($event.target as HTMLInputElement).value,
+                          )
+                          " />
+                    <span class="obs-mixer-db">{{
+                      volumeToDb(
+                        sliderOverride[src.sceneItemId] ??
+                        getPendingEdit(src)?.volumePercent ??
+                        src.volumePercent,
+                      )
+                    }}
+                      dB</span>
+                  </div>
+                </div>
+                <div v-if="!audioSources.length" class="ep-empty">
+                  {{
+                    selectedScene
+                      ? "no audio sources in this scene"
+                      : "pick a scene above"
                   }}
-                    dB</span>
                 </div>
               </div>
-              <div v-if="!audioSources.length" class="ep-empty">
-                {{
-                  selectedScene
-                    ? "no audio sources in this scene"
-                    : "pick a scene above"
-                }}
+            </div>
+          </template>
+
+          <div v-if="agentConnected && obsConnected" class="ep-field-group obs-box obs-box-cat">
+            <div v-if="selectedScene" class="obs-drawer-preview-mini">
+              <div class="obs-drawer-preview-mini-thumb">
+                <img v-if="sceneShots[selectedScene]" :src="sceneShots[selectedScene]" :alt="selectedScene" />
+                <div v-else class="obs-scene-thumb-empty">{{ agentStatus?.screenshots ? "…" : "" }}</div>
+              </div>
+              <div class="obs-drawer-preview-mini-info">
+                <div class="obs-drawer-preview-mini-label">previewing</div>
+                <div class="obs-drawer-preview-mini-name">{{ selectedScene }}</div>
               </div>
             </div>
-          </div>
-        </template>
-
-        <div v-if="agentConnected && obsConnected" class="ep-field-group obs-box obs-box-cat">
-          <label class="ep-field-label">Switch categories</label>
-          <div class="obs-category-strip">
-            <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
-              :class="{ disabled: !canFilterScenes, active: c.category_id === currentCategoryId, pending: isCategoryPending(c.category_id), switching: switchingCategory === c.category_id }"
-              :disabled="switchingCategory === c.category_id" :title="c.category_name" @click="onCategoryClick(c)">
-              <span v-if="canFilterScenes" class="obs-category-remove" title="Remove"
-                @click.stop="removeCategory(c.category_id)">×</span>
-              <img v-if="c.box_art_url" :src="c.box_art_url" :alt="c.category_name" />
-              <div v-else class="obs-category-empty">{{ c.category_name.slice(0, 2) }}</div>
-              <span class="obs-category-name">{{ c.category_name }}</span>
-            </button>
-            <template v-if="canFilterScenes">
-              <button v-for="n in emptyCategorySlots" :key="'empty' + n" class="obs-category-card obs-category-add"
-                title="Add a category" @click="showAddCategory = true">
-                <div class="obs-category-empty obs-category-plus">+</div>
+            <label class="ep-field-label">Switch categories</label>
+            <div class="obs-category-strip">
+              <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
+                :class="{ disabled: !canFilterScenes, active: c.category_id === currentCategoryId, pending: isCategoryPending(c.category_id), switching: switchingCategory === c.category_id }"
+                :disabled="switchingCategory === c.category_id" :title="c.category_name" @click="onCategoryClick(c)">
+                <span v-if="canFilterScenes" class="obs-category-remove" title="Remove"
+                  @click.stop="removeCategory(c.category_id)">×</span>
+                <img v-if="c.box_art_url" :src="c.box_art_url" :alt="c.category_name" />
+                <div v-else class="obs-category-empty">{{ c.category_name.slice(0, 2) }}</div>
+                <span class="obs-category-name">{{ c.category_name }}</span>
               </button>
-            </template>
+              <template v-if="canFilterScenes">
+                <button v-for="n in emptyCategorySlots" :key="'empty' + n" class="obs-category-card obs-category-add"
+                  title="Add a category" @click="showAddCategory = true">
+                  <div class="obs-category-empty obs-category-plus">+</div>
+                </button>
+              </template>
+            </div>
+            <div v-if="categorySwitchError" class="obs-category-error">{{ categorySwitchError }}</div>
           </div>
-          <div v-if="categorySwitchError" class="obs-category-error">{{ categorySwitchError }}</div>
         </div>
-      </div>
       </div>
       <!-- ^^^ drawer ^^^ -->
     </div>
@@ -2023,8 +2031,10 @@ watch(
           </div>
 
           <button class="obs-take-btn" :disabled="!canTakeToProgram"
-            title="Take the previewed scene live - the only thing that actually switches" @click="takeToProgram"
-            v-html="iconSvgFor('arrow-right')"></button>
+            title="Take the previewed scene live - the only thing that actually switches" @click="takeToProgram">
+            <span v-html="iconSvgFor('arrow-right')"></span>
+            <span class="obs-take-btn-label">switch</span>
+          </button>
 
           <div class="obs-pp-pane obs-pp-program">
             <div class="obs-pp-label">live</div>
@@ -2224,7 +2234,7 @@ watch(
                     <div class="ep-switch-knob"></div>
                   </div>
                   <span class="ep-switch-label">{{ enabledLocal ? "Connection enabled" : "Connection disabled"
-                    }}</span>
+                  }}</span>
                 </div>
                 <div class="ep-field-hint">Turn off to reject all agent connections.</div>
               </div>
@@ -2238,7 +2248,7 @@ watch(
                     <div class="ep-switch-knob"></div>
                   </div>
                   <span class="ep-switch-label">{{ screenshotsLocal ? "Scene previews on" : "Scene previews off"
-                    }}</span>
+                  }}</span>
                 </div>
                 <div class="ep-field-hint">Periodic screenshots of each scene.</div>
                 <div v-if="screenshotsLocal" class="ep-interval-row">
@@ -3159,17 +3169,19 @@ watch(
 
 .obs-take-btn {
   flex-shrink: 0;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  border-radius: 0;
   border: 1px solid #6f2bff88;
   background: #6f2bff22;
   color: #c4a0ff;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 4px;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  transition: background 0.15s, border-color 0.15s;
 }
 
 .obs-take-btn svg {
@@ -3177,9 +3189,16 @@ watch(
   height: 20px;
 }
 
+.obs-take-btn-label {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 .obs-take-btn:hover:not(:disabled) {
   background: #6f2bff44;
-  transform: scale(1.06);
+  border-color: #9d6cff;
 }
 
 .obs-take-btn:disabled {
@@ -3600,6 +3619,7 @@ watch(
   flex: 1 1 200px;
   min-width: 200px;
   max-width: 400px;
+  min-height: 280px;
 }
 
 .obs-box-cat {
@@ -3607,6 +3627,56 @@ watch(
   max-width: 590px;
   width: 590px;
   max-height: 200px
+}
+
+/* >>> reminds which scene is staged while the drawer covers the big preview pane */
+.obs-drawer-preview-mini {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #1e1e22;
+}
+
+.obs-drawer-preview-mini-thumb {
+  width: 46px;
+  height: 26px;
+  flex-shrink: 0;
+  background: #0a0a0d;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #2a2a30;
+}
+
+.obs-drawer-preview-mini-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.obs-drawer-preview-mini-info {
+  min-width: 0;
+}
+
+.obs-drawer-preview-mini-label {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9d6cff;
+}
+
+.obs-drawer-preview-mini-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #e0e0e0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* >>> the two quick-link buttons now sit inline in .obs-live-stats */
@@ -4191,7 +4261,7 @@ watch(
     margin-top: 10px;
     flex-direction: row;
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: space-between;
     width: 100%;
   }
 
@@ -4421,6 +4491,7 @@ watch(
   transform: translateY(0);
   opacity: 1;
   pointer-events: auto;
+  min-height: 55vh;
 }
 
 .obs-drawer-handle {
