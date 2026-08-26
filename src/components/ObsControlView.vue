@@ -1729,184 +1729,65 @@ watch(
 
 <template>
   <div class="obsconn-page">
-    <div class="obsconn-body" :class="{ 'obs-locked': locked }">
-      <template v-if="loading">
-        <div class="obs-loading">
-          <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="loading"
-            class="obs-loading-emote" />
-        </div>
-      </template>
+    <!-- vvv top bar - mode/connection/gear controls + the sources/mixer drawer toggle vvv -->
+    <div class="obs-topbar">
+      <div class="obs-topbar-left">
+        <div class="obsconn-title-slim">OBS Control</div>
 
-      <!-- >>> setup prompt, full instructions live in gear panel -->
-      <template v-else-if="!agentConnected || !obsConnected">
-        <div class="obs-setup-card obs-setup-compact">
-          <template v-if="isBroadcaster">
-            <div class="obs-setup-title">
-              {{
-                agentStatus?.paired
-                  ? agentConnected
-                    ? "Agent connected - waiting for OBS…"
-                    : "Waiting for the agent to connect…"
-                  : "OBS agent is not set up yet"
-              }}
-            </div>
-            <div class="obs-setup-hint">
-              Click the gear icon above to
-              {{
-                agentStatus?.paired
-                  ? "view your pairing token again or re-download the agent."
-                  : "get your pairing token and download the agent."
-              }}
-            </div>
-          </template>
-          <template v-else>
-            <div class="obs-setup-title">OBS isn't connected yet</div>
-            <div class="obs-setup-hint">
-              Ask your broadcaster to set it up (gear icon, broadcaster only).
-            </div>
-          </template>
-        </div>
-      </template>
-
-      <template v-if="agentConnected && obsConnected">
-        <div class="obs-program-preview">
-          <div class="obs-pp-pane obs-pp-preview" :class="{ empty: !selectedScene }">
-            <div class="obs-pp-label">preview</div>
-            <div class="obs-pp-thumb">
-              <img v-if="selectedScene && sceneShots[selectedScene]" :src="sceneShots[selectedScene]"
-                :alt="selectedScene" />
-              <div v-else class="obs-scene-thumb-empty">
-                {{ selectedScene ? (agentStatus?.screenshots ? "…" : "previews off") : "pick a scene below" }}
-              </div>
-            </div>
-            <div class="obs-pp-name-row">
-              <div class="obs-pp-name">{{ selectedScene || "—" }}</div>
-              <button v-if="selectedScene" class="obs-scene-fs-btn" title="Edit stream overlay"
-                @click.stop="openOverlayEditor(selectedScene)" v-html="iconSvgFor('edit')"></button>
-            </div>
+        <div class="obs-mode-toggle-slim" :title="editMode
+          ? 'Changes stage here until you press Save.'
+          : 'Changes apply to your stream instantly.'
+          " @click="setMode(!editMode)">
+          <div class="switch" :class="editMode ? 'edit' : 'live'">
+            <div class="knob"></div>
           </div>
-
-          <button class="obs-take-btn" :disabled="!canTakeToProgram"
-            title="Take the previewed scene live - the only thing that actually switches" @click="takeToProgram"
-            v-html="iconSvgFor('arrow-right')"></button>
-
-          <div class="obs-pp-pane obs-pp-program">
-            <div class="obs-pp-label">live</div>
-            <div class="obs-pp-thumb">
-              <img v-if="currentScene && sceneShots[currentScene]" :src="sceneShots[currentScene]"
-                :alt="currentScene" />
-              <div v-else class="obs-scene-thumb-empty">
-                {{ agentStatus?.screenshots ? "…" : "previews off" }}
-              </div>
-            </div>
-            <div class="obs-pp-name-row">
-              <div class="obs-pp-name">{{ currentScene || "—" }}</div>
-            </div>
-          </div>
+          <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? "Edit" : "Live" }}</span>
         </div>
 
-        <div class="obs-scene-strip">
-          <div v-for="s in visibleScenes" :key="s.sceneName" class="obs-scene-card" :class="{
-            picked: s.sceneName === selectedScene,
-            live: s.sceneName === currentScene,
-          }" @click="onSceneClick(s.sceneName)">
-            <div class="obs-scene-thumb">
-              <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
-              <div v-else class="obs-scene-thumb-empty">
-                {{ agentStatus?.screenshots ? "…" : "previews off" }}
-              </div>
-              <span v-if="s.sceneName === currentScene" class="obs-scene-live-tag">live</span>
-            </div>
-            <div class="obs-scene-name-row">
-              <div class="obs-scene-name">{{ s.sceneName }}</div>
-            </div>
-          </div>
-          <div v-if="!scenes.length" class="ep-empty">
-            <button class="ep-btn-cancel" @click="refreshScenes">
-              load scenes
-            </button>
-          </div>
+        <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> leaving…</span>
+
+        <div class="obs-status-bar-slim" :class="connStatusClass"
+          :title="agentStatus?.version ? `v${agentStatus.version}` : ''">
+          <div class="obs-status-dot"></div>
+          <span class="obs-status-text">{{ connStatusLabel }}</span>
         </div>
-
-        <div class="obs-scenes-footer">
-          <button v-if="canForcePreview && scenes.length > 0 && !videoMixProjectorOpen" class="ep-btn-cancel"
-            @click="forceAllPreviews()" :disabled="forcePreviewLoading">
-            {{ forcePreviewLoading ? "Opening…" : "Force all previews" }}
-          </button>
-          <div v-if="canForcePreview" class="obs-projector-state">
-            Multiview projector: {{ videoMixProjectorOpen ? "open" : "closed" }}
-            <span v-if="videoMixProjectorTitle" class="obs-projector-title">"{{ videoMixProjectorTitle }}"</span>
-          </div>
-        </div>
-      </template>
-
-      <ObsOverlayEditor v-if="overlayEditorOpen && session" :channel="session.channel" :auth-headers="authHeaders"
-        :scenes="scenes.map((s) => s.sceneName)" :current-scene="currentScene" :initial-scene="overlayEditorScene"
-        :obs-ready="agentConnected && obsConnected" @close="closeOverlayEditor" />
-
-      <div v-if="bindingsSaving || bindingsSaved" class="obsconn-autosave">
-        {{ bindingsSaving ? "saving…" : "saved" }}
       </div>
-    </div>
-
-    <!-- vvv bottom bar - mode/connection/gear controls + the sources/mixer drawer toggle vvv -->
-    <div class="obs-bottombar">
-      <div class="obsconn-title-slim">OBS Control</div>
-
-      <div class="obs-mode-toggle-slim" :title="editMode
-        ? 'Changes stage here until you press Save.'
-        : 'Changes apply to your stream instantly.'
-        " @click="setMode(!editMode)">
-        <div class="switch" :class="editMode ? 'edit' : 'live'">
-          <div class="knob"></div>
-        </div>
-        <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? "Edit" : "Live" }}</span>
-      </div>
-
-      <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> leaving…</span>
-
-      <div class="obs-status-bar-slim" :class="connStatusClass"
-        :title="agentStatus?.version ? `v${agentStatus.version}` : ''">
-        <div class="obs-status-dot"></div>
-        <span class="obs-status-text">{{ connStatusLabel }}</span>
-      </div>
-
-      <div v-if="agentConnected && obsConnected && bitrateLabel" class="obs-bottombar-stat"
-        :class="{ bad: bitrateBad }">
-        {{ bitrateLabel }}
-      </div>
-
-      <div class="obs-bottombar-spacer"></div>
-
-      <button v-if="obsConnected && canFilterScenes" class="obs-refresh-btn" @click="refreshScenes"
-        title="Refresh scene list" v-html="iconSvgFor('refresh-cw')">
-      </button>
-      <button v-if="obsConnected && canFilterScenes" class="obsconn-gear-btn" title="Filter scenes"
-        @click="openFilter">
-        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z" stroke="currentColor" stroke-width="1.5"
-            stroke-linejoin="round" />
-        </svg>
-      </button>
-      <button v-if="isBroadcaster" class="obsconn-gear-btn" title="OBS settings" @click="openSettings">
-        <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5" />
-          <path
-            d="M16.2 12.3a1.4 1.4 0 00.3 1.5l.05.05a1.65 1.65 0 11-2.35 2.35l-.05-.05a1.4 1.4 0 00-1.5-.3 1.4 1.4 0 00-.85 1.28v.14a1.65 1.65 0 11-3.3 0v-.07a1.4 1.4 0 00-.92-1.28 1.4 1.4 0 00-1.5.3l-.05.05A1.65 1.65 0 113.63 13.9l.05-.05a1.4 1.4 0 00.3-1.5 1.4 1.4 0 00-1.28-.85h-.14a1.65 1.65 0 110-3.3h.07a1.4 1.4 0 001.28-.92 1.4 1.4 0 00-.3-1.5l-.05-.05A1.65 1.65 0 116.09 3.38l.05.05a1.4 1.4 0 001.5.3h.06a1.4 1.4 0 00.85-1.28V2.3a1.65 1.65 0 113.3 0v.07a1.4 1.4 0 00.85 1.28h.06a1.4 1.4 0 001.5-.3l.05-.05a1.65 1.65 0 112.35 2.35l-.05.05a1.4 1.4 0 00-.3 1.5v.06a1.4 1.4 0 001.28.85h.14a1.65 1.65 0 110 3.3h-.07a1.4 1.4 0 00-1.28.85z"
-            stroke="currentColor" stroke-width="1.3" />
-        </svg>
-        <span v-if="!loading && !agentStatus?.paired" class="obs-gear-badge" title="OBS agent not set up yet">!</span>
-      </button>
 
       <button v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-drawer-toggle"
-        :class="{ open: boxesOpen }" @click="boxesOpen = !boxesOpen">
-        <span v-html="iconSvgFor('chevron-up')"></span> Sources &amp; Mixer
-      </button>
+        :class="{ open: boxesOpen }" title="Sources & Mixer" @click="boxesOpen = !boxesOpen"
+        v-html="iconSvgFor('chevron-down')"></button>
 
-      <div v-if="boxesOpen" class="obs-drawer-backdrop" @click="boxesOpen = false"></div>
+      <div class="obs-topbar-right">
+        <div v-if="agentConnected && obsConnected && bitrateLabel" class="obs-topbar-stat"
+          :class="{ bad: bitrateBad }">
+          {{ bitrateLabel }}
+        </div>
+
+        <button v-if="obsConnected && canFilterScenes" class="obs-refresh-btn" @click="refreshScenes"
+          title="Refresh scene list" v-html="iconSvgFor('refresh-cw')">
+        </button>
+        <button v-if="obsConnected && canFilterScenes" class="obsconn-gear-btn" title="Filter scenes"
+          @click="openFilter">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z" stroke="currentColor" stroke-width="1.5"
+              stroke-linejoin="round" />
+          </svg>
+        </button>
+        <button v-if="isBroadcaster" class="obsconn-gear-btn" title="OBS settings" @click="openSettings">
+          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5" />
+            <path
+              d="M16.2 12.3a1.4 1.4 0 00.3 1.5l.05.05a1.65 1.65 0 11-2.35 2.35l-.05-.05a1.4 1.4 0 00-1.5-.3 1.4 1.4 0 00-.85 1.28v.14a1.65 1.65 0 11-3.3 0v-.07a1.4 1.4 0 00-.92-1.28 1.4 1.4 0 00-1.5.3l-.05.05A1.65 1.65 0 113.63 13.9l.05-.05a1.4 1.4 0 00.3-1.5 1.4 1.4 0 00-1.28-.85h-.14a1.65 1.65 0 110-3.3h.07a1.4 1.4 0 001.28-.92 1.4 1.4 0 00-.3-1.5l-.05-.05A1.65 1.65 0 116.09 3.38l.05.05a1.4 1.4 0 001.5.3h.06a1.4 1.4 0 00.85-1.28V2.3a1.65 1.65 0 113.3 0v.07a1.4 1.4 0 00.85 1.28h.06a1.4 1.4 0 001.5-.3l.05-.05a1.65 1.65 0 112.35 2.35l-.05.05a1.4 1.4 0 00-.3 1.5v.06a1.4 1.4 0 001.28.85h.14a1.65 1.65 0 110 3.3h-.07a1.4 1.4 0 00-1.28.85z"
+              stroke="currentColor" stroke-width="1.3" />
+          </svg>
+          <span v-if="!loading && !agentStatus?.paired" class="obs-gear-badge" title="OBS agent not set up yet">!</span>
+        </button>
+      </div>
+
+      <!-- >>> no backdrop, stays open so scenes stay clickable while it's open -->
       <div class="obs-drawer" :class="{ open: boxesOpen }">
       <button class="obs-drawer-handle" @click="boxesOpen = false">
-        <span v-html="iconSvgFor('chevron-down')"></span> close
+        <span v-html="iconSvgFor('chevron-up')"></span> close
       </button>
 
       <div v-if="agentConnected && obsConnected" class="obs-live-stats">
@@ -1934,6 +1815,12 @@ watch(
                 : "off"
           }}</span>
         </div>
+        <button class="ep-btn-cancel obs-link-btn" @click="router.push('/commands')">
+          OBS commands
+        </button>
+        <button class="ep-btn-cancel obs-link-btn" @click="router.push('/automations?tab=obs')">
+          OBS automations
+        </button>
       </div>
 
       <!-- >>> builder still works even if obs isn't connected -->
@@ -2068,21 +1955,136 @@ watch(
           </div>
           <div v-if="categorySwitchError" class="obs-category-error">{{ categorySwitchError }}</div>
         </div>
-
-        <div v-if="agentConnected && obsConnected" class="ep-field-group obs-box obs-box-links">
-          <label class="ep-field-label">quick links</label>
-          <button class="ep-btn-cancel obs-link-btn" @click="router.push('/commands')">
-            OBS commands
-          </button>
-          <button class="ep-btn-cancel obs-link-btn" @click="router.push('/automations?tab=obs')">
-            OBS automations
-          </button>
-        </div>
       </div>
       </div>
       <!-- ^^^ drawer ^^^ -->
     </div>
-    <!-- ^^^ bottom bar ^^^ -->
+    <!-- ^^^ top bar ^^^ -->
+
+    <div v-if="!editMode" class="obs-live-mode-banner">
+      <span class="dot"></span>Live mode is on - source and category changes apply to your stream instantly
+    </div>
+
+    <div class="obsconn-body" :class="{ 'obs-locked': locked }">
+      <template v-if="loading">
+        <div class="obs-loading">
+          <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="loading"
+            class="obs-loading-emote" />
+        </div>
+      </template>
+
+      <!-- >>> setup prompt, full instructions live in gear panel -->
+      <template v-else-if="!agentConnected || !obsConnected">
+        <div class="obs-setup-card obs-setup-compact">
+          <template v-if="isBroadcaster">
+            <div class="obs-setup-title">
+              {{
+                agentStatus?.paired
+                  ? agentConnected
+                    ? "Agent connected - waiting for OBS…"
+                    : "Waiting for the agent to connect…"
+                  : "OBS agent is not set up yet"
+              }}
+            </div>
+            <div class="obs-setup-hint">
+              Click the gear icon above to
+              {{
+                agentStatus?.paired
+                  ? "view your pairing token again or re-download the agent."
+                  : "get your pairing token and download the agent."
+              }}
+            </div>
+          </template>
+          <template v-else>
+            <div class="obs-setup-title">OBS isn't connected yet</div>
+            <div class="obs-setup-hint">
+              Ask your broadcaster to set it up (gear icon, broadcaster only).
+            </div>
+          </template>
+        </div>
+      </template>
+
+      <template v-if="agentConnected && obsConnected">
+        <div class="obs-program-preview">
+          <div class="obs-pp-pane obs-pp-preview" :class="{ empty: !selectedScene }">
+            <div class="obs-pp-label">preview</div>
+            <div class="obs-pp-thumb">
+              <img v-if="selectedScene && sceneShots[selectedScene]" :src="sceneShots[selectedScene]"
+                :alt="selectedScene" />
+              <div v-else class="obs-scene-thumb-empty">
+                {{ selectedScene ? (agentStatus?.screenshots ? "…" : "previews off") : "pick a scene below" }}
+              </div>
+            </div>
+            <div class="obs-pp-name-row">
+              <div class="obs-pp-name">{{ selectedScene || "—" }}</div>
+              <button v-if="selectedScene" class="obs-scene-fs-btn" title="Edit stream overlay"
+                @click.stop="openOverlayEditor(selectedScene)" v-html="iconSvgFor('edit')"></button>
+            </div>
+          </div>
+
+          <button class="obs-take-btn" :disabled="!canTakeToProgram"
+            title="Take the previewed scene live - the only thing that actually switches" @click="takeToProgram"
+            v-html="iconSvgFor('arrow-right')"></button>
+
+          <div class="obs-pp-pane obs-pp-program">
+            <div class="obs-pp-label">live</div>
+            <div class="obs-pp-thumb">
+              <img v-if="currentScene && sceneShots[currentScene]" :src="sceneShots[currentScene]"
+                :alt="currentScene" />
+              <div v-else class="obs-scene-thumb-empty">
+                {{ agentStatus?.screenshots ? "…" : "previews off" }}
+              </div>
+            </div>
+            <div class="obs-pp-name-row">
+              <div class="obs-pp-name">{{ currentScene || "—" }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="obs-scene-strip">
+          <div v-for="s in visibleScenes" :key="s.sceneName" class="obs-scene-card" :class="{
+            picked: s.sceneName === selectedScene,
+            live: s.sceneName === currentScene,
+          }" @click="onSceneClick(s.sceneName)">
+            <div class="obs-scene-thumb">
+              <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
+              <div v-else class="obs-scene-thumb-empty">
+                {{ agentStatus?.screenshots ? "…" : "previews off" }}
+              </div>
+              <span v-if="s.sceneName === currentScene" class="obs-scene-live-tag">live</span>
+            </div>
+            <div class="obs-scene-name-row">
+              <div class="obs-scene-name">{{ s.sceneName }}</div>
+            </div>
+          </div>
+          <div v-if="!scenes.length" class="ep-empty">
+            <button class="ep-btn-cancel" @click="refreshScenes">
+              load scenes
+            </button>
+          </div>
+        </div>
+
+        <div class="obs-scenes-footer">
+          <button v-if="canForcePreview && scenes.length > 0 && !videoMixProjectorOpen" class="ep-btn-cancel"
+            @click="forceAllPreviews()" :disabled="forcePreviewLoading">
+            {{ forcePreviewLoading ? "Opening…" : "Force all previews" }}
+          </button>
+          <div v-if="canForcePreview" class="obs-projector-state">
+            Multiview projector: {{ videoMixProjectorOpen ? "open" : "closed" }}
+            <span v-if="videoMixProjectorTitle" class="obs-projector-title">"{{ videoMixProjectorTitle }}"</span>
+          </div>
+        </div>
+      </template>
+
+      <ObsOverlayEditor v-if="overlayEditorOpen && session" :channel="session.channel" :auth-headers="authHeaders"
+        :scenes="scenes.map((s) => s.sceneName)" :current-scene="currentScene" :initial-scene="overlayEditorScene"
+        :obs-ready="agentConnected && obsConnected" @close="closeOverlayEditor" />
+
+      <div v-if="bindingsSaving || bindingsSaved" class="obsconn-autosave">
+        {{ bindingsSaving ? "saving…" : "saved" }}
+      </div>
+    </div>
+
   </div>
 
   <!-- >>> broadcaster only -->
@@ -2446,13 +2448,6 @@ watch(
           </template>
         </div>
       </div>
-    </div>
-  </Teleport>
-
-  <!-- >>> site-wide, sits under navbar regardless of tab -->
-  <Teleport to="body">
-    <div v-if="!editMode" class="obs-live-mode-banner">
-      <span class="dot"></span>Live mode is on - source and category changes apply to your stream instantly
     </div>
   </Teleport>
 
@@ -3614,17 +3609,9 @@ watch(
   max-height: 200px
 }
 
-.obs-box-links {
-  flex: 0 0 180px;
-  max-width: 180px;
-  width: 180px;
-  gap: 8px;
-  max-height: 200px
-}
-
+/* >>> the two quick-link buttons now sit inline in .obs-live-stats */
 .obs-link-btn {
-  width: 100%;
-  text-align: center;
+  flex-shrink: 0;
 }
 
 .obs-category-strip {
@@ -4168,8 +4155,7 @@ watch(
   }
 
   .obs-box,
-  .obs-box-cat,
-  .obs-box-links {
+  .obs-box-cat {
     max-width: 100%;
     width: 100%;
   }
@@ -4310,18 +4296,48 @@ watch(
   color: #f14949;
 }
 
-/* >>> bottom bar - everything that used to be the header, plus the
-   sources/mixer drawer toggle. keeps the main panel free for scenes only */
-.obs-bottombar {
+/* >>> top bar - everything that used to be the page header, plus the
+   sources/mixer drawer toggle. breaks out of .main-panel's own padding
+   (negative margin matching each breakpoint) so it sits flush under the
+   site navbar instead of floating with a gap above it */
+.obs-topbar {
   position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  border-bottom: 1px solid #1e1e22;
+  background: #0d0d10;
+  flex-shrink: 0;
+  margin: -20px -20px 0;
+}
+
+@media (min-width: 681px) and (max-width: 960px) {
+  .obs-topbar {
+    margin: -16px -16px 0;
+    padding: 8px 16px;
+  }
+}
+
+@media (max-width: 680px) {
+  .obs-topbar {
+    margin: -14px -14px 0;
+    padding: 8px 14px;
+  }
+}
+
+.obs-topbar-left,
+.obs-topbar-right {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 8px 10px;
-  border: 1px solid #1e1e22;
-  background: #0d0d10;
-  flex-shrink: 0;
+  min-width: 0;
+}
+
+.obs-topbar-right {
+  justify-content: flex-end;
 }
 
 .obsconn-title-slim {
@@ -4332,7 +4348,7 @@ watch(
   white-space: nowrap;
 }
 
-.obs-bottombar-stat {
+.obs-topbar-stat {
   font-size: 11px;
   font-family: "Consolas", "Fira Mono", monospace;
   color: #9d6cff;
@@ -4341,26 +4357,21 @@ watch(
   flex-shrink: 0;
 }
 
-.obs-bottombar-stat.bad {
+.obs-topbar-stat.bad {
   color: #f14949;
 }
 
-.obs-bottombar-spacer {
-  flex: 1;
-}
-
+/* >>> dead center via the grid's 1fr/auto/1fr columns, regardless of how
+   wide the left/right sides end up. points where the drawer will open */
 .obs-drawer-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  width: 34px;
   height: 30px;
-  padding: 0 12px;
   border: 1px solid #6f2bff66;
   background: #6f2bff15;
   color: #9d6cff;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 700;
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s;
@@ -4371,8 +4382,8 @@ watch(
 }
 
 .obs-drawer-toggle svg {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   transition: transform 0.15s;
 }
 
@@ -4380,28 +4391,22 @@ watch(
   transform: rotate(180deg);
 }
 
-.obs-drawer-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 90;
-}
-
-/* >>> dropup - anchored to the bottom bar (its parent), opens above it */
+/* >>> opens downward below the top bar, over the scene view. no backdrop
+   and no forced-close on outside click - stays open, scenes stay clickable */
 .obs-drawer {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 100%;
-  margin-bottom: 4px;
+  top: 100%;
+  margin-top: 4px;
   max-height: 65vh;
   overflow-y: auto;
   background: #16161a;
   border: 1px solid #2a2a30;
-  border-bottom: none;
+  border-top: none;
   padding: 12px;
   z-index: 95;
-  transform: translateY(100%);
+  transform: translateY(-8px);
   opacity: 0;
   pointer-events: none;
   transition: transform 0.2s ease, opacity 0.2s ease;
@@ -4592,13 +4597,9 @@ watch(
   border-color: #e5c07b;
 }
 
-/* >>> site-wide live-mode banner, teleported under navbar */
+/* >>> in-flow now, sits right below the top bar instead of a fixed
+   teleport - that used to float over the top bar's own controls */
 .obs-live-mode-banner {
-  position: fixed;
-  top: 52px;
-  left: 0;
-  right: 0;
-  z-index: 150;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4611,6 +4612,7 @@ watch(
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  flex-shrink: 0;
 }
 
 .obs-live-mode-banner .dot {
@@ -4639,13 +4641,12 @@ watch(
   }
 }
 
-/* >>> floating save bar for staged changes - sits just above the OBS page's
-   own bottom bar (not fixed to it, this is a site-wide teleport) */
+/* >>> floating save bar for staged changes */
 .obs-save-bar {
   position: fixed;
   left: 200px;
   right: 0;
-  bottom: 50px;
+  bottom: 0;
   background: #17130a;
   border-top: 1px solid #e5c07b73;
   padding: 10px 20px;
