@@ -1784,8 +1784,8 @@ watch(
         v-html="iconSvgFor('chevron-down')"></button>
 
       <div class="obs-topbar-right">
-        <div v-if="agentConnected && obsConnected && bitrateLabel"
-          class="obs-topbar-stat obs-topbar-mobile-hide" :class="{ bad: bitrateBad }">
+        <div v-if="agentConnected && obsConnected && bitrateLabel" class="obs-topbar-stat obs-topbar-mobile-hide"
+          :class="{ bad: bitrateBad }">
           {{ bitrateLabel }}
         </div>
 
@@ -2105,8 +2105,8 @@ watch(
             </div>
             <div class="obs-scene-name-row">
               <div class="obs-scene-name">{{ s.sceneName }}</div>
-              <button class="obs-scene-fs-btn" title="Edit stream overlay"
-                @click.stop="openOverlayEditor(s.sceneName)" v-html="iconSvgFor('edit')"></button>
+              <button class="obs-scene-fs-btn" title="Edit stream overlay" @click.stop="openOverlayEditor(s.sceneName)"
+                v-html="iconSvgFor('edit')"></button>
             </div>
           </div>
           <div v-if="!scenes.length" class="ep-empty">
@@ -3741,6 +3741,7 @@ watch(
 }
 
 @media (min-width: 901px) {
+
   /* >>> only above 900px - below that .obs-boxes-row is column-direction,
      where align-self controls width instead and would shrink the box */
   .obs-box.collapsed {
@@ -4346,9 +4347,6 @@ watch(
 }
 
 @media (max-width: 900px) {
-  .obs-boxes-row {
-    flex-direction: column;
-  }
 
   .obs-box,
   .obs-box-cat {
@@ -4543,6 +4541,7 @@ watch(
 }
 
 @media (max-width: 680px) {
+
   /* >>> thin single line - most controls move into the kebab */
   .obs-topbar {
     margin: -14px -14px 0;
