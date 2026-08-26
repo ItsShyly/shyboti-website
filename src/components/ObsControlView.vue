@@ -240,6 +240,10 @@ function isTargetMissing(c: UnifiedCommand): boolean {
 
 // >>> sources/mixer/categories drawer, opens up from the bottom bar
 const boxesOpen = ref(false);
+// >>> collapsed by default, state outlives closing/reopening the drawer
+// >>> since this component never unmounts while just toggling boxesOpen
+const sourcesCollapsed = ref(true);
+const mixerCollapsed = ref(true);
 
 // >>> settings panel (broadcaster only)
 const showSettings = ref(false);
@@ -1851,16 +1855,19 @@ watch(
         <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"
           :class="{ 'obs-boxes-single': !(agentConnected && obsConnected) }">
           <template v-if="agentConnected && obsConnected">
-            <div class="ep-field-group obs-box">
+            <div class="ep-field-group obs-box" :class="{ collapsed: sourcesCollapsed }">
               <div class="obs-box-label-row">
-                <label class="ep-field-label">sources
+                <label class="ep-field-label obs-box-collapse-label" @click="sourcesCollapsed = !sourcesCollapsed">
+                  <span class="obs-box-collapse-chevron" :class="{ open: !sourcesCollapsed }"
+                    v-html="iconSvgFor('chevron-down')"></span>
+                  sources
                   <span v-if="selectedScene" class="ep-field-hint">{{
                     selectedScene
                   }}</span></label>
                 <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
                   @click="openAddSource" v-html="iconSvgFor('plus')"></button>
               </div>
-              <div class="obs-source-list">
+              <div v-if="!sourcesCollapsed" class="obs-source-list">
                 <!-- >>> background refreshes stay silent, no flash over rows -->
                 <template v-if="sourcesLoading && !sources.length">
                   <div class="obs-source-row" v-for="i in 4" :key="i">
@@ -1905,12 +1912,17 @@ watch(
               </div>
             </div>
 
-            <div class="ep-field-group obs-box">
-              <label class="ep-field-label">audio mixer
-                <span v-if="selectedScene" class="ep-field-hint">{{
-                  selectedScene
-                }}</span></label>
-              <div class="obs-mixer-list">
+            <div class="ep-field-group obs-box" :class="{ collapsed: mixerCollapsed }">
+              <div class="obs-box-label-row">
+                <label class="ep-field-label obs-box-collapse-label" @click="mixerCollapsed = !mixerCollapsed">
+                  <span class="obs-box-collapse-chevron" :class="{ open: !mixerCollapsed }"
+                    v-html="iconSvgFor('chevron-down')"></span>
+                  audio mixer
+                  <span v-if="selectedScene" class="ep-field-hint">{{
+                    selectedScene
+                  }}</span></label>
+              </div>
+              <div v-if="!mixerCollapsed" class="obs-mixer-list">
                 <div v-for="src in audioSources" :key="src.sceneItemId" class="obs-mixer-row"
                   :class="{ pending: isSourcePending(src) }">
                   <div class="obs-mixer-top">
@@ -3397,6 +3409,27 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3a3a44 #111217;
+}
+
+.obs-source-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.obs-source-list::-webkit-scrollbar-track {
+  background: #111217;
+}
+
+.obs-source-list::-webkit-scrollbar-thumb {
+  background: #3a3a44;
+  border-radius: 4px;
+}
+
+.obs-source-list::-webkit-scrollbar-thumb:hover {
+  background: #6f2bff88;
 }
 
 .obs-source-row {
@@ -3430,6 +3463,29 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.obs-box-collapse-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.obs-box-collapse-chevron {
+  display: flex;
+  align-items: center;
+  transition: transform 0.15s;
+}
+
+.obs-box-collapse-chevron.open {
+  transform: rotate(180deg);
+}
+
+.obs-box-collapse-chevron :deep(svg) {
+  width: 11px;
+  height: 11px;
 }
 
 .obs-add-source-btn {
@@ -3675,6 +3731,11 @@ watch(
   min-width: 200px;
   max-width: 400px;
   min-height: 280px;
+}
+
+/* >>> collapsed sources/mixer shouldn't stay forced to the expanded height */
+.obs-box.collapsed {
+  min-height: 0;
 }
 
 .obs-box-cat {
@@ -4577,13 +4638,14 @@ watch(
   background: #6f2bff30;
 }
 
-.obs-drawer-toggle svg {
+/* >>> :deep - icon is injected via v-html, needs :deep() to match past scoping */
+.obs-drawer-toggle :deep(svg) {
   width: 14px;
   height: 14px;
   transition: transform 0.15s;
 }
 
-.obs-drawer-toggle.open svg {
+.obs-drawer-toggle.open :deep(svg) {
   transform: rotate(180deg);
 }
 
