@@ -71,6 +71,8 @@ const selectedIds = ref<string[]>([]);
 const dirty = ref(false);
 const previewValues = ref<Record<string, string>>({});
 const snapEnabled = ref(true);
+// >>> mobile only - side panels become slide-in drawers instead of eating the canvas
+const mobileDrawer = ref<"gallery" | "props" | null>(null);
 
 // vvv "saved X ago" ticks without re-saving vvv
 const lastSavedAt = ref<number | null>(null);
@@ -1170,7 +1172,11 @@ onUnmounted(() => {
         </div>
 
         <div class="ovl-content">
-          <ObsOverlayElementGallery @add="addElement" />
+          <!-- >>> mobile-only backdrop, closes whichever drawer is open -->
+          <div v-if="mobileDrawer" class="ovl-mobile-backdrop" @click="mobileDrawer = null"></div>
+
+          <ObsOverlayElementGallery :class="{ 'mobile-open': mobileDrawer === 'gallery' }"
+            @add="(type, variant) => { addElement(type, variant); mobileDrawer = null; }" />
 
           <div class="ovl-body">
             <div v-if="loading" class="ovl-loading">loading…</div>
@@ -1181,9 +1187,17 @@ onUnmounted(() => {
               @update-elements="updateElements" @delete-element="deleteOne" @delete-selected="deleteSelected"
               @duplicate-element="duplicateSelected" @live-preview="onLivePreview" @cursor-move="onCursorMove"
               @video-command="onVideoCommand" />
+
+            <!-- >>> mobile-only FABs - side panels are drawers now, these open them -->
+            <div class="ovl-mobile-fabs">
+              <button class="ovl-mobile-fab" title="Add element" @click="mobileDrawer = 'gallery'"
+                v-html="iconSvgFor('plus')"></button>
+              <button class="ovl-mobile-fab" title="Properties &amp; layers" @click="mobileDrawer = 'props'"
+                v-html="iconSvgFor('settings')"></button>
+            </div>
           </div>
 
-          <div class="ovl-props">
+          <div class="ovl-props" :class="{ 'mobile-open': mobileDrawer === 'props' }">
             <template v-if="selectedElement">
               <div class="ovl-props-title">properties</div>
               <div class="ovl-props-type">{{ selectedElement.type }}</div>
@@ -1973,4 +1987,120 @@ onUnmounted(() => {
   gap: 8px;
 }
 
+/* >>> mobile-only FABs that open the gallery/props drawers */
+.ovl-mobile-fabs {
+  display: none;
+}
+
+.ovl-mobile-backdrop {
+  display: none;
+}
+
+@media (max-width: 680px) {
+  .ovl-modal {
+    max-height: 100%;
+  }
+
+  /* >>> too many controls to fit - scroll instead of clipping/overlapping */
+  .ovl-topbar {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .ovl-topbar-actions {
+    overflow-x: auto;
+    scrollbar-width: none;
+    max-width: 100%;
+  }
+
+  .ovl-topbar-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ovl-activate-bar {
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+
+  .ovl-activate-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* >>> canvas owns the screen - side panels become drawers, opened by the FABs below */
+  .ovl-content {
+    position: relative;
+    overflow: hidden;
+  }
+
+  :deep(.ovl-gallery) {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 220px;
+    max-width: 80vw;
+    z-index: 210;
+    background: #0a0a0d;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  :deep(.ovl-gallery.mobile-open) {
+    transform: translateX(0);
+  }
+
+  .ovl-props {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 280px;
+    max-width: 85vw;
+    z-index: 210;
+    background: #0a0a0d;
+    transform: translateX(100%);
+    transition: transform 0.2s ease;
+  }
+
+  .ovl-props.mobile-open {
+    transform: translateX(0);
+  }
+
+  .ovl-mobile-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 205;
+  }
+
+  .ovl-mobile-fabs {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 100;
+  }
+
+  .ovl-mobile-fab {
+    width: 46px;
+    height: 46px;
+    border: 1px solid #2a2a30;
+    background: #17171c;
+    color: #e0e0e0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+
+  .ovl-mobile-fab:active {
+    background: #6f2bff;
+    border-color: #6f2bff;
+  }
+}
 </style>

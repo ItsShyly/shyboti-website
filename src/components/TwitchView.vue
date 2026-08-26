@@ -1375,4 +1375,35 @@ async function saveActions() {
 
 /* >>> refund/action-card/command-preview styles now live in
    ChannelPointActionsEditor.vue, which owns that markup */
+
+@media (max-width: 680px) {
+  /* >>> the fixed "auto" action column squeezed .cp-main, truncating titles
+     way too early - give title its own full-width row, actions below it */
+  .cp-row {
+    grid-template-columns: 32px 1fr;
+    grid-template-areas:
+      "swatch main"
+      "actions actions";
+    row-gap: 10px;
+  }
+
+  .cp-swatch {
+    grid-area: swatch;
+    width: 32px;
+    height: 32px;
+  }
+
+  .cp-main {
+    grid-area: main;
+  }
+
+  .cp-row .ep-row-actions {
+    grid-area: actions;
+    justify-content: flex-end;
+  }
+
+  .cp-action-slot {
+    width: auto;
+  }
+}
 </style>

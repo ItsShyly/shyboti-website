@@ -1246,7 +1246,7 @@ onUnmounted(() => {
                 </div>
                 <div class="cmd-name">
                   <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
-                  {{ prefix }}{{ cmd.renamedTo || cmd.name }}
+                  <span class="cmd-name-text">{{ prefix }}{{ cmd.renamedTo || cmd.name }}</span>
                   <span v-if="cmd.renamedTo" class="cmd-renamed-hint" :title="`Default: ${prefix}${cmd.name}`">↺</span>
                   <span v-if="commandsWithRemovedDefaultAlias.has(cmd.name)" class="cmd-renamed-hint"
                     :title="t('cmd.default_alias_changed_hint')">↺</span>
@@ -1407,8 +1407,8 @@ onUnmounted(() => {
                   "><span class="ep-switch-knob"></span></div>
                 </div>
                 <div class="cmd-name">
-                  <span class="cmd-cat-dot" style="background: #9d6cff"></span>{{ prefix }}{{ cmd.name
-                  }}
+                  <span class="cmd-cat-dot" style="background: #9d6cff"></span>
+                  <span class="cmd-name-text">{{ prefix }}{{ cmd.name }}</span>
                 </div>
                 <div class="cmd-desc">
                   <span class="cmd-desc-text">{{ cmd.description }}</span>
@@ -1539,8 +1539,8 @@ onUnmounted(() => {
                 <div>
                   <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
-                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
-                  b.command }}</div>
+                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
+                    class="cmd-name-text">{{ prefix }}{{ b.command }}</span></div>
                 <div class="cmd-desc">switch scene · {{ b.scene }}</div>
                 <div>
                   <button class="access-btn" :class="{
@@ -1579,8 +1579,8 @@ onUnmounted(() => {
                 <div>
                   <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
-                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
-                  b.command }}</div>
+                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
+                    class="cmd-name-text">{{ prefix }}{{ b.command }}</span></div>
                 <div class="cmd-desc">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} · {{ b.source }}<template
                     v-if="b.action === 'volume' && b.value !== undefined"> @ {{ b.value }}%</template>
                 </div>
@@ -1621,8 +1621,8 @@ onUnmounted(() => {
                 <div>
                   <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
-                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span>{{ prefix }}{{
-                  obsArgCommand(entry) }}</div>
+                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
+                    class="cmd-name-text">{{ prefix }}{{ obsArgCommand(entry) }}</span></div>
                 <div class="cmd-desc">{{ OBS_ACTION_LABEL[action] ?? action }} · <span class="obs-arg-usage-inline">{{
                   obsArgUsage(action) }}</span></div>
                 <div>
@@ -2534,32 +2534,74 @@ onUnmounted(() => {
     display: none;
   }
 
-  .table-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    height: auto;
-    padding: 10px 12px;
-    gap: 8px;
-  }
-
-  .table-row>*:nth-child(4),
-  .table-row>*:nth-child(6) {
-    display: none;
-  }
-
+  /* >>> card layout: row 1 = toggle+name+edit (never breaks), row 2 = access+cooldown.
+     order + a zero-height 100%-basis breaker (the now-hidden desc cell) force the
+     wrap point instead of leaving it to chance, which used to strand "Edit" alone */
+  .table-row,
   .custom-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     height: auto;
     padding: 10px 12px;
-    gap: 8px;
+    gap: 6px 10px;
   }
 
-  .custom-row>*:nth-child(4),
+  .table-row>*:nth-child(1),
+  .custom-row>*:nth-child(1) {
+    order: 1;
+  }
+
+  .table-row>*:nth-child(2),
+  .custom-row>*:nth-child(2) {
+    order: 2;
+  }
+
+  .table-row>.cmd-name,
+  .custom-row>.cmd-name {
+    order: 3;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .cmd-name-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .table-row>*:nth-child(4),
+  .custom-row>*:nth-child(4) {
+    order: 5;
+    flex-basis: 100%;
+    height: 0;
+    min-height: 0;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  .table-row>*:nth-child(5),
+  .custom-row>*:nth-child(5) {
+    order: 6;
+  }
+
+  .table-row>*:nth-child(6),
   .custom-row>*:nth-child(6) {
     display: none;
+  }
+
+  .table-row>*:nth-child(7),
+  .custom-row>*:nth-child(7) {
+    order: 7;
+  }
+
+  .table-row>*:nth-child(8),
+  .custom-row>*:nth-child(8) {
+    order: 4;
+    flex-shrink: 0;
+    margin-left: auto;
   }
 
   .custom-header {
