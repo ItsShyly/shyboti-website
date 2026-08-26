@@ -244,6 +244,8 @@ const boxesOpen = ref(false);
 // >>> since this component never unmounts while just toggling boxesOpen
 const sourcesCollapsed = ref(true);
 const mixerCollapsed = ref(true);
+// >>> starts open, unlike sources/mixer - categories are picked at a glance
+const categoriesCollapsed = ref(false);
 
 // >>> settings panel (broadcaster only)
 const showSettings = ref(false);
@@ -1970,7 +1972,8 @@ watch(
             </div>
           </template>
 
-          <div v-if="agentConnected && obsConnected" class="ep-field-group obs-box obs-box-cat">
+          <div v-if="agentConnected && obsConnected" class="ep-field-group obs-box obs-box-cat"
+            :class="{ collapsed: categoriesCollapsed }">
             <div class="obs-drawer-preview-mini">
               <div class="obs-drawer-preview-mini-thumb">
                 <img v-if="selectedScene && sceneShots[selectedScene]" :src="sceneShots[selectedScene]"
@@ -1983,25 +1986,33 @@ watch(
                 <div class="obs-drawer-preview-mini-name">{{ selectedScene || "no scene selected" }}</div>
               </div>
             </div>
-            <label class="ep-field-label">Switch categories</label>
-            <div class="obs-category-strip" @wheel="onSceneStripWheel">
-              <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
-                :class="{ disabled: !canFilterScenes, active: c.category_id === currentCategoryId, pending: isCategoryPending(c.category_id), switching: switchingCategory === c.category_id }"
-                :disabled="switchingCategory === c.category_id" :title="c.category_name" @click="onCategoryClick(c)">
-                <span v-if="canFilterScenes" class="obs-category-remove" title="Remove"
-                  @click.stop="removeCategory(c.category_id)">×</span>
-                <img v-if="c.box_art_url" :src="c.box_art_url" :alt="c.category_name" />
-                <div v-else class="obs-category-empty">{{ c.category_name.slice(0, 2) }}</div>
-                <span class="obs-category-name">{{ c.category_name }}</span>
-              </button>
-              <template v-if="canFilterScenes">
-                <button v-for="n in emptyCategorySlots" :key="'empty' + n" class="obs-category-card obs-category-add"
-                  title="Add a category" @click="showAddCategory = true">
-                  <div class="obs-category-empty obs-category-plus">+</div>
-                </button>
-              </template>
+            <div class="obs-box-label-row">
+              <label class="ep-field-label obs-box-collapse-label" @click="categoriesCollapsed = !categoriesCollapsed">
+                <span class="obs-box-collapse-chevron" :class="{ open: !categoriesCollapsed }"
+                  v-html="iconSvgFor('chevron-down')"></span>
+                Switch categories
+              </label>
             </div>
-            <div v-if="categorySwitchError" class="obs-category-error">{{ categorySwitchError }}</div>
+            <div v-show="!categoriesCollapsed" class="obs-category-content">
+              <div class="obs-category-strip" @wheel="onSceneStripWheel">
+                <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
+                  :class="{ disabled: !canFilterScenes, active: c.category_id === currentCategoryId, pending: isCategoryPending(c.category_id), switching: switchingCategory === c.category_id }"
+                  :disabled="switchingCategory === c.category_id" :title="c.category_name" @click="onCategoryClick(c)">
+                  <span v-if="canFilterScenes" class="obs-category-remove" title="Remove"
+                    @click.stop="removeCategory(c.category_id)">×</span>
+                  <img v-if="c.box_art_url" :src="c.box_art_url" :alt="c.category_name" />
+                  <div v-else class="obs-category-empty">{{ c.category_name.slice(0, 2) }}</div>
+                  <span class="obs-category-name">{{ c.category_name }}</span>
+                </button>
+                <template v-if="canFilterScenes">
+                  <button v-for="n in emptyCategorySlots" :key="'empty' + n" class="obs-category-card obs-category-add"
+                    title="Add a category" @click="showAddCategory = true">
+                    <div class="obs-category-empty obs-category-plus">+</div>
+                  </button>
+                </template>
+              </div>
+              <div v-if="categorySwitchError" class="obs-category-error">{{ categorySwitchError }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -3503,6 +3514,10 @@ watch(
   .obs-mixer-list {
     display: flex !important;
   }
+
+  .obs-category-content {
+    display: block !important;
+  }
 }
 
 .obs-add-source-btn {
@@ -4764,7 +4779,6 @@ watch(
   transform: translateY(0);
   opacity: 1;
   pointer-events: auto;
-  min-height: 60vh;
 }
 
 .obs-drawer-handle {
