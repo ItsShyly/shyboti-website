@@ -1344,6 +1344,12 @@ const translations: Record<Locale, Record<string, string>> = {
     "obsconn.unsaved_changes": "Unsaved changes",
     "obsconn.discard": "Discard",
     "obsconn.save_changes": "Save changes",
+    "obsconn.nav.scenes": "Scenes",
+    "obsconn.nav.categories": "Categories",
+    "obsconn.nav.sources": "Sources",
+    "obsconn.nav.mixer": "Mixer",
+    "obsconn.nav.stats": "Stats",
+    "obsconn.nav.mode": "Mode",
     // ^^^ OBS Control page ^^^
 
     // vvv Overlay Editor suite (fork: fill EN keys below this line only) vvv
@@ -3043,6 +3049,12 @@ const translations: Record<Locale, Record<string, string>> = {
     "obsconn.unsaved_changes": "Ungespeicherte Änderungen",
     "obsconn.discard": "Verwerfen",
     "obsconn.save_changes": "Änderungen speichern",
+    "obsconn.nav.scenes": "Szenen",
+    "obsconn.nav.categories": "Kategorien",
+    "obsconn.nav.sources": "Sources",
+    "obsconn.nav.mixer": "Mixer",
+    "obsconn.nav.stats": "Stats",
+    "obsconn.nav.mode": "Modus",
     // ^^^ OBS Control page ^^^
 
     // vvv Overlay Editor suite (fork: fill DE keys below this line only) vvv

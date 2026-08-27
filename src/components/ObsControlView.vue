@@ -249,6 +249,14 @@ const mixerCollapsed = ref(true);
 // >>> starts open, unlike sources/mixer - categories are picked at a glance
 const categoriesCollapsed = ref(false);
 
+// >>> phone-only bottom nav tab - which panel the drawer shows instead of the topbar
+type MobileTab = "scenes" | "categories" | "sources" | "mixer" | "stats";
+const mobileTab = ref<MobileTab>("scenes");
+function selectMobileTab(tab: MobileTab) {
+  mobileTab.value = tab;
+  boxesOpen.value = tab !== "scenes";
+}
+
 // >>> settings panel (broadcaster only)
 const showSettings = ref(false);
 const settingsSaving = ref(false);
@@ -1758,7 +1766,7 @@ watch(
 </script>
 
 <template>
-  <div class="obsconn-page">
+  <div class="obsconn-page" :data-mtab="mobileTab">
     <!-- vvv top bar - mode/connection/gear controls + the sources/mixer drawer toggle vvv -->
     <div class="obs-topbar">
       <div class="obs-topbar-left">
@@ -1859,7 +1867,7 @@ watch(
         <div v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-boxes-row"
           :class="{ 'obs-boxes-single': !(agentConnected && obsConnected) }">
           <template v-if="agentConnected && obsConnected">
-            <div class="ep-field-group obs-box" :class="{ collapsed: sourcesCollapsed }">
+            <div class="ep-field-group obs-box obs-box-sources" :class="{ collapsed: sourcesCollapsed }">
               <div class="obs-box-label-row">
                 <label class="ep-field-label obs-box-collapse-label" @click="sourcesCollapsed = !sourcesCollapsed">
                   <span class="obs-box-collapse-chevron" :class="{ open: !sourcesCollapsed }"
@@ -1916,7 +1924,7 @@ watch(
               </div>
             </div>
 
-            <div class="ep-field-group obs-box" :class="{ collapsed: mixerCollapsed }">
+            <div class="ep-field-group obs-box obs-box-mixer" :class="{ collapsed: mixerCollapsed }">
               <div class="obs-box-label-row">
                 <label class="ep-field-label obs-box-collapse-label" @click="mixerCollapsed = !mixerCollapsed">
                   <span class="obs-box-collapse-chevron" :class="{ open: !mixerCollapsed }"
@@ -2149,6 +2157,48 @@ watch(
         {{ bindingsSaving ? t('obsconn.saving_ellipsis') : t('obsconn.saved') }}
       </div>
     </div>
+
+    <!-- vvv phone-only bottom nav - replaces the topbar/drawer chrome on mobile vvv -->
+    <nav v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-mobile-nav">
+      <button class="obs-mobile-nav-btn" :class="{ active: mobileTab === 'scenes' }"
+        :title="t('obsconn.nav.scenes')" @click="selectMobileTab('scenes')">
+        <span v-html="iconSvgFor('monitor')"></span>
+        <span class="obs-mobile-nav-label">{{ t('obsconn.nav.scenes') }}</span>
+      </button>
+      <button v-if="agentConnected && obsConnected" class="obs-mobile-nav-btn"
+        :class="{ active: mobileTab === 'categories' }" :title="t('obsconn.nav.categories')"
+        @click="selectMobileTab('categories')">
+        <span v-html="iconSvgFor('film')"></span>
+        <span class="obs-mobile-nav-label">{{ t('obsconn.nav.categories') }}</span>
+      </button>
+      <button v-if="agentConnected && obsConnected" class="obs-mobile-nav-btn"
+        :class="{ active: mobileTab === 'sources' }" :title="t('obsconn.nav.sources')"
+        @click="selectMobileTab('sources')">
+        <span v-html="iconSvgFor('layers')"></span>
+        <span class="obs-mobile-nav-label">{{ t('obsconn.nav.sources') }}</span>
+      </button>
+      <button v-if="agentConnected && obsConnected" class="obs-mobile-nav-btn"
+        :class="{ active: mobileTab === 'mixer' }" :title="t('obsconn.nav.mixer')"
+        @click="selectMobileTab('mixer')">
+        <span v-html="iconSvgFor('sliders')"></span>
+        <span class="obs-mobile-nav-label">{{ t('obsconn.nav.mixer') }}</span>
+      </button>
+      <button v-if="agentConnected && obsConnected" class="obs-mobile-nav-btn"
+        :class="{ active: mobileTab === 'stats' }" :title="t('obsconn.nav.stats')"
+        @click="selectMobileTab('stats')">
+        <span v-html="iconSvgFor('activity')"></span>
+        <span class="obs-mobile-nav-label">{{ t('obsconn.nav.stats') }}</span>
+      </button>
+      <button class="obs-mobile-nav-btn obs-mobile-nav-mode" :class="editMode ? 'edit' : 'live'"
+        :title="editMode ? t('obsconn.mode.edit_hint') : t('obsconn.mode.live_hint')"
+        @click="setMode(!editMode)">
+        <span class="obs-mobile-nav-mode-switch">
+          <span class="knob"></span>
+        </span>
+        <span class="obs-mobile-nav-label">{{ t('obsconn.nav.mode') }}</span>
+      </button>
+    </nav>
+    <!-- ^^^ phone-only bottom nav ^^^ -->
 
   </div>
 
@@ -4638,10 +4688,24 @@ watch(
 
 @media (max-width: 680px) {
 
-  /* >>> thin single line - most controls move into the kebab */
+  /* >>> topbar chrome goes away entirely - only the status dot survives,
+     floating fixed top-right; settings/filter/refresh move to a small
+     floating kebab top-left so they stay reachable without the bar */
   .obs-topbar {
-    margin: -14px -14px 0;
-    padding: 6px 10px;
+    margin: 0;
+    padding: 0;
+    border-bottom: none;
+    background: transparent;
+    min-height: 0;
+    display: block;
+  }
+
+  .obsconn-title-slim,
+  .obs-mode-toggle-slim,
+  .mode-hint.locked-hint,
+  .obs-topbar-stat,
+  .obs-drawer-toggle {
+    display: none !important;
   }
 
   .obs-topbar-left,
@@ -4653,17 +4717,28 @@ watch(
     display: none !important;
   }
 
-  .obs-mode-toggle-slim {
-    padding: 3px 6px;
+  .obs-status-bar-slim {
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    padding: 6px;
+    background: #16161a;
+    border: 1px solid #2a2a30;
+    z-index: 120;
   }
 
-  .obs-status-bar-slim {
-    padding: 5px;
+  .obs-topbar-right {
+    position: fixed;
+    top: 10px;
+    left: 10px;
+    z-index: 120;
   }
 
   /* >>> claw back every bit of vertical space so scenes need no scrolling */
   .obsconn-page {
     gap: 4px;
+    padding-top: 44px;
+    padding-bottom: 62px;
   }
 
   .obsconn-body {
@@ -4687,6 +4762,147 @@ watch(
     flex-wrap: wrap;
     gap: 6px;
   }
+
+  /* >>> bottom nav replaces the drawer-toggle/kebab as the way in */
+  .obs-mobile-nav {
+    display: flex;
+  }
+
+  /* >>> Scenes tab = the normal Program/Preview body; other tabs hide it
+     and show the drawer full-screen instead */
+  .obsconn-page:not([data-mtab="scenes"]) .obsconn-body {
+    display: none;
+  }
+
+  .obs-drawer {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: 44px;
+    bottom: 62px;
+    margin-top: 0;
+    max-height: none;
+    border-left: none;
+    border-right: none;
+    padding: 12px 14px;
+  }
+
+  .obs-live-stats,
+  .obs-box-sources,
+  .obs-box-mixer,
+  .obs-box-cat {
+    display: none;
+  }
+
+  .obsconn-page[data-mtab="stats"] .obs-live-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .obsconn-page[data-mtab="sources"] .obs-box-sources,
+  .obsconn-page[data-mtab="mixer"] .obs-box-mixer,
+  .obsconn-page[data-mtab="categories"] .obs-box-cat {
+    display: flex;
+  }
+
+  .obs-boxes-row {
+    display: block;
+  }
+
+  .obs-box,
+  .obs-box-cat {
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    height: 100%;
+  }
+}
+
+/* >>> Instagram-style bottom tab bar, phone only - see @media 680px above for display:flex */
+.obs-mobile-nav {
+  display: none;
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 130;
+  background: #16161a;
+  border-top: 1px solid #2a2a30;
+  padding: 4px 2px;
+  padding-bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+}
+
+.obs-mobile-nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 6px 2px;
+  border: none;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+}
+
+.obs-mobile-nav-btn :deep(svg) {
+  width: 19px;
+  height: 19px;
+}
+
+.obs-mobile-nav-btn.active {
+  color: #9d6cff;
+}
+
+.obs-mobile-nav-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.obs-mobile-nav-mode-switch {
+  position: relative;
+  width: 26px;
+  height: 15px;
+  border: 1px solid #2a2a30;
+  flex-shrink: 0;
+}
+
+.obs-mobile-nav-mode-switch .knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 11px;
+  height: 11px;
+  background: #666;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.obs-mobile-nav-mode.edit .obs-mobile-nav-mode-switch {
+  border-color: #e5c07b66;
+}
+
+.obs-mobile-nav-mode.edit .obs-mobile-nav-mode-switch .knob {
+  background: #e5c07b;
+}
+
+.obs-mobile-nav-mode.live .obs-mobile-nav-mode-switch {
+  border-color: #f1494966;
+}
+
+.obs-mobile-nav-mode.live .obs-mobile-nav-mode-switch .knob {
+  transform: translateX(11px);
+  background: #f14949;
+}
+
+.obs-mobile-nav-mode.edit .obs-mobile-nav-label {
+  color: #e5c07b;
+}
+
+.obs-mobile-nav-mode.live .obs-mobile-nav-label {
+  color: #f14949;
 }
 
 .obs-topbar-left,
