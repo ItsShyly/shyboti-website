@@ -36,6 +36,14 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.login_short": "Login",
     "nav.add_channel": "Add to your channel",
 
+    // vvv shared match-type dropdown (Triggers, Command keywords) vvv
+    "match.contains": "contains",
+    "match.exact": "exact match",
+    "match.starts": "starts with",
+    "match.ends": "ends with",
+    "match.regex": "regex",
+    // ^^^ shared match-type dropdown ^^^
+
     "banner.welcome":
       'Welcome! Add ShyBoti to your channel to get started. (don\'t forget to add shyboti as a mod "/mod shyboti"!)',
     "banner.add": "Add ShyBoti",
@@ -1723,6 +1731,14 @@ const translations: Record<Locale, Record<string, string>> = {
     "nav.login": "Mit Twitch anmelden",
     "nav.login_short": "Anmelden",
     "nav.add_channel": "Zu deinem Channel hinzufügen",
+
+    // vvv shared match-type dropdown (Triggers, Command keywords) vvv
+    "match.contains": "enthält",
+    "match.exact": "exakt",
+    "match.starts": "beginnt mit",
+    "match.ends": "endet mit",
+    "match.regex": "regex",
+    // ^^^ shared match-type dropdown ^^^
 
     "banner.welcome":
       'Willkommen! Füge ShyBoti zu deinem Channel hinzu um loszulegen. (Nicht vergessen ShyBoti mit "/mod shyboti" als Moderator hinzuzufügen!)',

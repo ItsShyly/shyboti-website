@@ -180,13 +180,16 @@ const keywordSaving = ref(false)
 const keywordError = ref('')
 const newKeywordPattern = ref('')
 const newKeywordMatchType = ref('contains')
-const KEYWORD_MATCH_TYPES = [
-  { value: 'contains', label: 'contains' },
-  { value: 'exact', label: 'exact match' },
-  { value: 'starts', label: 'starts with' },
-  { value: 'ends', label: 'ends with' },
-  { value: 'regex', label: 'regex' },
-]
+const KEYWORD_MATCH_TYPES = computed(() => [
+  { value: 'contains', label: t('match.contains') },
+  { value: 'exact', label: t('match.exact') },
+  { value: 'starts', label: t('match.starts') },
+  { value: 'ends', label: t('match.ends') },
+  { value: 'regex', label: t('match.regex') },
+])
+function keywordMatchLabel(v: string) {
+  return KEYWORD_MATCH_TYPES.value.find((m) => m.value === v)?.label ?? v
+}
 
 async function loadKeywords() {
   if (!session.value || !props.cmdName) return
@@ -1020,7 +1023,7 @@ function onNormalKeydown(e: KeyboardEvent) {
                 <div v-if="!keywords.length" class="arg-descs-empty">{{ t('edit.keywords_empty') }}</div>
                 <div v-else class="alias-chip-list">
                   <span v-for="k in keywords" :key="k.name" class="alias-chip">
-                    {{ k.match_type }}: "{{ k.match_pattern }}"
+                    {{ keywordMatchLabel(k.match_type) }}: "{{ k.match_pattern }}"
                     <button class="alias-chip-remove" type="button" :disabled="keywordSaving" @click="removeKeyword(k.name)" v-html="iconSvgFor('x')"></button>
                   </span>
                 </div>
@@ -1550,7 +1553,7 @@ function onNormalKeydown(e: KeyboardEvent) {
 }
 
 .ep-close-confirm {
-  width: 320px;
+  width: min(380px, 92vw);
   background: #16161a;
   border: 1px solid #2a2a30;
   box-shadow: 0 12px 48px rgba(0, 0, 0, .7);
@@ -1573,6 +1576,7 @@ function onNormalKeydown(e: KeyboardEvent) {
 
 .ep-close-confirm-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }

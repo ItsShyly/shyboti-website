@@ -3167,6 +3167,10 @@ watch(
   border-style: dashed;
 }
 
+.obs-pp-preview .obs-pp-thumb {
+  aspect-ratio: 16 / 9;
+}
+
 .obs-pp-program {
   border-color: #f1494955;
 }

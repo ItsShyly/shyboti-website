@@ -2051,7 +2051,7 @@ onUnmounted(() => {
 }
 
 .ovl-close-confirm {
-  width: 320px;
+  width: min(380px, 92vw);
   background: #16161a;
   border: 1px solid #2a2a30;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
@@ -2074,6 +2074,7 @@ onUnmounted(() => {
 
 .ovl-close-confirm-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }

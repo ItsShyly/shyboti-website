@@ -1651,7 +1651,7 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div class="custom-actions">
-                  <button class="edit-btn" @click="openObsEdit({ kind: 'scene', command: b.command })">edit</button>
+                  <button class="edit-btn" @click="openObsEdit({ kind: 'scene', command: b.command })">{{ t('cmd.edit') }}</button>
                   <button class="del-btn" :class="{ confirm: obsDeleteConfirm === 'scene:' + b.command }"
                     @click="deleteObsBinding('scene', b.command)">
                     <template v-if="obsDeleteConfirm === 'scene:' + b.command">{{ t('cmd.delete_sure') }}</template>
@@ -1694,7 +1694,7 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div class="custom-actions">
-                  <button class="edit-btn" @click="openObsEdit({ kind: 'source', command: b.command })">edit</button>
+                  <button class="edit-btn" @click="openObsEdit({ kind: 'source', command: b.command })">{{ t('cmd.edit') }}</button>
                   <button class="del-btn" :class="{ confirm: obsDeleteConfirm === 'source:' + b.command }"
                     @click="deleteObsBinding('source', b.command)">
                     <template v-if="obsDeleteConfirm === 'source:' + b.command">{{ t('cmd.delete_sure') }}</template>
@@ -1739,7 +1739,7 @@ onUnmounted(() => {
                 </div>
                 <div class="custom-actions">
                   <button class="edit-btn"
-                    @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">edit</button>
+                    @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">{{ t('cmd.edit') }}</button>
                   <button class="del-btn" :class="{ confirm: obsDeleteConfirm === 'arg:' + action }"
                     @click="deleteObsBinding('arg', action)">
                     <template v-if="obsDeleteConfirm === 'arg:' + action">{{ t('cmd.delete_sure') }}</template>
@@ -2183,7 +2183,8 @@ onUnmounted(() => {
 }
 
 .edit-btn {
-  width: 76px;
+  min-width: 76px;
+  padding: 0 10px;
   height: 34px;
   border: 2px solid #6f2bff;
   background: #6f2bff2b;

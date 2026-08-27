@@ -1347,7 +1347,7 @@ async function saveActions() {
   justify-content: flex-end;
   align-items: center;
   gap: 6px;
-  width: 220px;
+  width: 250px;
   flex-shrink: 0;
   flex-wrap: nowrap;
 }

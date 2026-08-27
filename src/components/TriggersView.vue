@@ -208,13 +208,13 @@ const EVENT_TYPES = [
   },
 ];
 
-const MATCH_TYPES = [
-  { value: "contains", label: "contains" },
-  { value: "exact", label: "exact match" },
-  { value: "starts", label: "starts with" },
-  { value: "ends", label: "ends with" },
-  { value: "regex", label: "regex" },
-];
+const MATCH_TYPES = computed(() => [
+  { value: "contains", label: t("match.contains") },
+  { value: "exact", label: t("match.exact") },
+  { value: "starts", label: t("match.starts") },
+  { value: "ends", label: t("match.ends") },
+  { value: "regex", label: t("match.regex") },
+]);
 
 // >>> "" fires once (normal path), "while_active" keeps the reward synced and
 // >>> reverts it when the category changes away
@@ -757,7 +757,7 @@ function actionLabel(v: string) {
   return ACTION_TYPES.find((a) => a.value === v)?.label ?? v;
 }
 function matchLabel(v: string) {
-  return MATCH_TYPES.find((m) => m.value === v)?.label ?? v;
+  return MATCH_TYPES.value.find((m) => m.value === v)?.label ?? v;
 }
 
 const needsPattern = (ev: string) => ["message", "command"].includes(ev);
