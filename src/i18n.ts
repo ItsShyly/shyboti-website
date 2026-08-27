@@ -1350,6 +1350,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "obsconn.nav.mixer": "Mixer",
     "obsconn.nav.stats": "Stats",
     "obsconn.nav.mode": "Mode",
+    "obsconn.nav.menu": "Menu",
     // ^^^ OBS Control page ^^^
 
     // vvv Overlay Editor suite (fork: fill EN keys below this line only) vvv
@@ -3055,6 +3056,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "obsconn.nav.mixer": "Mixer",
     "obsconn.nav.stats": "Stats",
     "obsconn.nav.mode": "Modus",
+    "obsconn.nav.menu": "Menü",
     // ^^^ OBS Control page ^^^
 
     // vvv Overlay Editor suite (fork: fill DE keys below this line only) vvv

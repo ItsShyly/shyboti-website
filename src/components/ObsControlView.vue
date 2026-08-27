@@ -255,6 +255,15 @@ const mobileTab = ref<MobileTab>("scenes");
 function selectMobileTab(tab: MobileTab) {
   mobileTab.value = tab;
   boxesOpen.value = tab !== "scenes";
+  mobileMenuOpen.value = false;
+}
+
+// >>> phone-only floating menu (settings/filter/refresh/force-previews/mode),
+// >>> replaces the separate floating kebab + footer mode button
+const mobileMenuOpen = ref(false);
+function mobileMenuAction(fn: () => void) {
+  fn();
+  mobileMenuOpen.value = false;
 }
 
 // >>> settings panel (broadcaster only)
@@ -2143,8 +2152,8 @@ watch(
         </div>
 
         <div class="obs-scenes-footer">
-          <button v-if="canForcePreview && scenes.length > 0 && !videoMixProjectorOpen" class="ep-btn-cancel"
-            @click="forceAllPreviews()" :disabled="forcePreviewLoading">
+          <button v-if="canForcePreview && scenes.length > 0 && !videoMixProjectorOpen"
+            class="ep-btn-cancel obs-topbar-mobile-hide" @click="forceAllPreviews()" :disabled="forcePreviewLoading">
             {{ forcePreviewLoading ? t('obsconn.opening') : t('obsconn.force_previews') }}
           </button>
           <div v-if="canForcePreview" class="obs-projector-state">
@@ -2188,19 +2197,49 @@ watch(
         <span v-html="iconSvgFor('sliders')"></span>
         <span class="obs-mobile-nav-label">{{ t('obsconn.nav.mixer') }}</span>
       </button>
-      <button v-if="agentConnected && obsConnected" class="obs-mobile-nav-btn"
-        :class="{ active: mobileTab === 'stats' }" :title="t('obsconn.nav.stats')" @click="selectMobileTab('stats')">
-        <span v-html="iconSvgFor('activity')"></span>
-        <span class="obs-mobile-nav-label">{{ t('obsconn.nav.stats') }}</span>
-      </button>
-      <button class="obs-mobile-nav-btn obs-mobile-nav-mode" :class="editMode ? 'edit' : 'live'"
-        :title="editMode ? t('obsconn.mode.edit_hint') : t('obsconn.mode.live_hint')" @click="setMode(!editMode)">
-        <span class="obs-mobile-nav-mode-switch">
-          <span class="knob"></span>
-        </span>
-        <span class="obs-mobile-nav-label">{{ t('obsconn.nav.mode') }}</span>
+      <button class="obs-mobile-nav-btn" :class="{ active: mobileMenuOpen }" :title="t('obsconn.nav.menu')"
+        @click="mobileMenuOpen = !mobileMenuOpen">
+        <span v-html="iconSvgFor('more-vertical')"></span>
+        <span class="obs-mobile-nav-label">{{ t('obsconn.nav.menu') }}</span>
       </button>
     </nav>
+
+    <div v-if="mobileMenuOpen" class="obs-mobile-menu-backdrop" @click="mobileMenuOpen = false">
+      <div class="obs-mobile-menu" @click.stop>
+        <button v-if="agentConnected && obsConnected" class="obs-mobile-menu-item"
+          @click="mobileMenuAction(() => selectMobileTab('stats'))">
+          <span v-html="iconSvgFor('activity')"></span>
+          {{ t('obsconn.nav.stats') }}
+        </button>
+        <button v-if="obsConnected && canFilterScenes" class="obs-mobile-menu-item"
+          @click="mobileMenuAction(refreshScenes)">
+          <span v-html="iconSvgFor('refresh-cw')"></span>
+          {{ t('obsconn.refresh_title') }}
+        </button>
+        <button v-if="obsConnected && canFilterScenes" class="obs-mobile-menu-item"
+          @click="mobileMenuAction(openFilter)">
+          <span v-html="iconSvgFor('tool')"></span>
+          {{ t('obsconn.filter_title') }}
+        </button>
+        <button v-if="isBroadcaster" class="obs-mobile-menu-item" @click="mobileMenuAction(openSettings)">
+          <span v-html="iconSvgFor('settings')"></span>
+          {{ t('obsconn.settings_title') }}
+        </button>
+        <button v-if="canForcePreview && scenes.length > 0 && !videoMixProjectorOpen" class="obs-mobile-menu-item"
+          :disabled="forcePreviewLoading" @click="mobileMenuAction(() => forceAllPreviews())">
+          <span v-html="iconSvgFor('maximize')"></span>
+          {{ forcePreviewLoading ? t('obsconn.opening') : t('obsconn.force_previews') }}
+        </button>
+        <button class="obs-mobile-menu-item obs-mobile-menu-mode" :class="editMode ? 'edit' : 'live'"
+          @click="setMode(!editMode)">
+          <span class="obs-mobile-nav-mode-switch">
+            <span class="knob"></span>
+          </span>
+          {{ editMode ? t('obsconn.mode.edit') : t('obsconn.mode.live') }}
+        </button>
+        <span class="obs-mobile-menu-arrow"></span>
+      </div>
+    </div>
     <!-- ^^^ phone-only bottom nav ^^^ -->
 
   </div>
@@ -4735,6 +4774,13 @@ watch(
     display: none !important;
   }
 
+  /* >>> settings/filter/refresh moved into the bottom-nav menu, so the
+     floating kebab that used to sit here (and cover content) is gone */
+  .obs-topbar-right {
+    display: none !important;
+  }
+
+  /* >>> scenes-only - other tabs are fullscreen content, no room to spare */
   .obs-status-bar-slim {
     position: fixed;
     top: 62px;
@@ -4745,11 +4791,74 @@ watch(
     z-index: 120;
   }
 
-  .obs-topbar-right {
-    position: fixed;
-    top: 62px;
-    left: 10px;
-    z-index: 120;
+  .obsconn-page[data-mtab]:not([data-mtab="scenes"]) .obs-status-bar-slim {
+    display: none;
+  }
+
+  /* >>> everything in the tab panels reads too small/thin/cramped on an
+     actual phone screen - bigger text, thicker rows, bigger tap targets */
+  .obs-box-label-row {
+    padding: 10px 2px;
+  }
+
+  .obs-box-label-row .ep-field-label {
+    font-size: 13px;
+  }
+
+  .obs-box-label-row .ep-field-hint {
+    font-size: 12px;
+  }
+
+  .obs-source-row {
+    padding: 12px 10px;
+    gap: 10px;
+  }
+
+  .obs-mixer-row {
+    padding: 12px 10px;
+    gap: 10px;
+  }
+
+  .obs-source-name {
+    font-size: 14px;
+  }
+
+  .obs-vis-btn,
+  .obs-mute-btn {
+    height: 32px;
+    padding: 0 14px;
+    font-size: 12px;
+  }
+
+  .obs-drag-handle :deep(svg),
+  .obs-add-source-btn {
+    width: 28px;
+    height: 28px;
+  }
+
+  .obs-mixer-slider-row {
+    gap: 10px;
+  }
+
+  .obs-mixer-db {
+    font-size: 12px;
+    width: 64px;
+  }
+
+  .obs-category-name {
+    font-size: 13px;
+  }
+
+  .obs-category-card {
+    gap: 8px;
+  }
+
+  .obs-live-stat-label {
+    font-size: 11px;
+  }
+
+  .obs-live-stat-value {
+    font-size: 15px;
   }
 
   /* >>> claw back every bit of vertical space so scenes need no scrolling */
@@ -4786,6 +4895,10 @@ watch(
      source order and would otherwise win regardless of viewport width */
   .obs-mobile-nav {
     display: flex !important;
+  }
+
+  .obs-mobile-menu-backdrop {
+    display: block !important;
   }
 
   /* >>> Scenes tab = the normal Program/Preview body; other tabs hide it
@@ -4929,6 +5042,67 @@ watch(
   letter-spacing: 0.02em;
 }
 
+/* >>> phone-only floating menu (Stats/Filter/Settings/Force previews/Mode),
+   opens upward from the nav's Menu button - see @media 680px for display */
+.obs-mobile-menu-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 135;
+}
+
+.obs-mobile-menu {
+  position: fixed;
+  right: 10px;
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  min-width: 190px;
+  background: #1a1a1e;
+  border: 1px solid #2a2a30;
+  box-shadow: 0 12px 32px #000000aa;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.obs-mobile-menu-arrow {
+  position: absolute;
+  bottom: -6px;
+  right: 22px;
+  width: 11px;
+  height: 11px;
+  background: #1a1a1e;
+  border-right: 1px solid #2a2a30;
+  border-bottom: 1px solid #2a2a30;
+  transform: rotate(45deg);
+}
+
+.obs-mobile-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: #ccc;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.obs-mobile-menu-item:hover,
+.obs-mobile-menu-item:active {
+  background: #6f2bff18;
+  color: #e0e0e0;
+}
+
+.obs-mobile-menu-item :deep(svg) {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
 .obs-mobile-nav-mode-switch {
   position: relative;
   width: 26px;
@@ -4947,28 +5121,28 @@ watch(
   transition: transform 0.15s, background 0.15s;
 }
 
-.obs-mobile-nav-mode.edit .obs-mobile-nav-mode-switch {
+.obs-mobile-menu-mode.edit .obs-mobile-nav-mode-switch {
   border-color: #e5c07b66;
 }
 
-.obs-mobile-nav-mode.edit .obs-mobile-nav-mode-switch .knob {
+.obs-mobile-menu-mode.edit .obs-mobile-nav-mode-switch .knob {
   background: #e5c07b;
 }
 
-.obs-mobile-nav-mode.live .obs-mobile-nav-mode-switch {
+.obs-mobile-menu-mode.live .obs-mobile-nav-mode-switch {
   border-color: #f1494966;
 }
 
-.obs-mobile-nav-mode.live .obs-mobile-nav-mode-switch .knob {
+.obs-mobile-menu-mode.live .obs-mobile-nav-mode-switch .knob {
   transform: translateX(11px);
   background: #f14949;
 }
 
-.obs-mobile-nav-mode.edit .obs-mobile-nav-label {
+.obs-mobile-menu-mode.edit {
   color: #e5c07b;
 }
 
-.obs-mobile-nav-mode.live .obs-mobile-nav-label {
+.obs-mobile-menu-mode.live {
   color: #f14949;
 }
 
