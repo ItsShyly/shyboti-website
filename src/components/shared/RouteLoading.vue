@@ -1,6 +1,6 @@
 <template>
   <div class="route-loading">
-    <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="loading" class="route-loading-emote" />
+    <img src="/loading.gif" alt="loading" class="route-loading-emote" />
     <div class="route-loading-bar-track">
       <div class="route-loading-bar-fill" :style="{ width: progress + '%' }"></div>
     </div>

@@ -467,8 +467,7 @@ let abortCtrl = new AbortController();
 let scrollListenerAttached = false;
 let rafScrollPending = false;
 
-const loadingOverlayLogoUrl =
-  "https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif";
+const loadingOverlayLogoUrl = "/loading.gif";
 const domSettling = ref(false);
 const pendingPaintJobs = ref(0);
 let domSettleToken = 0;

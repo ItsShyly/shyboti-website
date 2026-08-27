@@ -12,7 +12,7 @@ const { t } = useI18n();
       <div class="hero-inner">
         <h1 class="hero-title">
           <img
-            src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif"
+            src="/loading.gif"
             alt="shy"
             class="hero-emote"
           />

@@ -757,7 +757,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
   <div v-else class="page">
     <div class="topbar" :class="{ 'other-channel': viewingOtherChannel, 'admin-channel': viewingAsAdmin }">
       <div class="topbar-brand" @click="session ? router.push('/dashboard') : router.push('/')" style="cursor: pointer">
-        <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="shy" class="brand-emote" />
+        <img src="/loading.gif" alt="shy" class="brand-emote" />
         <span class="brand-name">ShyBoti</span>
       </div>
 
@@ -1113,7 +1113,13 @@ provide("searchOpenTrigger", searchOpenTrigger);
 </template>
 
 <style>
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap");
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono.woff2") format("woff2");
+}
 
 *,
 *::before,

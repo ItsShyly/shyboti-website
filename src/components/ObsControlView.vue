@@ -2050,7 +2050,7 @@ watch(
     <div class="obsconn-body" :class="{ 'obs-locked': locked }">
       <template v-if="loading">
         <div class="obs-loading">
-          <img src="https://cdn.7tv.app/emote/01G0PEAVDR0008B1SW0M995JQJ/2x.gif" alt="loading"
+          <img src="/loading.gif" alt="loading"
             class="obs-loading-emote" />
         </div>
       </template>
