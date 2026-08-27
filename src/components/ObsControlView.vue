@@ -1779,10 +1779,12 @@ watch(
           <div class="switch" :class="editMode ? 'edit' : 'live'">
             <div class="knob"></div>
           </div>
-          <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? t('obsconn.mode.edit') : t('obsconn.mode.live') }}</span>
+          <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? t('obsconn.mode.edit') :
+            t('obsconn.mode.live') }}</span>
         </div>
 
-        <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> {{ t('obsconn.leaving') }}</span>
+        <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> {{
+          t('obsconn.leaving') }}</span>
 
         <div class="obs-status-bar-slim" :class="connStatusClass"
           :title="agentStatus?.version ? `v${agentStatus.version}` : ''">
@@ -1811,15 +1813,16 @@ watch(
               stroke-linejoin="round" />
           </svg>
         </button>
-        <button v-if="isBroadcaster" class="obsconn-gear-btn obs-topbar-mobile-hide" :title="t('obsconn.settings_title')"
-          @click="openSettings">
+        <button v-if="isBroadcaster" class="obsconn-gear-btn obs-topbar-mobile-hide"
+          :title="t('obsconn.settings_title')" @click="openSettings">
           <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5" />
             <path
               d="M16.2 12.3a1.4 1.4 0 00.3 1.5l.05.05a1.65 1.65 0 11-2.35 2.35l-.05-.05a1.4 1.4 0 00-1.5-.3 1.4 1.4 0 00-.85 1.28v.14a1.65 1.65 0 11-3.3 0v-.07a1.4 1.4 0 00-.92-1.28 1.4 1.4 0 00-1.5.3l-.05.05A1.65 1.65 0 113.63 13.9l.05-.05a1.4 1.4 0 00.3-1.5 1.4 1.4 0 00-1.28-.85h-.14a1.65 1.65 0 110-3.3h.07a1.4 1.4 0 001.28-.92 1.4 1.4 0 00-.3-1.5l-.05-.05A1.65 1.65 0 116.09 3.38l.05.05a1.4 1.4 0 001.5.3h.06a1.4 1.4 0 00.85-1.28V2.3a1.65 1.65 0 113.3 0v.07a1.4 1.4 0 00.85 1.28h.06a1.4 1.4 0 001.5-.3l.05-.05a1.65 1.65 0 112.35 2.35l-.05.05a1.4 1.4 0 00-.3 1.5v.06a1.4 1.4 0 001.28.85h.14a1.65 1.65 0 110 3.3h-.07a1.4 1.4 0 00-1.28.85z"
               stroke="currentColor" stroke-width="1.3" />
           </svg>
-          <span v-if="!loading && !agentStatus?.paired" class="obs-gear-badge" :title="t('obsconn.not_set_up_badge')">!</span>
+          <span v-if="!loading && !agentStatus?.paired" class="obs-gear-badge"
+            :title="t('obsconn.not_set_up_badge')">!</span>
         </button>
 
         <RowKebabMenu :items="topbarKebabItems" @click.stop />
@@ -1909,7 +1912,8 @@ watch(
                   class="obs-source-row pending">
                   <span class="obs-source-name">{{ c.name }}</span>
                   <span class="pending-tag">pending (new)</span>
-                  <button class="ep-btn-action del" :title="t('obsconn.cancel_title')" @click="removePendingCreate(c.id)">
+                  <button class="ep-btn-action del" :title="t('obsconn.cancel_title')"
+                    @click="removePendingCreate(c.id)">
                     <span v-html="iconSvgFor('x')"></span>
                   </button>
                 </div>
@@ -2081,7 +2085,8 @@ watch(
               <img v-if="selectedScene && sceneShots[selectedScene]" :src="sceneShots[selectedScene]"
                 :alt="selectedScene" />
               <div v-else class="obs-scene-thumb-empty">
-                {{ selectedScene ? (agentStatus?.screenshots ? "…" : t('obsconn.previews_off')) : t('obsconn.pick_scene_below') }}
+                {{ selectedScene ? (agentStatus?.screenshots ? "…" : t('obsconn.previews_off')) :
+                  t('obsconn.pick_scene_below') }}
               </div>
             </div>
             <div class="obs-pp-name-row">
@@ -2091,8 +2096,8 @@ watch(
             </div>
           </div>
 
-          <button class="obs-take-btn" :disabled="!canTakeToProgram"
-            :title="t('obsconn.take_hint')" @click="takeToProgram">
+          <button class="obs-take-btn" :disabled="!canTakeToProgram" :title="t('obsconn.take_hint')"
+            @click="takeToProgram">
             <span v-html="iconSvgFor('arrow-right')"></span>
             <span class="obs-take-btn-label">{{ t('obsconn.take_label') }}</span>
           </button>
@@ -2126,8 +2131,8 @@ watch(
             </div>
             <div class="obs-scene-name-row">
               <div class="obs-scene-name">{{ s.sceneName }}</div>
-              <button class="obs-scene-fs-btn" :title="t('obsconn.edit_overlay_title')" @click.stop="openOverlayEditor(s.sceneName)"
-                v-html="iconSvgFor('edit')"></button>
+              <button class="obs-scene-fs-btn" :title="t('obsconn.edit_overlay_title')"
+                @click.stop="openOverlayEditor(s.sceneName)" v-html="iconSvgFor('edit')"></button>
             </div>
           </div>
           <div v-if="!scenes.length" class="ep-empty">
@@ -2143,7 +2148,8 @@ watch(
             {{ forcePreviewLoading ? t('obsconn.opening') : t('obsconn.force_previews') }}
           </button>
           <div v-if="canForcePreview" class="obs-projector-state">
-            {{ t('obsconn.projector_prefix') }} {{ videoMixProjectorOpen ? t('obsconn.state_open') : t('obsconn.state_closed') }}
+            {{ t('obsconn.projector_prefix') }} {{ videoMixProjectorOpen ? t('obsconn.state_open') :
+              t('obsconn.state_closed') }}
             <span v-if="videoMixProjectorTitle" class="obs-projector-title">"{{ videoMixProjectorTitle }}"</span>
           </div>
         </div>
@@ -2160,8 +2166,8 @@ watch(
 
     <!-- vvv phone-only bottom nav - replaces the topbar/drawer chrome on mobile vvv -->
     <nav v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-mobile-nav">
-      <button class="obs-mobile-nav-btn" :class="{ active: mobileTab === 'scenes' }"
-        :title="t('obsconn.nav.scenes')" @click="selectMobileTab('scenes')">
+      <button class="obs-mobile-nav-btn" :class="{ active: mobileTab === 'scenes' }" :title="t('obsconn.nav.scenes')"
+        @click="selectMobileTab('scenes')">
         <span v-html="iconSvgFor('monitor')"></span>
         <span class="obs-mobile-nav-label">{{ t('obsconn.nav.scenes') }}</span>
       </button>
@@ -2178,20 +2184,17 @@ watch(
         <span class="obs-mobile-nav-label">{{ t('obsconn.nav.sources') }}</span>
       </button>
       <button v-if="agentConnected && obsConnected" class="obs-mobile-nav-btn"
-        :class="{ active: mobileTab === 'mixer' }" :title="t('obsconn.nav.mixer')"
-        @click="selectMobileTab('mixer')">
+        :class="{ active: mobileTab === 'mixer' }" :title="t('obsconn.nav.mixer')" @click="selectMobileTab('mixer')">
         <span v-html="iconSvgFor('sliders')"></span>
         <span class="obs-mobile-nav-label">{{ t('obsconn.nav.mixer') }}</span>
       </button>
       <button v-if="agentConnected && obsConnected" class="obs-mobile-nav-btn"
-        :class="{ active: mobileTab === 'stats' }" :title="t('obsconn.nav.stats')"
-        @click="selectMobileTab('stats')">
+        :class="{ active: mobileTab === 'stats' }" :title="t('obsconn.nav.stats')" @click="selectMobileTab('stats')">
         <span v-html="iconSvgFor('activity')"></span>
         <span class="obs-mobile-nav-label">{{ t('obsconn.nav.stats') }}</span>
       </button>
       <button class="obs-mobile-nav-btn obs-mobile-nav-mode" :class="editMode ? 'edit' : 'live'"
-        :title="editMode ? t('obsconn.mode.edit_hint') : t('obsconn.mode.live_hint')"
-        @click="setMode(!editMode)">
+        :title="editMode ? t('obsconn.mode.edit_hint') : t('obsconn.mode.live_hint')" @click="setMode(!editMode)">
         <span class="obs-mobile-nav-mode-switch">
           <span class="knob"></span>
         </span>
@@ -2225,7 +2228,8 @@ watch(
               {{ t('obsconn.agent_ready') }}
             </div>
             <div class="ep-field-hint">
-              {{ t('obsconn.connected_to_obs') }}<template v-if="agentStatus?.version"> · v{{ agentStatus.version }}</template>
+              {{ t('obsconn.connected_to_obs') }}<template v-if="agentStatus?.version"> · v{{ agentStatus.version
+              }}</template>
             </div>
           </div>
 
@@ -2281,14 +2285,17 @@ watch(
                       </a>
                     </div>
                     <div class="ep-note" style="margin-top: 4px;">
-                      {{ t('obsconn.extract_run_pre') }} <code>start.bat</code> {{ t('obsconn.extract_run_mid') }} <code>start.sh</code>
+                      {{ t('obsconn.extract_run_pre') }} <code>start.bat</code> {{ t('obsconn.extract_run_mid') }}
+                      <code>start.sh</code>
                     </div>
                   </li>
                   <li>
-                    <strong>{{ t('obsconn.step_paste') }}</strong> <span class="ep-step-sub">{{ t('obsconn.step_paste_sub') }}</span>
+                    <strong>{{ t('obsconn.step_paste') }}</strong> <span class="ep-step-sub">{{
+                      t('obsconn.step_paste_sub') }}</span>
                   </li>
                   <li>
-                    <strong>{{ t('obsconn.step_open_obs') }}</strong> <span class="ep-step-sub">{{ t('obsconn.step_open_obs_sub') }}</span>
+                    <strong>{{ t('obsconn.step_open_obs') }}</strong> <span class="ep-step-sub">{{
+                      t('obsconn.step_open_obs_sub') }}</span>
                   </li>
                 </ol>
                 <div v-if="agentStatus?.paired && !agentConnected" class="ep-note">
@@ -2301,7 +2308,8 @@ watch(
                 <button class="ep-eye-btn" @click="tokenRevealed = !tokenRevealed"
                   :title="tokenRevealed ? t('obsconn.hide_token') : t('obsconn.show_token')"
                   v-html="iconSvgFor(tokenRevealed ? 'eye-off' : 'eye')"></button>
-                <button class="ep-copy-btn" @click="copyToken">{{ tokenJustCopied ? t('obsconn.copied') : t('obsconn.copy_btn') }}</button>
+                <button class="ep-copy-btn" @click="copyToken">{{ tokenJustCopied ? t('obsconn.copied') :
+                  t('obsconn.copy_btn') }}</button>
                 <button class="ep-dismiss-btn" @click="
                   tokenVisible = false;
                 token = '';
@@ -2317,8 +2325,12 @@ watch(
           <div class="ep-field-group">
             <label class="ep-field-label">{{ t('obsconn.autostart_label') }}</label>
             <div class="ep-note">
-              {{ t('obsconn.autostart_pre') }} <strong class="ep-note-menu">Tools</strong> {{ t('obsconn.autostart_mid1') }} <strong class="ep-note-menu">Scripts</strong>
-              {{ t('obsconn.autostart_mid1') }} <strong class="ep-note-menu">+</strong> {{ t('obsconn.autostart_mid2') }} <code>autostart.lua</code> {{ t('obsconn.autostart_post') }}
+              {{ t('obsconn.autostart_pre') }} <strong class="ep-note-menu">Tools</strong> {{
+                t('obsconn.autostart_mid1')
+              }} <strong class="ep-note-menu">Scripts</strong>
+              {{ t('obsconn.autostart_mid1') }} <strong class="ep-note-menu">+</strong> {{ t('obsconn.autostart_mid2')
+              }}
+              <code>autostart.lua</code> {{ t('obsconn.autostart_post') }}
             </div>
           </div>
 
@@ -2351,7 +2363,8 @@ watch(
                   <div class="ep-switch" :class="{ on: screenshotsLocal }">
                     <div class="ep-switch-knob"></div>
                   </div>
-                  <span class="ep-switch-label">{{ screenshotsLocal ? t('obsconn.previews_on_setting') : t('obsconn.previews_off_setting')
+                  <span class="ep-switch-label">{{ screenshotsLocal ? t('obsconn.previews_on_setting') :
+                    t('obsconn.previews_off_setting')
                   }}</span>
                 </div>
                 <div class="ep-field-hint">{{ t('obsconn.previews_hint') }}</div>
@@ -2375,8 +2388,10 @@ watch(
             <div class="ep-details-body">
               <div class="ep-field-group">
                 <div class="ep-download-row">
-                  <button class="ep-btn ep-btn-secondary" @click="openAgentPairingPage">{{ t('obsconn.open_pairing') }}</button>
-                  <button class="ep-btn ep-btn-secondary" @click="openAgentDebugConsole">{{ t('obsconn.open_debug') }}</button>
+                  <button class="ep-btn ep-btn-secondary" @click="openAgentPairingPage">{{ t('obsconn.open_pairing')
+                  }}</button>
+                  <button class="ep-btn ep-btn-secondary" @click="openAgentDebugConsole">{{ t('obsconn.open_debug')
+                  }}</button>
                   <button class="ep-btn ep-btn-secondary" :disabled="checkingAgentUpdate" @click="checkAgentUpdate">
                     {{ checkingAgentUpdate ? t('obsconn.checking') : t('obsconn.check_update') }}
                   </button>
@@ -2524,7 +2539,8 @@ watch(
           <template v-else>
             <div class="ep-field-group">
               <label class="ep-field-label">{{ t('obsconn.name_label') }}</label>
-              <input v-model="addSourceName" type="text" class="ep-field-input" :placeholder="t('obsconn.source_name_ph')" />
+              <input v-model="addSourceName" type="text" class="ep-field-input"
+                :placeholder="t('obsconn.source_name_ph')" />
             </div>
 
             <div v-if="addSourceMode === 'url'" class="ep-field-group">
@@ -2557,7 +2573,8 @@ watch(
             <div v-if="addSourceError" class="ep-toast error">{{ addSourceError }}</div>
 
             <button class="ep-btn-save" :disabled="addSourceSaving" @click="submitAddSource">
-              {{ addSourceSaving ? t('obsconn.adding') : editMode ? t('obsconn.staged_add_source') : t('obsconn.add_source_btn') }}
+              {{ addSourceSaving ? t('obsconn.adding') : editMode ? t('obsconn.staged_add_source') :
+                t('obsconn.add_source_btn') }}
             </button>
           </template>
         </div>
@@ -3572,6 +3589,7 @@ watch(
 
   .obs-category-content {
     display: block !important;
+    padding: 20px;
   }
 }
 
@@ -4824,10 +4842,32 @@ watch(
   }
 
   /* >>> fullscreen tab now, no need to look like a nested card */
+  .obs-box,
   .obs-box-cat {
     border: none;
     background: transparent;
     padding: 0;
+  }
+
+  /* >>> collapsing was for squeezing sources/mixer/categories into one
+     small drawer together - now each gets its own fullscreen tab, so
+     there's nothing left to collapse against. always show, no toggle */
+  .obs-box-collapse-label {
+    cursor: default;
+    pointer-events: none;
+  }
+
+  .obs-box-collapse-chevron {
+    display: none;
+  }
+
+  .obs-source-list,
+  .obs-mixer-list {
+    display: flex !important;
+  }
+
+  .obs-category-content {
+    display: block !important;
   }
 
   /* >>> gallery grid instead of a horizontal scroll strip - there's a
@@ -4835,7 +4875,7 @@ watch(
   .obs-category-strip {
     display: grid !important;
     grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-    gap: 14px 10px;
+    gap: 20px 20px;
     overflow-x: visible !important;
     padding-bottom: 0 !important;
   }
