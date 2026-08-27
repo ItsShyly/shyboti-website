@@ -834,9 +834,11 @@ const translations: Record<Locale, Record<string, string>> = {
       "Be able to Force scene previews (opens an OBS projector, only possible if scene previews are enabled).",
     "perm.group.channelpoints": "Channel Points",
     "perm.channelpoints_view": "View",
-    "perm.channelpoints_view.desc": "Access the Channel Points page and see rewards.",
+    "perm.channelpoints_view.desc":
+      "Access the Channel Points page and see rewards.",
     "perm.channelpoints_edit": "Edit",
-    "perm.channelpoints_edit.desc": "Create, edit, delete, and toggle channel point rewards.",
+    "perm.channelpoints_edit.desc":
+      "Create, edit, delete, and toggle channel point rewards.",
 
     // vvv Logs vvv
     "logs.title": "Logs",
@@ -1287,8 +1289,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "obsconn.autostart_label": "Optional: autostart with OBS",
     "obsconn.autostart_pre": "In OBS,",
     "obsconn.autostart_mid1": "→",
-    "obsconn.autostart_mid2":
-      "→ pick",
+    "obsconn.autostart_mid2": "→ pick",
     "obsconn.autostart_post":
       "from the agent's extracted folder. Starts the agent with OBS, stops it when OBS closes.",
     "obsconn.general_settings": "General Settings",
@@ -1352,11 +1353,13 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.editor.delete": "Delete this overlay",
     "overlay.editor.rename_hint": "{count} overlay(s) - click to rename",
     "overlay.editor.default_name": "Stream Overlay",
-    "overlay.editor.backdrop_title": "Canvas backdrop (editor-only, never rendered live)",
+    "overlay.editor.backdrop_title":
+      "Canvas backdrop (editor-only, never rendered live)",
     "overlay.editor.backdrop_checker_short": "checker",
     "overlay.editor.backdrop_white_short": "white",
     "overlay.editor.backdrop_black_short": "black",
-    "overlay.editor.backdrop_scene_hint": "preview the real scene behind the canvas",
+    "overlay.editor.backdrop_scene_hint":
+      "preview the real scene behind the canvas",
     "overlay.editor.backdrop_checkered": "Backdrop: Checkered",
     "overlay.editor.backdrop_white": "Backdrop: White",
     "overlay.editor.backdrop_black": "Backdrop: Black",
@@ -1370,12 +1373,14 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.editor.redo_hint": "Redo (Ctrl+Y)",
     "overlay.editor.landscape_hint": "Switch to landscape",
     "overlay.editor.live_update": "Live Update",
-    "overlay.editor.live_update_hint": "Auto-save every change as you make it, not just when you click Save",
+    "overlay.editor.live_update_hint":
+      "Auto-save every change as you make it, not just when you click Save",
     "overlay.editor.live_update_on": "Live Update: on",
     "overlay.editor.live_update_off": "Live Update: off",
     "overlay.editor.live_cursor_on": "Live Cursor: on",
     "overlay.editor.live_cursor_off": "Live Cursor: off",
-    "overlay.editor.live_cursor_hint_on": "Show your cursor + name live on stream",
+    "overlay.editor.live_cursor_hint_on":
+      "Show your cursor + name live on stream",
     "overlay.editor.live_cursor_hint_off": "Turn on Live Update first",
     "overlay.editor.discard": "Discard",
     "overlay.editor.saving": "Saving…",
@@ -1388,10 +1393,12 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.editor.a_scene": "a scene",
     "overlay.editor.on_scenes": "on {count} scenes",
     "overlay.editor.pick_scene": "pick scene",
-    "overlay.editor.swap_hint": 'Replaces "{name}", currently attached to this scene',
+    "overlay.editor.swap_hint":
+      'Replaces "{name}", currently attached to this scene',
     "overlay.editor.swap_in": "Swap in",
     "overlay.editor.add_to_scene": "Add to scene",
-    "overlay.editor.duplicate_hint": "Make an independent copy of this overlay and attach the copy to this scene",
+    "overlay.editor.duplicate_hint":
+      "Make an independent copy of this overlay and attach the copy to this scene",
     "overlay.editor.duplicate_to_scene": "Duplicate to this scene",
     "overlay.editor.manage": "Manage",
     "overlay.editor.hide_source": "Hide overlay source",
@@ -1420,20 +1427,24 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.editor.align_bottom": "bottom",
     "overlay.editor.elements_selected": "{count} elements selected.",
     "overlay.editor.delete_all": "Delete all",
-    "overlay.editor.select_hint": "Select an element, or add one from the gallery.",
+    "overlay.editor.select_hint":
+      "Select an element, or add one from the gallery.",
     "overlay.editor.counters_title": "counters",
     "overlay.editor.decrease": "Decrease",
     "overlay.editor.increase": "Increase",
     "overlay.editor.close_confirm_title": "Close without saving?",
-    "overlay.editor.close_confirm_body": "You have unsaved changes. Save them before closing, or discard them?",
+    "overlay.editor.close_confirm_body":
+      "You have unsaved changes. Save them before closing, or discard them?",
     "overlay.editor.cancel": "Cancel",
     "overlay.editor.save_and_close": "Save & close",
     "overlay.editor.saved_just_now": "saved just now",
     "overlay.editor.saved_secs_ago": "saved {secs}s ago",
     "overlay.editor.saved_mins_ago": "saved {mins}m ago",
     "overlay.editor.saved_hours_ago": "saved {hours}h ago",
-    "overlay.editor.confirm_discard": "Discard unsaved changes to this overlay?",
-    "overlay.editor.confirm_delete": 'Delete overlay "{name}"? This can\'t be undone.',
+    "overlay.editor.confirm_discard":
+      "Discard unsaved changes to this overlay?",
+    "overlay.editor.confirm_delete":
+      'Delete overlay "{name}"? This can\'t be undone.',
     "overlay.gallery.text": "Text",
     "overlay.gallery.variable": "Variable",
     "overlay.gallery.image": "Image",
@@ -1470,7 +1481,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.gallery.sc_zoom": "Zoom in/out",
     "overlay.gallery.sc_drag": " drag",
     "overlay.gallery.sc_pan_canvas": "Pan the canvas when zoomed in",
-    "overlay.gallery.sc_switch_backdrop": "Switch canvas backdrop (checker/white/black/scene screenshot)",
+    "overlay.gallery.sc_switch_backdrop":
+      "Switch canvas backdrop (checker/white/black/scene screenshot)",
     "overlay.layers.title": "layers",
     "overlay.layers.hide_all_hint": "Hide every element",
     "overlay.layers.show_all_hint": "Show every element",
@@ -1490,9 +1502,11 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.varpick.counters": "counters",
     "overlay.varpick.vars": "vars",
     "overlay.varpick.empty": "no variables yet",
-    "overlay.canvas.resize_hint": "Drag to resize (hold Ctrl or Alt to also scale font-size)",
+    "overlay.canvas.resize_hint":
+      "Drag to resize (hold Ctrl or Alt to also scale font-size)",
     "overlay.canvas.rotate_hint": "Drag to rotate (hold Shift for free angle)",
-    "overlay.canvas.resize_group_hint": "Drag to resize the group (hold Ctrl or Alt to also scale font-size)",
+    "overlay.canvas.resize_group_hint":
+      "Drag to resize the group (hold Ctrl or Alt to also scale font-size)",
     "overlay.canvas.unmute": "Unmute",
     "overlay.canvas.mute": "Mute",
     "overlay.canvas.vol_label": "Vol",
@@ -1556,7 +1570,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.list.not_added": "Not added to a scene",
     "overlay.list.edit": "Edit",
     "overlay.list.delete": "Delete",
-    "overlay.list.confirm_delete": 'Delete overlay "{name}"? This can\'t be undone.',
+    "overlay.list.confirm_delete":
+      'Delete overlay "{name}"? This can\'t be undone.',
     // ^^^ Overlay Editor suite ^^^
 
     // vvv OBS scene/source/rule edit panels + automations (fork: fill EN keys below this line only) vvv
@@ -1588,7 +1603,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "obscmd.tab.chat_arg": "chat arg",
     "obscmd.hint.scene": "One command always switches to one specific scene.",
     "obscmd.hint.source": "One command always acts on one specific source.",
-    "obscmd.hint.arg": "Chatter passes the scene/source name as part of the command -",
+    "obscmd.hint.arg":
+      "Chatter passes the scene/source name as part of the command -",
     "obscmd.hint.arg_example": "e.g.",
     "obscmd.action_label": "Action",
     "obscmd.scene_label": "Scene",
@@ -1685,7 +1701,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "logs.loading": "Loading…",
     "logs.popup.account_created": "account created",
     "logs.popup.followers": "followers",
-    "logs.popup.bot_not_in_channel": "ShyBoti isn't in #{channel} - follow/sub info unavailable",
+    "logs.popup.bot_not_in_channel":
+      "ShyBoti isn't in #{channel} - follow/sub info unavailable",
     "logs.popup.following_for": "Following for {time}",
     "logs.popup.not_following": "Not following",
     "logs.popup.not_subscribed": "Not subscribed",
@@ -1771,7 +1788,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "dash.filter.automations": "Automationen",
     "dash.filter.clear": "Leeren",
     "dash.action.logs": "Logs",
-    "dash.action.edit": "Bearbeiten",
+    "dash.action.edit": "Edit",
     "dash.action.auto": "Auto",
     "dash.reload": "Neu laden",
     "dash.view_user_logs": "User-Logs ansehen",
@@ -1834,7 +1851,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cmd.access.bc": "Nur BC",
     "cmd.arg_access_title":
       "Zugriff nur für diesen Subcommand, unabhängig vom Zugriff des Commands selbst",
-    "cmd.edit": "Bearbeiten",
+    "cmd.edit": "Edit",
     "cmd.view": "Ansehen",
     "cmd.blocked": "Gesperrt",
     "cmd.no_access": "Kein Zugriff",
@@ -2013,7 +2030,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cp.gate.only_active_on": "Nur aktiv bei",
     "cp.cost": "Kosten",
     "cp.enabled": "Aktiviert",
-    "cp.edit": "Bearbeiten",
+    "cp.edit": "Edit",
     "cp.error.not_connected":
       "Dieser Channel ist nicht mit dem Dashboard verbunden.",
     "cp.error.missing_scope":
@@ -2125,7 +2142,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "timer.empty": "Noch keine Timer. Erstelle einen um loszulegen.",
     "timer.loading": "Wird geladen…",
     "timer.edit_new": "Neuer Timer",
-    "timer.edit_title": "Bearbeiten ·",
+    "timer.edit_title": "Edit ·",
     "timer.field.name": "Name",
     "timer.field.name_hint": "kleinbuchstaben, keine leerzeichen",
     "timer.field.response": "Antwort",
@@ -2143,7 +2160,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "timer.when.online": "Nur online",
     "timer.when.offline": "Nur offline",
     "timer.sync.config": "Importieren",
-    "timer.edit": "Bearbeiten",
+    "timer.edit": "Edit",
     "timer.view": "Ansehen",
     "timer.share": "In anderen Channel kopieren",
     "timer.share.title": "Timer teilen",
@@ -2176,7 +2193,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "trigger.empty": "Noch keine Trigger. Erstelle einen um loszulegen.",
     "trigger.loading": "Wird geladen…",
     "trigger.edit_new": "Neuer Trigger",
-    "trigger.edit_title": "Bearbeiten ·",
+    "trigger.edit_title": "Edit ·",
     "trigger.field.name": "Name",
     "trigger.field.event": "Ereignistyp",
     "trigger.field.match": "Suchmuster",
@@ -2212,7 +2229,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "trigger.when.online": "Nur online",
     "trigger.when.offline": "Nur offline",
     "trigger.sync.config": "Importieren",
-    "trigger.edit": "Bearbeiten",
+    "trigger.edit": "Edit",
     "trigger.view": "Ansehen",
     "trigger.share": "In anderen Channel kopieren",
     "trigger.share.title": "Trigger teilen",
@@ -2252,8 +2269,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "countdown.empty": "Noch keine Countdowns. Erstelle einen um loszulegen.",
     "countdown.loading": "Wird geladen…",
     "countdown.edit_new": "Neuer Countdown",
-    "countdown.edit_title": "Bearbeiten ·",
-    "countdown.edit": "Bearbeiten",
+    "countdown.edit_title": "Edit ·",
+    "countdown.edit": "Edit",
     "countdown.view": "Ansehen",
     "countdown.field.name": "Name",
     "countdown.field.name_hint": "kleinbuchstaben, keine leerzeichen",
@@ -2278,7 +2295,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "countdown.error.delete": "Countdown konnte nicht gelöscht werden.",
     "countdown.placeholder.msg_start":
       "Countdown gestartet! $countdown.hype.remaining Sekunden verbleiben.",
-    "countdown.placeholder.msg_tick": "Noch $countdown.hype.remaining Sekunden!",
+    "countdown.placeholder.msg_tick":
+      "Noch $countdown.hype.remaining Sekunden!",
     "countdown.placeholder.msg_end": "Zeit ist abgelaufen! PogChamp",
     "countdown.status.idle": "bereit",
     "countdown.status.running": "läuft",
@@ -2503,7 +2521,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.commands_toggle": "Umschalten",
     "perm.commands_toggle.desc":
       "Commands aktivieren/deaktivieren und Extras-Tab-Einstellungen ändern.",
-    "perm.commands_edit": "Bearbeiten",
+    "perm.commands_edit": "Edit",
     "perm.commands_edit.desc":
       "Antworten, Cooldowns und Einstellungen bearbeiten. Neue Commands erstellen.",
     "perm.commands_delete": "Löschen",
@@ -2515,7 +2533,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.automations_toggle": "Umschalten",
     "perm.automations_toggle.desc":
       "Timer und Trigger aktivieren oder deaktivieren.",
-    "perm.automations_edit": "Bearbeiten",
+    "perm.automations_edit": "Edit",
     "perm.automations_edit.desc": "Timer und Trigger bearbeiten und erstellen.",
     "perm.automations_delete": "Löschen",
     "perm.automations_delete.desc": "Timer und Trigger dauerhaft löschen.",
@@ -2531,7 +2549,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "perm.obs_view": "Anzeigen",
     "perm.obs_view.desc":
       "Zugriff auf die OBS-Verbindungsseite und Szenen anzeigen.",
-    "perm.obs_edit": "Bearbeiten",
+    "perm.obs_edit": "Edit",
     "perm.obs_edit.desc":
       "Szenen wechseln, Quellen umschalten und Bindings verwalten.",
     "perm.obs_force_preview": "Force Preview",
@@ -2539,8 +2557,9 @@ const translations: Record<Locale, Record<string, string>> = {
       "Möglichkeit Scene Previews zu forcen (Öffnen eines OBS-Projektors. Nur möglich, wenn Szenenpreviews aktiviert sind).",
     "perm.group.channelpoints": "Kanalpunkte",
     "perm.channelpoints_view": "Anzeigen",
-    "perm.channelpoints_view.desc": "Zugriff auf die Kanalpunkte-Seite und Rewards anzeigen.",
-    "perm.channelpoints_edit": "Bearbeiten",
+    "perm.channelpoints_view.desc":
+      "Zugriff auf die Kanalpunkte-Seite und Rewards anzeigen.",
+    "perm.channelpoints_edit": "Edit",
     "perm.channelpoints_edit.desc":
       "Kanalpunkte-Rewards erstellen, bearbeiten, löschen und umschalten.",
 
@@ -2640,7 +2659,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "settings.tips.desc":
       "Stellt alle von dir ausgeblendeten Hinweise wieder her (z. B. den Snippet-Hinweis in den Logs).",
     "settings.tips.btn": "Ausgeblendete Tipps zeigen",
-    "settings.tips.restored": "Alle ausgeblendeten Tipps wurden wiederhergestellt.",
+    "settings.tips.restored":
+      "Alle ausgeblendeten Tipps wurden wiederhergestellt.",
     "settings.section.danger": "Gefahrenzone",
     "settings.remove.label": "Bot aus dem Channel entfernen",
     "settings.remove.confirm1": "Entfernen aus",
@@ -2826,10 +2846,10 @@ const translations: Record<Locale, Record<string, string>> = {
     "obs.empty.hint":
       "Erstelle eines, um eine URL zu erhalten, die du in OBS als Browser-Quelle einfügen kannst.",
     "obs.copy": "URL kopieren",
-    "obs.edit": "Bearbeiten",
+    "obs.edit": "Edit",
     "obs.delete.confirm": "Sicher?",
     "obs.panel.new": "Neues Widget",
-    "obs.panel.edit": "Bearbeiten · ",
+    "obs.panel.edit": "Edit · ",
     "obs.panel.name": "Name",
     "obs.panel.name.hint": "internes Label",
     "obs.panel.content": "Inhalt",
@@ -2870,7 +2890,8 @@ const translations: Record<Locale, Record<string, string>> = {
 
     // vvv OBS Control page vvv
     "obsconn.title": "OBS Control",
-    "obsconn.mode.edit_hint": "Änderungen werden gesammelt, bis du auf Speichern klickst.",
+    "obsconn.mode.edit_hint":
+      "Änderungen werden gesammelt, bis du auf Speichern klickst.",
     "obsconn.mode.live_hint": "Änderungen wirken sofort auf deinem Stream.",
     "obsconn.mode.edit": "Edit",
     "obsconn.mode.live": "Live",
@@ -2905,12 +2926,14 @@ const translations: Record<Locale, Record<string, string>> = {
     "obsconn.live_banner":
       "Live-Modus ist an - Source- und Kategorie-Änderungen wirken sofort auf deinem Stream",
     "obsconn.setup.agent_connected": "Agent verbunden - warte auf OBS…",
-    "obsconn.setup.waiting_agent": "Warte darauf, dass sich der Agent verbindet…",
+    "obsconn.setup.waiting_agent":
+      "Warte darauf, dass sich der Agent verbindet…",
     "obsconn.setup.not_set_up": "OBS-Agent ist noch nicht eingerichtet",
     "obsconn.setup.click_gear": "Klick oben aufs Zahnrad, um",
     "obsconn.setup.view_token":
       "deinen Pairing-Token nochmal zu sehen oder den Agent erneut runterzuladen.",
-    "obsconn.setup.get_token": "deinen Pairing-Token zu holen und den Agent runterzuladen.",
+    "obsconn.setup.get_token":
+      "deinen Pairing-Token zu holen und den Agent runterzuladen.",
     "obsconn.setup.not_connected": "OBS ist noch nicht verbunden",
     "obsconn.setup.ask_broadcaster":
       "Frag deinen Broadcaster, das einzurichten (Zahnrad, nur Broadcaster).",
@@ -2952,14 +2975,16 @@ const translations: Record<Locale, Record<string, string>> = {
     "obsconn.step_paste_sub": "wenn der Agent danach fragt.",
     "obsconn.step_open_obs": "OBS öffnen",
     "obsconn.step_open_obs_sub": "- der Agent verbindet sich lokal.",
-    "obsconn.token_waiting": "Token ist gesetzt - warte auf Verbindung vom Agent...",
+    "obsconn.token_waiting":
+      "Token ist gesetzt - warte auf Verbindung vom Agent...",
     "obsconn.hide_token": "Token verstecken",
     "obsconn.show_token": "Token anzeigen",
     "obsconn.copied": "kopiert!",
     "obsconn.copy_btn": "Kopieren",
     "obsconn.dismiss_title": "Gespeichert, ausblenden",
     "obsconn.done": "Fertig",
-    "obsconn.copy_warning": "Vor dem Ausblenden kopieren - wird nicht auf dem Server gespeichert.",
+    "obsconn.copy_warning":
+      "Vor dem Ausblenden kopieren - wird nicht auf dem Server gespeichert.",
     "obsconn.autostart_label": "Optional: Autostart mit OBS",
     "obsconn.autostart_pre": "In OBS,",
     "obsconn.autostart_mid1": "→",
@@ -3027,11 +3052,13 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.editor.delete": "Dieses Overlay löschen",
     "overlay.editor.rename_hint": "{count} Overlay(s) - klick zum Umbenennen",
     "overlay.editor.default_name": "Stream Overlay",
-    "overlay.editor.backdrop_title": "Canvas-Hintergrund (nur im Editor, nie live gerendert)",
+    "overlay.editor.backdrop_title":
+      "Canvas-Hintergrund (nur im Editor, nie live gerendert)",
     "overlay.editor.backdrop_checker_short": "Schachbrett",
     "overlay.editor.backdrop_white_short": "weiß",
     "overlay.editor.backdrop_black_short": "schwarz",
-    "overlay.editor.backdrop_scene_hint": "zeigt die echte Szene hinterm Canvas",
+    "overlay.editor.backdrop_scene_hint":
+      "zeigt die echte Szene hinterm Canvas",
     "overlay.editor.backdrop_checkered": "Hintergrund: Schachbrett",
     "overlay.editor.backdrop_white": "Hintergrund: Weiß",
     "overlay.editor.backdrop_black": "Hintergrund: Schwarz",
@@ -3045,12 +3072,14 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.editor.redo_hint": "Wiederholen (Strg+Y)",
     "overlay.editor.landscape_hint": "Zu Querformat wechseln",
     "overlay.editor.live_update": "Live Update",
-    "overlay.editor.live_update_hint": "Speichert jede Änderung automatisch, nicht erst bei Save",
+    "overlay.editor.live_update_hint":
+      "Speichert jede Änderung automatisch, nicht erst bei Save",
     "overlay.editor.live_update_on": "Live Update: an",
     "overlay.editor.live_update_off": "Live Update: aus",
     "overlay.editor.live_cursor_on": "Live Cursor: an",
     "overlay.editor.live_cursor_off": "Live Cursor: aus",
-    "overlay.editor.live_cursor_hint_on": "Zeigt deinen Cursor + Namen live auf Stream",
+    "overlay.editor.live_cursor_hint_on":
+      "Zeigt deinen Cursor + Namen live auf Stream",
     "overlay.editor.live_cursor_hint_off": "Erst Live Update einschalten",
     "overlay.editor.discard": "Verwerfen",
     "overlay.editor.saving": "Speichert…",
@@ -3063,10 +3092,12 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.editor.a_scene": "einer Szene",
     "overlay.editor.on_scenes": "auf {count} Szenen",
     "overlay.editor.pick_scene": "Szene wählen",
-    "overlay.editor.swap_hint": 'Ersetzt "{name}", das aktuell auf dieser Szene liegt',
+    "overlay.editor.swap_hint":
+      'Ersetzt "{name}", das aktuell auf dieser Szene liegt',
     "overlay.editor.swap_in": "Reinswappen",
     "overlay.editor.add_to_scene": "Zur Szene hinzufügen",
-    "overlay.editor.duplicate_hint": "Erstellt eine unabhängige Kopie dieses Overlays für diese Szene",
+    "overlay.editor.duplicate_hint":
+      "Erstellt eine unabhängige Kopie dieses Overlays für diese Szene",
     "overlay.editor.duplicate_to_scene": "Als Kopie zu dieser Szene",
     "overlay.editor.manage": "Verwalten",
     "overlay.editor.hide_source": "Overlay-Source verstecken",
@@ -3095,20 +3126,24 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.editor.align_bottom": "unten",
     "overlay.editor.elements_selected": "{count} Elemente ausgewählt.",
     "overlay.editor.delete_all": "Alle löschen",
-    "overlay.editor.select_hint": "Wähl ein Element oder füg eins aus der Gallery hinzu.",
+    "overlay.editor.select_hint":
+      "Wähl ein Element oder füg eins aus der Gallery hinzu.",
     "overlay.editor.counters_title": "Counter",
     "overlay.editor.decrease": "Verringern",
     "overlay.editor.increase": "Erhöhen",
     "overlay.editor.close_confirm_title": "Ohne Speichern schließen?",
-    "overlay.editor.close_confirm_body": "Du hast ungespeicherte Änderungen. Vorher speichern oder verwerfen?",
+    "overlay.editor.close_confirm_body":
+      "Du hast ungespeicherte Änderungen. Vorher speichern oder verwerfen?",
     "overlay.editor.cancel": "Abbrechen",
     "overlay.editor.save_and_close": "Speichern & schließen",
     "overlay.editor.saved_just_now": "gerade eben gespeichert",
     "overlay.editor.saved_secs_ago": "gespeichert vor {secs}s",
     "overlay.editor.saved_mins_ago": "gespeichert vor {mins}m",
     "overlay.editor.saved_hours_ago": "gespeichert vor {hours}h",
-    "overlay.editor.confirm_discard": "Ungespeicherte Änderungen an diesem Overlay verwerfen?",
-    "overlay.editor.confirm_delete": 'Overlay "{name}" löschen? Das kann nicht rückgängig gemacht werden.',
+    "overlay.editor.confirm_discard":
+      "Ungespeicherte Änderungen an diesem Overlay verwerfen?",
+    "overlay.editor.confirm_delete":
+      'Overlay "{name}" löschen? Das kann nicht rückgängig gemacht werden.',
     "overlay.gallery.text": "Text",
     "overlay.gallery.variable": "Variable",
     "overlay.gallery.image": "Bild",
@@ -3128,24 +3163,28 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.gallery.sc_save": "Speichern",
     "overlay.gallery.sc_undo": "Rückgängig",
     "overlay.gallery.sc_redo": "Wiederholen",
-    "overlay.gallery.sc_copy_paste": "Kopieren / einfügen von Auswahl oder Zwischenablage",
+    "overlay.gallery.sc_copy_paste":
+      "Kopieren / einfügen von Auswahl oder Zwischenablage",
     "overlay.gallery.sc_duplicate": "Auswahl duplizieren",
     "overlay.gallery.sc_delete": "Auswahl löschen",
     "overlay.gallery.sc_close": "Editor schließen",
-    "overlay.gallery.sc_add_remove_selection": "Zur Auswahl hinzufügen/entfernen",
+    "overlay.gallery.sc_add_remove_selection":
+      "Zur Auswahl hinzufügen/entfernen",
     "overlay.gallery.sc_drag_in_canvas": " + im Canvas ziehen",
     "overlay.gallery.sc_multiselect": "Mehrere Elemente auswählen",
     "overlay.gallery.sc_on_element": " auf einem Element",
     "overlay.gallery.sc_context_menu": "Kontextmenü",
     "overlay.gallery.sc_while_resizing": "beim Resizen",
-    "overlay.gallery.sc_scale_font": "Skaliert die Schriftgröße mit der Box mit",
+    "overlay.gallery.sc_scale_font":
+      "Skaliert die Schriftgröße mit der Box mit",
     "overlay.gallery.sc_plus_dragging": "+ ziehen",
     "overlay.gallery.sc_disable_snap": "Snap kurzzeitig ausschalten",
     "overlay.gallery.sc_over_canvas": " über dem Canvas",
     "overlay.gallery.sc_zoom": "Rein-/rauszoomen",
     "overlay.gallery.sc_drag": " ziehen",
     "overlay.gallery.sc_pan_canvas": "Canvas verschieben, wenn reingezoomt",
-    "overlay.gallery.sc_switch_backdrop": "Canvas-Hintergrund wechseln (Schachbrett/weiß/schwarz/Szenen-Screenshot)",
+    "overlay.gallery.sc_switch_backdrop":
+      "Canvas-Hintergrund wechseln (Schachbrett/weiß/schwarz/Szenen-Screenshot)",
     "overlay.layers.title": "Layers",
     "overlay.layers.hide_all_hint": "Alle Elemente verstecken",
     "overlay.layers.show_all_hint": "Alle Elemente zeigen",
@@ -3165,9 +3204,12 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.varpick.counters": "Counter",
     "overlay.varpick.vars": "Variablen",
     "overlay.varpick.empty": "noch keine Variablen",
-    "overlay.canvas.resize_hint": "Ziehen zum Resizen (Strg oder Alt gedrückt halten skaliert auch die Schriftgröße)",
-    "overlay.canvas.rotate_hint": "Ziehen zum Drehen (Shift gedrückt halten für freien Winkel)",
-    "overlay.canvas.resize_group_hint": "Ziehen zum Resizen der Gruppe (Strg oder Alt gedrückt halten skaliert auch die Schriftgröße)",
+    "overlay.canvas.resize_hint":
+      "Ziehen zum Resizen (Strg oder Alt gedrückt halten skaliert auch die Schriftgröße)",
+    "overlay.canvas.rotate_hint":
+      "Ziehen zum Drehen (Shift gedrückt halten für freien Winkel)",
+    "overlay.canvas.resize_group_hint":
+      "Ziehen zum Resizen der Gruppe (Strg oder Alt gedrückt halten skaliert auch die Schriftgröße)",
     "overlay.canvas.unmute": "Ton an",
     "overlay.canvas.mute": "Stumm",
     "overlay.canvas.vol_label": "Vol",
@@ -3229,9 +3271,10 @@ const translations: Record<Locale, Record<string, string>> = {
     "overlay.list.empty": "Noch keine Overlays. Erstell eins zum Loslegen.",
     "overlay.list.hidden_suffix": "(versteckt)",
     "overlay.list.not_added": "Keiner Szene hinzugefügt",
-    "overlay.list.edit": "Bearbeiten",
+    "overlay.list.edit": "Edit",
     "overlay.list.delete": "Löschen",
-    "overlay.list.confirm_delete": 'Overlay "{name}" löschen? Das kann nicht rückgängig gemacht werden.',
+    "overlay.list.confirm_delete":
+      'Overlay "{name}" löschen? Das kann nicht rückgängig gemacht werden.',
     // ^^^ Overlay Editor suite ^^^
 
     // vvv OBS scene/source/rule edit panels + automations (fork: fill DE keys below this line only) vvv
@@ -3255,13 +3298,14 @@ const translations: Record<Locale, Record<string, string>> = {
     "obsrule.pill.category": "Kategorie",
     "obsrule.cond.below": "unter",
     "obsrule.cond.above": "über",
-    "obscmd.title_edit": "Bearbeiten",
+    "obscmd.title_edit": "Edit",
     "obscmd.title_new": "Neu",
     "obscmd.name_ph": "Szene",
     "obscmd.tab.fixed_scene": "feste Szene",
     "obscmd.tab.fixed_source": "feste Source",
     "obscmd.tab.chat_arg": "Chat-Parameter",
-    "obscmd.hint.scene": "Ein Command wechselt immer zu einer bestimmten Szene.",
+    "obscmd.hint.scene":
+      "Ein Command wechselt immer zu einer bestimmten Szene.",
     "obscmd.hint.source": "Ein Command wirkt immer auf eine bestimmte Source.",
     "obscmd.hint.arg": "Chatter geben Szene/Source als Teil des Commands an -",
     "obscmd.hint.arg_example": "z.B.",
@@ -3271,7 +3315,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "obscmd.scene_name_ph": "Szenenname",
     "obscmd.source_name_ph": "Source-Name",
     "obscmd.fixed_volume_label": "Feste Lautstärke",
-    "obscmd.fixed_volume_hint": "0-100, leer lassen um's aus dem Chat zu nehmen",
+    "obscmd.fixed_volume_hint":
+      "0-100, leer lassen um's aus dem Chat zu nehmen",
     "obscmd.volume_ph": "z.B. 50",
     "obscmd.usage_label": "Verwendung",
     "obscmd.access_label": "Zugriff",
@@ -3325,13 +3370,14 @@ const translations: Record<Locale, Record<string, string>> = {
     "obsrule.missing.scene_name": "Szenenname",
     "obsrule.missing.target_category": "Ziel-Kategorie",
     "obsrule.missing.target": "Ziel",
-    "obsauto.not_paired_pre": "OBS ist noch nicht eingerichtet - richte den Agent erst auf der",
+    "obsauto.not_paired_pre":
+      "OBS ist noch nicht eingerichtet - richte den Agent erst auf der",
     "obsauto.not_paired_link": "OBS Control",
     "obsauto.not_paired_post": "Seite ein.",
     "obsauto.empty": "Noch keine OBS-Automations. Erstell eine, um loszulegen.",
     "obsauto.disable_title": "Deaktivieren",
     "obsauto.enable_title": "Aktivieren",
-    "obsauto.edit_btn": "bearbeiten",
+    "obsauto.edit_btn": "Edit",
     "obsauto.view_btn": "ansehen",
     "obsauto.count_label": "OBS-Regeln",
     "obsauto.create_label": "Neue Regel",
@@ -3360,7 +3406,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "logs.loading": "Lädt…",
     "logs.popup.account_created": "Account erstellt",
     "logs.popup.followers": "Follower",
-    "logs.popup.bot_not_in_channel": "ShyBoti ist nicht in #{channel} - Follow/Sub-Infos nicht verfügbar",
+    "logs.popup.bot_not_in_channel":
+      "ShyBoti ist nicht in #{channel} - Follow/Sub-Infos nicht verfügbar",
     "logs.popup.following_for": "Folgt seit {time}",
     "logs.popup.not_following": "Folgt nicht",
     "logs.popup.not_subscribed": "Nicht abonniert",
@@ -3415,7 +3462,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "feat.vars.empty.uvars": "Noch keine User-Vars",
     "feat.vars.save": "Speichern",
     "feat.vars.cancel": "Abbrechen",
-    "feat.vars.edit": "Bearbeiten",
+    "feat.vars.edit": "Edit",
     "feat.vars.delete": "Löschen",
     "feat.vars.add.counter": "Counter hinzufügen",
     "feat.vars.add.var": "Var hinzufügen",
