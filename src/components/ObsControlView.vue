@@ -4776,17 +4776,20 @@ watch(
     display: none;
   }
 
+  /* >>> !important - the unconditional base .obs-drawer rule further down
+     the file shares these properties and would otherwise win regardless
+     of viewport width (later same-specificity rule wins the cascade) */
   .obs-drawer {
-    position: fixed;
-    left: 0;
-    right: 0;
-    top: 44px;
-    bottom: 62px;
-    margin-top: 0;
-    max-height: none;
-    border-left: none;
-    border-right: none;
-    padding: 12px 14px;
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: 44px !important;
+    bottom: 62px !important;
+    margin-top: 0 !important;
+    max-height: none !important;
+    border-left: none !important;
+    border-right: none !important;
+    padding: 12px 14px !important;
   }
 
   .obs-live-stats,
@@ -4818,6 +4821,28 @@ watch(
     max-width: none;
     min-height: 0;
     height: 100%;
+  }
+
+  /* >>> fullscreen tab now, no need to look like a nested card */
+  .obs-box-cat {
+    border: none;
+    background: transparent;
+    padding: 0;
+  }
+
+  /* >>> gallery grid instead of a horizontal scroll strip - there's a
+     whole screen to use now, not a cramped dropdown */
+  .obs-category-strip {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+    gap: 14px 10px;
+    overflow-x: visible !important;
+    padding-bottom: 0 !important;
+  }
+
+  .obs-category-card {
+    width: 100% !important;
+    flex-shrink: initial !important;
   }
 }
 
@@ -5303,6 +5328,7 @@ watch(
 @media (max-width: 680px) {
   .obs-save-bar {
     left: 0;
+    bottom: 62px;
   }
 }
 
