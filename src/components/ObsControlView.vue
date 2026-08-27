@@ -4719,7 +4719,7 @@ watch(
 
   .obs-status-bar-slim {
     position: fixed;
-    top: 10px;
+    top: 62px;
     right: 10px;
     padding: 6px;
     background: #16161a;
@@ -4729,7 +4729,7 @@ watch(
 
   .obs-topbar-right {
     position: fixed;
-    top: 10px;
+    top: 62px;
     left: 10px;
     z-index: 120;
   }
@@ -4763,9 +4763,11 @@ watch(
     gap: 6px;
   }
 
-  /* >>> bottom nav replaces the drawer-toggle/kebab as the way in */
+  /* >>> bottom nav replaces the drawer-toggle/kebab as the way in - !important
+     since the unconditional base rule below (display:none) comes later in
+     source order and would otherwise win regardless of viewport width */
   .obs-mobile-nav {
-    display: flex;
+    display: flex !important;
   }
 
   /* >>> Scenes tab = the normal Program/Preview body; other tabs hide it
