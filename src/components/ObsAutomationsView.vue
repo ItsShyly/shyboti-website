@@ -5,7 +5,9 @@ import { useAuth } from "../auth";
 import ObsRuleEditPanel from "./ObsRuleEditPanel.vue";
 import type { ObsRule } from "./ObsRuleEditPanel.vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import { useI18n } from "../i18n";
 
+const { t } = useI18n();
 const { session, channelRole } = useAuth();
 
 
@@ -24,24 +26,29 @@ const sources = ref<string[]>([]);
 const saving = ref<string | null>(null);
 const hasCategoryScope = ref(true); // >>> avoids warning flash before check resolves
 
-const RULE_ACTION_LABEL: Record<string, string> = {
-  scene: "scene",
-  show: "show",
-  hide: "hide",
-  toggle: "toggle",
-  mute: "mute",
-  unmute: "unmute",
-  mutetoggle: "mute toggle",
-  volume: "volume",
-  category: "category",
-};
+const RULE_ACTION_LABEL = computed<Record<string, string>>(() => ({
+  scene: t("obsrule.pill.scene"),
+  show: t("obsrule.pill.show"),
+  hide: t("obsrule.pill.hide"),
+  toggle: t("obsrule.pill.toggle"),
+  mute: t("obsrule.pill.mute"),
+  unmute: t("obsrule.pill.unmute"),
+  mutetoggle: t("obsrule.pill.mutetoggle"),
+  volume: t("obsrule.pill.volume"),
+  category: t("obsrule.pill.category"),
+}));
 
 // >>> no trigger_type means a legacy bitrate-only rule
 function ruleTitle(rule: ObsRule): string {
   const type = rule.trigger_type ?? "bitrate";
-  if (type === "bitrate") return `${rule.condition} ${rule.bitrate_kbps} kbps`;
-  if (type === "category") return `${rule.category_name ?? "?"} -> ${rule.target}`;
-  return `${rule.trigger_scene ?? "?"} -> ${rule.target}`;
+  if (type === "bitrate")
+    return t("obsauto.title.bitrate", {
+      condition: rule.condition === "above" ? t("obsrule.cond.above") : t("obsrule.cond.below"),
+      kbps: rule.bitrate_kbps ?? 0,
+    });
+  if (type === "category")
+    return t("obsauto.title.category", { category: rule.category_name ?? "?", target: rule.target });
+  return t("obsauto.title.scene", { scene: rule.trigger_scene ?? "?", target: rule.target });
 }
 
 // >>> category rule but missing required scope
@@ -172,8 +179,8 @@ watch(
 defineExpose({
   header: computed(() => ({
     count: rules.value.length,
-    countLabel: "OBS rules",
-    createLabel: "New rule",
+    countLabel: t("obsauto.count_label"),
+    createLabel: t("obsauto.create_label"),
     canCreate: canEdit.value && paired.value,
   })),
   reload: fetchRules,
@@ -200,19 +207,19 @@ defineExpose({
       </div>
     </div>
     <div v-else-if="!paired" class="ep-empty">
-      OBS isn't set up yet - set up the agent on the
-      <router-link to="/obs-control" class="obs-rule-link">OBS control</router-link> page first.
+      {{ t('obsauto.not_paired_pre') }}
+      <router-link to="/obs-control" class="obs-rule-link">{{ t('obsauto.not_paired_link') }}</router-link> {{ t('obsauto.not_paired_post') }}
     </div>
     <template v-else>
       <div v-if="!rules.length" class="ep-empty">
-        No obs automations yet. Create one to get started.
+        {{ t('obsauto.empty') }}
       </div>
 
       <div v-else class="ep-row-list">
         <div v-for="rule in rules" :key="rule.id" class="ep-list-row" :class="{ inactive: !rule.enabled }">
           <div class="timer-toggle-wrap">
             <button class="ep-switch" :class="{ on: rule.enabled, off: !rule.enabled, disabled: !canEdit }"
-              @click="canEdit && toggleRule(rule)" :title="rule.enabled ? 'Disable' : 'Enable'"><span class="ep-switch-knob"></span></button>
+              @click="canEdit && toggleRule(rule)" :title="rule.enabled ? t('obsauto.disable_title') : t('obsauto.enable_title')"><span class="ep-switch-knob"></span></button>
           </div>
           <div class="timer-info" @click="canEdit && openEdit(rule.id)">
             <div class="timer-name">{{ ruleTitle(rule) }}</div>
@@ -225,7 +232,7 @@ defineExpose({
           <div class="ep-row-actions">
             <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(rule.id)"
               :class="{ disabled: !canEdit }">
-              {{ canEdit ? "edit" : "view" }}
+              {{ canEdit ? t('obsauto.edit_btn') : t('obsauto.view_btn') }}
             </button>
             <button v-if="canEdit" class="ep-btn-action del" @click.stop="deleteRule(rule.id)"
               :disabled="saving === rule.id" v-html="iconSvgFor('x')">

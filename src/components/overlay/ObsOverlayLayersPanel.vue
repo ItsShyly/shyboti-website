@@ -2,6 +2,9 @@
 import { ref, computed } from "vue";
 import { iconSvg as iconSvgFor } from "../../composables/icons";
 import type { OverlayElement } from "../../composables/overlay/overlayTypes";
+import { useI18n } from "../../i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   elements: OverlayElement[];
@@ -67,21 +70,21 @@ function onDrop(i: number) {
     <div class="ovl-layers-title" @click="collapsed = !collapsed">
       <span class="ovl-layers-title-left">
         <span class="ovl-layers-caret" v-html="iconSvgFor(collapsed ? 'chevron-right' : 'chevron-down')"></span>
-        layers
+        {{ t('overlay.layers.title') }}
       </span>
       <div class="ovl-layers-group-actions">
-        <button class="ovl-layers-mini-btn icon-only" :disabled="!canHideAll" title="Hide every element"
+        <button class="ovl-layers-mini-btn icon-only" :disabled="!canHideAll" :title="t('overlay.layers.hide_all_hint')"
           @click.stop="emit('hide-all')" v-html="iconSvgFor('eye-off')">
         </button>
-        <button class="ovl-layers-mini-btn icon-only" :disabled="!canShowAll" title="Show every element"
+        <button class="ovl-layers-mini-btn icon-only" :disabled="!canShowAll" :title="t('overlay.layers.show_all_hint')"
           @click.stop="emit('show-all')" v-html="iconSvgFor('eye')">
         </button>
-        <button class="ovl-layers-mini-btn" :disabled="!canGroup" title="Group selection"
+        <button class="ovl-layers-mini-btn" :disabled="!canGroup" :title="t('overlay.layers.group_hint')"
           @click.stop="emit('group')">
-          group
+          {{ t('overlay.layers.group') }}
         </button>
-        <button class="ovl-layers-mini-btn" :disabled="!canUngroup" title="Ungroup" @click.stop="emit('ungroup')">
-          ungroup
+        <button class="ovl-layers-mini-btn" :disabled="!canUngroup" :title="t('overlay.layers.ungroup_hint')" @click.stop="emit('ungroup')">
+          {{ t('overlay.layers.ungroup') }}
         </button>
       </div>
     </div>
@@ -92,19 +95,19 @@ function onDrop(i: number) {
       }" draggable="true" @dragstart="onDragStart(idx)" @dragover.prevent @drop="onDrop(idx)"
         @click="onRowClick(el.id, $event)">
         <span class="ovl-layers-grip" v-html="iconSvgFor('grip')"></span>
-        <button class="ovl-layers-icon-btn" :title="el.visible ? 'Hide' : 'Show'"
+        <button class="ovl-layers-icon-btn" :title="el.visible ? t('overlay.layers.hide') : t('overlay.layers.show')"
           @click.stop="emit('toggle-visible', el.id)" v-html="iconSvgFor(el.visible ? 'eye' : 'eye-off')"></button>
-        <button class="ovl-layers-icon-btn" :title="el.locked ? 'Unlock' : 'Lock'"
+        <button class="ovl-layers-icon-btn" :title="el.locked ? t('overlay.layers.unlock') : t('overlay.layers.lock')"
           @click.stop="emit('toggle-lock', el.id)" v-html="iconSvgFor('lock')"
           :class="{ dim: !el.locked }"></button>
         <span class="ovl-layers-type">{{ el.type }}</span>
         <span class="ovl-layers-content">{{ el.content || '—' }}</span>
-        <button class="ovl-layers-icon-btn" title="Duplicate" @click.stop="emit('duplicate', el.id)"
+        <button class="ovl-layers-icon-btn" :title="t('overlay.layers.duplicate')" @click.stop="emit('duplicate', el.id)"
           v-html="iconSvgFor('copy')"></button>
-        <button class="ovl-layers-icon-btn danger" title="Delete" @click.stop="emit('delete', el.id)"
+        <button class="ovl-layers-icon-btn danger" :title="t('overlay.layers.delete')" @click.stop="emit('delete', el.id)"
           v-html="iconSvgFor('trash')"></button>
       </div>
-      <div v-if="!sorted.length" class="ovl-layers-empty">no elements yet</div>
+      <div v-if="!sorted.length" class="ovl-layers-empty">{{ t('overlay.layers.empty') }}</div>
     </div>
   </div>
 </template>

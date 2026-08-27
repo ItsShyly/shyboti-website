@@ -1,23 +1,26 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { iconSvg as iconSvgFor } from "../../composables/icons";
 import type { OverlayElementType, ShapeVariant } from "../../composables/overlay/overlayTypes";
+import { useI18n } from "../../i18n";
+
+const { t } = useI18n();
 
 const emit = defineEmits<{
   add: [type: OverlayElementType, variant?: ShapeVariant];
 }>();
 
-const entries: { type: OverlayElementType; variant?: ShapeVariant; label: string; icon: string }[] = [
-  { type: "text", label: "Text", icon: "file-text" },
-  { type: "variable-text", label: "Variable", icon: "refresh-cw" },
-  { type: "image", label: "Image", icon: "image" },
-  { type: "video", label: "Video", icon: "film" },
-  { type: "countdown", label: "Countdown", icon: "clock" },
-  { type: "countup", label: "Countup", icon: "arrow-up" },
-  { type: "shape", variant: "border", label: "Border", icon: "maximize" },
-  { type: "shape", variant: "background-box", label: "Background box", icon: "monitor" },
-  { type: "shape", variant: "frame", label: "Frame", icon: "maximize" },
-];
+const entries = computed<{ type: OverlayElementType; variant?: ShapeVariant; label: string; icon: string }[]>(() => [
+  { type: "text", label: t("overlay.gallery.text"), icon: "file-text" },
+  { type: "variable-text", label: t("overlay.gallery.variable"), icon: "refresh-cw" },
+  { type: "image", label: t("overlay.gallery.image"), icon: "image" },
+  { type: "video", label: t("overlay.gallery.video"), icon: "film" },
+  { type: "countdown", label: t("overlay.gallery.countdown"), icon: "clock" },
+  { type: "countup", label: t("overlay.gallery.countup"), icon: "arrow-up" },
+  { type: "shape", variant: "border", label: t("overlay.gallery.border"), icon: "maximize" },
+  { type: "shape", variant: "background-box", label: t("overlay.gallery.background_box"), icon: "monitor" },
+  { type: "shape", variant: "frame", label: t("overlay.gallery.frame"), icon: "maximize" },
+]);
 
 const helpOpen = ref(false);
 
@@ -44,53 +47,55 @@ const MOUSE_MIDDLE = mouseIcon("middle");
 // >>> parts render as a keycap, icon, or plain text
 interface KeyPart { k?: string; svg?: string; t?: string }
 interface Shortcut { parts: KeyPart[]; desc: string }
-const shortcuts: Shortcut[] = [
-  { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "S" }], desc: "Save" },
-  { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "Z" }], desc: "Undo" },
-  { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "Y" }], desc: "Redo" },
+const CTRL = computed(() => t("overlay.gallery.key_ctrl"));
+const ALT = computed(() => t("overlay.gallery.key_alt"));
+const shortcuts = computed<Shortcut[]>(() => [
+  { parts: [{ k: CTRL.value }, { t: "+" }, { k: "S" }], desc: t("overlay.gallery.sc_save") },
+  { parts: [{ k: CTRL.value }, { t: "+" }, { k: "Z" }], desc: t("overlay.gallery.sc_undo") },
+  { parts: [{ k: CTRL.value }, { t: "+" }, { k: "Y" }], desc: t("overlay.gallery.sc_redo") },
   {
-    parts: [{ k: "Ctrl" }, { t: "+" }, { k: "C" }, { t: "/" }, { k: "Ctrl" }, { t: "+" }, { k: "V" }],
-    desc: "Copy / paste selected or clipboard",
+    parts: [{ k: CTRL.value }, { t: "+" }, { k: "C" }, { t: "/" }, { k: CTRL.value }, { t: "+" }, { k: "V" }],
+    desc: t("overlay.gallery.sc_copy_paste"),
   },
-  { parts: [{ k: "Ctrl" }, { t: "+" }, { k: "D" }], desc: "Duplicate selected" },
-  { parts: [{ k: "Delete" }, { t: "/" }, { k: "Backspace" }], desc: "Delete selected" },
-  { parts: [{ k: "Escape" }], desc: "Close the editor" },
+  { parts: [{ k: CTRL.value }, { t: "+" }, { k: "D" }], desc: t("overlay.gallery.sc_duplicate") },
+  { parts: [{ k: "Delete" }, { t: "/" }, { k: "Backspace" }], desc: t("overlay.gallery.sc_delete") },
+  { parts: [{ k: "Escape" }], desc: t("overlay.gallery.sc_close") },
   {
-    parts: [{ k: "Shift" }, { t: "+" }, { svg: MOUSE_LEFT }, { t: "/" }, { k: "Ctrl" }, { t: "+" }, { svg: MOUSE_LEFT }],
-    desc: "Add/remove from selection",
-  },
-  {
-    parts: [{ svg: MOUSE_LEFT }, { t: " + drag in canvas" }],
-    desc: "multi-select elements",
+    parts: [{ k: t("overlay.gallery.key_shift") }, { t: "+" }, { svg: MOUSE_LEFT }, { t: "/" }, { k: CTRL.value }, { t: "+" }, { svg: MOUSE_LEFT }],
+    desc: t("overlay.gallery.sc_add_remove_selection"),
   },
   {
-    parts: [{ svg: MOUSE_RIGHT }, { t: " on an element" }],
-    desc: "Context menu",
+    parts: [{ svg: MOUSE_LEFT }, { t: t("overlay.gallery.sc_drag_in_canvas") }],
+    desc: t("overlay.gallery.sc_multiselect"),
   },
   {
-    parts: [{ k: "Ctrl" }, { t: "/" }, { k: "Alt" }, { t: "while resizing" }],
-    desc: "Also scale font-size with the box",
-  },
-  { parts: [{ k: "Alt" }, { t: "+ dragging" }], desc: "Temporarily disable snapping" },
-  { parts: [{ k: "Mouse wheel" }, { t: " over canvas" }], desc: "Zoom in/out" },
-  {
-    parts: [{ k: "Ctrl" }, { t: "+" }, { k: "+" }, { t: "/" }, { k: "Ctrl" }, { t: "+" }, { k: "-" }],
-    desc: "Zoom in/out",
+    parts: [{ svg: MOUSE_RIGHT }, { t: t("overlay.gallery.sc_on_element") }],
+    desc: t("overlay.gallery.sc_context_menu"),
   },
   {
-    parts: [{ svg: MOUSE_RIGHT }, { t: "/" }, { svg: MOUSE_MIDDLE }, { t: " drag" }],
-    desc: "Pan the canvas when zoomed in",
+    parts: [{ k: CTRL.value }, { t: "/" }, { k: ALT.value }, { t: t("overlay.gallery.sc_while_resizing") }],
+    desc: t("overlay.gallery.sc_scale_font"),
+  },
+  { parts: [{ k: ALT.value }, { t: t("overlay.gallery.sc_plus_dragging") }], desc: t("overlay.gallery.sc_disable_snap") },
+  { parts: [{ k: t("overlay.gallery.key_mouse_wheel") }, { t: t("overlay.gallery.sc_over_canvas") }], desc: t("overlay.gallery.sc_zoom") },
+  {
+    parts: [{ k: CTRL.value }, { t: "+" }, { k: "+" }, { t: "/" }, { k: CTRL.value }, { t: "+" }, { k: "-" }],
+    desc: t("overlay.gallery.sc_zoom"),
+  },
+  {
+    parts: [{ svg: MOUSE_RIGHT }, { t: "/" }, { svg: MOUSE_MIDDLE }, { t: t("overlay.gallery.sc_drag") }],
+    desc: t("overlay.gallery.sc_pan_canvas"),
   },
   {
     parts: [{ k: "1" }, { t: "/" }, { k: "2" }, { t: "/" }, { k: "3" }, { t: "/" }, { k: "4" }],
-    desc: "Switch canvas backdrop (checker/white/black/scene screenshot)",
+    desc: t("overlay.gallery.sc_switch_backdrop"),
   },
-];
+]);
 </script>
 
 <template>
   <div class="ovl-gallery">
-    <div class="ovl-gallery-title">add</div>
+    <div class="ovl-gallery-title">{{ t('overlay.gallery.add') }}</div>
     <button v-for="entry in entries" :key="entry.label" class="ovl-gallery-item"
       @click="emit('add', entry.type, entry.variant)">
       <span class="ovl-gallery-icon" v-html="iconSvgFor(entry.icon)"></span>
@@ -99,7 +104,7 @@ const shortcuts: Shortcut[] = [
 
     <button class="ovl-gallery-item ovl-gallery-help" @click="helpOpen = true">
       <span class="ovl-gallery-icon" v-html="iconSvgFor('info')"></span>
-      Shortcuts
+      {{ t('overlay.gallery.shortcuts') }}
     </button>
   </div>
 
@@ -107,7 +112,7 @@ const shortcuts: Shortcut[] = [
     <div v-if="helpOpen" class="ovl-help-backdrop" @mousedown.self="helpOpen = false">
       <div class="ovl-help-modal">
         <div class="ovl-help-header">
-          <div class="ovl-help-title">keyboard &amp; mouse shortcuts</div>
+          <div class="ovl-help-title">{{ t('overlay.gallery.shortcuts_title') }}</div>
           <button class="ovl-help-close" @click="helpOpen = false" v-html="iconSvgFor('x')"></button>
         </div>
         <div class="ovl-help-list">

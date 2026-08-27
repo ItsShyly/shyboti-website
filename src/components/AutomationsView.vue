@@ -75,9 +75,9 @@ async function switchTab(tab: Tab) {
         <!-- >>> teleport targets for the sync panel, one per tab -->
         <div id="auto-sync-slot-timers"></div>
         <div id="auto-sync-slot-triggers"></div>
-        <button class="ep-btn-reload" @click="activeChild?.reload?.()" title="Reload" v-html="iconSvgFor('refresh-cw')"></button>
+        <button class="ep-btn-reload" @click="activeChild?.reload?.()" :title="t('auto.reload')" v-html="iconSvgFor('refresh-cw')"></button>
         <button class="ep-btn-new" :disabled="!activeChild?.header?.canCreate" @click="activeChild?.create?.()">
-          + {{ activeChild?.header?.createLabel ?? 'New' }}
+          + {{ activeChild?.header?.createLabel ?? t('auto.new') }}
         </button>
       </div>
     </div>

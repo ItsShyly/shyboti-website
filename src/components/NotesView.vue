@@ -95,12 +95,12 @@ async function createNote() {
     });
     if (!res.ok) {
       const d = (await res.json()) as any;
-      throw new Error(d.error ?? "Create failed");
+      throw new Error(d.error ?? t("notes.err.create_failed"));
     }
     const data = (await res.json()) as { id: string };
     lastLink.value = noteUrl(data.id);
   } catch (e: any) {
-    createError.value = e.message ?? "Could not create note";
+    createError.value = e.message ?? t("notes.err.create_generic");
   }
   creating.value = false;
 }
@@ -289,7 +289,7 @@ function switchView(v: "write" | "list") {
               class="restore-btn-sm"
               @click="recreateId = recreateId === note.id ? null : note.id"
             >
-              Restore
+              {{ t("notes.restore") }}
             </button>
 
             <button
@@ -303,23 +303,23 @@ function switchView(v: "write" | "list") {
           </div>
 
           <div v-if="recreateId === note.id" class="restore-panel">
-            <span class="restore-label">New expiry:</span>
+            <span class="restore-label">{{ t("notes.new_expiry") }}</span>
             <select v-model="recreateExpiry" class="expiry-select">
-              <option value="1h">1 hour</option>
-              <option value="1d">1 day</option>
-              <option value="7d">7 days</option>
-              <option value="30d">30 days</option>
-              <option value="forever">Forever</option>
+              <option value="1h">{{ t("notes.expiry.1h") }}</option>
+              <option value="1d">{{ t("notes.expiry.1d") }}</option>
+              <option value="7d">{{ t("notes.expiry.7d") }}</option>
+              <option value="30d">{{ t("notes.expiry.30d") }}</option>
+              <option value="forever">{{ t("notes.expiry.forever") }}</option>
             </select>
             <button
               class="restore-confirm-btn"
               :disabled="recreating === note.id"
               @click="recreateNote(note.id)"
             >
-              {{ recreating === note.id ? "…" : "Confirm" }}
+              {{ recreating === note.id ? "…" : t("notes.confirm") }}
             </button>
             <button class="restore-cancel-btn" @click="recreateId = null">
-              Cancel
+              {{ t("notes.cancel") }}
             </button>
           </div>
         </div>
@@ -344,7 +344,7 @@ function switchView(v: "write" | "list") {
               <template v-else>{{ t("notes.copy") }}</template>
             </button>
           </div>
-          <button class="new-note-btn" @click="newNote">+ New note</button>
+          <button class="new-note-btn" @click="newNote">+ {{ t("notes.new") }}</button>
         </div>
       </div>
 

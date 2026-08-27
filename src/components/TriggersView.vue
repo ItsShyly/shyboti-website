@@ -528,7 +528,7 @@ async function deleteTrigger(name: string) {
     if (editOpen.value && editTrigger.value.name === name)
       editOpen.value = false;
   } catch {
-    error.value = "Could not delete trigger.";
+    error.value = t("trigger.error.delete");
   }
   saving.value = null;
 }
@@ -566,7 +566,7 @@ function triggerKebabItems(trigger: Trigger): KebabMenuItem[] {
     },
     {
       key: "share",
-      label: "Share",
+      label: t("trigger.share"),
       icon: "corner-up-right",
       onClick: () => openShare(trigger.name),
     },
@@ -685,7 +685,7 @@ async function saveSync() {
     await fetchSync();
     await runSync();
   } catch {
-    syncMsg.value = "Failed to save.";
+    syncMsg.value = t("trigger.sync.error_save");
   }
   syncSaving.value = false;
 }
@@ -705,9 +705,9 @@ async function stopSync() {
       }),
     });
     syncConf.value = { ...syncConf.value, is_active: 0 };
-    syncMsg.value = "Sync stopped.";
+    syncMsg.value = t("trigger.sync.stopped");
   } catch {
-    syncMsg.value = "Failed.";
+    syncMsg.value = t("trigger.sync.error");
   }
   syncSaving.value = false;
 }
@@ -882,7 +882,7 @@ defineExpose({
           <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(trigger)" :class="{ disabled: !canEdit }">
             {{ canEdit ? t("trigger.edit") : t("trigger.view") }}
           </button>
-          <button class="ep-btn-action share" @click.stop="openShare(trigger.name)" title="Copy to another channel">
+          <button class="ep-btn-action share" @click.stop="openShare(trigger.name)" :title="t('trigger.share')">
             <span v-html="iconSvgFor('corner-up-right')"></span>
           </button>
           <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteTrigger(trigger.name)"

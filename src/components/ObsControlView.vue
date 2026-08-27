@@ -12,7 +12,9 @@ import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 import ObsOverlayEditor from "./overlay/ObsOverlayEditor.vue";
 import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import { useI18n } from "../i18n";
 
+const { t } = useI18n();
 const { session, channelRole } = useAuth();
 const router = useRouter();
 const settingsOverlay = useOverlayClose();
@@ -1760,19 +1762,19 @@ watch(
     <!-- vvv top bar - mode/connection/gear controls + the sources/mixer drawer toggle vvv -->
     <div class="obs-topbar">
       <div class="obs-topbar-left">
-        <div class="obsconn-title-slim obs-topbar-mobile-hide">OBS Control</div>
+        <div class="obsconn-title-slim obs-topbar-mobile-hide">{{ t('obsconn.title') }}</div>
 
         <div class="obs-mode-toggle-slim" :title="editMode
-          ? 'Changes stage here until you press Save.'
-          : 'Changes apply to your stream instantly.'
+          ? t('obsconn.mode.edit_hint')
+          : t('obsconn.mode.live_hint')
           " @click="setMode(!editMode)">
           <div class="switch" :class="editMode ? 'edit' : 'live'">
             <div class="knob"></div>
           </div>
-          <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? "Edit" : "Live" }}</span>
+          <span class="mode-state" :class="editMode ? 'edit' : 'live'">{{ editMode ? t('obsconn.mode.edit') : t('obsconn.mode.live') }}</span>
         </div>
 
-        <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> leaving…</span>
+        <span v-if="locked" class="mode-hint locked-hint"><span v-html="iconSvgFor('lock')"></span> {{ t('obsconn.leaving') }}</span>
 
         <div class="obs-status-bar-slim" :class="connStatusClass"
           :title="agentStatus?.version ? `v${agentStatus.version}` : ''">
@@ -1782,7 +1784,7 @@ watch(
       </div>
 
       <button v-if="(agentConnected && obsConnected) || agentStatus?.paired" class="obs-drawer-toggle"
-        :class="{ open: boxesOpen }" title="Sources & Mixer" @click="boxesOpen = !boxesOpen"
+        :class="{ open: boxesOpen }" :title="t('obsconn.drawer_toggle')" @click="boxesOpen = !boxesOpen"
         v-html="iconSvgFor('chevron-down')"></button>
 
       <div class="obs-topbar-right">
@@ -1792,16 +1794,16 @@ watch(
         </div>
 
         <button v-if="obsConnected && canFilterScenes" class="obs-refresh-btn obs-topbar-mobile-hide"
-          @click="refreshScenes" title="Refresh scene list" v-html="iconSvgFor('refresh-cw')">
+          @click="refreshScenes" :title="t('obsconn.refresh_title')" v-html="iconSvgFor('refresh-cw')">
         </button>
         <button v-if="obsConnected && canFilterScenes" class="obsconn-gear-btn obs-topbar-mobile-hide"
-          title="Filter scenes" @click="openFilter">
+          :title="t('obsconn.filter_title')" @click="openFilter">
           <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M3 4h14l-5.5 6.5v5l-3 1.5v-6.5L3 4z" stroke="currentColor" stroke-width="1.5"
               stroke-linejoin="round" />
           </svg>
         </button>
-        <button v-if="isBroadcaster" class="obsconn-gear-btn obs-topbar-mobile-hide" title="OBS settings"
+        <button v-if="isBroadcaster" class="obsconn-gear-btn obs-topbar-mobile-hide" :title="t('obsconn.settings_title')"
           @click="openSettings">
           <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M10 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z" stroke="currentColor" stroke-width="1.5" />
@@ -1809,7 +1811,7 @@ watch(
               d="M16.2 12.3a1.4 1.4 0 00.3 1.5l.05.05a1.65 1.65 0 11-2.35 2.35l-.05-.05a1.4 1.4 0 00-1.5-.3 1.4 1.4 0 00-.85 1.28v.14a1.65 1.65 0 11-3.3 0v-.07a1.4 1.4 0 00-.92-1.28 1.4 1.4 0 00-1.5.3l-.05.05A1.65 1.65 0 113.63 13.9l.05-.05a1.4 1.4 0 00.3-1.5 1.4 1.4 0 00-1.28-.85h-.14a1.65 1.65 0 110-3.3h.07a1.4 1.4 0 001.28-.92 1.4 1.4 0 00-.3-1.5l-.05-.05A1.65 1.65 0 116.09 3.38l.05.05a1.4 1.4 0 001.5.3h.06a1.4 1.4 0 00.85-1.28V2.3a1.65 1.65 0 113.3 0v.07a1.4 1.4 0 00.85 1.28h.06a1.4 1.4 0 001.5-.3l.05-.05a1.65 1.65 0 112.35 2.35l-.05.05a1.4 1.4 0 00-.3 1.5v.06a1.4 1.4 0 001.28.85h.14a1.65 1.65 0 110 3.3h-.07a1.4 1.4 0 00-1.28.85z"
               stroke="currentColor" stroke-width="1.3" />
           </svg>
-          <span v-if="!loading && !agentStatus?.paired" class="obs-gear-badge" title="OBS agent not set up yet">!</span>
+          <span v-if="!loading && !agentStatus?.paired" class="obs-gear-badge" :title="t('obsconn.not_set_up_badge')">!</span>
         </button>
 
         <RowKebabMenu :items="topbarKebabItems" @click.stop />
@@ -1820,27 +1822,27 @@ watch(
         <div v-if="agentConnected && obsConnected" class="obs-live-stats">
           <div class="flex">
             <div class="obs-live-stat" :class="{ bad: bitrateBad }">
-              <span class="obs-live-stat-label">bitrate</span>
-              <span class="obs-live-stat-value">{{ bitrateLabel ?? "not streaming" }}</span>
+              <span class="obs-live-stat-label">{{ t('obsconn.stat.bitrate') }}</span>
+              <span class="obs-live-stat-value">{{ bitrateLabel ?? t('obsconn.not_streaming') }}</span>
             </div>
             <div class="obs-live-stat">
-              <span class="obs-live-stat-label">preview size</span>
+              <span class="obs-live-stat-label">{{ t('obsconn.stat.preview_size') }}</span>
               <span class="obs-live-stat-value">{{
                 liveShotStats.kb != null
                   ? liveShotStats.kb + " kb"
                   : agentStatus?.screenshots
                     ? "--"
-                    : "off"
+                    : t('obsconn.stat_off')
               }}</span>
             </div>
             <div class="obs-live-stat">
-              <span class="obs-live-stat-label">preview cpu</span>
+              <span class="obs-live-stat-label">{{ t('obsconn.stat.preview_cpu') }}</span>
               <span class="obs-live-stat-value">{{
                 liveShotStats.cpuMs != null
                   ? liveShotStats.cpuMs + " ms"
                   : agentStatus?.screenshots
                     ? "--"
-                    : "off"
+                    : t('obsconn.stat_off')
               }}</span>
             </div>
           </div>
@@ -1862,11 +1864,11 @@ watch(
                 <label class="ep-field-label obs-box-collapse-label" @click="sourcesCollapsed = !sourcesCollapsed">
                   <span class="obs-box-collapse-chevron" :class="{ open: !sourcesCollapsed }"
                     v-html="iconSvgFor('chevron-down')"></span>
-                  sources
+                  {{ t('obsconn.sources_label') }}
                   <span v-if="selectedScene" class="ep-field-hint">{{
                     selectedScene
                   }}</span></label>
-                <button v-if="selectedScene" class="obs-add-source-btn" title="Add a browser source"
+                <button v-if="selectedScene" class="obs-add-source-btn" :title="t('obsconn.add_source_title')"
                   @click="openAddSource" v-html="iconSvgFor('plus')"></button>
               </div>
               <div v-show="!sourcesCollapsed" class="obs-source-list">
@@ -1881,17 +1883,17 @@ watch(
                   :class="{ pending: isSourcePending(src), dragging: dragSourceIndex === i }" draggable="true"
                   @dragstart="onSourceDragStart(i)" @dragover.prevent @drop="onSourceDrop(i)"
                   @dblclick="onSourceRowDblClick(src)">
-                  <span class="obs-drag-handle" title="Drag to reorder" v-html="iconSvgFor('grip')"></span>
+                  <span class="obs-drag-handle" :title="t('obsconn.drag_reorder')" v-html="iconSvgFor('grip')"></span>
                   <span class="obs-source-name">{{ src.sourceName }}</span>
                   <span v-if="isSourcePending(src)" class="pending-tag">pending</span>
                   <button class="obs-vis-btn" :class="{ on: effectiveVisible(src) }"
                     :disabled="pendingSources.has(src.sceneItemId)" @click.stop="onToggleVisible(src)">
-                    {{ effectiveVisible(src) ? "visible" : "hidden" }}
+                    {{ effectiveVisible(src) ? t('obsconn.visible') : t('obsconn.hidden') }}
                   </button>
                   <template v-if="src.isAudioSource">
                     <button class="obs-mute-btn" :class="{ muted: effectiveMuted(src) }"
                       :disabled="pendingSources.has(src.sceneItemId)" @click.stop="onToggleMute(src)">
-                      {{ effectiveMuted(src) ? "muted" : "unmuted" }}
+                      {{ effectiveMuted(src) ? t('obsconn.muted') : t('obsconn.unmuted') }}
                     </button>
                   </template>
                 </div>
@@ -1899,7 +1901,7 @@ watch(
                   class="obs-source-row pending">
                   <span class="obs-source-name">{{ c.name }}</span>
                   <span class="pending-tag">pending (new)</span>
-                  <button class="ep-btn-action del" title="Cancel" @click="removePendingCreate(c.id)">
+                  <button class="ep-btn-action del" :title="t('obsconn.cancel_title')" @click="removePendingCreate(c.id)">
                     <span v-html="iconSvgFor('x')"></span>
                   </button>
                 </div>
@@ -1907,8 +1909,8 @@ watch(
                   class="ep-empty">
                   {{
                     selectedScene
-                      ? "no sources in this scene"
-                      : "pick a scene above"
+                      ? t('obsconn.no_sources')
+                      : t('obsconn.pick_scene_above')
                   }}
                 </div>
               </div>
@@ -1919,7 +1921,7 @@ watch(
                 <label class="ep-field-label obs-box-collapse-label" @click="mixerCollapsed = !mixerCollapsed">
                   <span class="obs-box-collapse-chevron" :class="{ open: !mixerCollapsed }"
                     v-html="iconSvgFor('chevron-down')"></span>
-                  audio mixer
+                  {{ t('obsconn.mixer_label') }}
                   <span v-if="selectedScene" class="ep-field-hint">{{
                     selectedScene
                   }}</span></label>
@@ -1932,7 +1934,7 @@ watch(
                     <span v-if="isSourcePending(src)" class="pending-tag">pending</span>
                     <button class="obs-mute-btn" :class="{ muted: effectiveMuted(src) }"
                       :disabled="pendingSources.has(src.sceneItemId)" @click="onToggleMute(src)">
-                      {{ effectiveMuted(src) ? "muted" : "unmuted" }}
+                      {{ effectiveMuted(src) ? t('obsconn.muted') : t('obsconn.unmuted') }}
                     </button>
                   </div>
                   <div class="obs-mixer-slider-row">
@@ -1964,8 +1966,8 @@ watch(
                 <div v-if="!audioSources.length" class="ep-empty">
                   {{
                     selectedScene
-                      ? "no audio sources in this scene"
-                      : "pick a scene above"
+                      ? t('obsconn.no_audio_sources')
+                      : t('obsconn.pick_scene_above')
                   }}
                 </div>
               </div>
@@ -1982,15 +1984,15 @@ watch(
                 </div>
               </div>
               <div class="obs-drawer-preview-mini-info">
-                <div class="obs-drawer-preview-mini-label">previewing</div>
-                <div class="obs-drawer-preview-mini-name">{{ selectedScene || "no scene selected" }}</div>
+                <div class="obs-drawer-preview-mini-label">{{ t('obsconn.previewing_label') }}</div>
+                <div class="obs-drawer-preview-mini-name">{{ selectedScene || t('obsconn.no_scene_selected') }}</div>
               </div>
             </div>
             <div class="obs-box-label-row">
               <label class="ep-field-label obs-box-collapse-label" @click="categoriesCollapsed = !categoriesCollapsed">
                 <span class="obs-box-collapse-chevron" :class="{ open: !categoriesCollapsed }"
                   v-html="iconSvgFor('chevron-down')"></span>
-                Switch categories
+                {{ t('obsconn.switch_categories') }}
               </label>
             </div>
             <div v-show="!categoriesCollapsed" class="obs-category-content">
@@ -1998,7 +2000,7 @@ watch(
                 <button v-for="c in categoryHistory" :key="c.category_id" class="obs-category-card"
                   :class="{ disabled: !canFilterScenes, active: c.category_id === currentCategoryId, pending: isCategoryPending(c.category_id), switching: switchingCategory === c.category_id }"
                   :disabled="switchingCategory === c.category_id" :title="c.category_name" @click="onCategoryClick(c)">
-                  <span v-if="canFilterScenes" class="obs-category-remove" title="Remove"
+                  <span v-if="canFilterScenes" class="obs-category-remove" :title="t('obsconn.remove_title')"
                     @click.stop="removeCategory(c.category_id)">×</span>
                   <img v-if="c.box_art_url" :src="c.box_art_url" :alt="c.category_name" />
                   <div v-else class="obs-category-empty">{{ c.category_name.slice(0, 2) }}</div>
@@ -2006,7 +2008,7 @@ watch(
                 </button>
                 <template v-if="canFilterScenes">
                   <button v-for="n in emptyCategorySlots" :key="'empty' + n" class="obs-category-card obs-category-add"
-                    title="Add a category" @click="showAddCategory = true">
+                    :title="t('obsconn.add_category_title')" @click="showAddCategory = true">
                     <div class="obs-category-empty obs-category-plus">+</div>
                   </button>
                 </template>
@@ -2021,7 +2023,7 @@ watch(
     <!-- ^^^ top bar ^^^ -->
 
     <div v-if="!editMode" class="obs-live-mode-banner">
-      <span class="dot"></span>Live mode is on - source and category changes apply to your stream instantly
+      <span class="dot"></span>{{ t('obsconn.live_banner') }}
     </div>
 
     <div class="obsconn-body" :class="{ 'obs-locked': locked }">
@@ -2040,24 +2042,24 @@ watch(
               {{
                 agentStatus?.paired
                   ? agentConnected
-                    ? "Agent connected - waiting for OBS…"
-                    : "Waiting for the agent to connect…"
-                  : "OBS agent is not set up yet"
+                    ? t('obsconn.setup.agent_connected')
+                    : t('obsconn.setup.waiting_agent')
+                  : t('obsconn.setup.not_set_up')
               }}
             </div>
             <div class="obs-setup-hint">
-              Click the gear icon above to
+              {{ t('obsconn.setup.click_gear') }}
               {{
                 agentStatus?.paired
-                  ? "view your pairing token again or re-download the agent."
-                  : "get your pairing token and download the agent."
+                  ? t('obsconn.setup.view_token')
+                  : t('obsconn.setup.get_token')
               }}
             </div>
           </template>
           <template v-else>
-            <div class="obs-setup-title">OBS isn't connected yet</div>
+            <div class="obs-setup-title">{{ t('obsconn.setup.not_connected') }}</div>
             <div class="obs-setup-hint">
-              Ask your broadcaster to set it up (gear icon, broadcaster only).
+              {{ t('obsconn.setup.ask_broadcaster') }}
             </div>
           </template>
         </div>
@@ -2066,34 +2068,34 @@ watch(
       <template v-if="agentConnected && obsConnected">
         <div class="obs-program-preview">
           <div class="obs-pp-pane obs-pp-preview" :class="{ empty: !selectedScene }">
-            <div class="obs-pp-label">preview</div>
+            <div class="obs-pp-label">{{ t('obsconn.preview_label') }}</div>
             <div class="obs-pp-thumb">
               <img v-if="selectedScene && sceneShots[selectedScene]" :src="sceneShots[selectedScene]"
                 :alt="selectedScene" />
               <div v-else class="obs-scene-thumb-empty">
-                {{ selectedScene ? (agentStatus?.screenshots ? "…" : "previews off") : "pick a scene below" }}
+                {{ selectedScene ? (agentStatus?.screenshots ? "…" : t('obsconn.previews_off')) : t('obsconn.pick_scene_below') }}
               </div>
             </div>
             <div class="obs-pp-name-row">
               <div class="obs-pp-name">{{ selectedScene || "—" }}</div>
-              <button v-if="selectedScene" class="obs-scene-fs-btn" title="Edit stream overlay"
+              <button v-if="selectedScene" class="obs-scene-fs-btn" :title="t('obsconn.edit_overlay_title')"
                 @click.stop="openOverlayEditor(selectedScene)" v-html="iconSvgFor('edit')"></button>
             </div>
           </div>
 
           <button class="obs-take-btn" :disabled="!canTakeToProgram"
-            title="Take the previewed scene live - the only thing that actually switches" @click="takeToProgram">
+            :title="t('obsconn.take_hint')" @click="takeToProgram">
             <span v-html="iconSvgFor('arrow-right')"></span>
-            <span class="obs-take-btn-label">switch</span>
+            <span class="obs-take-btn-label">{{ t('obsconn.take_label') }}</span>
           </button>
 
           <div class="obs-pp-pane obs-pp-program">
-            <div class="obs-pp-label">live</div>
+            <div class="obs-pp-label">{{ t('obsconn.live_label') }}</div>
             <div class="obs-pp-thumb">
               <img v-if="currentScene && sceneShots[currentScene]" :src="sceneShots[currentScene]"
                 :alt="currentScene" />
               <div v-else class="obs-scene-thumb-empty">
-                {{ agentStatus?.screenshots ? "…" : "previews off" }}
+                {{ agentStatus?.screenshots ? "…" : t('obsconn.previews_off') }}
               </div>
             </div>
             <div class="obs-pp-name-row">
@@ -2110,19 +2112,19 @@ watch(
             <div class="obs-scene-thumb">
               <img v-if="sceneShots[s.sceneName]" :src="sceneShots[s.sceneName]" :alt="s.sceneName" />
               <div v-else class="obs-scene-thumb-empty">
-                {{ agentStatus?.screenshots ? "…" : "previews off" }}
+                {{ agentStatus?.screenshots ? "…" : t('obsconn.previews_off') }}
               </div>
-              <span v-if="s.sceneName === currentScene" class="obs-scene-live-tag">live</span>
+              <span v-if="s.sceneName === currentScene" class="obs-scene-live-tag">{{ t('obsconn.live_label') }}</span>
             </div>
             <div class="obs-scene-name-row">
               <div class="obs-scene-name">{{ s.sceneName }}</div>
-              <button class="obs-scene-fs-btn" title="Edit stream overlay" @click.stop="openOverlayEditor(s.sceneName)"
+              <button class="obs-scene-fs-btn" :title="t('obsconn.edit_overlay_title')" @click.stop="openOverlayEditor(s.sceneName)"
                 v-html="iconSvgFor('edit')"></button>
             </div>
           </div>
           <div v-if="!scenes.length" class="ep-empty">
             <button class="ep-btn-cancel" @click="refreshScenes">
-              load scenes
+              {{ t('obsconn.load_scenes') }}
             </button>
           </div>
         </div>
@@ -2130,10 +2132,10 @@ watch(
         <div class="obs-scenes-footer">
           <button v-if="canForcePreview && scenes.length > 0 && !videoMixProjectorOpen" class="ep-btn-cancel"
             @click="forceAllPreviews()" :disabled="forcePreviewLoading">
-            {{ forcePreviewLoading ? "Opening…" : "Force all previews" }}
+            {{ forcePreviewLoading ? t('obsconn.opening') : t('obsconn.force_previews') }}
           </button>
           <div v-if="canForcePreview" class="obs-projector-state">
-            Multiview projector: {{ videoMixProjectorOpen ? "open" : "closed" }}
+            {{ t('obsconn.projector_prefix') }} {{ videoMixProjectorOpen ? t('obsconn.state_open') : t('obsconn.state_closed') }}
             <span v-if="videoMixProjectorTitle" class="obs-projector-title">"{{ videoMixProjectorTitle }}"</span>
           </div>
         </div>
@@ -2144,7 +2146,7 @@ watch(
         :obs-ready="agentConnected && obsConnected" @close="closeOverlayEditor" />
 
       <div v-if="bindingsSaving || bindingsSaved" class="obsconn-autosave">
-        {{ bindingsSaving ? "saving…" : "saved" }}
+        {{ bindingsSaving ? t('obsconn.saving_ellipsis') : t('obsconn.saved') }}
       </div>
     </div>
 
@@ -2157,8 +2159,8 @@ watch(
       <div class="ep-panel obsconn-settings-panel obs-settings-redesign">
         <div class="ep-panel-header">
           <div>
-            <div class="ep-panel-title">OBS settings</div>
-            <div class="ep-panel-sub">broadcaster only</div>
+            <div class="ep-panel-title">{{ t('obsconn.settings_title') }}</div>
+            <div class="ep-panel-sub">{{ t('obsconn.broadcaster_only') }}</div>
           </div>
           <button class="ep-panel-close" @click="showSettings = false">
             x
@@ -2167,113 +2169,112 @@ watch(
 
         <div class="ep-panel-body">
           <div v-if="agentConnected && obsConnected" class="ep-section">
-            <div class="ep-section-label">Connection</div>
+            <div class="ep-section-label">{{ t('obsconn.connection_label') }}</div>
             <div class="ep-status-badge ready">
               <span class="ep-status-dot"></span>
-              Agent ready
+              {{ t('obsconn.agent_ready') }}
             </div>
             <div class="ep-field-hint">
-              Connected to OBS<template v-if="agentStatus?.version"> · v{{ agentStatus.version }}</template>
+              {{ t('obsconn.connected_to_obs') }}<template v-if="agentStatus?.version"> · v{{ agentStatus.version }}</template>
             </div>
           </div>
 
           <details class="ep-details" :open="!agentStatus?.paired">
             <summary>
-              Setup &amp; Pairing
+              {{ t('obsconn.setup_pairing') }}
               <span class="ep-details-icon closed" v-html="iconSvgFor('chevron-right')"></span>
               <span class="ep-details-icon open" v-html="iconSvgFor('chevron-down')"></span>
             </summary>
             <div class="ep-details-body">
               <template v-if="agentConnected && obsConnected">
                 <div class="ep-note">
-                  Agent is connected and paired. You can view your pairing token or regenerate it.
+                  {{ t('obsconn.agent_paired_note') }}
                 </div>
                 <button class="ep-btn ep-btn-secondary" style="margin-top: 4px;" :disabled="generatingToken"
                   @click="generateToken">
-                  {{ generatingToken ? "generating..." : "Show/Regenerate token" }}
+                  {{ generatingToken ? t('obsconn.generating') : t('obsconn.show_regen_token') }}
                 </button>
               </template>
               <template v-else>
                 <ol class="ep-steps">
                   <li>
-                    <strong>Generate a pairing token</strong>
+                    <strong>{{ t('obsconn.step_generate_token') }}</strong>
                     <div style="margin-top: 4px;">
                       <button class="ep-btn ep-btn-primary" :disabled="generatingToken" @click="generateToken">
                         {{
                           generatingToken
-                            ? "generating..."
+                            ? t('obsconn.generating')
                             : agentStatus?.paired
-                              ? "Regenerate token"
-                              : "Generate token"
+                              ? t('obsconn.regen_token')
+                              : t('obsconn.gen_token')
                         }}
                       </button>
                       <div v-if="!(tokenVisible && token)" class="ep-field-hint" style="margin-top: 4px;">
                         {{
                           agentStatus?.paired
-                            ? 'Token already set. Click "Regenerate token" to replace it.'
-                            : "No token generated yet."
+                            ? t('obsconn.token_already_set')
+                            : t('obsconn.no_token_yet')
                         }}
                       </div>
                     </div>
                   </li>
                   <li>
-                    <strong>Download the ShyBoti Agent</strong>
+                    <strong>{{ t('obsconn.step_download') }}</strong>
                     <div class="ep-download-row">
                       <a class="ep-btn ep-btn-secondary" :href="`${API}/agent/download/windows`" target="_blank"
                         rel="noopener">
-                        Windows (.zip)
+                        {{ t('obsconn.win_zip') }}
                       </a>
                       <a class="ep-btn ep-btn-secondary" :href="`${API}/agent/download/linux`" target="_blank"
                         rel="noopener">
-                        Linux (.tar.gz)
+                        {{ t('obsconn.linux_targz') }}
                       </a>
                     </div>
                     <div class="ep-note" style="margin-top: 4px;">
-                      Extract, then run <code>start.bat</code> (Win) or <code>start.sh</code>
+                      {{ t('obsconn.extract_run_pre') }} <code>start.bat</code> {{ t('obsconn.extract_run_mid') }} <code>start.sh</code>
                     </div>
                   </li>
                   <li>
-                    <strong>Paste the token</strong> <span class="ep-step-sub">into the agent when prompted.</span>
+                    <strong>{{ t('obsconn.step_paste') }}</strong> <span class="ep-step-sub">{{ t('obsconn.step_paste_sub') }}</span>
                   </li>
                   <li>
-                    <strong>Open OBS</strong> <span class="ep-step-sub">- the agent connects locally.</span>
+                    <strong>{{ t('obsconn.step_open_obs') }}</strong> <span class="ep-step-sub">{{ t('obsconn.step_open_obs_sub') }}</span>
                   </li>
                 </ol>
                 <div v-if="agentStatus?.paired && !agentConnected" class="ep-note">
-                  Token is set - waiting for agent to connect...
+                  {{ t('obsconn.token_waiting') }}
                 </div>
               </template>
 
               <div v-if="tokenVisible && token" class="ep-token-box">
                 <input class="ep-token-value" :type="tokenRevealed ? 'text' : 'password'" :value="token" readonly />
                 <button class="ep-eye-btn" @click="tokenRevealed = !tokenRevealed"
-                  :title="tokenRevealed ? 'hide token' : 'show token'"
+                  :title="tokenRevealed ? t('obsconn.hide_token') : t('obsconn.show_token')"
                   v-html="iconSvgFor(tokenRevealed ? 'eye-off' : 'eye')"></button>
-                <button class="ep-copy-btn" @click="copyToken">{{ tokenJustCopied ? "copied!" : "Copy" }}</button>
+                <button class="ep-copy-btn" @click="copyToken">{{ tokenJustCopied ? t('obsconn.copied') : t('obsconn.copy_btn') }}</button>
                 <button class="ep-dismiss-btn" @click="
                   tokenVisible = false;
                 token = '';
                 tokenRevealed = false;
-                " title="I saved it, dismiss">
-                  Done
+                " :title="t('obsconn.dismiss_title')">
+                  {{ t('obsconn.done') }}
                 </button>
-                <div class="ep-token-warning">Copy before dismissing - not stored on server.</div>
+                <div class="ep-token-warning">{{ t('obsconn.copy_warning') }}</div>
               </div>
             </div>
           </details>
 
           <div class="ep-field-group">
-            <label class="ep-field-label">Optional: autostart with OBS</label>
+            <label class="ep-field-label">{{ t('obsconn.autostart_label') }}</label>
             <div class="ep-note">
-              In OBS, <strong class="ep-note-menu">Tools</strong> → <strong class="ep-note-menu">Scripts</strong> →
-              <strong class="ep-note-menu">+</strong> → pick <code>autostart.lua</code> from the agent's extracted
-              folder. Starts the agent with OBS, stops it when OBS closes.
+              {{ t('obsconn.autostart_pre') }} <strong class="ep-note-menu">Tools</strong> {{ t('obsconn.autostart_mid1') }} <strong class="ep-note-menu">Scripts</strong>
+              {{ t('obsconn.autostart_mid1') }} <strong class="ep-note-menu">+</strong> {{ t('obsconn.autostart_mid2') }} <code>autostart.lua</code> {{ t('obsconn.autostart_post') }}
             </div>
           </div>
 
           <details class="ep-details" open>
             <summary>
-              General Settings
+              {{ t('obsconn.general_settings') }}
               <span class="ep-details-icon closed" v-html="iconSvgFor('chevron-right')"></span>
               <span class="ep-details-icon open" v-html="iconSvgFor('chevron-down')"></span>
             </summary>
@@ -2286,10 +2287,10 @@ watch(
                   <div class="ep-switch" :class="{ on: enabledLocal }">
                     <div class="ep-switch-knob"></div>
                   </div>
-                  <span class="ep-switch-label">{{ enabledLocal ? "Connection enabled" : "Connection disabled"
+                  <span class="ep-switch-label">{{ enabledLocal ? t('obsconn.conn_enabled') : t('obsconn.conn_disabled')
                   }}</span>
                 </div>
-                <div class="ep-field-hint">Turn off to reject all agent connections.</div>
+                <div class="ep-field-hint">{{ t('obsconn.conn_hint') }}</div>
               </div>
 
               <div class="ep-field-group">
@@ -2300,34 +2301,34 @@ watch(
                   <div class="ep-switch" :class="{ on: screenshotsLocal }">
                     <div class="ep-switch-knob"></div>
                   </div>
-                  <span class="ep-switch-label">{{ screenshotsLocal ? "Scene previews on" : "Scene previews off"
+                  <span class="ep-switch-label">{{ screenshotsLocal ? t('obsconn.previews_on_setting') : t('obsconn.previews_off_setting')
                   }}</span>
                 </div>
-                <div class="ep-field-hint">Periodic screenshots of each scene.</div>
+                <div class="ep-field-hint">{{ t('obsconn.previews_hint') }}</div>
                 <div v-if="screenshotsLocal" class="ep-interval-row">
-                  <span class="ep-switch-label">Refresh every</span>
+                  <span class="ep-switch-label">{{ t('obsconn.refresh_every') }}</span>
                   <input v-model.number="screenshotIntervalLocal" type="number" min="1" max="60" class="ep-field-input"
                     @change="saveSettings" />
-                  <span class="ep-switch-label">seconds (min 1)</span>
+                  <span class="ep-switch-label">{{ t('obsconn.seconds_min1') }}</span>
                 </div>
-                <div class="ep-field-hint">Only the broadcaster can change this.</div>
+                <div class="ep-field-hint">{{ t('obsconn.broadcaster_only_change') }}</div>
               </div>
             </div>
           </details>
 
           <details v-if="agentConnected" class="ep-details">
             <summary>
-              Agent Management
+              {{ t('obsconn.agent_mgmt') }}
               <span class="ep-details-icon closed" v-html="iconSvgFor('chevron-right')"></span>
               <span class="ep-details-icon open" v-html="iconSvgFor('chevron-down')"></span>
             </summary>
             <div class="ep-details-body">
               <div class="ep-field-group">
                 <div class="ep-download-row">
-                  <button class="ep-btn ep-btn-secondary" @click="openAgentPairingPage">Open pairing page</button>
-                  <button class="ep-btn ep-btn-secondary" @click="openAgentDebugConsole">Open debug console</button>
+                  <button class="ep-btn ep-btn-secondary" @click="openAgentPairingPage">{{ t('obsconn.open_pairing') }}</button>
+                  <button class="ep-btn ep-btn-secondary" @click="openAgentDebugConsole">{{ t('obsconn.open_debug') }}</button>
                   <button class="ep-btn ep-btn-secondary" :disabled="checkingAgentUpdate" @click="checkAgentUpdate">
-                    {{ checkingAgentUpdate ? "checking..." : "Check for update" }}
+                    {{ checkingAgentUpdate ? t('obsconn.checking') : t('obsconn.check_update') }}
                   </button>
                 </div>
                 <div v-if="agentUpdateResult" class="ep-field-hint">{{ agentUpdateResult }}</div>
@@ -2338,24 +2339,24 @@ watch(
                   :disabled="disconnectingAgent" @click="disconnectAgent">
                   {{
                     disconnectingAgent
-                      ? "disconnecting..."
+                      ? t('obsconn.disconnecting')
                       : disconnectConfirm
-                        ? "Click again to confirm"
-                        : "Disconnect agent"
+                        ? t('obsconn.confirm_again')
+                        : t('obsconn.disconnect_agent')
                   }}
                 </button>
-                <div class="ep-field-hint">Shuts down agent process on your PC.</div>
+                <div class="ep-field-hint">{{ t('obsconn.disconnect_hint') }}</div>
               </div>
             </div>
           </details>
 
           <div v-if="settingsSaving || settingsSaved" class="ep-autosave">
-            {{ settingsSaving ? "saving..." : "saved" }}
+            {{ settingsSaving ? t('obsconn.saving_ellipsis') : t('obsconn.saved') }}
           </div>
         </div>
 
         <div class="ep-panel-footer">
-          <button class="ep-btn ep-btn-secondary" @click="showSettings = false">Done</button>
+          <button class="ep-btn ep-btn-secondary" @click="showSettings = false">{{ t('obsconn.done') }}</button>
         </div>
       </div>
     </div>
@@ -2368,7 +2369,7 @@ watch(
       <div class="ep-panel obsconn-settings-panel">
         <div class="ep-panel-header">
           <div>
-            <div class="ep-panel-title">Filter scenes</div>
+            <div class="ep-panel-title">{{ t('obsconn.filter_title') }}</div>
           </div>
           <button class="ep-panel-close" @click="showFilter = false">
             x
@@ -2378,13 +2379,13 @@ watch(
         <div class="ep-panel-body">
           <div class="ep-field-group">
             <div class="ep-field-label obs-section-label">
-              Scenes
-              <button class="obs-refresh-btn" @click="refreshScenes" title="Refresh scene list"
+              {{ t('obsconn.scenes_label') }}
+              <button class="obs-refresh-btn" @click="refreshScenes" :title="t('obsconn.refresh_title')"
                 v-html="iconSvgFor('refresh-cw')">
               </button>
             </div>
             <div class="ep-field-hint">
-              Unchecked scenes stay out of the scenes unless live - saves resources aswell
+              {{ t('obsconn.filter_hint') }}
             </div>
             <div class="obs-filter-list">
               <div v-for="s in scenes" :key="s.sceneName" class="ep-list-row"
@@ -2393,11 +2394,11 @@ watch(
                   @click="toggleSceneHidden(s.sceneName)"><span class="ep-switch-knob"></span></div>
                 <span>{{ s.sceneName }}</span>
               </div>
-              <div v-if="!scenes.length" class="ep-field-hint">no scenes loaded yet</div>
+              <div v-if="!scenes.length" class="ep-field-hint">{{ t('obsconn.no_scenes_loaded') }}</div>
             </div>
           </div>
 
-          <div v-if="filterSaving" class="obsconn-autosave">saving…</div>
+          <div v-if="filterSaving" class="obsconn-autosave">{{ t('obsconn.saving_ellipsis') }}</div>
         </div>
       </div>
     </div>
@@ -2409,7 +2410,7 @@ watch(
       <div class="ep-panel obs-add-category-panel">
         <div class="ep-panel-header">
           <div>
-            <div class="ep-panel-title">Add category</div>
+            <div class="ep-panel-title">{{ t('obsconn.add_category_panel_title') }}</div>
           </div>
           <button class="ep-panel-close" @click="showAddCategory = false">
             x
@@ -2417,9 +2418,9 @@ watch(
         </div>
         <div class="ep-panel-body">
           <div class="ep-field-group">
-            <label class="ep-field-label">Category</label>
+            <label class="ep-field-label">{{ t('obsconn.category_label') }}</label>
             <TypeaheadInput v-model="addCategoryQuery" :fetch-items="fetchCategories" :min-chars="1" autofocus
-              placeholder="Search a Twitch category..." @select="onAddCategorySelect" />
+              :placeholder="t('obsconn.search_category_ph')" @select="onAddCategorySelect" />
           </div>
         </div>
       </div>
@@ -2431,8 +2432,8 @@ watch(
       <div class="ep-panel obs-add-category-panel">
         <div class="ep-panel-header">
           <div>
-            <div class="ep-panel-title">Add browser source</div>
-            <div class="ep-panel-sub">scene: {{ selectedScene }}</div>
+            <div class="ep-panel-title">{{ t('obsconn.add_source_panel_title') }}</div>
+            <div class="ep-panel-sub">{{ t('obsconn.scene_prefix') }} {{ selectedScene }}</div>
           </div>
           <button class="ep-panel-close" @click="showAddSource = false">
             x
@@ -2441,64 +2442,64 @@ watch(
         <div class="ep-panel-body">
           <div class="ep-tabs">
             <button class="ep-tab" :class="{ active: addSourceMode === 'url' }" @click="addSourceMode = 'url'">
-              URL
+              {{ t('obsconn.tab_url') }}
             </button>
             <button class="ep-tab" :class="{ active: addSourceMode === 'widget' }" @click="addSourceMode = 'widget'">
-              ShyBoti widget
+              {{ t('obsconn.tab_widget') }}
             </button>
             <button v-if="!hasOverlaySource" class="ep-tab" :class="{ active: addSourceMode === 'overlay' }"
               @click="addSourceMode = 'overlay'">
-              Overlay
+              {{ t('obsconn.tab_overlay') }}
             </button>
           </div>
 
           <template v-if="addSourceMode === 'overlay'">
             <div class="ep-field-group">
-              <label class="ep-field-label">Overlay</label>
+              <label class="ep-field-label">{{ t('obsconn.overlay_label') }}</label>
               <select v-model="selectedOverlayChoice" class="ep-field-select">
-                <option value="new">Create a new overlay</option>
+                <option value="new">{{ t('obsconn.create_new_overlay') }}</option>
                 <option v-for="o in overlaysForPicker" :key="o.id" :value="o.id">{{ o.name }}</option>
               </select>
               <div class="ep-field-hint">
-                An existing overlay's content is shared across every scene it's added to.
+                {{ t('obsconn.overlay_shared_hint') }}
               </div>
             </div>
 
             <div v-if="addSourceError" class="ep-toast error">{{ addSourceError }}</div>
 
             <button class="ep-btn-save" :disabled="addSourceSaving" @click="submitAddSource">
-              {{ addSourceSaving ? "adding..." : "add overlay" }}
+              {{ addSourceSaving ? t('obsconn.adding') : t('obsconn.add_overlay_btn') }}
             </button>
           </template>
           <template v-else>
             <div class="ep-field-group">
-              <label class="ep-field-label">Name</label>
-              <input v-model="addSourceName" type="text" class="ep-field-input" placeholder="Source name" />
+              <label class="ep-field-label">{{ t('obsconn.name_label') }}</label>
+              <input v-model="addSourceName" type="text" class="ep-field-input" :placeholder="t('obsconn.source_name_ph')" />
             </div>
 
             <div v-if="addSourceMode === 'url'" class="ep-field-group">
-              <label class="ep-field-label">URL</label>
+              <label class="ep-field-label">{{ t('obsconn.tab_url') }}</label>
               <input v-model="addSourceUrl" type="text" class="ep-field-input" placeholder="https://..." />
             </div>
             <div v-else class="ep-field-group">
-              <label class="ep-field-label">Widget</label>
+              <label class="ep-field-label">{{ t('obsconn.widget_label') }}</label>
               <select v-model="addSourceWidgetId" class="ep-field-select"
                 @change="pickAddSourceWidget(addSourceWidgetId)">
-                <option value="" disabled>Pick a widget...</option>
+                <option value="" disabled>{{ t('obsconn.pick_widget') }}</option>
                 <option v-for="w in widgets" :key="w.id" :value="w.id">{{ w.name }}</option>
               </select>
               <div v-if="!widgets.length" class="ep-field-hint">
-                No OBS widgets yet - create one on the OBS Widgets page first.
+                {{ t('obsconn.no_widgets_yet') }}
               </div>
             </div>
 
             <div class="ep-row-2">
               <div class="ep-field-group ep-sm">
-                <label class="ep-field-label">Width</label>
+                <label class="ep-field-label">{{ t('obsconn.width_label') }}</label>
                 <input v-model.number="addSourceWidth" type="number" min="1" class="ep-field-input" />
               </div>
               <div class="ep-field-group ep-sm">
-                <label class="ep-field-label">Height</label>
+                <label class="ep-field-label">{{ t('obsconn.height_label') }}</label>
                 <input v-model.number="addSourceHeight" type="number" min="1" class="ep-field-input" />
               </div>
             </div>
@@ -2506,7 +2507,7 @@ watch(
             <div v-if="addSourceError" class="ep-toast error">{{ addSourceError }}</div>
 
             <button class="ep-btn-save" :disabled="addSourceSaving" @click="submitAddSource">
-              {{ addSourceSaving ? "adding..." : editMode ? "stage source (added on Save)" : "add source" }}
+              {{ addSourceSaving ? t('obsconn.adding') : editMode ? t('obsconn.staged_add_source') : t('obsconn.add_source_btn') }}
             </button>
           </template>
         </div>
@@ -2516,13 +2517,13 @@ watch(
 
   <Teleport to="body">
     <div v-if="editMode && hasPending && !locked" class="obs-save-bar">
-      <span class="obs-save-lead">Unsaved changes</span>
+      <span class="obs-save-lead">{{ t('obsconn.unsaved_changes') }}</span>
       <div class="obs-diff-chips">
         <span v-for="(d, i) in pendingChanges" :key="i" class="obs-diff-chip">{{ d }}</span>
       </div>
       <div class="obs-save-btns">
-        <button class="obs-btn-discard" @click="discardChanges">Discard</button>
-        <button class="obs-btn-save" @click="saveChanges">Save changes</button>
+        <button class="obs-btn-discard" @click="discardChanges">{{ t('obsconn.discard') }}</button>
+        <button class="obs-btn-save" @click="saveChanges">{{ t('obsconn.save_changes') }}</button>
       </div>
     </div>
   </Teleport>

@@ -6,6 +6,9 @@ import { useOverlayClose } from "../composables/useOverlayClose";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import { useI18n } from "../i18n";
+
+const { t } = useI18n();
 
 export type ObsAccessLevel = "everyone" | "mod" | "broadcaster";
 
@@ -71,26 +74,26 @@ const fAccess = ref<ObsAccessLevel>("everyone");
 const fCooldown = ref(0);
 const fUserCd = ref(0);
 
-const SOURCE_ACTIONS = [
-  { value: "show", label: "show source" },
-  { value: "hide", label: "hide source" },
-  { value: "toggle", label: "toggle visibility" },
-  { value: "mute", label: "mute source" },
-  { value: "unmute", label: "unmute source" },
-  { value: "mutetoggle", label: "toggle mute" },
-  { value: "volume", label: "set volume" },
-];
+const SOURCE_ACTIONS = computed(() => [
+  { value: "show", label: t("obsrule.action.show") },
+  { value: "hide", label: t("obsrule.action.hide") },
+  { value: "toggle", label: t("obsrule.action.toggle") },
+  { value: "mute", label: t("obsrule.action.mute") },
+  { value: "unmute", label: t("obsrule.action.unmute") },
+  { value: "mutetoggle", label: t("obsrule.action.mutetoggle") },
+  { value: "volume", label: t("obsrule.action.volume") },
+]);
 
-const ARG_ACTIONS = [
-  { value: "scene", label: "switch scene", usage: "+cmd <scene name>" },
-  { value: "show", label: "show source", usage: "+cmd <source>" },
-  { value: "hide", label: "hide source", usage: "+cmd <source>" },
-  { value: "toggle", label: "toggle visibility", usage: "+cmd <source>" },
-  { value: "mute", label: "mute source", usage: "+cmd <source>" },
-  { value: "unmute", label: "unmute source", usage: "+cmd <source>" },
-  { value: "mutetoggle", label: "toggle mute", usage: "+cmd <source>" },
-  { value: "volume", label: "set volume", usage: "+cmd <source> <0-100>" },
-];
+const ARG_ACTIONS = computed(() => [
+  { value: "scene", label: t("obsrule.action.scene"), usage: "+cmd <scene name>" },
+  { value: "show", label: t("obsrule.action.show"), usage: "+cmd <source>" },
+  { value: "hide", label: t("obsrule.action.hide"), usage: "+cmd <source>" },
+  { value: "toggle", label: t("obsrule.action.toggle"), usage: "+cmd <source>" },
+  { value: "mute", label: t("obsrule.action.mute"), usage: "+cmd <source>" },
+  { value: "unmute", label: t("obsrule.action.unmute"), usage: "+cmd <source>" },
+  { value: "mutetoggle", label: t("obsrule.action.mutetoggle"), usage: "+cmd <source>" },
+  { value: "volume", label: t("obsrule.action.volume"), usage: "+cmd <source> <0-100>" },
+]);
 
 const isEdit = computed(() => !!props.editTarget);
 
@@ -163,7 +166,7 @@ watch(fKind, (k) => {
 async function save() {
   if (!session.value) return;
   if (missingFields.value.length) {
-    error.value = "Missing: " + missingFields.value.join(", ");
+    error.value = t("obscmd.missing_prefix") + " " + missingFields.value.join(", ");
     return;
   }
   error.value = "";
@@ -289,9 +292,9 @@ async function deleteCmd() {
 
 const missingFields = computed(() => {
   const missing: string[] = [];
-  if (!fCommand.value.trim()) missing.push("Command");
+  if (!fCommand.value.trim()) missing.push(t("obscmd.missing.command"));
   if ((fKind.value === "scene" || fKind.value === "source") && !fTarget.value.trim())
-    missing.push(fKind.value === "scene" ? "Scene" : "Source");
+    missing.push(fKind.value === "scene" ? t("obscmd.missing.scene") : t("obscmd.missing.source"));
   return missing;
 });
 </script>
@@ -303,9 +306,9 @@ const missingFields = computed(() => {
         <div class="ep-panel-header">
           <div>
             <div class="ep-panel-title">
-              {{ isEdit ? "Edit" : "New" }}
+              {{ isEdit ? t('obscmd.title_edit') : t('obscmd.title_new') }}
               <EditableNameHeader v-model="fCommand" :orig-name="editTarget?.command ?? ''" :prefix="prefix"
-                placeholder="scene" />
+                :placeholder="t('obscmd.name_ph')" />
             </div>
             <div class="ep-panel-sub">#{{ channel }}</div>
           </div>
@@ -318,27 +321,27 @@ const missingFields = computed(() => {
             <div class="obs-kind-tabs">
               <button class="obs-kind-tab" :class="{ active: fKind === 'scene' }" @click="fKind = 'scene'"
                 :disabled="isEdit">
-                fixed scene
+                {{ t('obscmd.tab.fixed_scene') }}
               </button>
               <button class="obs-kind-tab" :class="{ active: fKind === 'source' }" @click="fKind = 'source'"
                 :disabled="isEdit">
-                fixed source
+                {{ t('obscmd.tab.fixed_source') }}
               </button>
               <button class="obs-kind-tab" :class="{ active: fKind === 'arg' }" @click="fKind = 'arg'"
                 :disabled="isEdit">
-                chat arg
+                {{ t('obscmd.tab.chat_arg') }}
               </button>
             </div>
             <div class="ep-field-hint">
-              <template v-if="fKind === 'scene'">One command always switches to one specific scene.</template>
-              <template v-else-if="fKind === 'source'">One command always acts on one specific source.</template>
-              <template v-else>Chatter passes the scene/source name as part of the command -
-                e.g. <code class="ep-mono">+scene cam</code>.</template>
+              <template v-if="fKind === 'scene'">{{ t('obscmd.hint.scene') }}</template>
+              <template v-else-if="fKind === 'source'">{{ t('obscmd.hint.source') }}</template>
+              <template v-else>{{ t('obscmd.hint.arg') }}
+                {{ t('obscmd.hint.arg_example') }} <code class="ep-mono">+scene cam</code>.</template>
             </div>
           </div>
 
           <div v-if="fKind !== 'scene'" class="ep-field-group">
-            <label class="ep-field-label">Action</label>
+            <label class="ep-field-label">{{ t('obscmd.action_label') }}</label>
             <select v-model="fAction" class="ep-field-select">
               <option v-if="fKind === 'source'" v-for="a in SOURCE_ACTIONS" :key="a.value" :value="a.value">
                 {{ a.label }}
@@ -350,21 +353,21 @@ const missingFields = computed(() => {
           </div>
 
           <div v-if="fKind !== 'arg'" class="ep-field-group">
-            <label class="ep-field-label">{{ fKind === "scene" ? "Scene" : "Source" }}
+            <label class="ep-field-label">{{ fKind === "scene" ? t('obscmd.scene_label') : t('obscmd.source_label') }}
             </label>
             <TypeaheadInput v-model="fTarget" :items="fKind === 'scene' ? scenes : sources"
-              :placeholder="fKind === 'scene' ? 'Scene name' : 'Source name'" mono />
+              :placeholder="fKind === 'scene' ? t('obscmd.scene_name_ph') : t('obscmd.source_name_ph')" mono />
           </div>
 
           <div v-if="fKind === 'source' && fAction === 'volume'" class="ep-field-group">
-            <label class="ep-field-label">Fixed volume
-              <span class="ep-field-hint">0-100, leave blank to take from chat</span></label>
+            <label class="ep-field-label">{{ t('obscmd.fixed_volume_label') }}
+              <span class="ep-field-hint">{{ t('obscmd.fixed_volume_hint') }}</span></label>
             <input v-model.number="fValue" type="number" min="0" max="100" class="ep-field-input"
-              placeholder="e.g. 50" />
+              :placeholder="t('obscmd.volume_ph')" />
           </div>
 
           <div v-if="fKind === 'arg'" class="ep-field-group">
-            <label class="ep-field-label">Usage</label>
+            <label class="ep-field-label">{{ t('obscmd.usage_label') }}</label>
             <div class="obs-usage-preview ep-mono">
               {{ prefix }}{{ fCommand || "cmd" }}
               {{
@@ -377,28 +380,28 @@ const missingFields = computed(() => {
           </div>
 
           <div class="ep-field-group">
-            <label class="ep-field-label">Access</label>
+            <label class="ep-field-label">{{ t('obscmd.access_label') }}</label>
             <div class="obs-access-row">
               <button class="obs-access-btn" :class="{ active: fAccess === 'everyone' }" @click="fAccess = 'everyone'">
-                everyone
+                {{ t('obscmd.access.everyone') }}
               </button>
               <button class="obs-access-btn" :class="{ active: fAccess === 'mod' }" @click="fAccess = 'mod'">
-                mod+
+                {{ t('obscmd.access.mod') }}
               </button>
               <button class="obs-access-btn" :class="{ active: fAccess === 'broadcaster' }"
                 @click="fAccess = 'broadcaster'">
-                broadcaster
+                {{ t('obscmd.access.broadcaster') }}
               </button>
             </div>
           </div>
 
           <div class="ep-row-3">
             <div class="ep-field-group ep-sm">
-              <label class="ep-field-label">Global cooldown <span class="ep-field-hint">s</span></label>
+              <label class="ep-field-label">{{ t('obscmd.global_cooldown') }} <span class="ep-field-hint">s</span></label>
               <input v-model.number="fCooldown" type="number" min="0" class="ep-field-input" />
             </div>
             <div class="ep-field-group ep-sm">
-              <label class="ep-field-label">User cooldown <span class="ep-field-hint">s</span></label>
+              <label class="ep-field-label">{{ t('obscmd.user_cooldown') }} <span class="ep-field-hint">s</span></label>
               <input v-model.number="fUserCd" type="number" min="0" class="ep-field-input" />
             </div>
           </div>
@@ -407,14 +410,14 @@ const missingFields = computed(() => {
         <div class="ep-panel-footer">
           <button v-if="isEdit" class="ep-btn-delete" :class="{ confirm: deleteConfirm }" :disabled="deleting"
             @click="deleteCmd">
-            {{ deleting ? "…" : deleteConfirm ? "Sure?" : "Delete" }}
+            {{ deleting ? "…" : deleteConfirm ? t('obscmd.delete_confirm') : t('obscmd.delete') }}
           </button>
           <div v-else></div>
           <div class="ep-footer-right">
-            <button class="ep-btn-cancel" @click="emit('close')">Cancel</button>
+            <button class="ep-btn-cancel" @click="emit('close')">{{ t('obscmd.cancel') }}</button>
             <button class="ep-btn-save" :disabled="saving" @click="save">
-              <template v-if="saved"><span v-html="iconSvgFor('check')"></span> saved</template>
-              <template v-else>{{ saving ? "…" : "Save" }}</template>
+              <template v-if="saved"><span v-html="iconSvgFor('check')"></span> {{ t('obscmd.saved') }}</template>
+              <template v-else>{{ saving ? "…" : t('obscmd.save') }}</template>
             </button>
           </div>
         </div>

@@ -12,6 +12,9 @@ import {
   toggleRunningData,
   type CountdownLikeType,
 } from "../../composables/overlay/overlayCountdown";
+import { useI18n } from "../../i18n";
+
+const { t } = useI18n();
 
 // >>> custom icon, doesn't fit the shared icon set
 const RESET_ZOOM_ICON = `<svg viewBox="0 0 100 100" width="1em" height="1em" fill="currentColor">
@@ -975,9 +978,9 @@ function onTextEditInput(el: OverlayElement) {
 function displayText(el: OverlayElement) {
   if (el.type === "variable-text") {
     const resolved = props.previewValues?.[el.id];
-    return resolved || el.content || "(empty variable)";
+    return resolved || el.content || t("overlay.canvas.empty_variable");
   }
-  return el.content || "(empty text)";
+  return el.content || t("overlay.canvas.empty_text");
 }
 // ^^^ double-click to edit ^^^
 
@@ -1156,15 +1159,15 @@ const guideStyleY = computed(() => {
       </div>
       <span class="ovl-item-label">{{ el.type }}</span>
       <template v-if="selectedIds.length === 1 && el.id === selectedIds[0] && !el.locked">
-        <span class="ovl-handle tl" title="Drag to resize (hold Ctrl or Alt to also scale font-size)"
+        <span class="ovl-handle tl" :title="t('overlay.canvas.resize_hint')"
           @pointerdown="onHandleMouseDown(el, 'tl', $event)"></span>
-        <span class="ovl-handle tr" title="Drag to resize (hold Ctrl or Alt to also scale font-size)"
+        <span class="ovl-handle tr" :title="t('overlay.canvas.resize_hint')"
           @pointerdown="onHandleMouseDown(el, 'tr', $event)"></span>
-        <span class="ovl-handle bl" title="Drag to resize (hold Ctrl or Alt to also scale font-size)"
+        <span class="ovl-handle bl" :title="t('overlay.canvas.resize_hint')"
           @pointerdown="onHandleMouseDown(el, 'bl', $event)"></span>
-        <span class="ovl-handle br" title="Drag to resize (hold Ctrl or Alt to also scale font-size)"
+        <span class="ovl-handle br" :title="t('overlay.canvas.resize_hint')"
           @pointerdown="onHandleMouseDown(el, 'br', $event)"></span>
-        <span class="ovl-rotate-handle" title="Drag to rotate (hold Shift for free angle)"
+        <span class="ovl-rotate-handle" :title="t('overlay.canvas.rotate_hint')"
           @pointerdown="onRotateMouseDown(el, $event)">
           <span class="ovl-rotate-stem"></span>
           <span class="ovl-rotate-knob"></span>
@@ -1173,13 +1176,13 @@ const guideStyleY = computed(() => {
     </div>
 
     <div v-if="selectionBounds" class="ovl-group-box" :style="groupBoxStyle">
-      <span class="ovl-handle tl" title="Drag to resize the group (hold Ctrl or Alt to also scale font-size)"
+      <span class="ovl-handle tl" :title="t('overlay.canvas.resize_group_hint')"
         @pointerdown="onGroupHandleMouseDown('tl', $event)"></span>
-      <span class="ovl-handle tr" title="Drag to resize the group (hold Ctrl or Alt to also scale font-size)"
+      <span class="ovl-handle tr" :title="t('overlay.canvas.resize_group_hint')"
         @pointerdown="onGroupHandleMouseDown('tr', $event)"></span>
-      <span class="ovl-handle bl" title="Drag to resize the group (hold Ctrl or Alt to also scale font-size)"
+      <span class="ovl-handle bl" :title="t('overlay.canvas.resize_group_hint')"
         @pointerdown="onGroupHandleMouseDown('bl', $event)"></span>
-      <span class="ovl-handle br" title="Drag to resize the group (hold Ctrl or Alt to also scale font-size)"
+      <span class="ovl-handle br" :title="t('overlay.canvas.resize_group_hint')"
         @pointerdown="onGroupHandleMouseDown('br', $event)"></span>
     </div>
   </div>
@@ -1188,9 +1191,9 @@ const guideStyleY = computed(() => {
   <div v-if="contextMenu" class="ovl-ctx-menu" :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
     @pointerdown.stop>
     <template v-if="contextMenuElement?.type === 'video' && !youtubeVideoId(contextMenuElement.content)">
-      <button @click="ctxToggleMute">{{ contextMenuElement.data.muted !== false ? "Unmute" : "Mute" }}</button>
+      <button @click="ctxToggleMute">{{ contextMenuElement.data.muted !== false ? t('overlay.canvas.unmute') : t('overlay.canvas.mute') }}</button>
       <div class="ovl-ctx-volume">
-        <span>Vol</span>
+        <span>{{ t('overlay.canvas.vol_label') }}</span>
         <input type="range" min="0" max="100" :value="contextMenuElement.data.volume ?? 100"
           @input="ctxSetVolume(Number(($event.target as HTMLInputElement).value))" />
         <span>{{ contextMenuElement.data.volume ?? 100 }}%</span>
@@ -1199,27 +1202,27 @@ const guideStyleY = computed(() => {
     </template>
     <template v-if="contextMenuElement?.type === 'video'">
       <button @click="ctxToggleVideoPlay">
-        {{ contextMenuElement.data.paused === true ? "Play" : "Pause" }}
+        {{ contextMenuElement.data.paused === true ? t('overlay.canvas.play') : t('overlay.canvas.pause') }}
       </button>
-      <button @click="ctxRestartVideo">Restart</button>
+      <button @click="ctxRestartVideo">{{ t('overlay.canvas.restart') }}</button>
       <div class="ovl-ctx-sep"></div>
     </template>
     <template v-if="ctxCanToggleRunning(contextMenuElement)">
       <button @click="ctxToggleRunning">
-        {{ contextMenuElement?.data.running !== false ? "Stop" : "Start" }}
+        {{ contextMenuElement?.data.running !== false ? t('overlay.canvas.stop') : t('overlay.canvas.start') }}
       </button>
       <div class="ovl-ctx-sep"></div>
     </template>
-    <button @click="ctxToggleLock">{{ contextMenuElement?.locked ? "Unlock" : "Lock" }}</button>
+    <button @click="ctxToggleLock">{{ contextMenuElement?.locked ? t('overlay.canvas.unlock') : t('overlay.canvas.lock') }}</button>
     <div class="ovl-ctx-volume">
-      <span>Opac</span>
+      <span>{{ t('overlay.canvas.opac_label') }}</span>
       <input type="range" min="0" max="100" :value="contextMenuElement?.style.opacity ?? 100"
         @input="ctxSetOpacity(Number(($event.target as HTMLInputElement).value))" />
       <span>{{ contextMenuElement?.style.opacity ?? 100 }}%</span>
     </div>
     <div class="ovl-ctx-sep"></div>
-    <button @click="ctxDuplicate">Duplicate</button>
-    <button class="danger" @click="ctxDelete">Delete</button>
+    <button @click="ctxDuplicate">{{ t('overlay.canvas.duplicate') }}</button>
+    <button class="danger" @click="ctxDelete">{{ t('overlay.canvas.delete') }}</button>
   </div>
 
   <div v-if="zoomLevel > 1" class="ovl-minimap">
@@ -1227,7 +1230,7 @@ const guideStyleY = computed(() => {
       <div v-for="el in sortedElements" :key="'mm' + el.id" class="ovl-minimap-el" :style="minimapElStyle(el)"></div>
       <div class="ovl-minimap-viewport" :style="minimapViewportStyle()" @pointerdown="onMinimapRectMouseDown"></div>
     </div>
-    <button class="ovl-minimap-reset" title="Reset zoom" @click="resetZoom" v-html="RESET_ZOOM_ICON"></button>
+    <button class="ovl-minimap-reset" :title="t('overlay.canvas.reset_zoom')" @click="resetZoom" v-html="RESET_ZOOM_ICON"></button>
   </div>
   </div>
 </template>

@@ -3,6 +3,13 @@ import { ref, computed, reactive } from "vue";
 import { iconSvg as iconSvgFor } from "../../composables/icons";
 import type { OverlayElement, ShapeVariant } from "../../composables/overlay/overlayTypes";
 import { shapeDefaultStyle } from "../../composables/overlay/overlayTypes";
+import { useI18n } from "../../i18n";
+
+const { t } = useI18n();
+
+function shapeVariantLabel(v: ShapeVariant): string {
+  return t(`overlay.style.variant_${v.replace("-", "_")}`);
+}
 
 const props = defineProps<{
   element: OverlayElement;
@@ -142,28 +149,28 @@ function toggle(key: string) {
     <template v-if="isTextLike">
       <button class="ovl-style-section-title" @click="toggle('typography')">
         <span v-html="iconSvgFor(collapsed.typography ? 'chevron-right' : 'chevron-down')"></span>
-        typography
+        {{ t('overlay.style.typography') }}
       </button>
       <template v-if="!collapsed.typography">
         <label class="ovl-style-field">
-          Font family
+          {{ t('overlay.style.font_family') }}
           <input type="text" :value="element.style.fontFamily || ''" placeholder="inherit"
             @change="setStyle({ fontFamily: str($event) })" />
         </label>
         <div class="ovl-style-grid">
           <label class="ovl-style-num">
-            Size
+            {{ t('overlay.style.size') }}
             <input type="number" :value="element.style.fontSize ?? 32"
               @change="setStyle({ fontSize: num($event) })" />
           </label>
           <label class="ovl-style-num">
-            Letter sp.
+            {{ t('overlay.style.letter_sp') }}
             <input type="number" :value="element.style.letterSpacing ?? 0"
               @change="setStyle({ letterSpacing: num($event) })" />
           </label>
         </div>
         <label class="ovl-style-field">
-          Weight
+          {{ t('overlay.style.weight') }}
           <select :value="element.style.fontWeight || 'normal'" @change="setStyle({ fontWeight: str($event) })">
             <option value="normal">normal</option>
             <option value="bold">bold</option>
@@ -180,16 +187,16 @@ function toggle(key: string) {
       <!-- vvv text color, own section, auto-collapsed vvv -->
       <button class="ovl-style-section-title" @click="toggle('color')">
         <span v-html="iconSvgFor(collapsed.color ? 'chevron-right' : 'chevron-down')"></span>
-        text styling
+        {{ t('overlay.style.text_styling') }}
       </button>
       <template v-if="!collapsed.color">
         <label class="ovl-style-field">
-          Text color
+          {{ t('overlay.style.text_color') }}
           <div class="ovl-style-bg-row">
             <input type="color" :value="parseSolidColor(element.style.color, '#ffffff').hex"
               @input="setSolidColorHex('color', '#ffffff', ($event.target as HTMLInputElement).value)" />
             <input type="range" min="0" max="100" :value="parseSolidColor(element.style.color, '#ffffff').alpha"
-              title="opacity"
+              :title="t('overlay.style.opacity_tooltip')"
               @input="setSolidColorAlpha('color', '#ffffff', Number(($event.target as HTMLInputElement).value))" />
             <span class="ovl-style-bg-pct">{{ parseSolidColor(element.style.color, '#ffffff').alpha }}%</span>
           </div>
@@ -199,15 +206,15 @@ function toggle(key: string) {
             @click="setStyle({ stroke: !element.style.stroke })">
             <span class="ep-switch-knob"></span>
           </div>
-          outline
+          {{ t('overlay.style.outline') }}
         </label>
         <label v-if="element.style.stroke" class="ovl-style-field">
-          Outline color
+          {{ t('overlay.style.outline_color') }}
           <div class="ovl-style-bg-row">
             <input type="color" :value="parseSolidColor(element.style.strokeColor, '#000000').hex"
               @input="setSolidColorHex('strokeColor', '#000000', ($event.target as HTMLInputElement).value)" />
             <input type="range" min="0" max="100"
-              :value="parseSolidColor(element.style.strokeColor, '#000000').alpha" title="opacity"
+              :value="parseSolidColor(element.style.strokeColor, '#000000').alpha" :title="t('overlay.style.opacity_tooltip')"
               @input="setSolidColorAlpha('strokeColor', '#000000', Number(($event.target as HTMLInputElement).value))" />
             <span class="ovl-style-bg-pct">{{ parseSolidColor(element.style.strokeColor, '#000000').alpha }}%</span>
           </div>
@@ -217,15 +224,15 @@ function toggle(key: string) {
             @click="setStyle({ shadow: !element.style.shadow })">
             <span class="ep-switch-knob"></span>
           </div>
-          drop shadow
+          {{ t('overlay.style.drop_shadow') }}
         </label>
         <label v-if="element.style.shadow" class="ovl-style-field">
-          Shadow color
+          {{ t('overlay.style.shadow_color') }}
           <div class="ovl-style-bg-row">
             <input type="color" :value="parseSolidColor(element.style.shadowColor, '#000000').hex"
               @input="setSolidColorHex('shadowColor', '#000000', ($event.target as HTMLInputElement).value)" />
             <input type="range" min="0" max="100"
-              :value="parseSolidColor(element.style.shadowColor, '#000000').alpha" title="opacity"
+              :value="parseSolidColor(element.style.shadowColor, '#000000').alpha" :title="t('overlay.style.opacity_tooltip')"
               @input="setSolidColorAlpha('shadowColor', '#000000', Number(($event.target as HTMLInputElement).value))" />
             <span class="ovl-style-bg-pct">{{ parseSolidColor(element.style.shadowColor, '#000000').alpha }}%</span>
           </div>
@@ -237,19 +244,19 @@ function toggle(key: string) {
     <template v-if="isCountdown">
       <button class="ovl-style-section-title" @click="toggle('countdown')">
         <span v-html="iconSvgFor(collapsed.countdown ? 'chevron-right' : 'chevron-down')"></span>
-        countdown
+        {{ t('overlay.style.countdown') }}
       </button>
       <template v-if="!collapsed.countdown">
         <label class="ovl-style-field">
-          Mode
+          {{ t('overlay.style.mode') }}
           <select :value="element.data.mode || 'duration'" @change="setData({ mode: str($event) })">
-            <option value="duration">Duration</option>
-            <option value="target">Target date/time</option>
+            <option value="duration">{{ t('overlay.style.duration') }}</option>
+            <option value="target">{{ t('overlay.style.target_datetime') }}</option>
           </select>
         </label>
         <template v-if="(element.data.mode || 'duration') === 'duration'">
           <label class="ovl-style-num">
-            Minutes
+            {{ t('overlay.style.minutes') }}
             <input type="number" min="0" step="0.5" :value="(element.data.durationSec ?? 300) / 60"
               @change="setData({ durationSec: Math.max(0, num($event) * 60) })" />
           </label>
@@ -258,18 +265,18 @@ function toggle(key: string) {
               @click="setData({ repeat: element.data.repeat === false })">
               <span class="ep-switch-knob"></span>
             </div>
-            repeat when it reaches zero
+            {{ t('overlay.style.repeat_at_zero') }}
           </label>
         </template>
         <label v-else class="ovl-style-field">
-          Target date &amp; time
+          {{ t('overlay.style.target_date_time') }}
           <input type="datetime-local" class="ovl-style-datetime"
             :value="isoToLocalInput(element.data.targetIso || '')"
             @change="setData({ targetIso: localInputToIso(($event.target as HTMLInputElement).value) })" />
         </label>
         <label class="ovl-style-field">
-          Text when done
-          <input type="text" :value="element.data.doneText || ''" placeholder="leave empty for 00:00"
+          {{ t('overlay.style.text_when_done') }}
+          <input type="text" :value="element.data.doneText || ''" :placeholder="t('overlay.style.done_ph')"
             @change="setData({ doneText: str($event) })" />
         </label>
       </template>
@@ -277,11 +284,11 @@ function toggle(key: string) {
 
     <!-- vvv shape - variant only vvv -->
     <template v-if="isShape">
-      <div class="ovl-style-section-title-static">shape</div>
+      <div class="ovl-style-section-title-static">{{ t('overlay.style.shape') }}</div>
       <div class="ovl-style-grid-2">
         <button v-for="v in (['border', 'background-box', 'frame'] as ShapeVariant[])" :key="v"
           class="ovl-style-variant-btn" :class="{ active: shapeVariant === v }" @click="setVariant(v)">
-          {{ v }}
+          {{ shapeVariantLabel(v) }}
         </button>
       </div>
     </template>
@@ -290,21 +297,21 @@ function toggle(key: string) {
     <template v-if="isShape || isImage || isVideo || isTextLike">
       <button class="ovl-style-section-title" @click="toggle('border')">
         <span v-html="iconSvgFor(collapsed.border ? 'chevron-right' : 'chevron-down')"></span>
-        border &amp; background
+        {{ t('overlay.style.border_background') }}
       </button>
       <template v-if="!collapsed.border">
         <label class="ovl-style-field">
-          Background
+          {{ t('overlay.style.background') }}
           <div class="ovl-style-bg-row">
             <input type="color" :value="backgroundParsed.hex"
               @input="setBackgroundHex(($event.target as HTMLInputElement).value)" />
-            <input type="range" min="0" max="100" :value="backgroundParsed.alpha" title="opacity"
+            <input type="range" min="0" max="100" :value="backgroundParsed.alpha" :title="t('overlay.style.opacity_tooltip')"
               @input="setBackgroundAlpha(Number(($event.target as HTMLInputElement).value))" />
             <span class="ovl-style-bg-pct">{{ backgroundParsed.alpha }}%</span>
           </div>
         </label>
         <label class="ovl-style-field">
-          Border w.
+          {{ t('overlay.style.border_width') }}
           <div class="ovl-style-bg-row">
             <input type="number" min="0" max="40" :value="element.style.borderWidth ?? 0"
               @input="setStyle({ borderWidth: num($event) })" />
@@ -313,7 +320,7 @@ function toggle(key: string) {
           </div>
         </label>
         <label class="ovl-style-field">
-          Radius
+          {{ t('overlay.style.radius') }}
           <div class="ovl-style-bg-row">
             <input type="number" min="0" max="200" :value="element.style.borderRadius ?? 0"
               @input="setStyle({ borderRadius: num($event) })" />
@@ -322,23 +329,23 @@ function toggle(key: string) {
           </div>
         </label>
         <label class="ovl-style-field">
-          Border color
+          {{ t('overlay.style.border_color') }}
           <div class="ovl-style-bg-row">
             <input type="color" :value="parseSolidColor(element.style.borderColor, '#ffffff').hex"
               @input="setSolidColorHex('borderColor', '#ffffff', ($event.target as HTMLInputElement).value)" />
             <input type="range" min="0" max="100" :value="parseSolidColor(element.style.borderColor, '#ffffff').alpha"
-              title="opacity"
+              :title="t('overlay.style.opacity_tooltip')"
               @input="setSolidColorAlpha('borderColor', '#ffffff', Number(($event.target as HTMLInputElement).value))" />
             <span class="ovl-style-bg-pct">{{ parseSolidColor(element.style.borderColor, '#ffffff').alpha }}%</span>
           </div>
         </label>
         <label class="ovl-style-field">
-          Border style
+          {{ t('overlay.style.border_style') }}
           <select :value="element.style.borderStyle || 'solid'"
             @change="setStyle({ borderStyle: str($event) as any })">
-            <option value="solid">solid</option>
-            <option value="dashed">dashed</option>
-            <option value="dotted">dotted</option>
+            <option value="solid">{{ t('overlay.style.solid') }}</option>
+            <option value="dashed">{{ t('overlay.style.dashed') }}</option>
+            <option value="dotted">{{ t('overlay.style.dotted') }}</option>
           </select>
         </label>
       </template>
@@ -346,20 +353,20 @@ function toggle(key: string) {
 
     <!-- vvv audio, just the mute toggle vvv -->
     <template v-if="isAudio">
-      <div class="ovl-style-section-title-static">audio</div>
+      <div class="ovl-style-section-title-static">{{ t('overlay.style.audio') }}</div>
       <label class="ovl-style-check">
         <div class="ep-switch" :class="{ on: element.data.muted !== false }"
           @click="setData({ muted: element.data.muted === false })">
           <span class="ep-switch-knob"></span>
         </div>
-        muted
+        {{ t('overlay.style.muted') }}
       </label>
     </template>
 
     <!-- vvv transform kept last, was confused with text size up top vvv -->
     <button class="ovl-style-section-title" @click="toggle('position')">
       <span v-html="iconSvgFor(collapsed.position ? 'chevron-right' : 'chevron-down')"></span>
-      transform
+      {{ t('overlay.style.transform') }}
     </button>
     <div v-if="!collapsed.position" class="ovl-style-grid">
       <label class="ovl-style-num">
@@ -379,14 +386,14 @@ function toggle(key: string) {
         <input type="number" :value="Math.round(element.h)" @change="setH(num($event))" />
       </label>
       <label class="ovl-style-num">
-        Rotation
+        {{ t('overlay.style.rotation') }}
         <input type="number" :value="Math.round(element.rotation)" @change="set({ rotation: num($event) })" />
       </label>
       <label class="ovl-style-check">
         <div class="ep-switch" :class="{ on: aspectLocked }" @click="aspectLocked = !aspectLocked">
           <span class="ep-switch-knob"></span>
         </div>
-        lock aspect
+        {{ t('overlay.style.lock_aspect') }}
       </label>
     </div>
   </div>

@@ -734,7 +734,7 @@ function builtInKebabItems(cmd: Command): KebabMenuItem[] {
   return [
     {
       key: "access",
-      label: `Access: ${restrictionLabel(cmd)}`,
+      label: `${t("cmd.access_prefix")}: ${restrictionLabel(cmd)}`,
       icon: "lock",
       disabled: !canToggle.value,
       onClick: () => cycleRestriction(cmd),
@@ -757,7 +757,7 @@ function customKebabItems(cmd: CustomCommand): KebabMenuItem[] {
   const items: KebabMenuItem[] = [
     {
       key: "access",
-      label: `Access: ${restrictionLabel(cmd)}`,
+      label: `${t("cmd.access_prefix")}: ${restrictionLabel(cmd)}`,
       icon: "lock",
       disabled: !canToggle.value,
       onClick: () => cycleRestriction(cmd),
@@ -770,7 +770,7 @@ function customKebabItems(cmd: CustomCommand): KebabMenuItem[] {
     },
     {
       key: "share",
-      label: "Share",
+      label: t("cmd.share_icon"),
       icon: "corner-up-right",
       onClick: () => openShare(cmd.name),
     },
@@ -1040,7 +1040,7 @@ async function saveSync() {
     await fetchSync();
     syncMsg.value = "Sync config saved.";
   } catch {
-    syncMsg.value = "Failed to save.";
+    syncMsg.value = t("cmd.sync.error_save");
   }
   syncSaving.value = false;
 }
@@ -1061,9 +1061,9 @@ async function stopSync() {
       }),
     });
     syncConf.value = { ...syncConf.value, is_active: 0 };
-    syncMsg.value = "Sync stopped.";
+    syncMsg.value = t("cmd.sync.stopped");
   } catch {
-    syncMsg.value = "Failed to stop sync.";
+    syncMsg.value = t("cmd.sync.error_stop");
   }
   syncSaving.value = false;
 }
@@ -1232,7 +1232,7 @@ onUnmounted(() => {
                 syncMsg }}</div>
           </div>
         </div>
-        <button class="ep-btn-reload" @click="reloadAll" :disabled="reloading" title="Reload">
+        <button class="ep-btn-reload" @click="reloadAll" :disabled="reloading" :title="t('cmd.reload')">
           <template v-if="reloading">…</template>
           <span v-else v-html="iconSvgFor('refresh-cw')"></span>
         </button>
@@ -1319,7 +1319,7 @@ onUnmounted(() => {
                 <div class="row-chevron-cell">
                   <button v-if="cmd.argVariants?.length" class="row-chevron"
                     :class="{ open: expandedDefault.has(cmd.name) }" @click.stop="toggleExpandDefault(cmd.name)"
-                    title="Show argument variants" v-html="iconSvgFor('chevron-down')">
+                    :title="t('cmd.show_arg_variants')" v-html="iconSvgFor('chevron-down')">
                   </button>
                 </div>
                 <div>
@@ -1478,7 +1478,7 @@ onUnmounted(() => {
               <div class="table-row custom-row" :class="{ expanded: expandedCustom.has(cmd.name) }">
                 <div class="row-chevron-cell">
                   <button v-if="customHasArgs(cmd)" class="row-chevron" :class="{ open: expandedCustom.has(cmd.name) }"
-                    @click.stop="toggleExpandCustom(cmd.name)" title="Show argument variants"
+                    @click.stop="toggleExpandCustom(cmd.name)" :title="t('cmd.show_arg_variants')"
                     v-html="iconSvgFor('chevron-down')">
                   </button>
                 </div>
@@ -1546,7 +1546,7 @@ onUnmounted(() => {
                   <button class="edit-btn" :class="{ blocked: !canEdit }" @click="canEdit && openEdit(cmd.name, false)">
                     {{ canEdit ? t("cmd.edit") : t("cmd.view") }}
                   </button>
-                  <button class="share-btn" @click="openShare(cmd.name)" title="Copy to another channel"
+                  <button class="share-btn" @click="openShare(cmd.name)" :title="t('mod.share')"
                     v-html="iconSvgFor('corner-up-right')">
                   </button>
                   <button v-if="canDelete" class="del-btn" :class="{

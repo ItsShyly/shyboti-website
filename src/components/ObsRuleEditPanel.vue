@@ -7,7 +7,9 @@ import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 import ReauthLink from "./shared/ReauthLink.vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import { useI18n } from "../i18n";
 
+const { t } = useI18n();
 
 export interface ObsRule {
   id: string;
@@ -53,27 +55,27 @@ const error = ref("");
 const deleting = ref(false);
 const deleteConfirm = ref(false);
 
-const TRIGGER_TABS: { value: "bitrate" | "category" | "scene"; label: string }[] = [
-  { value: "bitrate", label: "bitrate" },
-  { value: "category", label: "category" },
-  { value: "scene", label: "scene" },
-];
+const TRIGGER_TABS = computed<{ value: "bitrate" | "category" | "scene"; label: string }[]>(() => [
+  { value: "bitrate", label: t("obsrule.tab.bitrate") },
+  { value: "category", label: t("obsrule.tab.category") },
+  { value: "scene", label: t("obsrule.tab.scene") },
+]);
 
-const SOURCE_ACTIONS = [
-  { value: "scene", label: "switch scene" },
-  { value: "show", label: "show source" },
-  { value: "hide", label: "hide source" },
-  { value: "toggle", label: "toggle visibility" },
-  { value: "mute", label: "mute source" },
-  { value: "unmute", label: "unmute source" },
-  { value: "mutetoggle", label: "toggle mute" },
-  { value: "volume", label: "set volume" },
-];
+const SOURCE_ACTIONS = computed(() => [
+  { value: "scene", label: t("obsrule.action.scene") },
+  { value: "show", label: t("obsrule.action.show") },
+  { value: "hide", label: t("obsrule.action.hide") },
+  { value: "toggle", label: t("obsrule.action.toggle") },
+  { value: "mute", label: t("obsrule.action.mute") },
+  { value: "unmute", label: t("obsrule.action.unmute") },
+  { value: "mutetoggle", label: t("obsrule.action.mutetoggle") },
+  { value: "volume", label: t("obsrule.action.volume") },
+]);
 
 const RULE_ACTIONS = computed(() =>
   fTriggerType.value === "scene"
-    ? [{ value: "category", label: "change category" }, ...SOURCE_ACTIONS]
-    : SOURCE_ACTIONS,
+    ? [{ value: "category", label: t("obsrule.action.category") }, ...SOURCE_ACTIONS.value]
+    : SOURCE_ACTIONS.value,
 );
 
 const isEdit = computed(() => !!props.editTarget);
@@ -95,8 +97,8 @@ const fChatMsgEnabled = ref(false);
 const fChatMsg = ref("");
 
 function defaultChatMessage(action: string): string {
-  if (action === "scene") return "Scene changed to $scene";
-  if (action === "category") return "Category changed to $category";
+  if (action === "scene") return t("obsrule.chat_default_scene");
+  if (action === "category") return t("obsrule.chat_default_category");
   return "";
 }
 function toggleChatMessage() {
@@ -219,7 +221,7 @@ async function fetchCategories(query: string): Promise<TypeaheadItem[]> {
 async function save() {
   if (!session.value) return;
   if (missingFields.value.length) {
-    error.value = "Missing: " + missingFields.value.join(", ");
+    error.value = t("obscmd.missing_prefix") + " " + missingFields.value.join(", ");
     return;
   }
   saving.value = true;
@@ -299,11 +301,11 @@ async function deleteRule() {
 
 const missingFields = computed(() => {
   const missing: string[] = [];
-  if (fTriggerType.value === "bitrate" && (!fBitrate.value || fBitrate.value <= 0)) missing.push("Bitrate threshold");
-  if (fTriggerType.value === "category" && !fCategoryId.value) missing.push("Category");
-  if (fTriggerType.value === "scene" && !fTriggerScene.value.trim()) missing.push("Scene name");
-  if (fAction.value === "category" && !fTargetCategoryId.value) missing.push("Target category");
-  if (fAction.value !== "category" && !fTarget.value.trim()) missing.push("Target");
+  if (fTriggerType.value === "bitrate" && (!fBitrate.value || fBitrate.value <= 0)) missing.push(t("obsrule.missing.bitrate"));
+  if (fTriggerType.value === "category" && !fCategoryId.value) missing.push(t("obsrule.missing.category"));
+  if (fTriggerType.value === "scene" && !fTriggerScene.value.trim()) missing.push(t("obsrule.missing.scene_name"));
+  if (fAction.value === "category" && !fTargetCategoryId.value) missing.push(t("obsrule.missing.target_category"));
+  if (fAction.value !== "category" && !fTarget.value.trim()) missing.push(t("obsrule.missing.target"));
   return missing;
 });
 </script>
@@ -314,7 +316,7 @@ const missingFields = computed(() => {
       <div class="ep-panel obs-ep-panel">
         <div class="ep-panel-header">
           <div>
-            <div class="ep-panel-title">{{ isEdit ? "Edit Rule" : "New Rule" }}</div>
+            <div class="ep-panel-title">{{ isEdit ? t('obsrule.title_edit') : t('obsrule.title_new') }}</div>
             <div class="ep-panel-sub">#{{ channel }}</div>
           </div>
           <button class="ep-panel-close" @click="emit('close')" v-html="iconSvgFor('x')"></button>
@@ -323,115 +325,112 @@ const missingFields = computed(() => {
         <div class="ep-panel-body">
           <div v-if="error" class="ep-toast error">{{ error }}</div>
           <div class="ep-field-group">
-            <label class="ep-field-label">Trigger</label>
+            <label class="ep-field-label">{{ t('obsrule.trigger_label') }}</label>
             <div class="obs-kind-tabs">
-              <button v-for="t in TRIGGER_TABS" :key="t.value" class="obs-kind-tab"
-                :class="{ active: fTriggerType === t.value }" @click="selectTrigger(t.value)">
-                {{ t.label }}
+              <button v-for="tt in TRIGGER_TABS" :key="tt.value" class="obs-kind-tab"
+                :class="{ active: fTriggerType === tt.value }" @click="selectTrigger(tt.value)">
+                {{ tt.label }}
               </button>
             </div>
           </div>
 
           <template v-if="fTriggerType === 'bitrate'">
             <div class="ep-field-group">
-              <label class="ep-field-label">Condition</label>
+              <label class="ep-field-label">{{ t('obsrule.condition_label') }}</label>
               <div class="obs-kind-tabs">
                 <button class="obs-kind-tab" :class="{ active: fCondition === 'below' }" @click="fCondition = 'below'">
-                  below
+                  {{ t('obsrule.cond.below') }}
                 </button>
                 <button class="obs-kind-tab" :class="{ active: fCondition === 'above' }" @click="fCondition = 'above'">
-                  above
+                  {{ t('obsrule.cond.above') }}
                 </button>
               </div>
             </div>
             <div class="ep-field-group">
-              <label class="ep-field-label">Bitrate threshold <span class="ep-field-hint">kbps</span></label>
+              <label class="ep-field-label">{{ t('obsrule.bitrate_threshold') }} <span class="ep-field-hint">kbps</span></label>
               <input v-model.number="fBitrate" type="number" min="1" class="ep-field-input" />
             </div>
           </template>
 
           <div v-else-if="fTriggerType === 'category'" class="ep-field-group">
-            <label class="ep-field-label">Category</label>
+            <label class="ep-field-label">{{ t('obsrule.category_label') }}</label>
             <TypeaheadInput v-model="fCategoryName" :fetch-items="fetchCategories" :min-chars="1"
-              placeholder="Search a Twitch category..." @select="onCategorySelect" />
+              :placeholder="t('obsrule.search_category_ph')" @select="onCategorySelect" />
           </div>
 
           <div v-else class="ep-field-group">
-            <label class="ep-field-label">Scene <span class="ep-field-hint">fires when OBS switches to
-                this</span></label>
-            <TypeaheadInput v-model="fTriggerScene" :items="scenes" placeholder="Scene name" mono />
+            <label class="ep-field-label">{{ t('obsrule.scene_label') }} <span class="ep-field-hint">{{ t('obsrule.scene_hint') }}</span></label>
+            <TypeaheadInput v-model="fTriggerScene" :items="scenes" :placeholder="t('obsrule.scene_name_ph')" mono />
           </div>
 
           <div class="ep-field-group">
-            <label class="ep-field-label">Action</label>
+            <label class="ep-field-label">{{ t('obscmd.action_label') }}</label>
             <select v-model="fAction" class="ep-field-select">
               <option v-for="a in RULE_ACTIONS" :key="a.value" :value="a.value">{{ a.label }}</option>
             </select>
           </div>
 
           <div v-if="fAction === 'category'" class="ep-field-group">
-            <label class="ep-field-label">New category</label>
+            <label class="ep-field-label">{{ t('obsrule.new_category_label') }}</label>
             <TypeaheadInput v-model="fTargetCategoryName" :fetch-items="fetchCategories" :min-chars="1"
-              placeholder="Search a Twitch category..." @select="onTargetCategorySelect" />
+              :placeholder="t('obsrule.search_category_ph')" @select="onTargetCategorySelect" />
           </div>
 
           <div v-else class="ep-field-group">
             <label class="ep-field-label">
-              {{ fAction === "scene" && fTriggerType === "scene" ? "Switch to scene" : fAction === "scene" ? "Scene" :
-                "Source" }}
+              {{ fAction === "scene" && fTriggerType === "scene" ? t('obsrule.switch_to_scene_label') : fAction === "scene" ? t('obsrule.scene_label') :
+                t('obsrule.source_label') }}
             </label>
             <TypeaheadInput v-model="fTarget" :items="fAction === 'scene' ? scenes : sources"
-              :placeholder="fAction === 'scene' ? 'Scene name' : 'Source name'" mono />
+              :placeholder="fAction === 'scene' ? t('obsrule.scene_name_ph') : t('obsrule.source_name_ph')" mono />
           </div>
 
           <div v-if="fAction === 'volume'" class="ep-field-group">
-            <label class="ep-field-label">Volume <span class="ep-field-hint">0-100</span></label>
+            <label class="ep-field-label">{{ t('obsrule.volume_label') }} <span class="ep-field-hint">0-100</span></label>
             <input v-model.number="fValue" type="number" min="0" max="100" class="ep-field-input"
-              placeholder="e.g. 50" />
+              :placeholder="t('obsrule.volume_ph')" />
           </div>
 
           <div class="ep-field-group">
-            <label class="ep-field-label">Chat message</label>
+            <label class="ep-field-label">{{ t('obsrule.chat_message_label') }}</label>
             <div class="obs-toggle-row">
               <button class="ep-switch" :class="{ on: fChatMsgEnabled }" @click="toggleChatMessage">
                 <span class="ep-switch-knob"></span>
               </button>
-              <span class="obs-toggle-label">{{ fChatMsgEnabled ? "send a message when this fires" : "off" }}</span>
+              <span class="obs-toggle-label">{{ fChatMsgEnabled ? t('obsrule.chat_message_on') : t('obsrule.chat_message_off') }}</span>
             </div>
             <textarea v-if="fChatMsgEnabled" v-model="fChatMsg" class="ep-field-input obs-chat-msg-input" rows="2"
-              placeholder="Scene changed to $scene"></textarea>
+              :placeholder="t('obsrule.chat_default_scene')"></textarea>
           </div>
 
           <div class="ep-field-group">
-            <label class="ep-field-label">Enabled</label>
+            <label class="ep-field-label">{{ t('obsrule.enabled_label') }}</label>
             <div class="obs-toggle-row">
               <button class="ep-switch" :class="{ on: fEnabled }" @click="fEnabled = !fEnabled">
                 <span class="ep-switch-knob"></span>
               </button>
-              <span class="obs-toggle-label">{{ fEnabled ? "active" : "disabled" }}</span>
+              <span class="obs-toggle-label">{{ fEnabled ? t('obsrule.state_active') : t('obsrule.state_disabled') }}</span>
             </div>
           </div>
         </div>
 
         <div v-if="needsCategoryScope" class="ep-panel-body" style="padding-top: 0">
           <div class="obs-scope-warning">
-            Your stored Twitch token doesn't have permission to change the category yet, so this
-            rule won't actually fire until <ReauthLink fallback="the broadcaster re-authorizes">you
-              re-authorize</ReauthLink>.
+            {{ t('obsrule.scope_warning_pre') }} <ReauthLink :fallback="t('obsrule.scope_warning_fallback')">{{ t('obsrule.scope_warning_link') }}</ReauthLink>.
           </div>
         </div>
 
         <div class="ep-panel-footer">
           <button v-if="isEdit" class="ep-btn-delete" :class="{ confirm: deleteConfirm }" :disabled="deleting"
             @click="deleteRule">
-            {{ deleting ? "…" : deleteConfirm ? "Sure?" : "Delete" }}
+            {{ deleting ? "…" : deleteConfirm ? t('obscmd.delete_confirm') : t('obscmd.delete') }}
           </button>
           <div v-else></div>
           <div class="ep-footer-right">
-            <button class="ep-btn-cancel" @click="emit('close')">Cancel</button>
+            <button class="ep-btn-cancel" @click="emit('close')">{{ t('obscmd.cancel') }}</button>
             <button class="ep-btn-save" :disabled="saving" @click="save">
-              <template v-if="saved"><span v-html="iconSvgFor('check')"></span> saved</template>
-              <template v-else>{{ saving ? "…" : "Save" }}</template>
+              <template v-if="saved"><span v-html="iconSvgFor('check')"></span> {{ t('obscmd.saved') }}</template>
+              <template v-else>{{ saving ? "…" : t('obscmd.save') }}</template>
             </button>
           </div>
         </div>

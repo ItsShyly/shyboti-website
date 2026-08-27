@@ -229,7 +229,7 @@ async function fetchActivity() {
       activity.value = data.activity;
     }
   } catch {
-    if (viewChannel.value === target) error.value = "Could not load activity.";
+    if (viewChannel.value === target) error.value = t("dash.err.activity");
   }
   if (viewChannel.value !== target) return;
   loading.value = false;
@@ -709,7 +709,7 @@ function fmtActor(actor: string) {
             ? 'Connecting…'
             : 'Offline'
           "></span>
-        <button class="ep-btn-reload" @click="fetchActivity" title="Reload" v-html="iconSvgFor('refresh-cw')"></button>
+        <button class="ep-btn-reload" @click="fetchActivity" :title="t('dash.reload')" v-html="iconSvgFor('refresh-cw')"></button>
 
       </div>
     </div>
@@ -767,19 +767,19 @@ function fmtActor(actor: string) {
 
             <div class="feed-right">
               <div class="feed-actions">
-                <button v-if="USER_TARGET_TYPES.has(e.type)" class="act-btn" title="View user logs"
+                <button v-if="USER_TARGET_TYPES.has(e.type)" class="act-btn" :title="t('dash.view_user_logs')"
                   @click.stop="goToLogs(e)">
-                  logs
+                  {{ t("dash.action.logs") }}
                 </button>
                 <button v-if="
                   ['cmd_added', 'cmd_changed', 'cmd_removed'].includes(e.type)
-                " class="act-btn" title="Edit command" @click.stop="goToCommand(e)">
-                  edit
+                " class="act-btn" :title="t('dash.edit_command')" @click.stop="goToCommand(e)">
+                  {{ t("dash.action.edit") }}
                 </button>
                 <button v-if="
                   e.type.startsWith('timer') || e.type.startsWith('trigger') || e.type.startsWith('countdown')
-                " class="act-btn" title="View in Automations" @click.stop="goToAutomations(e)">
-                  <span v-html="iconSvgFor('refresh-cw')"></span> auto
+                " class="act-btn" :title="t('dash.view_automations')" @click.stop="goToAutomations(e)">
+                  <span v-html="iconSvgFor('refresh-cw')"></span> {{ t("dash.action.auto") }}
                 </button>
               </div>
               <span class="feed-time">{{ fmtTime(e.timestamp) }}</span>
@@ -850,10 +850,10 @@ function fmtActor(actor: string) {
           </div>
 
           <div v-if="popupUser.nameHistory?.length" class="popup-names">
-            <div class="popup-names-label">Previous names</div>
+            <div class="popup-names-label">{{ t("dash.previous_names") }}</div>
             <div v-for="n in popupUser.nameHistory" :key="n.name" class="popup-name-row">
               <span class="name-val">{{ n.name }}</span>
-              <span v-if="n.lastSeen" class="name-when">{{ fmtDuration(n.lastSeen) }} ago</span>
+              <span v-if="n.lastSeen" class="name-when">{{ t("dash.ago", { time: fmtDuration(n.lastSeen) }) }}</span>
             </div>
           </div>
         </template>

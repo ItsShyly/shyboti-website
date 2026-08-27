@@ -287,7 +287,7 @@ async function deleteCountdown(name: string) {
     if (editOpen.value && editCountdown.value.name === name)
       editOpen.value = false;
   } catch {
-    error.value = "Could not delete countdown.";
+    error.value = t("countdown.error.delete");
   }
   saving.value = null;
 }
@@ -530,7 +530,7 @@ defineExpose({
                   t("countdown.field.resp_hint")
                   }}</span></label>
               <div ref="startEditorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
-                data-placeholder="Countdown gestartet! $countdown.hype.remaining Sekunden verbleiben."
+                :data-placeholder="t('countdown.placeholder.msg_start')"
                 @focus="activeField = 'msg_start'" @input="onEditorInput(startEditorRef, 'msg_start')"></div>
             </div>
 
@@ -541,7 +541,7 @@ defineExpose({
                     t("countdown.field.tick_hint")
                     }}</span></label>
                 <div ref="tickEditorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
-                  data-placeholder="Noch $countdown.hype.remaining Sekunden!" @focus="activeField = 'msg_tick'"
+                  :data-placeholder="t('countdown.placeholder.msg_tick')" @focus="activeField = 'msg_tick'"
                   @input="onEditorInput(tickEditorRef, 'msg_tick')"></div>
               </div>
               <div class="ep-field-group ep-sm">
@@ -557,7 +557,7 @@ defineExpose({
                   t("countdown.field.resp_hint")
                   }}</span></label>
               <div ref="endEditorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
-                data-placeholder="Zeit ist abgelaufen! PogChamp" @focus="activeField = 'msg_end'"
+                :data-placeholder="t('countdown.placeholder.msg_end')" @focus="activeField = 'msg_end'"
                 @input="onEditorInput(endEditorRef, 'msg_end')"></div>
             </div>
 

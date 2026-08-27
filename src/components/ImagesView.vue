@@ -53,16 +53,17 @@ async function uploadFromUrl() {
   uploadError.value = "";
   try {
     const res = await fetch(v);
-    if (!res.ok) throw new Error(`Could not fetch image (${res.status})`);
+    if (!res.ok)
+      throw new Error(t("images.err.fetch_failed", { status: res.status }));
     const ct = res.headers.get("content-type") ?? "";
     if (!ct.startsWith("image/"))
-      throw new Error("URL does not point to an image");
+      throw new Error(t("images.err.not_image_url"));
     const blob = await res.blob();
     const name = v.split("/").pop()?.split("?")[0] ?? "image";
     await uploadFiles([new File([blob], name, { type: ct })]);
     urlInput.value = "";
   } catch (e: any) {
-    urlError.value = e.message ?? "Failed to fetch image";
+    urlError.value = e.message ?? t("images.err.fetch_generic");
   }
   urlUploading.value = false;
 }
@@ -252,7 +253,7 @@ async function compressImage(file: File, maxMB = 3): Promise<Blob> {
         canvas.toBlob(
           (blob) => {
             if (!blob) {
-              reject(new Error("Canvas encode failed"));
+              reject(new Error(t("images.err.canvas")));
               return;
             }
             if (blob.size <= maxBytes || quality < 0.25) {
@@ -300,20 +301,20 @@ async function uploadFiles(files: File[]) {
     for (const file of files) {
       // >>> hard reject: not an accepted type
       if (!isAcceptedFile(file)) {
-        uploadError.value = `${file.name} is not an accepted image or video`;
+        uploadError.value = t("images.err.type", { name: file.name });
         continue;
       }
 
       // >>> pre-compress / validate size before upload
       const blob = await prepareFile(file);
       if (!blob) {
-        uploadError.value = `${file.name} exceeds 50 MB and cannot be compressed in-browser. Please compress it first.`;
+        uploadError.value = t("images.err.too_big_compress", { name: file.name });
         continue;
       }
 
       // >>> hard server-side limit guard
       if (blob.size > 50 * 1024 * 1024) {
-        uploadError.value = `${file.name} is too large (max 50 MB)`;
+        uploadError.value = t("images.err.too_large", { name: file.name });
         continue;
       }
 
@@ -341,11 +342,11 @@ async function uploadFiles(files: File[]) {
         data = await res.json();
       } else {
         const text = await res.text();
-        data = { error: text || `Server error (${res.status})` };
+        data = { error: text || t("images.err.server", { status: res.status }) };
       }
 
       if (!res.ok) {
-        uploadError.value = data.error ?? `Upload failed (${res.status})`;
+        uploadError.value = data.error ?? t("images.err.upload_failed", { status: res.status });
         continue;
       }
 
@@ -353,7 +354,7 @@ async function uploadFiles(files: File[]) {
       if (fileInputRef.value) fileInputRef.value.value = "";
     }
   } catch (e: any) {
-    uploadError.value = e.message ?? "Upload failed";
+    uploadError.value = e.message ?? t("images.err.upload_failed_generic");
   }
   uploading.value = false;
 }
@@ -489,7 +490,7 @@ function switchView(v: "upload" | "gallery") {
           <div class="link-bar">
             <span class="link-label">{{ t("images.link") }}</span>
             <code class="link-code">{{ lastLink }}</code>
-            <button class="crop-btn" @click.stop="openCrop()"><span v-html="iconSvgFor('scissors')"></span> Crop</button>
+            <button class="crop-btn" @click.stop="openCrop()"><span v-html="iconSvgFor('scissors')"></span> {{ t("images.crop.btn") }}</button>
             <button class="copy-btn" @click.stop="copyLink(lastLink)">
               <span v-if="lastCopied" v-html="iconSvgFor('check')"></span>
               <template v-else>{{ t("images.copy") }}</template>
@@ -526,7 +527,7 @@ function switchView(v: "upload" | "gallery") {
       </div>
 
       <div class="url-bar">
-        <input v-model="urlInput" class="url-input" placeholder="Paste any image URL to upload it…"
+        <input v-model="urlInput" class="url-input" :placeholder="t('images.url.placeholder')"
           @keydown.enter="uploadFromUrl" :disabled="urlUploading" />
         <button class="url-go-btn" @click="uploadFromUrl" :disabled="urlUploading">
           <template v-if="urlUploading">…</template>
@@ -554,16 +555,16 @@ function switchView(v: "upload" | "gallery") {
     <div v-if="cropOpen" class="crop-backdrop" @click.self="cropOpen = false">
       <div class="crop-modal">
         <div class="crop-header">
-          <span class="crop-title"><span v-html="iconSvgFor('scissors')"></span> Crop Image</span>
+          <span class="crop-title"><span v-html="iconSvgFor('scissors')"></span> {{ t("images.crop.title") }}</span>
           <button class="crop-close" @click="cropOpen = false" v-html="iconSvgFor('x')"></button>
         </div>
-        <div class="crop-hint">Click and drag to select crop area</div>
+        <div class="crop-hint">{{ t("images.crop.hint") }}</div>
         <canvas ref="cropCanvas" class="crop-canvas" @mousedown="cropMouseDown" @mousemove="cropMouseMove"
           @mouseup="cropMouseUp" @mouseleave="cropMouseUp" />
         <div class="crop-actions">
-          <button class="crop-cancel" @click="cropOpen = false">Cancel</button>
+          <button class="crop-cancel" @click="cropOpen = false">{{ t("images.cancel") }}</button>
           <button class="crop-apply" :disabled="cropApplying" @click="applyCrop">
-            {{ cropApplying ? "Applying…" : "Apply Crop" }}
+            {{ cropApplying ? t("images.crop.applying") : t("images.crop.apply") }}
           </button>
         </div>
       </div>

@@ -1475,7 +1475,7 @@ async function fetchOldestDate(ch: string): Promise<Date> {
 async function search() {
   readInputs();
   if (!channel.value.trim()) {
-    error.value = "Channel is required.";
+    error.value = t("logs.error.channel_required");
     return;
   }
   activeSearchJob.value += 1;
@@ -1544,7 +1544,7 @@ async function search() {
       (endDate.getTime() - startDate.getTime()) / 86_400_000,
     );
     if (diffDays < 0) {
-      error.value = "End date must be after start date.";
+      error.value = t("logs.error.end_before_start");
       loading.value = false;
       return;
     }
@@ -1710,7 +1710,7 @@ async function search() {
         if (found) await jumpToMessage(hashId);
         else {
           scrollToBottom();
-          error.value = "Could not find linked message.";
+          error.value = t("logs.error.msg_not_found");
         }
       } else {
         await jumpToMessage(hashId);
@@ -1759,7 +1759,7 @@ async function search() {
         if (found) await jumpToMessage(hashId);
         else {
           scrollToBottom();
-          error.value = "Could not find linked message.";
+          error.value = t("logs.error.msg_not_found");
         }
       } else {
         await jumpToMessage(hashId);
@@ -2045,8 +2045,8 @@ function fmtTimeOnly(ts: string) {
 }
 
 function automodTagLabel(status: string): string {
-  const label = status === "held" ? "Hold" : status.charAt(0).toUpperCase() + status.slice(1);
-  return `Automod: ${label}`;
+  const label = status === "held" ? t("logs.automod.hold") : status.charAt(0).toUpperCase() + status.slice(1);
+  return t("logs.automod.tag", { status: label });
 }
 
 function fmtDayLabel(ts: string) {
@@ -2209,7 +2209,7 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
         index: i,
         anchorId: `day-${it.id}`,
         thin: true,
-        title: `Day: ${it.label}`,
+        title: t("logs.marker.day_prefix", { label: it.label }),
       });
       continue;
     }
@@ -2221,7 +2221,7 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
         topPct,
         index: i,
         anchorId: `log-${it.msg.id}`,
-        title: "Ban/timeout (AutoMod)",
+        title: t("logs.marker.automod"),
       });
       continue;
     }
@@ -2244,7 +2244,7 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
         topPct,
         index: i,
         anchorId: `log-${msg.id}`,
-        title: "Subscription event",
+        title: t("logs.marker.sub_event"),
       });
     else if (isFirst)
       out.push({
@@ -2253,7 +2253,7 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
         topPct,
         index: i,
         anchorId: `log-${msg.id}`,
-        title: "First-time chatter",
+        title: t("logs.marker.first_chatter"),
       });
     else if (isMod)
       out.push({
@@ -2262,7 +2262,7 @@ const timelineMarkers = computed<TimelineMarker[]>(() => {
         topPct,
         index: i,
         anchorId: `log-${msg.id}`,
-        title: "Ban/timeout message",
+        title: t("logs.marker.mod_message"),
       });
   }
 
@@ -2562,20 +2562,20 @@ function buildBadgeChips(m: LogMsg): BadgeChip[] {
 function getEventMeta(m: LogMsg): EventMeta | null {
   const tags = m.tags ?? {};
   if (tags["first-msg"] === "1") {
-    return { label: "First Message", icon: "star", tone: "first" };
+    return { label: t("logs.event.first_message"), icon: "star", tone: "first" };
   }
   const msgId = String(tags["msg-id"] ?? "").toLowerCase();
   if (msgId === "sub" || msgId === "resub") {
-    return { label: "Subscribed", icon: "star", tone: "sub" };
+    return { label: t("logs.event.subscribed"), icon: "star", tone: "sub" };
   }
   if (msgId === "subgift") {
-    return { label: "Gift Subscription", icon: "star", tone: "sub" };
+    return { label: t("logs.event.gift_sub"), icon: "star", tone: "sub" };
   }
   if (msgId === "submysterygift") {
-    return { label: "Community Gift", icon: "star", tone: "sub" };
+    return { label: t("logs.event.community_gift"), icon: "star", tone: "sub" };
   }
   if (msgId === "announcement") {
-    return { label: "Announcement", icon: "megaphone", tone: "announce" };
+    return { label: t("logs.event.announcement"), icon: "megaphone", tone: "announce" };
   }
   return null;
 }
@@ -3456,41 +3456,41 @@ function paintNameStyle(paint: {
           <div class="field-wrap">
             <label class="field-lbl">{{ t("logs.field.term") }}
               <span class="opt">{{ t("logs.field.optional") }}</span></label>
-            <input ref="termInputRef" class="field-input" placeholder="search term" @keydown.enter="search"
+            <input ref="termInputRef" class="field-input" :placeholder="t('logs.search_term_ph')" @keydown.enter="search"
               autocomplete="off" spellcheck="false" />
           </div>
           <div class="field-wrap">
-            <label class="field-lbl">Date
+            <label class="field-lbl">{{ t("logs.field.date") }}
               <span class="opt">{{ t("logs.field.optional") }}</span></label>
             <VueDatePicker v-model="dateSingle" no-time-picker dark auto-apply :format="formatDateSingle"
-              placeholder="Any date" class="dp-logs dp-logs-single" :teleport="true" />
+              :placeholder="t('logs.field.any_date_ph')" class="dp-logs dp-logs-single" :teleport="true" />
           </div>
           <!-- >>> sort + visuals merged so bar doesn't sprawl -->
           <div class="field-wrap visuals-bar" ref="visualsBarRef">
-            <label class="field-lbl hide-mobile">Options</label>
+            <label class="field-lbl hide-mobile">{{ t("logs.field.options") }}</label>
             <button class="visuals-toggle hide-mobile" :class="{ open: visualsOpen }"
               @click.stop="visualsOpen = !visualsOpen">
-              Options <span v-html="iconSvg(visualsOpen ? 'chevron-up' : 'chevron-down')"></span>
+              {{ t("logs.field.options") }} <span v-html="iconSvg(visualsOpen ? 'chevron-up' : 'chevron-down')"></span>
             </button>
             <div class="visuals-panel" :class="{ 'visuals-panel-open': visualsOpen }" @click.stop>
               <div class="options-group">
-                <span class="options-group-lbl show-mobile">Sort</span>
+                <span class="options-group-lbl show-mobile">{{ t("logs.sort_label") }}</span>
                 <button class="dir-btn" :class="{ active: direction === 'newest' }" @click="setDirection('newest')">
-                  &#8595; Newest
+                  &#8595; {{ t("logs.sort.newest") }}
                 </button>
                 <button class="dir-btn" :class="{ active: direction === 'oldest' }" @click="setDirection('oldest')">
-                  &#8593; Oldest
+                  &#8593; {{ t("logs.sort.oldest") }}
                 </button>
               </div>
               <div class="options-group">
-                <span class="options-group-lbl show-mobile">Visuals</span>
+                <span class="options-group-lbl show-mobile">{{ t("logs.visuals_label") }}</span>
                 <button class="dir-btn" :class="{ active: nameVisual === '7tv' }" @click="nameVisual = '7tv'"
-                  title="Show 7TV paints & badges">
+                  :title="t('logs.visuals.7tv_title')">
                   7TV
                 </button>
                 <button class="dir-btn" :class="{ active: nameVisual === 'white' }" @click="nameVisual = 'white'"
-                  title="Show all usernames in white">
-                  White names
+                  :title="t('logs.visuals.white_title')">
+                  {{ t("logs.visuals.white_names") }}
                 </button>
               </div>
             </div>
@@ -3508,8 +3508,8 @@ function paintNameStyle(paint: {
     <div v-if="searched && isBroadcaster && automodMsgs.length > 0" class="automod-bar">
       <button class="automod-toggle" :class="{ active: showAutomod }" @click="showAutomod = !showAutomod">
         <span class="automod-toggle-icon" v-html="iconSvg('alert-triangle')"></span>
-        AutoMod ({{ automodMsgs.length }})
-        {{ showAutomod ? "- click to hide" : "- click to show" }}
+        {{ t("logs.automod.count_label", { count: automodMsgs.length }) }}
+        {{ showAutomod ? t("logs.automod.hide") : t("logs.automod.show") }}
       </button>
     </div>
 
@@ -3553,7 +3553,7 @@ function paintNameStyle(paint: {
               <div class="logs-tbody" ref="scrollerRef">
                 <div v-if="!isMobileView && !loading" class="day-jump-pill-row">
                   <button class="day-jump-btn" @click="jumpOneDayUp">
-                    <span v-html="iconSvg('arrow-up')"></span> jump to {{ jumpTargetDayLabel || "..." }}
+                    <span v-html="iconSvg('arrow-up')"></span> {{ t("logs.jump_to_day", { day: jumpTargetDayLabel || "..." }) }}
                   </button>
                 </div>
                 <div v-if="loadingMore" class="top-loader">
@@ -3692,7 +3692,7 @@ function paintNameStyle(paint: {
                           'reply-context-link':
                             !!item.msg.tags?.['reply-parent-msg-id'],
                         }" :title="item.msg.tags?.['reply-parent-msg-id']
-                          ? 'Jump to replied message'
+                          ? t('logs.reply.jump_title')
                           : undefined
                           " @click.stop="jumpToReplyParent(item.msg)">
                           <span class="reply-icon" v-html="iconSvg('corner-down-right')"></span>
@@ -3707,7 +3707,7 @@ function paintNameStyle(paint: {
                         </div>
                         <div class="log-msg" v-html="getRowData(item.msg).html"></div>
                       </div>
-                      <div class="log-share" @click="shareMsg(item.msg)" title="Copy link">
+                      <div class="log-share" @click="shareMsg(item.msg)" :title="t('logs.copy_link_title')">
                         <svg viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
                           <path d="M10 2L14 6L10 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
                             stroke-linejoin="round" />
@@ -3748,7 +3748,7 @@ function paintNameStyle(paint: {
               @click.stop="jumpToTimelineMarker(m)"></button>
           </div>
         </div>
-        <button v-if="!isMobileView" class="logs-resize-handle" title="Drag to resize logs panel"
+        <button v-if="!isMobileView" class="logs-resize-handle" :title="t('logs.resize_title')"
           @pointerdown="startResizeDrag"></button>
       </div>
     </div>
@@ -3774,31 +3774,30 @@ function paintNameStyle(paint: {
         </button>
       </div>
       <div class="popup-body">
-        <div v-if="popupLoading" class="popup-loading">Loading…</div>
+        <div v-if="popupLoading" class="popup-loading">{{ t("logs.loading") }}</div>
         <template v-else-if="popupUser">
           <div class="popup-stats">
             <div class="popup-stat">
               <span class="stat-val">{{ fmtJoined(popupUser.createdAt) }}</span>
-              <span class="stat-lbl">account created</span>
+              <span class="stat-lbl">{{ t("logs.popup.account_created") }}</span>
             </div>
             <div v-if="popupUser.ownFollowers !== null" class="popup-stat">
               <span class="stat-val">{{
                 fmtFollowers(popupUser.ownFollowers!)
               }}</span>
-              <span class="stat-lbl">followers</span>
+              <span class="stat-lbl">{{ t("logs.popup.followers") }}</span>
             </div>
           </div>
           <div class="popup-relations">
             <div v-if="!popupUser.botInChannel" class="popup-no-bot">
-              ShyBoti not in #{{ popup?.channel }} - follow/sub info unavailable
+              {{ t("logs.popup.bot_not_in_channel", { channel: popup?.channel }) }}
             </div>
             <template v-else>
               <div class="popup-rel" :class="popupUser.followedAt ? 'rel-yes' : 'rel-no'">
                 <span class="rel-icon" v-html="iconSvg('heart')"></span>
                 <span class="rel-label">
-                  <template v-if="popupUser.followedAt">Following for
-                    {{ fmtDuration(popupUser.followedAt) }}</template>
-                  <template v-else>Not following</template>
+                  <template v-if="popupUser.followedAt">{{ t("logs.popup.following_for", { time: fmtDuration(popupUser.followedAt) }) }}</template>
+                  <template v-else>{{ t("logs.popup.not_following") }}</template>
                 </span>
               </div>
               <div class="popup-rel" :class="popupUser.subbedSince ? 'rel-yes' : 'rel-no'">
@@ -3806,32 +3805,32 @@ function paintNameStyle(paint: {
                 <span class="rel-label">
                   <template v-if="popupUser.subbedSince">{{ subTierLabel(popupUser.subTier ?? "1000") }} ·
                     {{ fmtDuration(popupUser.subbedSince) }}</template>
-                  <template v-else>Not subscribed</template>
+                  <template v-else>{{ t("logs.popup.not_subscribed") }}</template>
                 </span>
               </div>
             </template>
           </div>
           <div v-if="popupUser.paint" class="popup-paint">
-            <div class="popup-paint-label">7TV Paint</div>
+            <div class="popup-paint-label">{{ t("logs.popup.paint_label") }}</div>
             <div class="popup-paint-display">
               <span class="popup-paint-name" :style="paintNameStyle(popupUser.paint)">{{ popupUser.paint.name }}</span>
             </div>
           </div>
           <div v-if="popupUser.nameHistory?.length" class="popup-names">
-            <div class="popup-names-label">Previous names</div>
+            <div class="popup-names-label">{{ t("logs.popup.previous_names") }}</div>
             <div v-for="n in popupUser.nameHistory" :key="n.name" class="popup-name-row">
               <span class="name-val">{{ n.name }}</span>
-              <span v-if="n.lastSeen" class="name-when">{{ fmtDuration(n.lastSeen) }} ago</span>
+              <span v-if="n.lastSeen" class="name-when">{{ t("logs.time_ago", { time: fmtDuration(n.lastSeen) }) }}</span>
             </div>
           </div>
         </template>
         <div v-else class="popup-loading" style="color: #555">
-          Could not load profile.
+          {{ t("logs.popup.load_error") }}
         </div>
       </div>
       <div class="popup-actions">
         <button class="popup-btn" @click="goToLogsForUser(popup.username, popup.channel)">
-          Logs
+          {{ t("logs.popup.logs_btn") }}
         </button>
         <button class="popup-btn" @click="openUsercardPopout(popup.username, popup.channel)">
           <span v-html="iconSvg('external-link')"></span> Twitch
@@ -3843,7 +3842,7 @@ function paintNameStyle(paint: {
       :aria-busy="showFloatingFetch ? 'true' : 'false'">
       <img class="logs-fetch-logo" :src="loadingOverlayLogoUrl" alt="ShyBoti loading" loading="eager" decoding="async"
         fetchpriority="high" />
-      <span class="logs-fetch-text">logs getting displayed...</span>
+      <span class="logs-fetch-text">{{ t("logs.fetch_loading") }}</span>
     </div>
   </div>
 </template>

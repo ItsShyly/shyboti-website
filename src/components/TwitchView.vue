@@ -893,7 +893,7 @@ async function saveActions() {
         <div class="ep-view-sub">{{ rewards.length }} {{ t("cp.tab") }}</div>
       </div>
       <div v-if="canView" class="ep-view-header-right">
-        <button class="ep-btn-reload" title="Reload" @click="reload" v-html="iconSvgFor('refresh-cw')"></button>
+        <button class="ep-btn-reload" :title="t('twitch.reload')" @click="reload" v-html="iconSvgFor('refresh-cw')"></button>
         <button v-if="canEdit" class="ep-btn-new" @click="openNew">
           + {{ t("cp.new") }}
         </button>

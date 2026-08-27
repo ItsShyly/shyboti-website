@@ -125,39 +125,39 @@ async function openChatterino() {
         </div>
         <div class="modal-body">
           <div class="mc-row">
-            <span class="mc-label">Request URL</span>
+            <span class="mc-label">{{ t("uploads.chatterino.field_url") }}</span>
             <code class="mc-val">https://shyboti.de/api/images/upload</code>
             <button class="mc-copy" @click="copyText('https://shyboti.de/api/images/upload', 'url')">
               <span v-if="copied === 'url'" v-html="iconSvgFor('check')"></span>
-              <template v-else>copy</template>
+              <template v-else>{{ t("uploads.copy") }}</template>
             </button>
           </div>
           <div class="mc-row">
-            <span class="mc-label">Form field</span>
+            <span class="mc-label">{{ t("uploads.chatterino.field_form") }}</span>
             <code class="mc-val">file</code>
             <button class="mc-copy" @click="copyText('file', 'field')">
               <span v-if="copied === 'field'" v-html="iconSvgFor('check')"></span>
-              <template v-else>copy</template>
+              <template v-else>{{ t("uploads.copy") }}</template>
             </button>
           </div>
           <div class="mc-row">
-            <span class="mc-label">Image link</span>
+            <span class="mc-label">{{ t("uploads.chatterino.field_link") }}</span>
             <code class="mc-val">https://i.shyboti.de/{id}</code>
             <button class="mc-copy" @click="copyText('https://i.shyboti.de/{id}', 'link')">
               <span v-if="copied === 'link'" v-html="iconSvgFor('check')"></span>
-              <template v-else>copy</template>
+              <template v-else>{{ t("uploads.copy") }}</template>
             </button>
           </div>
           <div class="mc-row">
-            <span class="mc-label">Deletion URL</span>
-            <code class="mc-val mc-muted">(leave empty)</code>
+            <span class="mc-label">{{ t("uploads.chatterino.field_del") }}</span>
+            <code class="mc-val mc-muted">{{ t("uploads.chatterino.leave_empty") }}</code>
           </div>
           <div class="mc-divider"></div>
           <div class="mc-bind-hint">{{ t("uploads.chatterino.bind_hint") }}</div>
           <div class="mc-row">
-            <span class="mc-label">Extra headers <span class="mc-optional">optional</span></span>
-            <code v-if="!session" class="mc-val mc-muted">Log in to see</code>
-            <code v-else-if="tokenLoading" class="mc-val mc-muted">Generating…</code>
+            <span class="mc-label">{{ t("uploads.chatterino.headers") }} <span class="mc-optional">{{ t("uploads.chatterino.optional") }}</span></span>
+            <code v-if="!session" class="mc-val mc-muted">{{ t("uploads.chatterino.login_to_see") }}</code>
+            <code v-else-if="tokenLoading" class="mc-val mc-muted">{{ t("uploads.chatterino.generating") }}</code>
             <code v-else class="mc-val mc-token">{{
               showToken ? "Upload-ID: " + uploadToken : "••••••••••••••••••••••"
             }}</code>
@@ -175,7 +175,7 @@ async function openChatterino() {
             <button v-if="session && !tokenLoading" class="mc-copy"
               @click="copyText('Upload-ID: ' + uploadToken, 'token')">
               <span v-if="copied === 'token'" v-html="iconSvgFor('check')"></span>
-              <template v-else>copy</template>
+              <template v-else>{{ t("uploads.copy") }}</template>
             </button>
           </div>
         </div>

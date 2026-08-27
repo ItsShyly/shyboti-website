@@ -69,7 +69,7 @@ function resetAllHiddenInfos() {
     if (key && key.startsWith(prefix)) toRemove.push(key);
   }
   toRemove.forEach((k) => localStorage.removeItem(k));
-  tipsResetMsg.value = "All hidden tips have been restored.";
+  tipsResetMsg.value = t("settings.tips.restored");
   setTimeout(() => (tipsResetMsg.value = ""), 3000);
 }
 
@@ -188,7 +188,7 @@ async function toggleNameHistOptOut() {
       : "Previous usernames are now visible.";
     setTimeout(() => (nameHistMsg.value = ""), 3000);
   } catch {
-    nameHistMsg.value = "Failed to update preference.";
+    nameHistMsg.value = t("settings.err.pref_update");
   }
   nameHistSaving.value = false;
 }
@@ -211,7 +211,7 @@ async function saveVanish() {
       : "Vanish timeouts will show in dashboard.";
     setTimeout(() => (vanishMsg.value = ""), 3000);
   } catch {
-    vanishMsg.value = "Failed to save.";
+    vanishMsg.value = t("settings.err.save");
   }
   vanishSaving.value = false;
 }
@@ -343,19 +343,19 @@ async function doDeleteAllData() {
     <header class="settings-header">
       <h1 class="settings-title">{{ t("settings.title") }}</h1>
       <p class="settings-sub">
-        Manage settings for <span class="chan">#{{ session?.channel }}</span>.
+        {{ t("settings.sub") }} <span class="chan">#{{ session?.channel }}</span>.
       </p>
     </header>
 
     <div class="settings-body">
         <section v-if="isBroadcaster" class="settings-section">
-          <h2 class="section-title">Chat behavior</h2>
+          <h2 class="section-title">{{ t("settings.section.chat") }}</h2>
           <div class="setting-list">
             <div class="setting-row">
               <div class="setting-info">
-                <div class="setting-label">Command prefix</div>
+                <div class="setting-label">{{ t("settings.prefix.label") }}</div>
                 <div class="setting-desc">
-                  Used before commands, e.g. <code class="code">{{ prefix || "+" }}</code>ping.
+                  {{ t("settings.prefix.desc_pre") }}<code class="code">{{ prefix || "+" }}</code>{{ t("settings.prefix.desc_post") }}
                 </div>
                 <div v-if="prefixError" class="field-error">{{ prefixError }}</div>
               </div>
@@ -376,10 +376,9 @@ async function doDeleteAllData() {
 
             <div class="setting-row">
               <div class="setting-info">
-                <div class="setting-label">Hide vanish timeouts</div>
+                <div class="setting-label">{{ t("settings.vanish.label") }}</div>
                 <div class="setting-desc">
-                  Hides short timeouts from the dashboard when the user typed a
-                  vanish command.
+                  {{ t("settings.vanish.desc") }}
                 </div>
                 <div class="setting-desc-detects">
                   Detects <code class="code">!v</code>
@@ -394,7 +393,7 @@ async function doDeleteAllData() {
                   vanishHide = !vanishHide;
                 saveVanish();
                 " :disabled="vanishSaving">
-                  {{ vanishSaving ? "..." : vanishHide ? "Disable" : "Enable" }}
+                  {{ vanishSaving ? "..." : vanishHide ? t("settings.disable") : t("settings.enable") }}
                 </button>
               </div>
             </div>
@@ -402,11 +401,11 @@ async function doDeleteAllData() {
         </section>
 
         <section class="settings-section">
-          <h2 class="section-title">Privacy</h2>
+          <h2 class="section-title">{{ t("settings.section.privacy") }}</h2>
           <div class="setting-list">
             <div class="setting-row">
               <div class="setting-info">
-                <div class="setting-label">Chat log visibility</div>
+                <div class="setting-label">{{ t("settings.optout.label") }}</div>
                 <div class="setting-desc">{{ t("settings.optout.sub") }}</div>
                 <div v-if="optMsg" class="status-msg ok">{{ optMsg }}</div>
               </div>
@@ -426,10 +425,9 @@ async function doDeleteAllData() {
 
             <div class="setting-row">
               <div class="setting-info">
-                <div class="setting-label">Previous usernames</div>
+                <div class="setting-label">{{ t("settings.namehist.label") }}</div>
                 <div class="setting-desc">
-                  Hide your previous Twitch usernames from being shown on other
-                  users' screens.
+                  {{ t("settings.namehist.desc") }}
                 </div>
                 <div v-if="nameHistMsg" class="status-msg ok">{{ nameHistMsg }}</div>
               </div>
@@ -440,8 +438,8 @@ async function doDeleteAllData() {
                     nameHistSaving
                       ? "..."
                       : nameHistOptedOut
-                        ? "Show Names"
-                        : "Hide Names"
+                        ? t("settings.namehist.show")
+                        : t("settings.namehist.hide")
                   }}
                 </button>
               </div>
@@ -450,14 +448,14 @@ async function doDeleteAllData() {
         </section>
 
         <section v-if="isBroadcaster" class="settings-section">
-          <h2 class="section-title">Integrations</h2>
+          <h2 class="section-title">{{ t("settings.section.integrations") }}</h2>
           <div class="integration-panel">
             <div class="integration-header">
-              <div class="integration-title">7TV Emote Set</div>
+              <div class="integration-title">{{ t("settings.7tv.title") }}</div>
               <div class="integration-desc">{{ t("settings.7tv.sub") }}</div>
             </div>
             <div class="integration-body">
-              <div v-if="emoteSetLoading" class="loading">Loading...</div>
+              <div v-if="emoteSetLoading" class="loading">{{ t("settings.loading") }}</div>
               <template v-else>
                 <div v-if="emoteSet.setId" class="emote-current">
                   <span class="emote-name">
@@ -491,7 +489,7 @@ async function doDeleteAllData() {
                         : t("settings.7tv.fetch")
                     }}
                   </button>
-                  <span class="emote-lbl">by channel name</span>
+                  <span class="emote-lbl">{{ t("settings.7tv.by_channel") }}</span>
                 </div>
 
                 <div class="emote-form-row">
@@ -524,20 +522,19 @@ async function doDeleteAllData() {
         </section>
 
         <section class="settings-section">
-          <h2 class="section-title">Interface</h2>
+          <h2 class="section-title">{{ t("settings.section.interface") }}</h2>
           <div class="setting-list">
             <div class="setting-row">
               <div class="setting-info">
-                <div class="setting-label">Hidden tips</div>
+                <div class="setting-label">{{ t("settings.tips.label") }}</div>
                 <div class="setting-desc">
-                  Restore all info tips you've dismissed (e.g. the snippet hint in
-                  Logs).
+                  {{ t("settings.tips.desc") }}
                 </div>
                 <div v-if="tipsResetMsg" class="status-msg ok">{{ tipsResetMsg }}</div>
               </div>
               <div class="setting-control">
                 <button class="btn btn-secondary" @click="resetAllHiddenInfos">
-                  Show hidden tips
+                  {{ t("settings.tips.btn") }}
                 </button>
               </div>
             </div>
@@ -545,17 +542,17 @@ async function doDeleteAllData() {
         </section>
 
         <section v-if="canRemoveBotCard || dangerZoneUnlocked" class="settings-section danger-section">
-          <h2 class="section-title danger-title">Danger zone</h2>
+          <h2 class="section-title danger-title">{{ t("settings.section.danger") }}</h2>
           <div class="danger-list">
             <div v-if="canRemoveBotCard" class="danger-row warning">
               <div class="danger-info">
-                <div class="danger-label">Remove bot from channel</div>
+                <div class="danger-label">{{ t("settings.remove.label") }}</div>
                 <div class="danger-desc">{{ t("settings.remove.sub") }}</div>
                 <div v-if="removeMsg" class="status-msg ok">{{ removeMsg }}</div>
                 <div v-if="removeError" class="status-msg err">{{ removeError }}</div>
                 <div v-if="removeConfirm" class="confirm-inline">
                   <span>
-                    Remove from <strong>#{{ session?.channel }}</strong>?
+                    {{ t("settings.remove.confirm1") }} <strong>#{{ session?.channel }}</strong>?
                     {{ t("settings.remove.confirm2") }}
                   </span>
                   <button class="btn btn-confirm-no" @click="removeConfirm = false">
@@ -579,14 +576,14 @@ async function doDeleteAllData() {
 
             <div v-if="dangerZoneUnlocked" class="danger-row delete">
               <div class="danger-info">
-                <div class="danger-label">Delete all channel data</div>
+                <div class="danger-label">{{ t("settings.delete.label") }}</div>
                 <div class="danger-desc">
                   {{ t("settings.delete.sub") }}
                   <strong>#{{ session?.channel }}</strong>.
                 </div>
                 <div v-if="deleteError" class="status-msg err">{{ deleteError }}</div>
                 <div class="delete-confirm">
-                  <span>Type <strong>DELETE</strong> to confirm.</span>
+                  <span>{{ t("settings.delete.type_confirm_pre") }} <strong>DELETE</strong> {{ t("settings.delete.type_confirm_post") }}</span>
                   <input v-model="deleteConfirmInput" class="delete-input" type="text" placeholder="DELETE"
                     :disabled="deleting" />
                 </div>

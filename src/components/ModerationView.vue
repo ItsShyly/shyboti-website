@@ -161,7 +161,7 @@ function blockedKebabItems(term: BlockedTerm): KebabMenuItem[] {
   if (term.group_id) {
     items.push({
       key: "ungroup",
-      label: "Remove from group",
+      label: t("mod.remove_from_group"),
       icon: "corner-up-left",
       onClick: () => removeFromGroup("blocked", term.id),
     });
@@ -180,7 +180,7 @@ function spamKebabItems(f: SpamFilter): KebabMenuItem[] {
   if (f.group_id) {
     items.push({
       key: "ungroup",
-      label: "Remove from group",
+      label: t("mod.remove_from_group"),
       icon: "corner-up-left",
       onClick: () => removeFromGroup("spam", f.id),
     });
@@ -199,7 +199,7 @@ function nukeKebabItems(n: NukeConfig): KebabMenuItem[] {
   if (n.group_id) {
     items.push({
       key: "ungroup",
-      label: "Remove from group",
+      label: t("mod.remove_from_group"),
       icon: "corner-up-left",
       onClick: () => removeFromGroup("nukes", n.id),
     });
@@ -895,7 +895,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
           </div>
         </div>
-        <button class="ep-btn-reload" @click="reload" :disabled="reloading" title="Reload">
+        <button class="ep-btn-reload" @click="reload" :disabled="reloading" :title="t('mod.reload')">
           <template v-if="reloading">…</template>
           <span v-else v-html="iconSvgFor('refresh-cw')"></span>
         </button>
@@ -980,7 +980,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   </div>
                 </div>
                 <div class="ep-row-actions">
-                  <button v-if="canManage && term.group_id" class="ep-btn-action" title="Remove from group"
+                  <button v-if="canManage && term.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
                     @click.stop="removeFromGroup('blocked', term.id)" v-html="iconSvgFor('corner-up-left')"></button>
                   <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
                   }}</button>
@@ -1038,7 +1038,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   </div>
                 </div>
                 <div class="ep-row-actions">
-                  <button v-if="canManage && f.group_id" class="ep-btn-action" title="Remove from group"
+                  <button v-if="canManage && f.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
                     @click.stop="removeFromGroup('spam', f.id)" v-html="iconSvgFor('corner-up-left')"></button>
                   <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit")
                   }}</button>
@@ -1119,7 +1119,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   </select>
                 </div>
                 <div class="ep-row-actions">
-                  <button v-if="canManage && n.group_id" class="ep-btn-action" title="Remove from group"
+                  <button v-if="canManage && n.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
                     @click.stop="removeFromGroup('nukes', n.id)" v-html="iconSvgFor('corner-up-left')"></button>
                   <button v-if="canManage" class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }"
                     @click="fireNuke(n.id)">

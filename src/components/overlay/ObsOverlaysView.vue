@@ -5,6 +5,9 @@ import { API } from "../../api";
 import { iconSvg as iconSvgFor } from "../../composables/icons";
 import type { Overlay } from "../../composables/overlay/overlayTypes";
 import ObsOverlayEditor from "./ObsOverlayEditor.vue";
+import { useI18n } from "../../i18n";
+
+const { t } = useI18n();
 
 const { session } = useAuth();
 const authHeaders = computed(() =>
@@ -60,7 +63,7 @@ async function createOverlay() {
 
 async function deleteOverlay(o: Overlay) {
   if (!session.value) return;
-  if (!window.confirm(`Delete overlay "${o.name}"? This can't be undone.`)) return;
+  if (!window.confirm(t("overlay.list.confirm_delete", { name: o.name }))) return;
   try {
     const res = await fetch(`${API}/overlays/${session.value.channel}/${o.id}`, {
       method: "DELETE",
@@ -81,15 +84,15 @@ onMounted(load);
 <template>
   <div class="oov-view">
     <div class="oov-header">
-      <h1 class="oov-title">OBS Overlays</h1>
+      <h1 class="oov-title">{{ t('overlay.list.title') }}</h1>
       <button class="oov-new-btn" @click="createOverlay">
-        <span v-html="iconSvgFor('plus')"></span> New overlay
+        <span v-html="iconSvgFor('plus')"></span> {{ t('overlay.list.new') }}
       </button>
     </div>
 
-    <div v-if="loading" class="oov-empty">loading…</div>
+    <div v-if="loading" class="oov-empty">{{ t('overlay.list.loading') }}</div>
     <div v-else-if="!overlays.length" class="oov-empty">
-      No overlays yet. Create one to get started.
+      {{ t('overlay.list.empty') }}
     </div>
     <div v-else class="oov-list">
       <div v-for="o in overlays" :key="o.id" class="oov-row">
@@ -98,13 +101,13 @@ onMounted(load);
           <div class="oov-row-name">{{ o.name }}</div>
           <div class="oov-row-status">
             <template v-if="o.scenes.length">
-              {{ o.scenes.map((s) => `${s.scene}${s.active ? "" : " (hidden)"}`).join(", ") }}
+              {{ o.scenes.map((s) => `${s.scene}${s.active ? "" : " " + t('overlay.list.hidden_suffix')}`).join(", ") }}
             </template>
-            <template v-else>Not added to a scene</template>
+            <template v-else>{{ t('overlay.list.not_added') }}</template>
           </div>
         </div>
-        <button class="oov-icon-btn" title="Edit" @click="editingId = o.id" v-html="iconSvgFor('edit')"></button>
-        <button class="oov-icon-btn danger" title="Delete" @click="deleteOverlay(o)"
+        <button class="oov-icon-btn" :title="t('overlay.list.edit')" @click="editingId = o.id" v-html="iconSvgFor('edit')"></button>
+        <button class="oov-icon-btn danger" :title="t('overlay.list.delete')" @click="deleteOverlay(o)"
           v-html="iconSvgFor('trash')"></button>
       </div>
     </div>

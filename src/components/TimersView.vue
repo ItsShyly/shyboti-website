@@ -240,7 +240,7 @@ async function deleteTimer(name: string) {
     timers.value = timers.value.filter((timer) => timer.name !== name);
     if (editOpen.value && editTimer.value.name === name) editOpen.value = false;
   } catch {
-    error.value = "Could not delete timer.";
+    error.value = t("timer.error.delete");
   }
   saving.value = null;
 }
@@ -400,7 +400,7 @@ async function saveSync() {
     await fetchSync();
     await runSync();
   } catch {
-    syncMsg.value = "Failed to save.";
+    syncMsg.value = t("timer.sync.error_save");
   }
   syncSaving.value = false;
 }
@@ -420,9 +420,9 @@ async function stopSync() {
       }),
     });
     syncConf.value = { ...syncConf.value, is_active: 0 };
-    syncMsg.value = "Sync stopped.";
+    syncMsg.value = t("timer.sync.stopped");
   } catch {
-    syncMsg.value = "Failed.";
+    syncMsg.value = t("timer.sync.error");
   }
   syncSaving.value = false;
 }

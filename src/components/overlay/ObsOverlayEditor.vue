@@ -27,6 +27,9 @@ import ObsOverlayVariablePicker from "./ObsOverlayVariablePicker.vue";
 import ObsOverlayStylePanel from "./ObsOverlayStylePanel.vue";
 import ObsOverlayLayersPanel from "./ObsOverlayLayersPanel.vue";
 import RowKebabMenu, { type KebabMenuItem } from "../shared/RowKebabMenu.vue";
+import { useI18n } from "../../i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   channel: string;
@@ -115,12 +118,12 @@ let clockTimer: ReturnType<typeof setInterval> | null = null;
 const lastSavedLabel = computed(() => {
   if (!lastSavedAt.value) return "";
   const secs = Math.max(0, Math.round((clockNow.value - lastSavedAt.value) / 1000));
-  if (secs < 5) return "saved just now";
-  if (secs < 60) return `saved ${secs}s ago`;
+  if (secs < 5) return t("overlay.editor.saved_just_now");
+  if (secs < 60) return t("overlay.editor.saved_secs_ago", { secs });
   const mins = Math.round(secs / 60);
-  if (mins < 60) return `saved ${mins}m ago`;
+  if (mins < 60) return t("overlay.editor.saved_mins_ago", { mins });
   const hours = Math.round(mins / 60);
-  return `saved ${hours}h ago`;
+  return t("overlay.editor.saved_hours_ago", { hours });
 });
 // ^^^ "saved X ago" ^^^
 
@@ -143,6 +146,12 @@ async function loadSceneShot() {
 function pickBackdrop(b: "checker" | "white" | "black" | "scene") {
   stageBackdrop.value = b;
   if (b === "scene") loadSceneShot();
+}
+function backdropLabel(b: "checker" | "white" | "black"): string {
+  return t(`overlay.editor.backdrop_${b}_short`);
+}
+function alignLabel(h: string, v: string): string {
+  return `${t(`overlay.editor.align_${v}`)} ${t(`overlay.editor.align_${h}`)}`;
 }
 watch(activateScene, () => {
   if (stageBackdrop.value === "scene") loadSceneShot();
@@ -430,7 +439,7 @@ async function load() {
 // vvv switch/create/rename/delete overlays vvv
 function confirmDiscardIfDirty(): boolean {
   if (!dirty.value) return true;
-  return window.confirm("Discard unsaved changes to this overlay?");
+  return window.confirm(t("overlay.editor.confirm_discard"));
 }
 function cycleOverlay(dir: 1 | -1) {
   if (!overlays.value.length) return;
@@ -484,7 +493,7 @@ async function commitRename() {
 }
 async function deleteOverlay() {
   if (!currentOverlay.value) return;
-  if (!window.confirm(`Delete overlay "${currentOverlay.value.name}"? This can't be undone.`))
+  if (!window.confirm(t("overlay.editor.confirm_delete", { name: currentOverlay.value.name })))
     return;
   const id = currentOverlay.value.id;
   try {
@@ -973,22 +982,22 @@ watch(liveUpdate, (on) => {
 // >>> mobile topbar kebab - backdrop + live update/cursor, moved off the bar
 const moreMenuItems = computed<KebabMenuItem[]>(() => {
   const items: KebabMenuItem[] = [
-    { key: "bg-checker", label: "Backdrop: Checkered", onClick: () => pickBackdrop("checker") },
-    { key: "bg-white", label: "Backdrop: White", onClick: () => pickBackdrop("white") },
-    { key: "bg-black", label: "Backdrop: Black", onClick: () => pickBackdrop("black") },
+    { key: "bg-checker", label: t("overlay.editor.backdrop_checkered"), onClick: () => pickBackdrop("checker") },
+    { key: "bg-white", label: t("overlay.editor.backdrop_white"), onClick: () => pickBackdrop("white") },
+    { key: "bg-black", label: t("overlay.editor.backdrop_black"), onClick: () => pickBackdrop("black") },
   ];
   if (props.obsReady) {
-    items.push({ key: "bg-scene", label: "Backdrop: Scene", onClick: () => pickBackdrop("scene") });
+    items.push({ key: "bg-scene", label: t("overlay.editor.backdrop_scene"), onClick: () => pickBackdrop("scene") });
   }
   if (props.obsReady && overlayVisible.value) {
     items.push({
       key: "live-update",
-      label: liveUpdate.value ? "Live Update: on" : "Live Update: off",
+      label: liveUpdate.value ? t("overlay.editor.live_update_on") : t("overlay.editor.live_update_off"),
       onClick: () => toggleLiveUpdate(),
     });
     items.push({
       key: "live-cursor",
-      label: liveCursor.value ? "Live Cursor: on" : "Live Cursor: off",
+      label: liveCursor.value ? t("overlay.editor.live_cursor_on") : t("overlay.editor.live_cursor_off"),
       disabled: !liveUpdate.value,
       onClick: () => toggleLiveCursor(),
     });
@@ -1135,56 +1144,56 @@ onUnmounted(() => {
       <div class="ovl-modal" ref="ovlModalRef">
         <div class="ovl-topbar">
           <div class="ovl-switcher">
-            <button class="ovl-switcher-nav" title="Previous overlay" :disabled="overlays.length < 2"
+            <button class="ovl-switcher-nav" :title="t('overlay.editor.prev')" :disabled="overlays.length < 2"
               @click="cycleOverlay(-1)" v-html="iconSvgFor('chevron-left')"></button>
             <input v-if="renaming" v-model="renameDraft" class="ovl-switcher-input" autofocus
               @blur="commitRename" @keydown.enter="commitRename"
               @keydown.esc="renaming = false" />
-            <button v-else class="ovl-switcher-label" :title="`${overlays.length} overlay(s) - click to rename`"
+            <button v-else class="ovl-switcher-label" :title="t('overlay.editor.rename_hint', { count: overlays.length })"
               @click="startRename">
-              {{ currentOverlay?.name || "Stream Overlay" }}
+              {{ currentOverlay?.name || t('overlay.editor.default_name') }}
             </button>
-            <button class="ovl-switcher-nav" title="Next overlay" :disabled="overlays.length < 2"
+            <button class="ovl-switcher-nav" :title="t('overlay.editor.next')" :disabled="overlays.length < 2"
               @click="cycleOverlay(1)" v-html="iconSvgFor('chevron-right')"></button>
-            <button class="ovl-switcher-nav" title="New overlay" @click="createOverlay"
+            <button class="ovl-switcher-nav" :title="t('overlay.editor.new')" @click="createOverlay"
               v-html="iconSvgFor('plus')"></button>
-            <button class="ovl-switcher-nav" title="Delete this overlay" :disabled="overlays.length < 2"
+            <button class="ovl-switcher-nav" :title="t('overlay.editor.delete')" :disabled="overlays.length < 2"
               @click="deleteOverlay" v-html="iconSvgFor('trash')"></button>
           </div>
           <div class="ovl-topbar-actions">
-            <div class="ovl-backdrop-swatches ovl-mobile-hide" title="Canvas backdrop (editor-only, never rendered live)">
+            <div class="ovl-backdrop-swatches ovl-mobile-hide" :title="t('overlay.editor.backdrop_title')">
               <button v-for="b in (['checker', 'white', 'black'] as const)" :key="b" class="ovl-backdrop-swatch"
-                :class="[b, { active: stageBackdrop === b }]" :title="b" @click="pickBackdrop(b)"></button>
+                :class="[b, { active: stageBackdrop === b }]" :title="backdropLabel(b)" @click="pickBackdrop(b)"></button>
               <button v-if="obsReady" class="ovl-backdrop-swatch scene"
-                :class="{ active: stageBackdrop === 'scene' }" title="preview the real scene behind the canvas"
+                :class="{ active: stageBackdrop === 'scene' }" :title="t('overlay.editor.backdrop_scene_hint')"
                 @click="pickBackdrop('scene')" v-html="iconSvgFor('monitor')"></button>
             </div>
             <button class="ovl-btn-cancel ovl-mobile-hide" :class="{ on: snapEnabled }" @click="snapEnabled = !snapEnabled"
-              :title="snapEnabled ? 'Snapping on - click to disable' : 'Snapping off - click to enable'">
-              <span v-html="iconSvgFor('maximize')"></span> Snap
+              :title="snapEnabled ? t('overlay.editor.snap_on_hint') : t('overlay.editor.snap_off_hint')">
+              <span v-html="iconSvgFor('maximize')"></span> {{ t('overlay.editor.snap') }}
             </button>
-            <button class="ovl-btn-cancel ovl-mobile-hide" :disabled="!historyPast.length" @click="undo" title="Undo (Ctrl+Z)">
+            <button class="ovl-btn-cancel ovl-mobile-hide" :disabled="!historyPast.length" @click="undo" :title="t('overlay.editor.undo_hint')">
               <span v-html="iconSvgFor('corner-up-left')"></span>
             </button>
-            <button class="ovl-btn-cancel ovl-mobile-hide" :disabled="!historyFuture.length" @click="redo" title="Redo (Ctrl+Y)">
+            <button class="ovl-btn-cancel ovl-mobile-hide" :disabled="!historyFuture.length" @click="redo" :title="t('overlay.editor.redo_hint')">
               <span v-html="iconSvgFor('corner-up-right')"></span>
             </button>
             <button v-if="obsReady && overlayVisible" class="ovl-btn-cancel ovl-mobile-hide" :class="{ on: liveUpdate }"
               @click="toggleLiveUpdate"
-              title="Auto-save every change as you make it, not just when you click Save">
-              Live Update
+              :title="t('overlay.editor.live_update_hint')">
+              {{ t('overlay.editor.live_update') }}
             </button>
             <button v-if="obsReady && overlayVisible" class="ovl-btn-cancel ovl-btn-icon-only ovl-mobile-hide"
               :class="{ on: liveCursor }" :disabled="!liveUpdate" @click="toggleLiveCursor"
-              :title="liveUpdate ? 'Show your cursor + name live on stream' : 'Turn on Live Update first'">
+              :title="liveUpdate ? t('overlay.editor.live_cursor_hint_on') : t('overlay.editor.live_cursor_hint_off')">
               <span v-html="iconSvgFor('mouse-pointer')"></span>
             </button>
-            <button class="ovl-btn-cancel ovl-mobile-hide" :disabled="!dirty || saving" @click="discard">Discard</button>
+            <button class="ovl-btn-cancel ovl-mobile-hide" :disabled="!dirty || saving" @click="discard">{{ t('overlay.editor.discard') }}</button>
             <button class="ovl-btn-save ovl-mobile-hide" :disabled="!dirty || saving" @click="save()">
-              {{ saving ? "Saving…" : "Save" }}
+              {{ saving ? t('overlay.editor.saving') : t('overlay.editor.save') }}
             </button>
             <RowKebabMenu :items="moreMenuItems" @click.stop />
-            <button class="ovl-close-btn" title="Close (Esc)" @click="requestClose" v-html="iconSvgFor('x')"></button>
+            <button class="ovl-close-btn" :title="t('overlay.editor.close_hint')" @click="requestClose" v-html="iconSvgFor('x')"></button>
           </div>
         </div>
 
@@ -1192,44 +1201,44 @@ onUnmounted(() => {
         <div class="ovl-activate-bar">
           <span class="ovl-activate-dot" :class="{ on: overlayVisible }"></span>
           <span class="ovl-activate-status">
-            <template v-if="overlayAdded">{{ overlayVisible ? "Visible in OBS - " : "Added, hidden - " }}{{
+            <template v-if="overlayAdded">{{ overlayVisible ? t('overlay.editor.visible_in_obs') : t('overlay.editor.added_hidden') }}{{
               activateScene }}</template>
-            <template v-else-if="occupantOverlay">“{{ occupantOverlay.name }}” is on this scene</template>
-            <template v-else>Not added to {{ activateScene || "a scene" }}</template>
+            <template v-else-if="occupantOverlay">{{ t('overlay.editor.occupant', { name: occupantOverlay.name }) }}</template>
+            <template v-else>{{ t('overlay.editor.not_added', { scene: activateScene || t('overlay.editor.a_scene') }) }}</template>
             <span v-if="lastSavedLabel" class="ovl-activate-saved">{{ lastSavedLabel }}</span>
           </span>
           <span v-if="currentOverlay && currentOverlay.scenes.length > 1" class="ovl-activate-count">
-            on {{ currentOverlay.scenes.length }} scenes
+            {{ t('overlay.editor.on_scenes', { count: currentOverlay.scenes.length }) }}
           </span>
           <select v-model="activateScene" class="ovl-activate-select">
-            <option value="" disabled>pick scene</option>
+            <option value="" disabled>{{ t('overlay.editor.pick_scene') }}</option>
             <option v-for="s in scenes" :key="s" :value="s">{{ s }}</option>
           </select>
           <template v-if="!overlayAdded">
             <button v-if="occupantOverlay" class="ovl-activate-btn" :disabled="busy || !activateScene"
-              :title="`Replaces “${occupantOverlay.name}”, currently attached to this scene`" @click="swapIn">
-              {{ busy ? "…" : "Swap in" }}
+              :title="t('overlay.editor.swap_hint', { name: occupantOverlay.name })" @click="swapIn">
+              {{ busy ? "…" : t('overlay.editor.swap_in') }}
             </button>
             <template v-else>
               <button class="ovl-activate-btn" :disabled="busy || !activateScene" @click="addToScene">
-                {{ busy ? "…" : "Add to scene" }}
+                {{ busy ? "…" : t('overlay.editor.add_to_scene') }}
               </button>
               <button v-if="pendingElements.length" class="ovl-activate-btn" :disabled="busy || !activateScene"
-                title="Make an independent copy of this overlay and attach the copy to this scene"
+                :title="t('overlay.editor.duplicate_hint')"
                 @click="duplicateToScene">
-                Duplicate to this scene
+                {{ t('overlay.editor.duplicate_to_scene') }}
               </button>
             </template>
           </template>
           <div v-else class="ovl-activate-menu">
             <button class="ovl-activate-btn" :disabled="busy" @click="menuOpen = !menuOpen">
-              {{ busy ? "…" : "Manage" }} <span v-html="iconSvgFor('chevron-down')"></span>
+              {{ busy ? "…" : t('overlay.editor.manage') }} <span v-html="iconSvgFor('chevron-down')"></span>
             </button>
             <div v-if="menuOpen" class="ovl-activate-menu-list">
               <button v-if="obsReady" @click="toggleVisibility">
-                {{ overlayVisible ? "Hide overlay source" : "Show overlay source" }}
+                {{ overlayVisible ? t('overlay.editor.hide_source') : t('overlay.editor.show_source') }}
               </button>
-              <button @click="removeFromScene">Remove from scene</button>
+              <button @click="removeFromScene">{{ t('overlay.editor.remove_from_scene') }}</button>
             </div>
           </div>
         </div>
@@ -1238,17 +1247,17 @@ onUnmounted(() => {
              a curated thumb-reachable bar instead of horizontal-scrolling it -->
         <div class="ovl-mobile-toolbar">
           <button class="ovl-mobile-tool" :class="{ on: snapEnabled }" @click="snapEnabled = !snapEnabled"
-            title="Snap"><span v-html="iconSvgFor('maximize')"></span></button>
-          <button class="ovl-mobile-tool" :disabled="!historyPast.length" @click="undo" title="Undo">
+            :title="t('overlay.editor.snap')"><span v-html="iconSvgFor('maximize')"></span></button>
+          <button class="ovl-mobile-tool" :disabled="!historyPast.length" @click="undo" :title="t('overlay.editor.undo')">
             <span v-html="iconSvgFor('corner-up-left')"></span></button>
-          <button class="ovl-mobile-tool" :disabled="!historyFuture.length" @click="redo" title="Redo">
+          <button class="ovl-mobile-tool" :disabled="!historyFuture.length" @click="redo" :title="t('overlay.editor.redo')">
             <span v-html="iconSvgFor('corner-up-right')"></span></button>
           <button class="ovl-mobile-tool" :class="{ on: landscapeLocked }" @click="toggleLandscapeLock"
-            title="Switch to landscape"><span v-html="iconSvgFor('rotate-cw')"></span></button>
+            :title="t('overlay.editor.landscape_hint')"><span v-html="iconSvgFor('rotate-cw')"></span></button>
           <div class="ovl-mobile-toolbar-spacer"></div>
-          <button class="ovl-mobile-tool-text" :disabled="!dirty || saving" @click="discard">Discard</button>
+          <button class="ovl-mobile-tool-text" :disabled="!dirty || saving" @click="discard">{{ t('overlay.editor.discard') }}</button>
           <button class="ovl-mobile-tool-text save" :disabled="!dirty || saving" @click="save()">
-            {{ saving ? "…" : "Save" }}
+            {{ saving ? "…" : t('overlay.editor.save') }}
           </button>
         </div>
 
@@ -1260,7 +1269,7 @@ onUnmounted(() => {
             @add="(type, variant) => { addElement(type, variant); mobileDrawer = null; }" />
 
           <div class="ovl-body">
-            <div v-if="loading" class="ovl-loading">loading…</div>
+            <div v-if="loading" class="ovl-loading">{{ t('overlay.editor.loading') }}</div>
             <ObsOverlayCanvasStage v-else ref="canvasStageRef" :elements="pendingElements"
               :selected-ids="selectedIds" :base-width="baseWidth" :base-height="baseHeight" :backdrop="stageBackdrop"
               :scene-shot-url="sceneShotUrl" :preview-values="previewValues" :snap-enabled="snapEnabled"
@@ -1272,16 +1281,16 @@ onUnmounted(() => {
             <!-- >>> mobile-only FABs - side panels are drawers now, these open them.
                  hidden while a drawer is open so they don't float on top of it -->
             <div v-if="!mobileDrawer" class="ovl-mobile-fabs">
-              <button class="ovl-mobile-fab" title="Add element" @click="mobileDrawer = 'gallery'"
+              <button class="ovl-mobile-fab" :title="t('overlay.editor.add_element_hint')" @click="mobileDrawer = 'gallery'"
                 v-html="iconSvgFor('plus')"></button>
-              <button class="ovl-mobile-fab" title="Properties &amp; layers" @click="mobileDrawer = 'props'"
+              <button class="ovl-mobile-fab" :title="t('overlay.editor.props_layers_hint')" @click="mobileDrawer = 'props'"
                 v-html="iconSvgFor('settings')"></button>
             </div>
           </div>
 
           <div class="ovl-props" :class="{ 'mobile-open': mobileDrawer === 'props' }">
             <template v-if="selectedElement">
-              <div class="ovl-props-title">properties</div>
+              <div class="ovl-props-title">{{ t('overlay.editor.props_title') }}</div>
               <div class="ovl-props-type">{{ selectedElement.type }}</div>
 
               <div v-if="isCountdownLike(selectedElement.type)" class="ovl-props-countdown-top">
@@ -1292,18 +1301,18 @@ onUnmounted(() => {
                   @keydown.enter="($event.target as HTMLInputElement).blur()" />
                 <button v-if="canToggleRunning(selectedElement)" class="ep-btn-cancel"
                   @click="toggleElementRunning(selectedElement)">
-                  {{ selectedElement.data.running !== false ? "Stop" : "Start" }}
+                  {{ selectedElement.data.running !== false ? t('overlay.editor.stop') : t('overlay.editor.start') }}
                 </button>
               </div>
 
               <template v-if="!['shape', 'audio', 'countdown', 'countup'].includes(selectedElement.type)">
                 <label class="ovl-props-label">
-                  {{ selectedElement.type === "image" || selectedElement.type === "video" ? "Media URL" : "Content" }}
+                  {{ selectedElement.type === "image" || selectedElement.type === "video" ? t('overlay.editor.media_url') : t('overlay.editor.content_label') }}
                 </label>
                 <textarea v-if="selectedElement.type === 'text' || selectedElement.type === 'variable-text'"
                   class="ovl-props-textarea" :value="selectedElement.content" :placeholder="selectedElement.type === 'variable-text'
-                    ? 'e.g. $counter.wins'
-                    : 'Text to show'
+                    ? t('overlay.editor.counter_example_ph')
+                    : t('overlay.editor.text_ph')
                     "
                   @input="updateElement(selectedElement.id, { content: ($event.target as HTMLTextAreaElement).value })" />
                 <input v-else class="ovl-props-input" :value="selectedElement.content" placeholder="https://…"
@@ -1314,15 +1323,15 @@ onUnmounted(() => {
 
                 <div v-if="selectedElement.type === 'video'" class="ovl-video-controls">
                   <button class="ep-btn-cancel" @click="toggleVideoPlay(selectedElement)">
-                    {{ selectedElement.data.paused === true ? "Play" : "Pause" }}
+                    {{ selectedElement.data.paused === true ? t('overlay.editor.play') : t('overlay.editor.pause') }}
                   </button>
-                  <button class="ep-btn-cancel" @click="restartVideo(selectedElement)">Restart</button>
+                  <button class="ep-btn-cancel" @click="restartVideo(selectedElement)">{{ t('overlay.editor.restart') }}</button>
                 </div>
               </template>
 
               <!-- >>> global, stays visible, not in a collapsible -->
               <label class="ovl-props-label ovl-opacity-label">
-                Opacity
+                {{ t('overlay.editor.opacity_label') }}
                 <div class="ovl-opacity-row">
                   <input type="range" min="0" max="100" :value="selectedElement.style.opacity ?? 100"
                     @input="updateElement(selectedElement.id, { style: { ...selectedElement.style, opacity: Number(($event.target as HTMLInputElement).value) } })" />
@@ -1332,11 +1341,11 @@ onUnmounted(() => {
 
               <!-- >>> alignment stays visible, not in a collapsible -->
               <label v-if="isTextLikeType(selectedElement.type)" class="ovl-props-label ovl-align-label">
-                Alignment
+                {{ t('overlay.editor.alignment_label') }}
                 <div class="ovl-align-grid">
                   <button v-for="opt in alignOptions" :key="opt.h + opt.v" class="ovl-align-btn" :class="{
                     active: (selectedElement.style.textAlign || 'left') === opt.h && (selectedElement.style.verticalAlign || 'top') === opt.v,
-                  }" :title="`${opt.v} ${opt.h}`" @click="setAlign(selectedElement, opt.h, opt.v)">
+                  }" :title="alignLabel(opt.h, opt.v)" @click="setAlign(selectedElement, opt.h, opt.v)">
                     <span class="ovl-align-dot"></span>
                   </button>
                 </div>
@@ -1346,12 +1355,12 @@ onUnmounted(() => {
                 @update="(patch) => updateElement(selectedElement!.id, patch)" />
             </template>
             <div v-else-if="selectedIds.length > 1" class="ovl-props-empty">
-              {{ selectedIds.length }} elements selected.
+              {{ t('overlay.editor.elements_selected', { count: selectedIds.length }) }}
               <button class="ovl-btn-delete" @click="deleteSelected">
-                <span v-html="iconSvgFor('trash')"></span> Delete all
+                <span v-html="iconSvgFor('trash')"></span> {{ t('overlay.editor.delete_all') }}
               </button>
             </div>
-            <div v-else class="ovl-props-empty">Select an element, or add one from the gallery.</div>
+            <div v-else class="ovl-props-empty">{{ t('overlay.editor.select_hint') }}</div>
 
             <ObsOverlayLayersPanel :elements="pendingElements" :selected-ids="selectedIds" @select="onSelect"
               @toggle-lock="toggleLock" @toggle-visible="toggleVisible" @update-elements="updateElements"
@@ -1359,12 +1368,12 @@ onUnmounted(() => {
               @duplicate="duplicateLayer" @group="groupSelected" @ungroup="ungroupSelected" />
 
             <div v-if="usedCounterNames.length" class="ovl-counters">
-              <div class="ovl-counters-title">counters</div>
+              <div class="ovl-counters-title">{{ t('overlay.editor.counters_title') }}</div>
               <div v-for="name in usedCounterNames" :key="name" class="ovl-counters-row">
                 <span class="ovl-counters-name">${{ name }}</span>
                 <span class="ovl-counters-value">{{ counterValues[name] ?? 0 }}</span>
-                <button class="ovl-counters-btn" title="Decrease" @click="bumpCounter(name, -1)">−</button>
-                <button class="ovl-counters-btn" title="Increase" @click="bumpCounter(name, 1)">+</button>
+                <button class="ovl-counters-btn" :title="t('overlay.editor.decrease')" @click="bumpCounter(name, -1)">−</button>
+                <button class="ovl-counters-btn" :title="t('overlay.editor.increase')" @click="bumpCounter(name, 1)">+</button>
               </div>
             </div>
           </div>
@@ -1373,13 +1382,13 @@ onUnmounted(() => {
 
       <div v-if="closeConfirmOpen" class="ovl-close-confirm-backdrop" @mousedown.self="closeConfirmOpen = false">
         <div class="ovl-close-confirm">
-          <div class="ovl-close-confirm-title">Close without saving?</div>
-          <div class="ovl-close-confirm-body">You have unsaved changes. Save them before closing, or discard them?</div>
+          <div class="ovl-close-confirm-title">{{ t('overlay.editor.close_confirm_title') }}</div>
+          <div class="ovl-close-confirm-body">{{ t('overlay.editor.close_confirm_body') }}</div>
           <div class="ovl-close-confirm-actions">
-            <button class="ovl-btn-cancel" @click="closeConfirmOpen = false">Cancel</button>
-            <button class="ovl-btn-delete" @click="discardAndClose">Discard</button>
+            <button class="ovl-btn-cancel" @click="closeConfirmOpen = false">{{ t('overlay.editor.cancel') }}</button>
+            <button class="ovl-btn-delete" @click="discardAndClose">{{ t('overlay.editor.discard') }}</button>
             <button class="ovl-btn-save" :disabled="saving" @click="saveAndClose">
-              {{ saving ? "Saving…" : "Save & close" }}
+              {{ saving ? t('overlay.editor.saving') : t('overlay.editor.save_and_close') }}
             </button>
           </div>
         </div>

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { API } from "../../api";
+import { useI18n } from "../../i18n";
+
+const { t } = useI18n();
 
 const props = defineProps<{
   channel: string;
@@ -64,21 +67,21 @@ onMounted(() => { });
 
 <template>
   <div class="ovl-varpick">
-    <button ref="btnRef" class="ovl-varpick-btn" @click="toggle">Insert variable</button>
+    <button ref="btnRef" class="ovl-varpick-btn" @click="toggle">{{ t('overlay.varpick.insert') }}</button>
     <Teleport to="body">
       <div v-if="open" class="ovl-varpick-menu" :style="menuStyle">
-        <div v-if="loading" class="ovl-varpick-empty">loading…</div>
+        <div v-if="loading" class="ovl-varpick-empty">{{ t('overlay.varpick.loading') }}</div>
         <template v-else>
-          <div v-if="counters.length" class="ovl-varpick-group">counters</div>
+          <div v-if="counters.length" class="ovl-varpick-group">{{ t('overlay.varpick.counters') }}</div>
           <button v-for="c in counters" :key="'c' + c.name" class="ovl-varpick-item"
             @click="pick(`$counter.${c.name}`)">
             $counter.{{ c.name }}
           </button>
-          <div v-if="vars.length" class="ovl-varpick-group">vars</div>
+          <div v-if="vars.length" class="ovl-varpick-group">{{ t('overlay.varpick.vars') }}</div>
           <button v-for="v in vars" :key="'v' + v.name" class="ovl-varpick-item" @click="pick(`$var.${v.name}`)">
             $var.{{ v.name }}
           </button>
-          <div v-if="!counters.length && !vars.length" class="ovl-varpick-empty">no variables yet</div>
+          <div v-if="!counters.length && !vars.length" class="ovl-varpick-empty">{{ t('overlay.varpick.empty') }}</div>
         </template>
       </div>
     </Teleport>

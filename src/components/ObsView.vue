@@ -320,7 +320,7 @@ watch(() => session.value?.channel, load);
         <div class="ep-view-sub">{{ widgets.length }} widget{{ widgets.length === 1 ? '' : 's' }}</div>
       </div>
       <div class="ep-view-header-right">
-        <button class="ep-btn-reload" @click="load" title="Reload" v-html="iconSvgFor('refresh-cw')"></button>
+        <button class="ep-btn-reload" @click="load" :title="t('obs.reload')" v-html="iconSvgFor('refresh-cw')"></button>
         <button class="ep-btn-new" @click="openNew" :disabled="!canEdit">
           + {{ t("obs.new") }}
         </button>
@@ -360,7 +360,7 @@ watch(() => session.value?.channel, load);
           <code class="widget-content">{{ w.content.slice(0, 60)
           }}{{ w.content.length > 60 ? "…" : "" }}</code>
           <div class="widget-meta">
-            <span v-html="iconSvgFor('refresh-cw')"></span> every {{ w.refresh_ms / 1000 }}s · {{ fmtDate(w.created_at) }}
+            <span v-html="iconSvgFor('refresh-cw')"></span> {{ t('obs.every') }} {{ w.refresh_ms / 1000 }}s · {{ fmtDate(w.created_at) }}
           </div>
         </div>
         <div class="widget-actions">

@@ -209,8 +209,8 @@ async function addEntry() {
         </svg>
       </div>
       <div class="card-body">
-        <div class="card-title">OBS Control</div>
-        <div class="card-sub">Switch scenes and control sources from chat</div>
+        <div class="card-title">{{ t("feat.obsconn.title") }}</div>
+        <div class="card-sub">{{ t("feat.obsconn.sub") }}</div>
       </div>
     </div>
 
@@ -226,8 +226,8 @@ async function addEntry() {
         </svg>
       </div>
       <div class="card-body">
-        <div class="card-title">OBS Overlays</div>
-        <div class="card-sub">Manage and control your stream overlays</div>
+        <div class="card-title">{{ t("feat.obsoverlays.title") }}</div>
+        <div class="card-sub">{{ t("feat.obsoverlays.sub") }}</div>
       </div>
     </div>
   </div>
