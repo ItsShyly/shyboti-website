@@ -539,6 +539,9 @@ const MINIMUM_MOD = new Set([
   "prefix",
   "setgame",
   "settitle",
+  "pin",
+  "unpin",
+  "pincmd",
 ]);
 const MINIMUM_BC = new Set(["pm2", "refresh", "join", "leave"]);
 
