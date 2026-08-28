@@ -49,7 +49,7 @@ async function loadTwitchBadge() {
     const d = (await res.json()) as any;
     const b = d?.badgeMap?.[twitchBadgeKey.value];
     twitchBadgeUrl.value = String(b?.image_url_2x ?? b?.image_url_1x ?? "");
-  } catch {}
+  } catch { }
 }
 
 type Perms = Omit<RolePermissions, "modsEnabled">;
@@ -118,8 +118,8 @@ const DEFAULT_MOD_PERMS: Perms = {
   obs_view: false,
   obs_edit: false,
   obs_force_preview: false,
-  channelpoints_view: false,
-  channelpoints_edit: false,
+  channelpoints_view: true,
+  channelpoints_edit: true,
 };
 
 // >>> mirrors apiServer.ts defaults, keep in sync
@@ -160,7 +160,7 @@ async function load() {
       (isChatter.value ? data.chattersEnabled : isVip.value ? data.vipsEnabled : data.modsEnabled) ??
       (!isVip.value && !isChatter.value);
     Object.assign(globalPerms.value, DEFAULT_PERMS.value, data.permissions);
-  } catch {}
+  } catch { }
 }
 
 async function loadScopeStatus() {
@@ -174,7 +174,7 @@ async function loadScopeStatus() {
     const data = (await res.json()) as { hasScope: boolean };
     if (session.value?.channel !== ch) return;
     hasScope.value = data.hasScope;
-  } catch {}
+  } catch { }
 }
 
 async function save() {
@@ -188,7 +188,7 @@ async function save() {
       body: JSON.stringify(body),
     });
     emit("saved");
-  } catch {}
+  } catch { }
 }
 
 async function syncNow() {
@@ -201,7 +201,7 @@ async function syncNow() {
     });
     await loadScopeStatus();
     emit("saved");
-  } catch {}
+  } catch { }
   syncing.value = false;
 }
 
@@ -233,7 +233,8 @@ watch(() => session.value?.channel, reload);
       <p class="card-sub">{{ accessSub }}</p>
 
       <div v-if="isVip && !hasScope" class="scope-warning">
-        {{ t("roles.scope_warning_pre") }}<ReauthLink>{{ t("roles.scope_warning_link") }}</ReauthLink>{{ t("roles.scope_warning_post") }}
+        {{ t("roles.scope_warning_pre") }}<ReauthLink>{{ t("roles.scope_warning_link") }}</ReauthLink>{{
+          t("roles.scope_warning_post") }}
       </div>
       <button v-if="isVip" class="sync-btn" @click.stop="syncNow" :disabled="syncing">
         {{ syncing ? t("roles.syncing") : t("roles.sync") }}
@@ -248,11 +249,8 @@ watch(() => session.value?.channel, reload);
                 <div class="perm-label">{{ perm.label }}</div>
                 <div class="perm-desc">{{ perm.desc }}</div>
               </div>
-              <div
-                class="ep-switch sm"
-                :class="{ on: enabled && (globalPerms as any)[perm.key] }"
-                @click.stop="enabled && ((globalPerms as any)[perm.key] = !(globalPerms as any)[perm.key]); enabled && save();"
-              >
+              <div class="ep-switch sm" :class="{ on: enabled && (globalPerms as any)[perm.key] }"
+                @click.stop="enabled && ((globalPerms as any)[perm.key] = !(globalPerms as any)[perm.key]); enabled && save();">
                 <div class="ep-switch-knob"></div>
               </div>
             </div>
