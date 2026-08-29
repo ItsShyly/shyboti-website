@@ -748,6 +748,113 @@
   background: #c792ea11;
 }
 
+/* >>> unified row/table system - CSS grid divs (not <table>), same idiom
+   CommandsView's .table-row already proved out. Each view sets its own
+   grid-template-columns; this just carries the shared box/hover/inactive
+   look so every migrated view reads the same. */
+.ep-row-grid {
+  display: grid;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 14px 0 10px;
+  background: #222226;
+  border-bottom: 1px solid #1e1e1e;
+  transition:
+    background 0.1s,
+    opacity 0.2s;
+}
+.ep-row-grid:hover {
+  background: #1c1c20;
+}
+.ep-row-grid.inactive {
+  opacity: 0.45;
+}
+.ep-row-header {
+  display: grid;
+  align-items: center;
+  padding: 8px 14px 8px 10px;
+  color: #555;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #222;
+}
+.ep-row-expander {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: transparent;
+  color: #555;
+  font-size: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s;
+}
+.ep-row-expander.open {
+  transform: rotate(90deg);
+  color: #6f2bff;
+}
+.ep-row-expand-panel {
+  padding: 10px 16px 10px 32px;
+  font-size: 11px;
+  color: #888;
+  background: #1a1a1e;
+  border-left: 2px solid #6f2bff;
+  border-bottom: 1px solid #1e1e1e;
+}
+
+/* >>> canonical tag palette - replaces the per-view .ep-meta-pill variant
+   sprawl (event/pattern/action/tick/cd/cmd-alias-tag/etc.), one color per
+   concept everywhere instead of drifting per-component */
+.ep-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid;
+  font-weight: 500;
+}
+.ep-tag.keyword {
+  color: #c792ea;
+  border-color: #c792ea44;
+  background: #c792ea11;
+  font-family: monospace;
+}
+.ep-tag.arg {
+  color: #e5c07b;
+  border-color: #e5c07b44;
+  background: #e5c07b11;
+  font-family: monospace;
+}
+.ep-tag.event-type {
+  color: #61afef;
+  border-color: #61afef44;
+  background: #61afef11;
+}
+.ep-tag.action {
+  color: #23d18b;
+  border-color: #23d18b44;
+  background: #23d18b11;
+}
+.ep-tag.cooldown {
+  color: #9d6cff;
+  border-color: #9d6cff44;
+  background: #9d6cff11;
+}
+.ep-tag.access {
+  color: #4ec9b0;
+  border-color: #4ec9b044;
+  background: #4ec9b011;
+}
+.ep-tag.condition {
+  color: #c792ea;
+  border-color: #c792ea44;
+  background: #c792ea11;
+}
+
 /* Toasts */
 .ep-toast {
   padding: 8px 14px;

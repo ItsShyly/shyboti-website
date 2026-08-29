@@ -16,6 +16,7 @@ export interface CustomCommand {
   enabled_when: string; required_game: string
   regex1: string; regex2: string; text1: string; text2: string
   isActive: boolean | number; cooldown: number; userCooldown: number
+  modOnly: boolean; broadcasterOnly: boolean
   description: string
   arg_descs: { usage: string; desc: string }[]
   flags: string[]
@@ -42,6 +43,7 @@ const missingFields = ref<string[]>([])
 const form = ref<CustomCommand>({
   name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
   regex1: '', regex2: '', text1: '', text2: '', isActive: true, cooldown: 0, userCooldown: 0,
+  modOnly: false, broadcasterOnly: false,
   description: '', arg_descs: [], flags: [],
 })
 
@@ -72,6 +74,59 @@ const builtinGlobalAliases = ref<string[]>([])
 const builtinRenamedTo = ref<string | null>(null)
 const newAliasName = ref('')
 const aliasSaving = ref(false)
+
+// vvv built-in access restriction + per-subcommand access override vvv
+// >>> kept out of `form` (CustomCommand shape) so it never gets sent to the
+// custom-commands save endpoint - this only applies to built-ins
+const builtinModOnly = ref(false)
+const builtinBroadcasterOnly = ref(false)
+interface ArgVariant { usage: string; desc: string; argKey: string; access: 'everyone' | 'mod' | 'broadcaster' }
+const builtinArgVariants = ref<ArgVariant[]>([])
+const ACCESS_ORDER = ['everyone', 'mod', 'broadcaster'] as const
+function accessLabel(modOnly: boolean, broadcasterOnly: boolean): string {
+  if (broadcasterOnly) return t('cmd.access.bc')
+  if (modOnly) return t('cmd.access.mod')
+  return t('cmd.access.everyone')
+}
+function argAccessLabel(access: string): string {
+  if (access === 'broadcaster') return t('cmd.access.bc')
+  if (access === 'mod') return t('cmd.access.mod')
+  return t('cmd.access.everyone')
+}
+function cycleBuiltinAccess() {
+  if (!builtinModOnly.value && !builtinBroadcasterOnly.value) {
+    builtinModOnly.value = true; builtinBroadcasterOnly.value = false
+  } else if (builtinModOnly.value) {
+    builtinModOnly.value = false; builtinBroadcasterOnly.value = true
+  } else {
+    builtinModOnly.value = false; builtinBroadcasterOnly.value = false
+  }
+}
+// >>> same cycle, but for custom commands - flows through form's own
+// save() (already spreads ...form.value into /custom-commands PUT), no
+// separate endpoint needed unlike the built-in case above
+function cycleFormAccess() {
+  if (!form.value.modOnly && !form.value.broadcasterOnly) {
+    form.value.modOnly = true; form.value.broadcasterOnly = false
+  } else if (form.value.modOnly) {
+    form.value.modOnly = false; form.value.broadcasterOnly = true
+  } else {
+    form.value.modOnly = false; form.value.broadcasterOnly = false
+  }
+}
+async function cycleBuiltinArgAccess(variant: ArgVariant) {
+  if (!session.value || !props.cmdName) return
+  const next = ACCESS_ORDER[(ACCESS_ORDER.indexOf(variant.access) + 1) % ACCESS_ORDER.length]!
+  variant.access = next
+  try {
+    await fetch(`${API}/commands/${props.channel}/${props.cmdName}/arg-access`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+      body: JSON.stringify({ argKey: variant.argKey, access: next }),
+    })
+  } catch { }
+}
+// ^^^ built-in access restriction ^^^
 const aliasError = ref('')
 const resetting = ref(false)
 const resetConfirm = ref(false)
@@ -278,6 +333,7 @@ async function load() {
     form.value = {
       name: '', response: '', rule: '', alias: '', enabled_when: 'always', required_game: '',
       regex1: '', regex2: '', text1: '', text2: '', isActive: true, cooldown: 0, userCooldown: 0,
+      modOnly: false, broadcasterOnly: false,
       description: '', arg_descs: [], flags: []
     }
     loading.value = false
@@ -291,10 +347,22 @@ async function load() {
         headers: { Authorization: `Bearer ${session.value.token}` }
       })
       if (res.ok) {
-        const data = await res.json() as { commands: Array<{ name: string; description: string; renamedTo: string | null }> }
+        const data = await res.json() as {
+          commands: Array<{
+            name: string; description: string; renamedTo: string | null
+            cooldown: number; userCooldown: number; modOnly: boolean; broadcasterOnly: boolean
+            argVariants: ArgVariant[]
+          }>
+        }
         const cmd = data.commands.find(c => c.name === props.cmdName)
         builtinRenamedTo.value = cmd?.renamedTo ?? null
-        form.value = { ...form.value, name: cmd?.renamedTo || props.cmdName, description: cmd?.description ?? '' }
+        builtinModOnly.value = cmd?.modOnly ?? false
+        builtinBroadcasterOnly.value = cmd?.broadcasterOnly ?? false
+        builtinArgVariants.value = cmd?.argVariants ?? []
+        form.value = {
+          ...form.value, name: cmd?.renamedTo || props.cmdName, description: cmd?.description ?? '',
+          cooldown: cmd?.cooldown ?? 0, userCooldown: cmd?.userCooldown ?? 0,
+        }
       }
       await loadAliases()
     } else {
@@ -309,7 +377,8 @@ async function load() {
           : {
             name: props.cmdName, response: '', rule: '', alias: '', enabled_when: 'always',
             required_game: '', regex1: '', regex2: '', text1: '', text2: '',
-            isActive: true, cooldown: 0, userCooldown: 0, description: '', arg_descs: [], flags: []
+            isActive: true, cooldown: 0, userCooldown: 0, modOnly: false, broadcasterOnly: false,
+            description: '', arg_descs: [], flags: []
           }
         userParams.value = userParams.value.map(p => ({ ...p, value: ex ? ((ex as any)[p.key] ?? '') : '' }))
       }
@@ -513,6 +582,22 @@ async function save() {
         }
         builtinRenamedTo.value = newName === oldName ? null : newName
       }
+    }
+
+    // >>> access/cooldown for built-ins live in the channel_${channel} table,
+    // reached through /commands, not /custom-commands - same endpoint the
+    // row's own inline controls already used before they moved in here
+    if (props.isBuiltIn && oldName) {
+      await fetch(`${API}/commands/${props.channel}/${oldName}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.value.token}` },
+        body: JSON.stringify({
+          cooldown: form.value.cooldown,
+          userCooldown: form.value.userCooldown,
+          modOnly: builtinModOnly.value,
+          broadcasterOnly: builtinBroadcasterOnly.value,
+        }),
+      })
     }
 
     // >>> put the data under the new name
@@ -1060,6 +1145,36 @@ function onNormalKeydown(e: KeyboardEvent) {
               </div>
             </div>
 
+            <div v-if="isBuiltIn" class="ep-field-group">
+              <label class="ep-field-label">{{ t('cmd.access_prefix') }}</label>
+              <button type="button" class="access-cycle-btn" :class="{
+                'access-mod': builtinModOnly, 'access-bc': builtinBroadcasterOnly,
+              }" @click="cycleBuiltinAccess">
+                {{ accessLabel(builtinModOnly, builtinBroadcasterOnly) }}
+              </button>
+            </div>
+
+            <div v-else class="ep-field-group">
+              <label class="ep-field-label">{{ t('cmd.access_prefix') }}</label>
+              <button type="button" class="access-cycle-btn" :class="{
+                'access-mod': form.modOnly, 'access-bc': form.broadcasterOnly,
+              }" @click="cycleFormAccess">
+                {{ accessLabel(form.modOnly, form.broadcasterOnly) }}
+              </button>
+            </div>
+
+            <div v-if="isBuiltIn && builtinArgVariants.length" class="ep-field-group">
+              <label class="ep-field-label">{{ t('edit.arg_access') }}</label>
+              <div class="arg-access-list">
+                <div v-for="v in builtinArgVariants" :key="v.argKey" class="arg-access-row">
+                  <code class="arg-access-usage">{{ v.usage }}</code>
+                  <button type="button" class="access-cycle-btn" :class="{
+                    'access-mod': v.access === 'mod', 'access-bc': v.access === 'broadcaster',
+                  }" @click="cycleBuiltinArgAccess(v)">{{ argAccessLabel(v.access) }}</button>
+                </div>
+              </div>
+            </div>
+
             <div class="ep-row-3">
               <div class="ep-field-group ep-sm">
                 <label class="ep-field-label">{{ t('edit.active_when') }}</label>
@@ -1178,6 +1293,51 @@ function onNormalKeydown(e: KeyboardEvent) {
   border: 1px solid #1e1e22;
   padding: 7px 10px;
   font-style: italic;
+}
+
+.access-cycle-btn {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #2a2a30;
+  background: transparent;
+  color: #ccc;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+.access-cycle-btn:hover {
+  border-color: #444;
+}
+.access-cycle-btn.access-mod {
+  border-color: #e5c07b66;
+  color: #e5c07b;
+}
+.access-cycle-btn.access-bc {
+  border-color: #f1494966;
+  color: #f14949;
+}
+.arg-access-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.arg-access-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 8px;
+  background: #0d0d10;
+  border: 1px solid #1e1e22;
+}
+.arg-access-usage {
+  font-size: 11px;
+  color: #888;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .arg-add-btn {
