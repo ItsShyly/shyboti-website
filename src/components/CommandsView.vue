@@ -671,6 +671,27 @@ function toggle(
   else updateCommand(cmd as Command);
 }
 
+// >>> cycles everyone -> mod -> broadcaster -> everyone, click-in-place same
+// as before it briefly moved to panel-only - backend already enforces
+// per-command minimum access server-side, no need to duplicate that here
+function cycleAccess(cmd: Command | CustomCommand) {
+  if (!canToggle.value) return;
+  const c = cmd as any;
+  if (!c.modOnly && !c.broadcasterOnly) {
+    c.modOnly = true;
+    c.broadcasterOnly = false;
+  } else if (c.modOnly) {
+    c.modOnly = false;
+    c.broadcasterOnly = true;
+  } else {
+    c.modOnly = false;
+    c.broadcasterOnly = false;
+  }
+  if (customCommands.value.includes(cmd as CustomCommand))
+    updateCustomActive(cmd as CustomCommand);
+  else updateCommand(cmd as Command);
+}
+
 function restrictionLabel(cmd: {
   modOnly: boolean;
   broadcasterOnly: boolean;
@@ -1149,22 +1170,20 @@ onUnmounted(() => {
         </div>
         <template v-else>
           <div class="ep-row-header cmd-default-row">
-            <div></div>
             <div class="sort-col" @click="setSort('name')">{{ t("cmd.header.name") }}<span class="sort-arrow"
                 v-html="sortField === 'name' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
             </div>
             <div>{{ t("cmd.header.desc") }}</div>
-            <div>{{ t("cmd.sort.access") }}</div>
+            <div>{{ t("cmd.header.tags") }}</div>
             <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.header.gcd") }}/{{ t("cmd.header.ucd") }}<span class="sort-arrow"
                 v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
             </div>
             <div>{{ t("cmd.header.access") }}</div>
-            <div></div>
             <div>{{ t("cmd.sort.actions") }}</div>
+            <div></div>
           </div>
           <div v-if="loading" class="rows">
             <div class="ep-row-grid cmd-default-row" v-for="i in 8" :key="i">
-              <div></div>
               <div>
                 <div class="ep-skeleton-block" style="height:11px;width:80%;"></div>
               </div>
@@ -1178,10 +1197,13 @@ onUnmounted(() => {
                 <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
               </div>
               <div>
-                <div class="ep-skeleton-block ep-skeleton-square"></div>
+                <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
               </div>
               <div>
                 <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+              </div>
+              <div>
+                <div class="ep-skeleton-block ep-skeleton-square"></div>
               </div>
             </div>
           </div>
@@ -1191,14 +1213,14 @@ onUnmounted(() => {
                 saving: saving === cmd.name,
                 expanded: expandedDefault.has(cmd.name),
               }">
-                <div class="row-chevron-cell">
-                  <button v-if="cmd.argVariants?.length" class="ep-row-expander"
-                    :class="{ open: expandedDefault.has(cmd.name) }" @click.stop="toggleExpandDefault(cmd.name)"
-                    :title="t('cmd.show_arg_variants')" v-html="iconSvgFor('chevron-down')">
-                  </button>
-                </div>
                 <div class="cmd-name" :class="{ 'ep-row-cell-hover': cmd.argVariants?.length }"
                   @click="cmd.argVariants?.length && toggleExpandDefault(cmd.name)">
+                  <span class="row-chevron-cell">
+                    <button v-if="cmd.argVariants?.length" class="ep-row-expander"
+                      :class="{ open: expandedDefault.has(cmd.name) }" :title="t('cmd.show_arg_variants')"
+                      v-html="iconSvgFor('chevron-down')">
+                    </button>
+                  </span>
                   <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ cmd.renamedTo || cmd.name }}</span>
                   <span v-if="cmd.renamedTo" class="cmd-renamed-hint" :title="`Default: ${prefix}${cmd.name}`">↺</span>
@@ -1222,19 +1244,13 @@ onUnmounted(() => {
                 </div>
                 <div class="cmd-cooldowns ep-row-cell-hover" @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ cmd.cooldown }}s</span>
-                  <span class="ep-tag cooldown">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
+                  <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
                 </div>
                 <div>
                   <button class="ep-btn-action access" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }"
-                    @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
+                    @click="cycleAccess(cmd)">
                     {{ restrictionLabel(cmd) }}
                   </button>
-                </div>
-                <div class="ep-row-cell-center">
-                  <div class="ep-switch" :class="[
-                    cmd.isActive ? 'on' : 'off',
-                    { disabled: !canToggle },
-                  ]" @click.stop="toggle(cmd, 'isActive')"><span class="ep-switch-knob"></span></div>
                 </div>
                 <div>
                   <button class="ep-btn-action edit" :class="{ disabled: BLOCKED.includes(cmd.name) || !canEdit }" @click.stop="
@@ -1250,6 +1266,12 @@ onUnmounted(() => {
                           : t("cmd.edit")
                     }}
                   </button>
+                </div>
+                <div class="ep-row-cell-center">
+                  <div class="ep-switch" :class="[
+                    cmd.isActive ? 'on' : 'off',
+                    { disabled: !canToggle },
+                  ]" @click.stop="toggle(cmd, 'isActive')"><span class="ep-switch-knob"></span></div>
                 </div>
                 <RowKebabMenu :items="builtInKebabItems(cmd)" @click.stop />
               </div>
@@ -1279,23 +1301,21 @@ onUnmounted(() => {
       <template v-if="activeTab === 'Custom'">
 
         <div v-if="customLoading || filteredCustom().length > 0" class="ep-row-header cmd-custom-row">
-          <div></div>
           <div class="sort-col" @click="setSort('name')">{{ t("cmd.sort.name") }}<span class="sort-arrow"
               v-html="sortField === 'name' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
           </div>
           <div>{{ t("cmd.header.desc") }}</div>
-          <div>{{ t("cmd.sort.access") }}</div>
+          <div>{{ t("cmd.header.tags") }}</div>
           <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.sort.gcd") }}/{{ t("cmd.header.ucd") }}<span class="sort-arrow"
               v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
           </div>
           <div>{{ t("cmd.sort.access") }}</div>
-          <div></div>
           <div>{{ t("cmd.sort.actions") }}</div>
+          <div></div>
         </div>
 
         <div v-if="customLoading" class="rows">
           <div class="ep-row-grid cmd-custom-row" v-for="i in 8" :key="i">
-            <div></div>
             <div>
               <div class="ep-skeleton-block" style="height:11px;width:80%;"></div>
             </div>
@@ -1309,10 +1329,13 @@ onUnmounted(() => {
               <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
             </div>
             <div>
-              <div class="ep-skeleton-block ep-skeleton-square"></div>
+              <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
             </div>
             <div>
               <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block ep-skeleton-square"></div>
             </div>
           </div>
         </div>
@@ -1326,14 +1349,13 @@ onUnmounted(() => {
           <div class="rows">
             <template v-for="cmd in filteredCustom()" :key="cmd.name">
               <div class="ep-row-grid cmd-custom-row" :class="{ expanded: expandedCustom.has(cmd.name) }">
-                <div class="row-chevron-cell">
-                  <button v-if="customHasArgs(cmd)" class="ep-row-expander" :class="{ open: expandedCustom.has(cmd.name) }"
-                    @click.stop="toggleExpandCustom(cmd.name)" :title="t('cmd.show_arg_variants')"
-                    v-html="iconSvgFor('chevron-down')">
-                  </button>
-                </div>
                 <div class="cmd-name" :class="{ 'ep-row-cell-hover': customHasArgs(cmd) }"
                   @click="customHasArgs(cmd) && toggleExpandCustom(cmd.name)">
+                  <span class="row-chevron-cell">
+                    <button v-if="customHasArgs(cmd)" class="ep-row-expander" :class="{ open: expandedCustom.has(cmd.name) }"
+                      :title="t('cmd.show_arg_variants')" v-html="iconSvgFor('chevron-down')">
+                    </button>
+                  </span>
                   <span class="cmd-cat-dot" style="background: #9d6cff"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ cmd.name }}</span>
                 </div>
@@ -1355,22 +1377,13 @@ onUnmounted(() => {
                 </div>
                 <div class="cmd-cooldowns ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ cmd.cooldown }}s</span>
-                  <span class="ep-tag cooldown">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
+                  <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
                 </div>
                 <div>
                   <button class="ep-btn-action access" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }"
-                    @click="canEdit && openEdit(cmd.name, false)">
+                    @click="cycleAccess(cmd)">
                     {{ restrictionLabel(cmd) }}
                   </button>
-                </div>
-                <div class="ep-row-cell-center">
-                  <div class="ep-switch" :class="[
-                    cmd.isActive ? 'on' : 'off',
-                    { disabled: !canToggle },
-                  ]" @click="
-                    cmd.isActive = !cmd.isActive;
-                  updateCustomActive(cmd);
-                  "><span class="ep-switch-knob"></span></div>
                 </div>
                 <div class="custom-actions">
                   <button class="ep-btn-action edit" :class="{ disabled: !canEdit }" @click="canEdit && openEdit(cmd.name, false)">
@@ -1390,6 +1403,15 @@ onUnmounted(() => {
                     <template v-else-if="deleteConfirmName === cmd.name">{{ t("cmd.delete_sure") }}</template>
                     <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
+                </div>
+                <div class="ep-row-cell-center">
+                  <div class="ep-switch" :class="[
+                    cmd.isActive ? 'on' : 'off',
+                    { disabled: !canToggle },
+                  ]" @click="
+                    cmd.isActive = !cmd.isActive;
+                  updateCustomActive(cmd);
+                  "><span class="ep-switch-knob"></span></div>
                 </div>
                 <RowKebabMenu :items="customKebabItems(cmd)" @click.stop />
               </div>
@@ -1444,8 +1466,8 @@ onUnmounted(() => {
               <div>{{ t("cmd.header.desc") }}</div>
               <div>{{ t("cmd.header.gcd") }}/{{ t("cmd.header.ucd") }}</div>
               <div>{{ t("cmd.header.access") }}</div>
-              <div></div>
               <div>{{ t("cmd.sort.actions") }}</div>
+              <div></div>
             </div>
 
             <div class="rows">
@@ -1472,9 +1494,6 @@ onUnmounted(() => {
                     {{ obsAccessLabel(b.access) }}
                   </button>
                 </div>
-                <div class="ep-row-cell-center">
-                  <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
-                </div>
                 <div class="custom-actions">
                   <button class="ep-btn-action edit" @click="openObsEdit({ kind: 'scene', command: b.command })">{{ t('cmd.edit') }}</button>
                   <button class="ep-btn-action del" :class="{ confirm: obsDeleteConfirm === 'scene:' + b.command }"
@@ -1482,6 +1501,9 @@ onUnmounted(() => {
                     <template v-if="obsDeleteConfirm === 'scene:' + b.command">{{ t('cmd.delete_sure') }}</template>
                     <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
+                </div>
+                <div class="ep-row-cell-center">
+                  <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
                 <RowKebabMenu :items="obsBindingKebabItems('scene', b.command, b.command)" @click.stop />
               </div>
@@ -1511,9 +1533,6 @@ onUnmounted(() => {
                     {{ obsAccessLabel(b.access) }}
                   </button>
                 </div>
-                <div class="ep-row-cell-center">
-                  <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
-                </div>
                 <div class="custom-actions">
                   <button class="ep-btn-action edit" @click="openObsEdit({ kind: 'source', command: b.command })">{{ t('cmd.edit') }}</button>
                   <button class="ep-btn-action del" :class="{ confirm: obsDeleteConfirm === 'source:' + b.command }"
@@ -1521,6 +1540,9 @@ onUnmounted(() => {
                     <template v-if="obsDeleteConfirm === 'source:' + b.command">{{ t('cmd.delete_sure') }}</template>
                     <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
+                </div>
+                <div class="ep-row-cell-center">
+                  <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
                 <RowKebabMenu :items="obsBindingKebabItems('source', b.command, b.command)" @click.stop />
               </div>
@@ -1551,9 +1573,6 @@ onUnmounted(() => {
                     {{ obsAccessLabel(obsArgAccess(entry)) }}
                   </button>
                 </div>
-                <div class="ep-row-cell-center">
-                  <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
-                </div>
                 <div class="custom-actions">
                   <button class="ep-btn-action edit"
                     @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">{{ t('cmd.edit') }}</button>
@@ -1562,6 +1581,9 @@ onUnmounted(() => {
                     <template v-if="obsDeleteConfirm === 'arg:' + action">{{ t('cmd.delete_sure') }}</template>
                     <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
+                </div>
+                <div class="ep-row-cell-center">
+                  <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
                 <RowKebabMenu :items="obsBindingKebabItems('arg', obsArgCommand(entry), String(action))" @click.stop />
               </div>
@@ -1733,20 +1755,25 @@ onUnmounted(() => {
   align-items: center;
 }
 
-/* >>> Default/Custom tabs - 8 tracks: expander, name, description (text
-   only), tags (alias/keyword/flags - own section, not mixed into desc),
-   cooldowns (global+user grouped), access (its own button near actions,
-   not buried in a tag), switch, actions. */
+/* >>> Default/Custom tabs - 7 tracks: name (expander lives inside this cell
+   now, not its own column - so hover/click-to-expand reaches the true left
+   edge of the row instead of starting after a separate chevron column),
+   description (text only), tags (alias/keyword/flags - own section, not
+   mixed into desc), cooldowns (global+user grouped), access (its own
+   button, positioned next to actions), actions, switch (rightmost, after
+   actions). */
 .ep-row-header.cmd-default-row,
 .ep-row-grid.cmd-default-row {
-  grid-template-columns: 28px 140px 1fr 160px 140px 90px 50px 110px;
+  grid-template-columns: 168px 1fr 160px 140px 90px 110px 50px;
 }
 .ep-row-header.cmd-custom-row,
 .ep-row-grid.cmd-custom-row {
-  grid-template-columns: 28px 140px 1fr 160px 140px 90px 50px 150px;
+  grid-template-columns: 168px 1fr 160px 140px 90px 150px 50px;
 }
+/* >>> self-contained (indent, usage, desc), not tracking the parent's exact
+   column layout - this sub-row only ever shows those 3 pieces */
 .arg-variant-row.cmd-custom-row {
-  grid-template-columns: 28px 140px 1fr 160px 140px 90px 50px 150px;
+  grid-template-columns: 28px 1fr 1fr;
 }
 .ep-row-header.cmd-obs-row,
 .ep-row-grid.cmd-obs-row {
@@ -1830,6 +1857,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
 }
 
 .arg-variant-row {
@@ -1855,28 +1884,25 @@ onUnmounted(() => {
 }
 
 .arg-variant-usage {
-  grid-column: 2 / 4;
+  grid-column: 2;
 }
 
 .arg-variant-desc {
-  grid-column: 4;
+  grid-column: 3;
 }
 
-/* >>> default commands never have a usage desc, give usage the full width instead */
-.arg-variant-usage-wide {
-  grid-column: 2 / 6;
-}
-
-/* >>> Default tab's arg-variant-row, column order matches .cmd-default-row
-   (name+desc+tags span 2/6, access sits at col 6 - switch/actions live in
-   the parent row only, no per-variant equivalent) */
+/* >>> Default tab's arg-variant-row is a dense sub-detail row, self-contained
+   rather than tracking the parent's exact 7-column layout: indent, usage
+   (full remaining width - default commands never have a usage desc), access. */
 .arg-variant-row.cmd-default-row {
-  grid-template-columns: 28px 140px 1fr 160px 140px 90px 50px 110px;
+  grid-template-columns: 28px 1fr 90px;
+}
+.arg-variant-usage-wide {
+  grid-column: 2;
 }
 
 .arg-access-btn {
-  /* >>> lines up under the "Access" column */
-  grid-column: 6;
+  grid-column: 3;
   justify-self: start;
   font-size: 10px;
   padding: 3px 8px;
@@ -2081,6 +2107,7 @@ onUnmounted(() => {
   gap: 4px;
   min-width: 0;
   overflow: hidden;
+  padding: 0 6px;
 }
 
 .cmd-tags,
@@ -2090,7 +2117,7 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: 4px;
   min-width: 0;
-  padding: 4px 0;
+  padding: 4px 6px;
 }
 
 .ep-btn-action.access {

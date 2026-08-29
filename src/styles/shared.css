@@ -758,6 +758,8 @@
      "dead" vertical gap around short content falls through clicks/hover to
      whatever's behind the cell (the row itself) instead of the cell */
   align-items: stretch;
+  /* >>> no gap = adjacent cells sit flush against each other, no breathing room */
+  column-gap: 10px;
   min-height: 44px;
   padding: 0 14px 0 10px;
   background: #18181c;
@@ -790,6 +792,7 @@
 .ep-row-header {
   display: grid;
   align-items: center;
+  column-gap: 10px;
   padding: 8px 14px 8px 10px;
   background: #141418;
   color: #555;
@@ -862,6 +865,12 @@
   color: #9d6cff;
   border-color: #9d6cff44;
   background: #9d6cff11;
+}
+/* >>> global vs user cooldown looked identical - distinguish user's shade */
+.ep-tag.cooldown.user {
+  color: #61afef;
+  border-color: #61afef44;
+  background: #61afef11;
 }
 .ep-tag.access {
   color: #4ec9b0;
