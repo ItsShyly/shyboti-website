@@ -83,6 +83,7 @@ interface CustomCommand {
   broadcasterOnly: boolean;
   description: string;
   arg_descs: { usage: string; desc: string }[];
+  flags: string[];
 }
 
 const commands = ref<Command[]>([]);
@@ -1153,7 +1154,11 @@ onUnmounted(() => {
                 v-html="sortField === 'name' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
             </div>
             <div>{{ t("cmd.header.desc") }}</div>
-            <div>{{ t("cmd.header.access") }} / {{ t("cmd.header.gcd") }}</div>
+            <div>{{ t("cmd.sort.access") }}</div>
+            <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.header.gcd") }}/{{ t("cmd.header.ucd") }}<span class="sort-arrow"
+                v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
+            </div>
+            <div>{{ t("cmd.header.access") }}</div>
             <div></div>
             <div>{{ t("cmd.sort.actions") }}</div>
           </div>
@@ -1165,6 +1170,9 @@ onUnmounted(() => {
               </div>
               <div>
                 <div class="ep-skeleton-block" style="height:9px;width:70%;"></div>
+              </div>
+              <div>
+                <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
               </div>
               <div>
                 <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
@@ -1182,23 +1190,25 @@ onUnmounted(() => {
               <div class="ep-row-grid cmd-default-row" :class="{
                 saving: saving === cmd.name,
                 expanded: expandedDefault.has(cmd.name),
-                expandable: cmd.argVariants?.length,
-              }" @click="cmd.argVariants?.length && toggleExpandDefault(cmd.name)">
+              }">
                 <div class="row-chevron-cell">
                   <button v-if="cmd.argVariants?.length" class="ep-row-expander"
                     :class="{ open: expandedDefault.has(cmd.name) }" @click.stop="toggleExpandDefault(cmd.name)"
                     :title="t('cmd.show_arg_variants')" v-html="iconSvgFor('chevron-down')">
                   </button>
                 </div>
-                <div class="cmd-name">
+                <div class="cmd-name" :class="{ 'ep-row-cell-hover': cmd.argVariants?.length }"
+                  @click="cmd.argVariants?.length && toggleExpandDefault(cmd.name)">
                   <span class="cmd-cat-dot" :style="{ background: CAT_COLOR[inferCategory(cmd.name)] }"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ cmd.renamedTo || cmd.name }}</span>
                   <span v-if="cmd.renamedTo" class="cmd-renamed-hint" :title="`Default: ${prefix}${cmd.name}`">↺</span>
                   <span v-if="commandsWithRemovedDefaultAlias.has(cmd.name)" class="cmd-renamed-hint"
                     :title="t('cmd.default_alias_changed_hint')">↺</span>
                 </div>
-                <div class="cmd-desc ep-row-cell-hover" @click.stop="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
+                <div class="cmd-desc ep-row-cell-hover" @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
                   <span class="cmd-desc-text">{{ cmdDesc(cmd) }}</span>
+                </div>
+                <div class="cmd-tags ep-row-cell-hover" @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
                   <span v-for="al in (aliasesByCommand[cmd.name] ?? []).slice(0, 3)" :key="al"
                     class="ep-tag keyword">{{ prefix }}{{ al }}</span>
                   <span v-if="(aliasesByCommand[cmd.name]?.length ?? 0) > 3" class="ep-tag keyword">
@@ -1210,14 +1220,17 @@ onUnmounted(() => {
                     +{{ keywordsByCommand[cmd.name]!.length - 3 }}
                   </span>
                 </div>
-                <div class="cmd-access-cd ep-row-cell-hover" @click.stop="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
-                  <span class="ep-tag access" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }">
-                    {{ restrictionLabel(cmd) }}
-                  </span>
+                <div class="cmd-cooldowns ep-row-cell-hover" @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ cmd.cooldown }}s</span>
                   <span class="ep-tag cooldown">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
                 </div>
                 <div>
+                  <button class="ep-btn-action access" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }"
+                    @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
+                    {{ restrictionLabel(cmd) }}
+                  </button>
+                </div>
+                <div class="ep-row-cell-center">
                   <div class="ep-switch" :class="[
                     cmd.isActive ? 'on' : 'off',
                     { disabled: !canToggle },
@@ -1271,7 +1284,11 @@ onUnmounted(() => {
               v-html="sortField === 'name' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
           </div>
           <div>{{ t("cmd.header.desc") }}</div>
-          <div>{{ t("cmd.sort.access") }} / {{ t("cmd.sort.gcd") }}</div>
+          <div>{{ t("cmd.sort.access") }}</div>
+          <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.sort.gcd") }}/{{ t("cmd.header.ucd") }}<span class="sort-arrow"
+              v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
+          </div>
+          <div>{{ t("cmd.sort.access") }}</div>
           <div></div>
           <div>{{ t("cmd.sort.actions") }}</div>
         </div>
@@ -1284,6 +1301,9 @@ onUnmounted(() => {
             </div>
             <div>
               <div class="ep-skeleton-block" style="height:9px;width:70%;"></div>
+            </div>
+            <div>
+              <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
             </div>
             <div>
               <div class="ep-skeleton-block" style="height:9px;width:50%;"></div>
@@ -1312,12 +1332,15 @@ onUnmounted(() => {
                     v-html="iconSvgFor('chevron-down')">
                   </button>
                 </div>
-                <div class="cmd-name">
+                <div class="cmd-name" :class="{ 'ep-row-cell-hover': customHasArgs(cmd) }"
+                  @click="customHasArgs(cmd) && toggleExpandCustom(cmd.name)">
                   <span class="cmd-cat-dot" style="background: #9d6cff"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ cmd.name }}</span>
                 </div>
                 <div class="cmd-desc ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
                   <span class="cmd-desc-text">{{ cmd.description }}</span>
+                </div>
+                <div class="cmd-tags ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
                   <span v-for="al in (aliasesByCommand[cmd.name] ?? []).slice(0, 3)" :key="al"
                     class="ep-tag keyword">{{ prefix }}{{ al }}</span>
                   <span v-if="(aliasesByCommand[cmd.name]?.length ?? 0) > 3" class="ep-tag keyword">
@@ -1328,15 +1351,19 @@ onUnmounted(() => {
                   <span v-if="(keywordsByCommand[cmd.name]?.length ?? 0) > 3" class="ep-tag arg">
                     +{{ keywordsByCommand[cmd.name]!.length - 3 }}
                   </span>
+                  <span v-for="fl in cmd.flags ?? []" :key="fl" class="ep-tag condition">{{ fl }}</span>
                 </div>
-                <div class="cmd-access-cd ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
-                  <span class="ep-tag access" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }">
-                    {{ restrictionLabel(cmd) }}
-                  </span>
+                <div class="cmd-cooldowns ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ cmd.cooldown }}s</span>
                   <span class="ep-tag cooldown">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
                 </div>
                 <div>
+                  <button class="ep-btn-action access" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }"
+                    @click="canEdit && openEdit(cmd.name, false)">
+                    {{ restrictionLabel(cmd) }}
+                  </button>
+                </div>
+                <div class="ep-row-cell-center">
                   <div class="ep-switch" :class="[
                     cmd.isActive ? 'on' : 'off',
                     { disabled: !canToggle },
@@ -1415,7 +1442,8 @@ onUnmounted(() => {
               <div></div>
               <div>{{ t("cmd.header.name") }}</div>
               <div>{{ t("cmd.header.desc") }}</div>
-              <div>{{ t("cmd.header.access") }} / {{ t("cmd.header.gcd") }}</div>
+              <div>{{ t("cmd.header.gcd") }}/{{ t("cmd.header.ucd") }}</div>
+              <div>{{ t("cmd.header.access") }}</div>
               <div></div>
               <div>{{ t("cmd.sort.actions") }}</div>
             </div>
@@ -1426,11 +1454,7 @@ onUnmounted(() => {
                 <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
                     class="cmd-name-text">{{ prefix }}{{ b.command }}</span></div>
                 <div class="cmd-desc">switch scene · {{ b.scene }}</div>
-                <div class="cmd-access-cd">
-                  <span class="ep-tag access ep-row-cell-hover" :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }"
-                    @click="openObsEdit({ kind: 'scene', command: b.command })">
-                    {{ obsAccessLabel(b.access) }}
-                  </span>
+                <div class="cmd-cooldowns">
                   <div class="cd-input-wrap">
                     <input type="number" min="0" class="cd-input" :value="b.cooldown ?? 0"
                       @change="onObsCooldownInput(b, 'cooldown', ($event.target as HTMLInputElement).value)" />
@@ -1443,6 +1467,12 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div>
+                  <button class="ep-btn-action access" :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }"
+                    @click="openObsEdit({ kind: 'scene', command: b.command })">
+                    {{ obsAccessLabel(b.access) }}
+                  </button>
+                </div>
+                <div class="ep-row-cell-center">
                   <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
                 <div class="custom-actions">
@@ -1463,11 +1493,7 @@ onUnmounted(() => {
                 <div class="cmd-desc">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} · {{ b.source }}<template
                     v-if="b.action === 'volume' && b.value !== undefined"> @ {{ b.value }}%</template>
                 </div>
-                <div class="cmd-access-cd">
-                  <span class="ep-tag access ep-row-cell-hover" :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }"
-                    @click="openObsEdit({ kind: 'source', command: b.command })">
-                    {{ obsAccessLabel(b.access) }}
-                  </span>
+                <div class="cmd-cooldowns">
                   <div class="cd-input-wrap">
                     <input type="number" min="0" class="cd-input" :value="b.cooldown ?? 0"
                       @change="onObsCooldownInput(b, 'cooldown', ($event.target as HTMLInputElement).value)" />
@@ -1480,6 +1506,12 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div>
+                  <button class="ep-btn-action access" :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }"
+                    @click="openObsEdit({ kind: 'source', command: b.command })">
+                    {{ obsAccessLabel(b.access) }}
+                  </button>
+                </div>
+                <div class="ep-row-cell-center">
                   <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
                 <div class="custom-actions">
@@ -1499,11 +1531,7 @@ onUnmounted(() => {
                     class="cmd-name-text">{{ prefix }}{{ obsArgCommand(entry) }}</span></div>
                 <div class="cmd-desc">{{ OBS_ACTION_LABEL[action] ?? action }} · <span class="obs-arg-usage-inline">{{
                   obsArgUsage(action) }}</span></div>
-                <div class="cmd-access-cd">
-                  <span class="ep-tag access ep-row-cell-hover" :class="{ 'access-mod': obsArgAccess(entry) === 'mod', 'access-bc': obsArgAccess(entry) === 'broadcaster' }"
-                    @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">
-                    {{ obsAccessLabel(obsArgAccess(entry)) }}
-                  </span>
+                <div class="cmd-cooldowns">
                   <div class="cd-input-wrap">
                     <input type="number" min="0" class="cd-input"
                       :value="typeof entry === 'string' ? 0 : ((entry as any).cooldown ?? 0)"
@@ -1518,6 +1546,12 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div>
+                  <button class="ep-btn-action access" :class="{ 'access-mod': obsArgAccess(entry) === 'mod', 'access-bc': obsArgAccess(entry) === 'broadcaster' }"
+                    @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">
+                    {{ obsAccessLabel(obsArgAccess(entry)) }}
+                  </button>
+                </div>
+                <div class="ep-row-cell-center">
                   <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
                 <div class="custom-actions">
@@ -1699,24 +1733,24 @@ onUnmounted(() => {
   align-items: center;
 }
 
-/* >>> Default/Custom tabs - 6 tracks: expander, name, desc+tags (content),
-   access+cooldowns (behavior, grouped as one cell per the demo), switch,
-   actions. Access/cooldowns are NOT separate columns - they're 3 tags
-   stacked in one cell, same as the demo's single "ZUGRIFF/COOLDOWNS" <th>. */
+/* >>> Default/Custom tabs - 8 tracks: expander, name, description (text
+   only), tags (alias/keyword/flags - own section, not mixed into desc),
+   cooldowns (global+user grouped), access (its own button near actions,
+   not buried in a tag), switch, actions. */
 .ep-row-header.cmd-default-row,
 .ep-row-grid.cmd-default-row {
-  grid-template-columns: 28px 140px 1fr 220px 50px 110px;
+  grid-template-columns: 28px 140px 1fr 160px 140px 90px 50px 110px;
 }
 .ep-row-header.cmd-custom-row,
 .ep-row-grid.cmd-custom-row {
-  grid-template-columns: 28px 140px 1fr 220px 50px 150px;
+  grid-template-columns: 28px 140px 1fr 160px 140px 90px 50px 150px;
 }
 .arg-variant-row.cmd-custom-row {
-  grid-template-columns: 28px 140px 1fr 220px 50px 150px;
+  grid-template-columns: 28px 140px 1fr 160px 140px 90px 50px 150px;
 }
 .ep-row-header.cmd-obs-row,
 .ep-row-grid.cmd-obs-row {
-  grid-template-columns: 28px 140px 1fr 260px 50px 150px;
+  grid-template-columns: 28px 140px 1fr 140px 90px 50px 150px;
 }
 .ep-row-grid.saving {
   opacity: 0.6;
@@ -1830,19 +1864,19 @@ onUnmounted(() => {
 
 /* >>> default commands never have a usage desc, give usage the full width instead */
 .arg-variant-usage-wide {
-  grid-column: 2 / 4;
+  grid-column: 2 / 6;
 }
 
 /* >>> Default tab's arg-variant-row, column order matches .cmd-default-row
-   (name+desc span 2/4, access sits at col 4 - switch/actions live in the
-   parent row only, no per-variant equivalent) */
+   (name+desc+tags span 2/6, access sits at col 6 - switch/actions live in
+   the parent row only, no per-variant equivalent) */
 .arg-variant-row.cmd-default-row {
-  grid-template-columns: 28px 140px 1fr 220px 50px 110px;
+  grid-template-columns: 28px 140px 1fr 160px 140px 90px 50px 110px;
 }
 
 .arg-access-btn {
   /* >>> lines up under the "Access" column */
-  grid-column: 4;
+  grid-column: 6;
   justify-self: start;
   font-size: 10px;
   padding: 3px 8px;
@@ -1904,6 +1938,7 @@ onUnmounted(() => {
   color: #e0e0e0;
   display: flex;
   align-items: center;
+  height: 100%;
   gap: 7px;
 }
 
@@ -2048,12 +2083,26 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-.cmd-access-cd {
+.cmd-tags,
+.cmd-cooldowns {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 4px;
+  min-width: 0;
   padding: 4px 0;
+}
+
+.ep-btn-action.access {
+  color: #555;
+}
+.ep-btn-action.access.access-mod {
+  border-color: #c792ea55;
+  color: #c792ea;
+}
+.ep-btn-action.access.access-bc {
+  border-color: #f1494955;
+  color: #f14949;
 }
 
 .cmd-desc-text {

@@ -754,7 +754,10 @@
    look so every migrated view reads the same. */
 .ep-row-grid {
   display: grid;
-  align-items: center;
+  /* >>> stretch (not center) - cells must fill the full row height, else the
+     "dead" vertical gap around short content falls through clicks/hover to
+     whatever's behind the cell (the row itself) instead of the cell */
+  align-items: stretch;
   min-height: 44px;
   padding: 0 14px 0 10px;
   background: #18181c;
@@ -765,13 +768,24 @@
   opacity: 0.45;
 }
 /* >>> hover is per-cell (matches the demo), not whole-row - opt individual
-   clickable cells into this rather than hovering the entire row */
+   clickable cells into this rather than hovering the entire row. Cells using
+   this fill their full grid track (see .ep-row-grid's align-items above) and
+   center their own content vertically via flex. */
 .ep-row-cell-hover {
+  display: flex;
+  align-items: center;
+  height: 100%;
   cursor: pointer;
   transition: background 0.1s;
 }
 .ep-row-cell-hover:hover {
   background: #202028;
+}
+/* >>> non-clickable grid cells (switch wrapper, blank header cells) still
+   need centering now that .ep-row-grid stretches cells to full height */
+.ep-row-cell-center {
+  display: flex;
+  align-items: center;
 }
 .ep-row-header {
   display: grid;
