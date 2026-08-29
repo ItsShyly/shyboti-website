@@ -757,27 +757,32 @@
   align-items: center;
   min-height: 44px;
   padding: 0 14px 0 10px;
-  background: #222226;
-  border-bottom: 1px solid #1e1e1e;
-  transition:
-    background 0.1s,
-    opacity 0.2s;
-}
-.ep-row-grid:hover {
-  background: #1c1c20;
+  background: #18181c;
+  border-bottom: 1px solid #121216;
+  transition: opacity 0.2s;
 }
 .ep-row-grid.inactive {
   opacity: 0.45;
+}
+/* >>> hover is per-cell (matches the demo), not whole-row - opt individual
+   clickable cells into this rather than hovering the entire row */
+.ep-row-cell-hover {
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.ep-row-cell-hover:hover {
+  background: #202028;
 }
 .ep-row-header {
   display: grid;
   align-items: center;
   padding: 8px 14px 8px 10px;
+  background: #141418;
   color: #555;
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  border-bottom: 1px solid #222;
+  border-bottom: 1px solid #1e1e24;
 }
 .ep-row-expander {
   width: 20px;
