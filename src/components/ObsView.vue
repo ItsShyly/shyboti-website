@@ -348,19 +348,22 @@ watch(() => session.value?.channel, load);
     </div>
 
     <div v-else class="ep-row-list">
-      <div v-for="w in widgets" :key="w.id" class="ep-list-row widget-row">
-        <div class="widget-icon">
-          <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="1" y="3" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.5" />
-            <path d="M7 18h6M10 15v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          </svg>
+      <div v-for="w in widgets" :key="w.id" class="ep-row-grid widget-row">
+        <div class="ep-row-cell-center">
+          <div class="widget-icon">
+            <svg viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="1" y="3" width="18" height="12" rx="2" stroke="currentColor" stroke-width="1.5" />
+              <path d="M7 18h6M10 15v3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+            </svg>
+          </div>
         </div>
-        <div class="widget-info" @click="canEdit && openEdit(w)">
+        <div class="widget-info ep-row-cell-hover" @click="canEdit && openEdit(w)">
           <div class="widget-name">{{ w.name }}</div>
           <code class="widget-content">{{ w.content.slice(0, 60)
           }}{{ w.content.length > 60 ? "…" : "" }}</code>
           <div class="widget-meta">
-            <span v-html="iconSvgFor('refresh-cw')"></span> {{ t('obs.every') }} {{ w.refresh_ms / 1000 }}s · {{ fmtDate(w.created_at) }}
+            <span v-html="iconSvgFor('refresh-cw')"></span> {{ t('obs.every') }} {{ w.refresh_ms / 1000 }}s · {{
+              fmtDate(w.created_at) }}
           </div>
         </div>
         <div class="widget-actions">
@@ -408,7 +411,7 @@ watch(() => session.value?.channel, load);
               <label class="ep-field-label">{{ t("obs.panel.name") }}
                 <span class="ep-field-hint">{{
                   t("obs.panel.name.hint")
-                }}</span></label>
+                  }}</span></label>
               <input v-model="form.name" class="ep-field-input" placeholder="kills-counter" />
             </div>
 
@@ -416,7 +419,7 @@ watch(() => session.value?.channel, load);
               <label class="ep-field-label">{{ t("obs.panel.content") }}
                 <span class="ep-field-hint">{{
                   t("obs.panel.content.hint")
-                }}</span></label>
+                  }}</span></label>
               <input ref="contentInputEl" v-model="form.content" class="ep-field-input ep-mono"
                 placeholder="$counter.kills.get" />
             </div>
@@ -461,13 +464,13 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.size")
-                  }}</label>
+                    }}</label>
                   <input v-model.number="form.style.fontSize" type="number" min="8" max="200" class="ep-field-input" />
                 </div>
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.color")
-                  }}</label>
+                    }}</label>
                   <div class="color-row">
                     <input type="color" v-model="form.style.color" class="color-pick" />
                     <input v-model="form.style.color" class="ep-field-input" placeholder="#ffffff" />
@@ -476,7 +479,7 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.font")
-                  }}</label>
+                    }}</label>
                   <select v-model="form.style.fontFamily" class="ep-field-select">
                     <option v-for="f in FONT_FAMILIES" :key="f.value" :value="f.value">
                       {{ f.label }}
@@ -486,7 +489,7 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.weight")
-                  }}</label>
+                    }}</label>
                   <select v-model="form.style.fontWeight" class="ep-field-select">
                     <option value="normal">
                       {{ t("obs.panel.weight.normal") }}
@@ -502,7 +505,7 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.align")
-                  }}</label>
+                    }}</label>
                   <select v-model="form.style.textAlign" class="ep-field-select">
                     <option value="left">
                       {{ t("obs.panel.align.left") }}
@@ -518,7 +521,7 @@ watch(() => session.value?.channel, load);
                 <div class="ep-field-group">
                   <label class="ep-field-label">{{
                     t("obs.panel.padding")
-                  }}</label>
+                    }}</label>
                   <input v-model.number="form.style.padding" type="number" min="0" class="ep-field-input" />
                 </div>
               </div>
@@ -535,7 +538,7 @@ watch(() => session.value?.channel, load);
                 <label class="ep-field-label">{{ t("obs.panel.bg") }}
                   <span class="ep-field-hint">{{
                     t("obs.panel.bg.hint")
-                  }}</span></label>
+                    }}</span></label>
                 <div class="color-row">
                   <input type="color" v-model="form.style.background" class="color-pick" />
                   <input v-model="form.style.background" class="ep-field-input" placeholder="transparent" />
@@ -571,6 +574,10 @@ watch(() => session.value?.channel, load);
   font-size: 11px;
 }
 
+.widget-row {
+  grid-template-columns: 44px 1fr auto;
+}
+
 .widget-icon {
   width: 28px;
   flex-shrink: 0;
@@ -584,9 +591,12 @@ watch(() => session.value?.channel, load);
 }
 
 .widget-info {
-  flex: 1;
-  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
   min-width: 0;
+  padding: 0 6px;
 }
 
 .widget-name {
@@ -832,10 +842,11 @@ watch(() => session.value?.channel, load);
   }
 
   .widget-row {
-    flex-wrap: wrap;
+    grid-template-columns: 36px 1fr;
   }
 
   .widget-actions {
+    grid-column: 1 / -1;
     align-items: flex-start;
     width: 100%;
   }

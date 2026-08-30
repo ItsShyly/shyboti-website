@@ -21,7 +21,10 @@ export interface CustomCommand {
   arg_descs: { usage: string; desc: string }[]
   flags: string[]
 }
-interface Props { cmdName: string; channel: string; open: boolean; isBuiltIn?: boolean; prefix?: string }
+interface Props {
+  cmdName: string; channel: string; open: boolean; isBuiltIn?: boolean; prefix?: string
+  initialTab?: 'response' | 'args' | 'flags' | 'behavior'
+}
 
 const props = defineProps<Props>()
 const emit = defineEmits<{ (e: 'close'): void; (e: 'saved', name: string): void }>()
@@ -484,7 +487,7 @@ function updateLineNumbers(text: string) {
   lineCount.value = (text.match(/\n/g) || []).length + 1
 }
 
-watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; saveError.value = ''; activeTab.value = 'response'; closeConfirmOpen.value = false } })
+watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; saveError.value = ''; activeTab.value = props.initialTab ?? 'response'; closeConfirmOpen.value = false } })
 onMounted(() => { if (props.open) load() })
 
 // >>> the response tab's v-if unmounts the contenteditable - repopulate it
@@ -951,8 +954,8 @@ function onNormalKeydown(e: KeyboardEvent) {
             <div class="ep-panel-sub">Rule builder for #{{ channel }}</div>
           </div>
           <div class="ep-panel-header-actions">
-            <button v-if="isBuiltIn" class="reset-default-btn" :class="{ confirm: resetConfirm }"
-              :disabled="resetting" @click="resetToDefault">
+            <button v-if="isBuiltIn" class="reset-default-btn" :class="{ confirm: resetConfirm }" :disabled="resetting"
+              @click="resetToDefault">
               {{ resetConfirm ? t('edit.reset_confirm') : t('edit.reset_default') }}
             </button>
             <button class="ep-panel-close" title="Close (Esc)" @click="requestClose" v-html="iconSvgFor('x')"></button>
@@ -964,14 +967,14 @@ function onNormalKeydown(e: KeyboardEvent) {
           <div v-if="saveError" class="ep-toast error">{{ saveError }}</div>
 
           <div class="ep-tabs">
-            <button class="ep-tab" :class="{ active: activeTab === 'response' }"
-              @click="activeTab = 'response'">{{ t('edit.tab_response') }}</button>
-            <button class="ep-tab" :class="{ active: activeTab === 'args' }"
-              @click="activeTab = 'args'">{{ t('edit.tab_args') }}</button>
+            <button class="ep-tab" :class="{ active: activeTab === 'response' }" @click="activeTab = 'response'">{{
+              t('edit.tab_response') }}</button>
+            <button class="ep-tab" :class="{ active: activeTab === 'args' }" @click="activeTab = 'args'">{{
+              t('edit.tab_args') }}</button>
             <button v-if="!isBuiltIn" class="ep-tab" :class="{ active: activeTab === 'flags' }"
               @click="activeTab = 'flags'">{{ t('edit.tab_flags') }}</button>
-            <button class="ep-tab" :class="{ active: activeTab === 'behavior' }"
-              @click="activeTab = 'behavior'">{{ t('edit.tab_behavior') }}</button>
+            <button class="ep-tab" :class="{ active: activeTab === 'behavior' }" @click="activeTab = 'behavior'">{{
+              t('edit.tab_behavior') }}</button>
           </div>
 
           <!-- vvv response tab vvv -->
@@ -981,7 +984,8 @@ function onNormalKeydown(e: KeyboardEvent) {
 
               <!-- >>> locked prefix for built-in commands -->
               <div v-if="isBuiltIn" class="builtin-prefix-row">
-                <span class="builtin-prefix-token">$command.output <span class="builtin-prefix-lock" v-html="iconSvgFor('lock')"></span></span>
+                <span class="builtin-prefix-token">$command.output <span class="builtin-prefix-lock"
+                    v-html="iconSvgFor('lock')"></span></span>
                 <span class="builtin-prefix-hint">{{ t('edit.builtin_locked') }}</span>
               </div>
 
@@ -1057,15 +1061,17 @@ function onNormalKeydown(e: KeyboardEvent) {
 
             <!-- >>> aliases work for built-in and custom -->
             <div class="ep-field-group">
-              <label class="ep-field-label">{{ t('edit.aliases') }} <span class="ep-field-hint">{{ t('edit.aliases_hint') }}</span></label>
+              <label class="ep-field-label">{{ t('edit.aliases') }} <span class="ep-field-hint">{{
+                t('edit.aliases_hint') }}</span></label>
               <div v-if="aliasesNeedSave" class="arg-descs-empty">
                 {{ t('edit.aliases_save_first') }}
               </div>
               <template v-else>
                 <div class="alias-add-row">
-                  <input v-model="newAliasName" class="ep-field-input alias-add-input" :placeholder="t('edit.aliases_placeholder')"
-                    @keydown.enter="addAlias" />
-                  <button class="arg-add-btn" type="button" :disabled="aliasSaving || !newAliasName.trim()" @click="addAlias">
+                  <input v-model="newAliasName" class="ep-field-input alias-add-input"
+                    :placeholder="t('edit.aliases_placeholder')" @keydown.enter="addAlias" />
+                  <button class="arg-add-btn" type="button" :disabled="aliasSaving || !newAliasName.trim()"
+                    @click="addAlias">
                     {{ t('edit.aliases_add') }}
                   </button>
                 </div>
@@ -1081,7 +1087,8 @@ function onNormalKeydown(e: KeyboardEvent) {
                   </span>
                   <span v-for="a in builtinChannelAliases" :key="'c:' + a" class="alias-chip">
                     {{ prefix || '+' }}{{ a }}
-                    <button class="alias-chip-remove" type="button" :disabled="aliasSaving" @click="removeAlias(a)" v-html="iconSvgFor('x')"></button>
+                    <button class="alias-chip-remove" type="button" :disabled="aliasSaving" @click="removeAlias(a)"
+                      v-html="iconSvgFor('x')"></button>
                   </span>
                 </div>
                 <div v-if="aliasError" class="alias-error">{{ aliasError }}</div>
@@ -1090,7 +1097,9 @@ function onNormalKeydown(e: KeyboardEvent) {
 
             <!-- >>> keywords - natural phrases that run this command without the prefix -->
             <div class="ep-field-group">
-              <label class="ep-field-label">{{ t('edit.keywords') }} <span class="ep-field-hint">{{ t('edit.keywords_hint') }}</span></label>
+              <label class="ep-field-label">{{ t('edit.keywords') }} <span class="ep-field-hint">{{
+                t('edit.keywords_hint')
+                  }}</span></label>
               <div v-if="aliasesNeedSave" class="arg-descs-empty">
                 {{ t('edit.aliases_save_first') }}
               </div>
@@ -1099,9 +1108,10 @@ function onNormalKeydown(e: KeyboardEvent) {
                   <select v-model="newKeywordMatchType" class="ep-field-select match-type">
                     <option v-for="m in KEYWORD_MATCH_TYPES" :key="m.value" :value="m.value">{{ m.label }}</option>
                   </select>
-                  <input v-model="newKeywordPattern" class="ep-field-input alias-add-input" :placeholder="t('edit.keywords_placeholder')"
-                    @keydown.enter="addKeyword" />
-                  <button class="arg-add-btn" type="button" :disabled="keywordSaving || !newKeywordPattern.trim()" @click="addKeyword">
+                  <input v-model="newKeywordPattern" class="ep-field-input alias-add-input"
+                    :placeholder="t('edit.keywords_placeholder')" @keydown.enter="addKeyword" />
+                  <button class="arg-add-btn" type="button" :disabled="keywordSaving || !newKeywordPattern.trim()"
+                    @click="addKeyword">
                     {{ t('edit.aliases_add') }}
                   </button>
                 </div>
@@ -1109,7 +1119,8 @@ function onNormalKeydown(e: KeyboardEvent) {
                 <div v-else class="alias-chip-list">
                   <span v-for="k in keywords" :key="k.name" class="alias-chip">
                     {{ keywordMatchLabel(k.match_type) }}: "{{ k.match_pattern }}"
-                    <button class="alias-chip-remove" type="button" :disabled="keywordSaving" @click="removeKeyword(k.name)" v-html="iconSvgFor('x')"></button>
+                    <button class="alias-chip-remove" type="button" :disabled="keywordSaving"
+                      @click="removeKeyword(k.name)" v-html="iconSvgFor('x')"></button>
                   </span>
                 </div>
                 <div v-if="keywordError" class="alias-error">{{ keywordError }}</div>
@@ -1121,9 +1132,11 @@ function onNormalKeydown(e: KeyboardEvent) {
           <!-- vvv flags tab vvv -->
           <template v-if="activeTab === 'flags' && !isBuiltIn">
             <div class="ep-field-group">
-              <label class="ep-field-label">{{ t('edit.tab_flags') }} <span class="ep-field-hint">{{ t('edit.custom_flags_hint') }}</span></label>
+              <label class="ep-field-label">{{ t('edit.tab_flags') }} <span class="ep-field-hint">{{
+                t('edit.custom_flags_hint') }}</span></label>
               <div class="flags-list">
-                <div v-for="f in CUSTOM_FLAG_DEFS" :key="f.flag" class="flags-row flags-row-toggle" @click="toggleCustomFlag(f.flag)">
+                <div v-for="f in CUSTOM_FLAG_DEFS" :key="f.flag" class="flags-row flags-row-toggle"
+                  @click="toggleCustomFlag(f.flag)">
                   <div class="ep-switch" :class="{ on: form.flags.includes(f.flag) }">
                     <div class="ep-switch-knob"></div>
                   </div>
@@ -1259,6 +1272,7 @@ function onNormalKeydown(e: KeyboardEvent) {
   gap: 10px;
   flex-shrink: 0;
 }
+
 .reset-default-btn {
   height: 28px;
   padding: 0 12px;
@@ -1271,16 +1285,19 @@ function onNormalKeydown(e: KeyboardEvent) {
   white-space: nowrap;
   transition: all .15s;
 }
+
 .reset-default-btn:hover:not(:disabled) {
   color: #ccc;
   border-color: #444;
 }
+
 .reset-default-btn.confirm {
   border-color: #f14949;
   background: rgba(241, 73, 73, 0.15);
   color: #f14949;
   font-weight: 700;
 }
+
 .reset-default-btn:disabled {
   opacity: .5;
   cursor: not-allowed;
@@ -1307,22 +1324,27 @@ function onNormalKeydown(e: KeyboardEvent) {
   white-space: nowrap;
   transition: all 0.15s;
 }
+
 .access-cycle-btn:hover {
   border-color: #444;
 }
+
 .access-cycle-btn.access-mod {
   border-color: #e5c07b66;
   color: #e5c07b;
 }
+
 .access-cycle-btn.access-bc {
   border-color: #f1494966;
   color: #f14949;
 }
+
 .arg-access-list {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+
 .arg-access-row {
   display: flex;
   align-items: center;
@@ -1332,6 +1354,7 @@ function onNormalKeydown(e: KeyboardEvent) {
   background: #0d0d10;
   border: 1px solid #1e1e22;
 }
+
 .arg-access-usage {
   font-size: 11px;
   color: #888;
@@ -1515,6 +1538,7 @@ function onNormalKeydown(e: KeyboardEvent) {
 .editor-wrapper:focus-within {
   border-color: #6f2bff55;
 }
+
 .editor-wrapper.field-error {
   border-color: #f14949;
 }
@@ -1526,7 +1550,8 @@ function onNormalKeydown(e: KeyboardEvent) {
   padding: 12px 6px 12px 8px;
   background: #0a0a0d;
   border-right: 1px solid #1a1a22;
-  overflow: hidden; /* >>> hides scroll bar, synced manually */
+  overflow: hidden;
+  /* >>> hides scroll bar, synced manually */
   flex-shrink: 0;
   user-select: none;
   pointer-events: none;
@@ -1535,7 +1560,8 @@ function onNormalKeydown(e: KeyboardEvent) {
 .line-number {
   font-family: 'Consolas', 'Fira Mono', monospace;
   font-size: 13px;
-  line-height: 1.7; /* >>> must match .normal-editor line-height */
+  line-height: 1.7;
+  /* >>> must match .normal-editor line-height */
   color: #3a3a50;
   text-align: right;
   white-space: pre;
@@ -1563,7 +1589,8 @@ function onNormalKeydown(e: KeyboardEvent) {
   word-break: break-word;
   tab-size: 2;
   background: transparent;
-  border: none; /* >>> border is on .editor-wrapper */
+  border: none;
+  /* >>> border is on .editor-wrapper */
 }
 
 .normal-editor:empty::before {
@@ -1740,7 +1767,6 @@ function onNormalKeydown(e: KeyboardEvent) {
   justify-content: flex-end;
   gap: 8px;
 }
-
 </style>
 
 <style>

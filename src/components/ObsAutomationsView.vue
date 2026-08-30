@@ -208,7 +208,8 @@ defineExpose({
     </div>
     <div v-else-if="!paired" class="ep-empty">
       {{ t('obsauto.not_paired_pre') }}
-      <router-link to="/obs-control" class="obs-rule-link">{{ t('obsauto.not_paired_link') }}</router-link> {{ t('obsauto.not_paired_post') }}
+      <router-link to="/obs-control" class="obs-rule-link">{{ t('obsauto.not_paired_link') }}</router-link> {{
+        t('obsauto.not_paired_post') }}
     </div>
     <template v-else>
       <div v-if="!rules.length" class="ep-empty">
@@ -216,18 +217,14 @@ defineExpose({
       </div>
 
       <div v-else class="ep-row-list">
-        <div v-for="rule in rules" :key="rule.id" class="ep-list-row" :class="{ inactive: !rule.enabled }">
-          <div class="timer-toggle-wrap">
-            <button class="ep-switch" :class="{ on: rule.enabled, off: !rule.enabled, disabled: !canEdit }"
-              @click="canEdit && toggleRule(rule)" :title="rule.enabled ? t('obsauto.disable_title') : t('obsauto.enable_title')"><span class="ep-switch-knob"></span></button>
+        <div v-for="rule in rules" :key="rule.id" class="ep-row-grid obsauto-row" :class="{ inactive: !rule.enabled }">
+          <div class="ep-cell-name ep-row-cell-hover" @click="canEdit && openEdit(rule.id)">
+            <span class="obsauto-title">{{ ruleTitle(rule) }}</span>
           </div>
-          <div class="timer-info" @click="canEdit && openEdit(rule.id)">
-            <div class="timer-name">{{ ruleTitle(rule) }}</div>
-            <div class="timer-meta">
-              <span class="ep-meta-pill interval">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
-              <span class="ep-meta-pill when">{{ rule.target }}<template
-                  v-if="rule.action === 'volume' && rule.value !== undefined"> @ {{ rule.value }}%</template></span>
-            </div>
+          <div class="ep-cell-tags ep-row-cell-hover" @click="canEdit && openEdit(rule.id)">
+            <span class="ep-tag action">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
+            <span class="ep-tag condition">{{ rule.target }}<template
+                v-if="rule.action === 'volume' && rule.value !== undefined"> @ {{ rule.value }}%</template></span>
           </div>
           <div class="ep-row-actions">
             <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(rule.id)"
@@ -237,6 +234,10 @@ defineExpose({
             <button v-if="canEdit" class="ep-btn-action del" @click.stop="deleteRule(rule.id)"
               :disabled="saving === rule.id" v-html="iconSvgFor('x')">
             </button>
+            <button class="ep-switch" :class="{ on: rule.enabled, off: !rule.enabled, disabled: !canEdit }"
+              @click.stop="canEdit && toggleRule(rule)"
+              :title="rule.enabled ? t('obsauto.disable_title') : t('obsauto.enable_title')"><span
+                class="ep-switch-knob"></span></button>
           </div>
         </div>
       </div>
@@ -256,28 +257,15 @@ defineExpose({
   flex-wrap: wrap;
 }
 
-.timer-toggle-wrap {
-  flex-shrink: 0;
+.obsauto-row {
+  grid-template-columns: 1fr 220px auto;
 }
 
-.timer-info {
-  flex: 1;
-  cursor: pointer;
-  min-width: 0;
-}
-
-.timer-name {
+.obsauto-title {
   font-size: 13px;
   font-weight: 600;
   color: #e0e0e0;
-  margin-bottom: 4px;
   font-family: "Consolas", "Fira Mono", monospace;
-}
-
-.timer-meta {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
 }
 
 .obs-rule-link {

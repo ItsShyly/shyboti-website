@@ -504,7 +504,8 @@ defineExpose({
             <select v-model="syncFrom" class="ep-field-select-sm">
               <option value="">{{ syncMode === 'import' ? t("timer.sync.select") : (syncConf?.is_active ?
                 t("timer.sync.change") : t("timer.sync.select")) }}</option>
-              <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
+              <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{ ch
+                }}</option>
             </select>
             <button v-if="syncMode === 'import'" class="ep-sync-save-btn" @click="runImport"
               :disabled="syncImporting || !syncFrom">
@@ -519,8 +520,10 @@ defineExpose({
               t("timer.sync.pull") }}</button>
             <button class="ep-sync-stop-btn" @click="stopSync">{{ t("timer.sync.stop") }}</button>
           </div>
-          <div v-if="syncMode === 'ongoing' && syncConf?.last_synced" class="ep-sync-last">{{ t("timer.sync.last") }} {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
-          <div v-if="syncMsg" class="ep-sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{ syncMsg }}</div>
+          <div v-if="syncMode === 'ongoing' && syncConf?.last_synced" class="ep-sync-last">{{ t("timer.sync.last") }} {{
+            new Date(syncConf.last_synced).toLocaleString() }}</div>
+          <div v-if="syncMsg" class="ep-sync-msg"
+            :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{ syncMsg }}</div>
         </div>
       </div>
     </Teleport>
@@ -547,28 +550,26 @@ defineExpose({
     </div>
 
     <div v-else class="ep-row-list">
-      <div v-for="timer in timers" :key="timer.id" class="ep-list-row timer-row"
+      <div v-for="timer in timers" :key="timer.id" class="ep-row-grid timer-row"
         :class="{ inactive: !timer.is_active }">
-        <div class="timer-toggle-wrap">
-          <button class="ep-switch" :class="{ on: timer.is_active, off: !timer.is_active, disabled: !canToggle }"
-            @click="canToggle && toggleActive(timer)" :title="timer.is_active ? 'Disable' : 'Enable'"><span class="ep-switch-knob"></span></button>
+        <div class="ep-cell-name">
+          <span class="timer-name-text">{{ timer.name }}</span>
         </div>
-        <div class="timer-info" @click="openEdit(timer)">
-          <div class="timer-name">{{ timer.name }}</div>
-          <div class="timer-meta">
-            <span class="ep-meta-pill interval"><span v-html="iconSvgFor('clock')"></span> {{ fmtInterval(timer.interval_sec) }}</span>
-            <span v-if="timer.min_messages" class="ep-meta-pill msgs"><span v-html="iconSvgFor('message-circle')"></span> {{ timer.min_messages }}+ msgs</span>
-            <span v-if="timer.enabled_when !== 'always'" class="ep-meta-pill when">{{ timer.enabled_when }}</span>
-            <span v-if="timer.required_game" class="ep-meta-pill game">{{ timer.required_game }}</span>
-            <span v-if="timer.condition" class="ep-meta-pill cond">if …</span>
-          </div>
-          <div class="timer-response">
-            {{ timer.response.slice(0, 80)
-            }}{{ timer.response.length > 80 ? "…" : "" }}
-          </div>
-          <div v-if="timer.is_active" class="timer-next">
-            {{ fmtNextFire(timer) }}
-          </div>
+        <div class="ep-cell-text timer-resp-cell ep-row-cell-hover" @click="openEdit(timer)">
+          <span class="timer-response">{{ timer.response.slice(0, 60)
+            }}{{ timer.response.length > 60 ? "…" : "" }}</span>
+          <span v-if="timer.is_active" class="timer-next">{{ fmtNextFire(timer) }}</span>
+        </div>
+        <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(timer)">
+          <span class="ep-tag cooldown"><span v-html="iconSvgFor('clock')"></span> {{ fmtInterval(timer.interval_sec)
+            }}</span>
+          <span v-if="timer.min_messages" class="ep-tag cooldown user"><span
+              v-html="iconSvgFor('message-circle')"></span> {{ timer.min_messages }}+</span>
+        </div>
+        <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(timer)">
+          <span v-if="timer.enabled_when !== 'always'" class="ep-tag condition">{{ timer.enabled_when }}</span>
+          <span v-if="timer.required_game" class="ep-tag condition">{{ timer.required_game }}</span>
+          <span v-if="timer.condition" class="ep-tag condition">if …</span>
         </div>
         <div class="ep-row-actions">
           <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(timer)" :class="{ disabled: !canEdit }">
@@ -581,6 +582,9 @@ defineExpose({
             :disabled="saving === timer.name">
             <span v-html="iconSvgFor('trash')"></span>
           </button>
+          <button class="ep-switch" :class="{ on: timer.is_active, off: !timer.is_active, disabled: !canToggle }"
+            @click.stop="canToggle && toggleActive(timer)" :title="timer.is_active ? 'Disable' : 'Enable'"><span
+              class="ep-switch-knob"></span></button>
         </div>
         <RowKebabMenu :items="timerKebabItems(timer)" @click.stop />
       </div>
@@ -607,7 +611,7 @@ defineExpose({
               <label class="ep-field-label">{{ t("timer.field.response") }}
                 <span class="ep-field-hint">{{
                   t("timer.field.resp_hint")
-                }}</span></label>
+                  }}</span></label>
               <div ref="editorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
                 data-placeholder="Hello chat! $channel.viewers viewers right now." @input="onEditorInput"></div>
               <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
@@ -617,7 +621,7 @@ defineExpose({
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("timer.field.interval")
-                }}</label>
+                  }}</label>
                 <div class="interval-row">
                   <input v-model.number="editTimer.interval_sec" type="number" min="30" class="ep-field-input" />
                   <span class="ep-field-hint">{{ t("timer.field.interval_hint") }} ·
@@ -628,7 +632,7 @@ defineExpose({
                 <label class="ep-field-label">{{ t("timer.field.min_msgs") }}
                   <span class="ep-field-hint">{{
                     t("timer.field.min_msgs_hint")
-                  }}</span></label>
+                    }}</span></label>
                 <input v-model.number="editTimer.min_messages" type="number" min="0" class="ep-field-input" />
               </div>
             </div>
@@ -637,7 +641,7 @@ defineExpose({
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("timer.field.active_when")
-                }}</label>
+                  }}</label>
                 <select v-model="editTimer.enabled_when" class="ep-field-select">
                   <option value="always">{{ t("timer.when.always") }}</option>
                   <option value="online">{{ t("timer.when.online") }}</option>
@@ -648,7 +652,7 @@ defineExpose({
                 <label class="ep-field-label">{{ t("timer.field.game") }}
                   <span class="ep-field-hint">{{
                     t("timer.field.game_hint")
-                  }}</span></label>
+                    }}</span></label>
                 <input v-model="editTimer.required_game" class="ep-field-input" placeholder="Just Chatting" />
               </div>
             </div>
@@ -657,7 +661,7 @@ defineExpose({
               <label class="ep-field-label">{{ t("timer.field.condition") }}
                 <span class="ep-field-hint">{{
                   t("timer.field.cond_hint")
-                }}</span></label>
+                  }}</span></label>
               <input v-model="editTimer.condition" class="ep-field-input ep-mono" placeholder="$channel.viewers > 10" />
             </div>
 
@@ -728,50 +732,37 @@ defineExpose({
   flex-wrap: wrap;
 }
 
-.timer-toggle-wrap {
-  flex-shrink: 0;
+.timer-row {
+  grid-template-columns: 160px 1fr 150px 190px auto;
 }
 
-.timer-info {
-  flex: 1;
-  cursor: pointer;
-  min-width: 0;
-}
-
-.timer-name {
+.timer-name-text {
   font-size: 13px;
   font-weight: 600;
   color: #e0e0e0;
-  margin-bottom: 4px;
 }
 
-.timer-meta {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 4px;
+.timer-resp-cell {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
 }
 
 .timer-response {
   font-size: 11px;
-  color: #555;
+  color: #888;
   font-family: "Consolas", "Fira Mono", monospace;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 100%;
 }
 
 .timer-next {
   font-size: 10px;
   color: #9d6cff88;
-  margin-top: 2px;
   font-family: "Consolas", "Fira Mono", monospace;
-}
-
-.ep-meta-pill.msgs {
-  color: #4ec9b0;
-  border-color: #4ec9b044;
-  background: #4ec9b011;
 }
 
 .interval-row {
@@ -843,7 +834,7 @@ defineExpose({
   }
 
   /* >>> edit/share/delete move into the kebab on phone */
-  .timer-row > .ep-row-actions {
+  .timer-row>.ep-row-actions {
     display: none;
   }
 

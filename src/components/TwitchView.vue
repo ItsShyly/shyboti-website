@@ -297,7 +297,7 @@ async function syncCategoryGate(rewardId: string, rewardTitle: string) {
       }),
     });
     gateTriggerName.value = name;
-  } catch {}
+  } catch { }
 }
 // ^^^ category gate ^^^
 
@@ -801,7 +801,7 @@ async function ensureUserInputEnabled() {
       },
     );
     if (res.ok) r.userInputRequired = true; // <<< same object ref as in rewards.value
-  } catch {}
+  } catch { }
 }
 watch(actionsList, ensureUserInputEnabled, { deep: true });
 
@@ -839,7 +839,7 @@ async function saveActions() {
       await fetch(`${API}/triggers/${channel}/${name}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     // >>> upsert each action as its own trigger row
@@ -893,7 +893,8 @@ async function saveActions() {
         <div class="ep-view-sub">{{ rewards.length }} {{ t("cp.tab") }}</div>
       </div>
       <div v-if="canView" class="ep-view-header-right">
-        <button class="ep-btn-reload" :title="t('twitch.reload')" @click="reload" v-html="iconSvgFor('refresh-cw')"></button>
+        <button class="ep-btn-reload" :title="t('twitch.reload')" @click="reload"
+          v-html="iconSvgFor('refresh-cw')"></button>
         <button v-if="canEdit" class="ep-btn-new" @click="openNew">
           + {{ t("cp.new") }}
         </button>
@@ -903,114 +904,121 @@ async function saveActions() {
     <div v-if="!canView" class="ep-empty">{{ t("cp.no_access") }}</div>
 
     <template v-else>
-    <div v-if="error" class="ep-toast error">{{ error }}</div>
-    <div v-if="copyResultMsg" class="ep-toast success">{{ copyResultMsg }}</div>
+      <div v-if="error" class="ep-toast error">{{ error }}</div>
+      <div v-if="copyResultMsg" class="ep-toast success">{{ copyResultMsg }}</div>
 
-    <div class="ep-tabs">
-      <button class="ep-tab" :class="{ active: activeTab === 'channelpoints' }">
-        {{ t("cp.tab") }}
-      </button>
-    </div>
-
-    <div class="cp-explain">
-      <span v-html="iconSvgFor('info')"></span>
-      <span>{{ t("cp.explain") }}</span>
-    </div>
-
-    <div class="cp-scroll">
-      <div v-if="loading" class="ep-row-list">
-        <div class="ep-skeleton-row" v-for="i in 4" :key="i">
-          <div class="ep-skeleton-block ep-skeleton-square"></div>
-          <div class="ep-skeleton-lines">
-            <div class="ep-skeleton-block ep-skeleton-line title"></div>
-            <div class="ep-skeleton-block ep-skeleton-line meta"></div>
-          </div>
-          <div class="ep-skeleton-actions">
-            <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
-          </div>
-        </div>
+      <div class="ep-tabs">
+        <button class="ep-tab" :class="{ active: activeTab === 'channelpoints' }">
+          {{ t("cp.tab") }}
+        </button>
       </div>
 
-      <div v-else-if="!rewards.length" class="ep-empty">{{ t("cp.empty") }}</div>
+      <div class="cp-explain">
+        <span v-html="iconSvgFor('info')"></span>
+        <span>{{ t("cp.explain") }}</span>
+      </div>
 
-      <template v-else>
-        <div v-if="botRewards.length" class="cp-group">
-          <div class="cp-group-header">
-            <span>{{ t("cp.group.bot") }}</span>
-            <span class="cp-group-count">{{ botRewards.length }}</span>
+      <div class="cp-scroll">
+        <div v-if="loading" class="ep-row-list">
+          <div class="ep-skeleton-row" v-for="i in 4" :key="i">
+            <div class="ep-skeleton-block ep-skeleton-square"></div>
+            <div class="ep-skeleton-lines">
+              <div class="ep-skeleton-block ep-skeleton-line title"></div>
+              <div class="ep-skeleton-block ep-skeleton-line meta"></div>
+            </div>
+            <div class="ep-skeleton-actions">
+              <div class="ep-skeleton-block ep-skeleton-btn icon"></div>
+            </div>
           </div>
-          <div class="ep-row-list">
-            <div v-for="r in botRewards" :key="r.id" class="ep-list-row cp-row" :class="{ inactive: !r.isEnabled }">
-              <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
-              <div class="cp-main">
-                <div class="cp-title-row">
-                  <span class="cp-title">{{ r.title }}</span>
+        </div>
+
+        <div v-else-if="!rewards.length" class="ep-empty">{{ t("cp.empty") }}</div>
+
+        <template v-else>
+          <div v-if="botRewards.length" class="cp-group">
+            <div class="cp-group-header">
+              <span>{{ t("cp.group.bot") }}</span>
+              <span class="cp-group-count">{{ botRewards.length }}</span>
+            </div>
+            <div class="ep-row-list">
+              <div v-for="r in botRewards" :key="r.id" class="ep-row-grid cp-row" :class="{ inactive: !r.isEnabled }">
+                <div class="ep-row-cell-center">
+                  <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
                 </div>
-                <div class="cp-cost">
-                  <span class="cp-cost-dot"></span>
-                  <span>{{ r.cost }}</span>
-                  <span v-if="categoryGates[r.id]" class="ep-meta-pill game">
-                    {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
-                  </span>
-                  <span v-for="at in actionTypesByReward[r.id] ?? []" :key="at" class="ep-meta-pill cp-action-tag">
-                    {{ actionTagLabel(at) }}
-                  </span>
+                <div class="cp-main ep-row-cell-hover" @click="canEdit && openEdit(r)">
+                  <div class="cp-title-row">
+                    <span class="cp-title">{{ r.title }}</span>
+                  </div>
+                  <div class="cp-cost">
+                    <span class="cp-cost-dot"></span>
+                    <span>{{ r.cost }}</span>
+                    <span v-if="categoryGates[r.id]" class="ep-tag condition">
+                      {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
+                    </span>
+                    <span v-for="at in actionTypesByReward[r.id] ?? []" :key="at" class="ep-tag action">
+                      {{ actionTagLabel(at) }}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div class="ep-row-actions">
-                <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: !canEdit }"
-                  :title="t('cp.enabled')" @click="toggleEnabled(r)"><span class="ep-switch-knob"></span></button>
-                <div class="cp-action-slot">
-                  <button v-if="canEdit" class="ep-btn-action edit" @click="openEdit(r)">{{ t("cp.edit") }}</button>
-                  <button v-if="canEdit" class="ep-btn-action del" :class="{ confirm: rowDeleteConfirmId === r.id }"
-                    :title="t('cp.panel.delete')" @click="requestRowDelete(r)" v-html="iconSvgFor('trash')"></button>
+                <div class="ep-row-actions">
+                  <div class="cp-action-slot">
+                    <button v-if="canEdit" class="ep-btn-action edit" @click="openEdit(r)">{{ t("cp.edit") }}</button>
+                    <button v-if="canEdit" class="ep-btn-action del" :class="{ confirm: rowDeleteConfirmId === r.id }"
+                      :title="t('cp.panel.delete')" @click="requestRowDelete(r)" v-html="iconSvgFor('trash')"></button>
+                  </div>
+                  <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: !canEdit }"
+                    :title="t('cp.enabled')" @click="toggleEnabled(r)"><span class="ep-switch-knob"></span></button>
                 </div>
                 <RowKebabMenu :items="botRewardKebabItems(r)" @click.stop />
               </div>
             </div>
           </div>
-        </div>
 
-        <div v-if="twitchRewards.length" class="cp-group">
-          <div class="cp-group-header">
-            <span>{{ t("cp.group.twitch") }}</span>
-            <span class="cp-group-count">{{ twitchRewards.length }}</span>
-          </div>
-          <div class="ep-row-list">
-            <div v-for="r in twitchRewards" :key="r.id" class="ep-list-row cp-row" :class="{ inactive: !r.isEnabled }">
-              <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
-              <div class="cp-main">
-                <div class="cp-title-row">
-                  <span class="cp-title">{{ r.title }}</span>
+          <div v-if="twitchRewards.length" class="cp-group">
+            <div class="cp-group-header">
+              <span>{{ t("cp.group.twitch") }}</span>
+              <span class="cp-group-count">{{ twitchRewards.length }}</span>
+            </div>
+            <div class="ep-row-list">
+              <div v-for="r in twitchRewards" :key="r.id" class="ep-row-grid cp-row"
+                :class="{ inactive: !r.isEnabled }">
+                <div class="ep-row-cell-center">
+                  <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
                 </div>
-                <div class="cp-cost">
-                  <span class="cp-cost-dot"></span>
-                  <span>{{ r.cost }}</span>
-                  <span v-if="categoryGates[r.id]" class="ep-meta-pill game">
-                    {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
-                  </span>
-                  <span v-for="at in actionTypesByReward[r.id] ?? []" :key="at" class="ep-meta-pill cp-action-tag">
-                    {{ actionTagLabel(at) }}
-                  </span>
+                <div class="cp-main">
+                  <div class="cp-title-row">
+                    <span class="cp-title">{{ r.title }}</span>
+                  </div>
+                  <div class="cp-cost">
+                    <span class="cp-cost-dot"></span>
+                    <span>{{ r.cost }}</span>
+                    <span v-if="categoryGates[r.id]" class="ep-tag condition">
+                      {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
+                    </span>
+                    <span v-for="at in actionTypesByReward[r.id] ?? []" :key="at" class="ep-tag action">
+                      {{ actionTagLabel(at) }}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div class="ep-row-actions">
-                <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: true }"
-                  :title="t('cp.locked_hint')"><span class="ep-switch-knob"></span></button>
-                <div class="cp-action-slot">
-                  <button v-if="canEdit" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn") }}</button>
-                  <button v-if="isSiteAdminMode" class="ep-btn-action copy" :disabled="copyingRewardId === r.id"
-                    :title="t('cp.admin.copy_reward_hint')" @click="copyReward(r)" v-html="iconSvgFor('copy')"></button>
-                  <button class="ep-btn-action locked" disabled :title="t('cp.locked_hint')"
-                    v-html="iconSvgFor('lock')"></button>
+                <div class="ep-row-actions">
+                  <div class="cp-action-slot">
+                    <button v-if="canEdit" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn")
+                      }}</button>
+                    <button v-if="isSiteAdminMode" class="ep-btn-action copy" :disabled="copyingRewardId === r.id"
+                      :title="t('cp.admin.copy_reward_hint')" @click="copyReward(r)"
+                      v-html="iconSvgFor('copy')"></button>
+                    <button class="ep-btn-action locked" disabled :title="t('cp.locked_hint')"
+                      v-html="iconSvgFor('lock')"></button>
+                  </div>
+                  <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: true }"
+                    :title="t('cp.locked_hint')"><span class="ep-switch-knob"></span></button>
                 </div>
                 <RowKebabMenu :items="twitchRewardKebabItems(r)" @click.stop />
               </div>
             </div>
           </div>
-        </div>
-      </template>
-    </div>
+        </template>
+      </div>
     </template>
 
     <!-- vvv edit panel vvv -->
@@ -1043,100 +1051,101 @@ async function saveActions() {
             <ChannelPointActionsEditor v-if="!isNew && editTab === 'actions'" :actions="actionsList"
               :refund-on-failure="refundOnFailure" :always-refund="alwaysRefund" :manageable="true"
               :needs-input-warning="needsInputWarning" :command-names="commandNames" :channel-prefix="channelPrefix"
-              :reward-options="botRewards.map((r) => ({ id: r.id, title: r.title }))"
-              :gate-enabled="gateEnabled" :gate-category="gateCategory" :fetch-categories="fetchCategories"
+              :reward-options="botRewards.map((r) => ({ id: r.id, title: r.title }))" :gate-enabled="gateEnabled"
+              :gate-category="gateCategory" :fetch-categories="fetchCategories"
               @update:refund-on-failure="refundOnFailure = $event" @update:always-refund="alwaysRefund = $event"
               @update:gate-enabled="gateEnabled = $event" @update:gate-category="gateCategory = $event" />
 
             <template v-else>
 
-            <div class="ep-field-group">
-              <label class="ep-field-label">{{ t("cp.field.title") }}
-                <span class="ep-field-hint">{{ form.title.length }}/45</span>
-              </label>
-              <input v-model="form.title" maxlength="45" class="ep-field-input"
-                :class="{ 'cp-field-invalid': nameErrorMsg }" :placeholder="t('cp.field.title_ph')" />
-              <div v-if="nameErrorMsg" class="cp-field-error">{{ nameErrorMsg }}</div>
-            </div>
-
-            <div class="ep-field-group">
-              <label class="ep-field-label">{{ t("cp.field.prompt") }}
-                <span class="ep-field-hint">{{ t("cp.field.prompt_hint") }} · {{ form.prompt.length }}/200</span>
-              </label>
-              <textarea v-model="form.prompt" maxlength="200" class="ep-field-input cp-textarea"
-                :class="{ 'cp-field-invalid': promptErrorMsg }"></textarea>
-              <div v-if="promptErrorMsg" class="cp-field-error">{{ promptErrorMsg }}</div>
-            </div>
-
-            <div class="ep-field-group cp-toggle-row">
-              <div>
-                <div class="ep-field-label">{{ t("cp.field.user_input") }}</div>
-                <div class="ep-field-hint">{{ t("cp.field.user_input_hint") }}</div>
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("cp.field.title") }}
+                  <span class="ep-field-hint">{{ form.title.length }}/45</span>
+                </label>
+                <input v-model="form.title" maxlength="45" class="ep-field-input"
+                  :class="{ 'cp-field-invalid': nameErrorMsg }" :placeholder="t('cp.field.title_ph')" />
+                <div v-if="nameErrorMsg" class="cp-field-error">{{ nameErrorMsg }}</div>
               </div>
-              <button class="ep-switch" :class="{ on: form.userInputRequired }"
-                @click="form.userInputRequired = !form.userInputRequired"><span class="ep-switch-knob"></span></button>
-            </div>
 
-            <div class="ep-field-group">
-              <label class="ep-field-label">{{ t("cp.field.cost") }}</label>
-              <input v-model.number="form.cost" type="number" min="1" max="1000000000" class="ep-field-input"
-                :class="{ 'cp-field-invalid': costErrorMsg }" />
-              <div v-if="costErrorMsg" class="cp-field-error">{{ costErrorMsg }}</div>
-            </div>
-
-            <div class="ep-field-group">
-              <label class="ep-field-label">{{ t("cp.field.color") }}</label>
-              <div class="cp-color-row">
-                <input type="color" v-model="form.backgroundColor" class="cp-color-pick" />
-                <input v-model="form.backgroundColor" class="ep-field-input"
-                  :class="{ 'cp-field-invalid': colorErrorMsg }" placeholder="#9146FF" />
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("cp.field.prompt") }}
+                  <span class="ep-field-hint">{{ t("cp.field.prompt_hint") }} · {{ form.prompt.length }}/200</span>
+                </label>
+                <textarea v-model="form.prompt" maxlength="200" class="ep-field-input cp-textarea"
+                  :class="{ 'cp-field-invalid': promptErrorMsg }"></textarea>
+                <div v-if="promptErrorMsg" class="cp-field-error">{{ promptErrorMsg }}</div>
               </div>
-              <div v-if="colorErrorMsg" class="cp-field-error">{{ colorErrorMsg }}</div>
-              <div v-else class="ep-field-hint">{{ t("cp.field.color_hint") }}</div>
-            </div>
 
-            <div class="ep-field-group cp-toggle-row">
-              <div>
-                <div class="ep-field-label">{{ t("cp.field.skip_queue") }}</div>
-                <div class="ep-field-hint">{{ t("cp.field.skip_queue_hint") }}</div>
-              </div>
-              <button class="ep-switch" :class="{ on: form.autoFulfill }"
-                @click="form.autoFulfill = !form.autoFulfill"><span class="ep-switch-knob"></span></button>
-            </div>
-
-            <div class="ep-field-group">
-              <div class="cp-toggle-row">
+              <div class="ep-field-group cp-toggle-row">
                 <div>
-                  <div class="ep-field-label">{{ t("cp.field.limits") }}</div>
-                  <div class="ep-field-hint">{{ t("cp.field.limits_hint") }}</div>
+                  <div class="ep-field-label">{{ t("cp.field.user_input") }}</div>
+                  <div class="ep-field-hint">{{ t("cp.field.user_input_hint") }}</div>
                 </div>
-                <button class="ep-switch" :class="{ on: limitsEnabled }"
-                  @click="limitsEnabled = !limitsEnabled"><span class="ep-switch-knob"></span></button>
+                <button class="ep-switch" :class="{ on: form.userInputRequired }"
+                  @click="form.userInputRequired = !form.userInputRequired"><span
+                    class="ep-switch-knob"></span></button>
               </div>
 
-              <div v-if="limitsEnabled" class="cp-limits-box" :class="{ 'cp-field-invalid': limitsErrorMsg }">
-                <div class="ep-field-group">
-                  <label class="ep-field-label">{{ t("cp.field.cooldown") }}
-                    <span class="ep-field-hint">{{ t("cp.field.cooldown_hint") }}</span>
-                  </label>
-                  <input v-model.number="form.globalCooldown" type="number" min="0" class="ep-field-input" />
-                </div>
-                <div class="ep-field-group">
-                  <label class="ep-field-label">{{ t("cp.field.max_stream") }}
-                    <span class="ep-field-hint">{{ t("cp.field.max_stream_hint") }}</span>
-                  </label>
-                  <input v-model.number="form.maxRedemptionsPerStream" type="number" min="0" class="ep-field-input" />
-                </div>
-                <div class="ep-field-group">
-                  <label class="ep-field-label">{{ t("cp.field.max_user") }}
-                    <span class="ep-field-hint">{{ t("cp.field.max_user_hint") }}</span>
-                  </label>
-                  <input v-model.number="form.maxRedemptionsPerUserPerStream" type="number" min="0"
-                    class="ep-field-input" />
-                </div>
-                <div v-if="limitsErrorMsg" class="cp-field-error">{{ limitsErrorMsg }}</div>
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("cp.field.cost") }}</label>
+                <input v-model.number="form.cost" type="number" min="1" max="1000000000" class="ep-field-input"
+                  :class="{ 'cp-field-invalid': costErrorMsg }" />
+                <div v-if="costErrorMsg" class="cp-field-error">{{ costErrorMsg }}</div>
               </div>
-            </div>
+
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("cp.field.color") }}</label>
+                <div class="cp-color-row">
+                  <input type="color" v-model="form.backgroundColor" class="cp-color-pick" />
+                  <input v-model="form.backgroundColor" class="ep-field-input"
+                    :class="{ 'cp-field-invalid': colorErrorMsg }" placeholder="#9146FF" />
+                </div>
+                <div v-if="colorErrorMsg" class="cp-field-error">{{ colorErrorMsg }}</div>
+                <div v-else class="ep-field-hint">{{ t("cp.field.color_hint") }}</div>
+              </div>
+
+              <div class="ep-field-group cp-toggle-row">
+                <div>
+                  <div class="ep-field-label">{{ t("cp.field.skip_queue") }}</div>
+                  <div class="ep-field-hint">{{ t("cp.field.skip_queue_hint") }}</div>
+                </div>
+                <button class="ep-switch" :class="{ on: form.autoFulfill }"
+                  @click="form.autoFulfill = !form.autoFulfill"><span class="ep-switch-knob"></span></button>
+              </div>
+
+              <div class="ep-field-group">
+                <div class="cp-toggle-row">
+                  <div>
+                    <div class="ep-field-label">{{ t("cp.field.limits") }}</div>
+                    <div class="ep-field-hint">{{ t("cp.field.limits_hint") }}</div>
+                  </div>
+                  <button class="ep-switch" :class="{ on: limitsEnabled }" @click="limitsEnabled = !limitsEnabled"><span
+                      class="ep-switch-knob"></span></button>
+                </div>
+
+                <div v-if="limitsEnabled" class="cp-limits-box" :class="{ 'cp-field-invalid': limitsErrorMsg }">
+                  <div class="ep-field-group">
+                    <label class="ep-field-label">{{ t("cp.field.cooldown") }}
+                      <span class="ep-field-hint">{{ t("cp.field.cooldown_hint") }}</span>
+                    </label>
+                    <input v-model.number="form.globalCooldown" type="number" min="0" class="ep-field-input" />
+                  </div>
+                  <div class="ep-field-group">
+                    <label class="ep-field-label">{{ t("cp.field.max_stream") }}
+                      <span class="ep-field-hint">{{ t("cp.field.max_stream_hint") }}</span>
+                    </label>
+                    <input v-model.number="form.maxRedemptionsPerStream" type="number" min="0" class="ep-field-input" />
+                  </div>
+                  <div class="ep-field-group">
+                    <label class="ep-field-label">{{ t("cp.field.max_user") }}
+                      <span class="ep-field-hint">{{ t("cp.field.max_user_hint") }}</span>
+                    </label>
+                    <input v-model.number="form.maxRedemptionsPerUserPerStream" type="number" min="0"
+                      class="ep-field-input" />
+                  </div>
+                  <div v-if="limitsErrorMsg" class="cp-field-error">{{ limitsErrorMsg }}</div>
+                </div>
+              </div>
 
             </template>
 
@@ -1185,8 +1194,8 @@ async function saveActions() {
             <ChannelPointActionsEditor :actions="actionsList" :refund-on-failure="refundOnFailure"
               :always-refund="alwaysRefund" :manageable="!!actionsReward?.manageable"
               :needs-input-warning="needsInputWarning" :command-names="commandNames" :channel-prefix="channelPrefix"
-              :reward-options="botRewards.map((r) => ({ id: r.id, title: r.title }))"
-              :gate-enabled="gateEnabled" :gate-category="gateCategory" :fetch-categories="fetchCategories"
+              :reward-options="botRewards.map((r) => ({ id: r.id, title: r.title }))" :gate-enabled="gateEnabled"
+              :gate-category="gateCategory" :fetch-categories="fetchCategories"
               @update:refund-on-failure="refundOnFailure = $event" @update:always-refund="alwaysRefund = $event"
               @update:gate-enabled="gateEnabled = $event" @update:gate-category="gateCategory = $event" />
 
@@ -1212,12 +1221,6 @@ async function saveActions() {
 
 <style scoped>
 /* >>> layout comes from shared.css, only channel-points-specific bits here */
-
-.ep-meta-pill.cp-action-tag {
-  color: #4ec9b0;
-  border-color: #4ec9b044;
-  background: #4ec9b011;
-}
 
 .ep-btn-reload.confirm {
   border-color: #e5c07b;
@@ -1431,6 +1434,7 @@ async function saveActions() {
    ChannelPointActionsEditor.vue, which owns that markup */
 
 @media (max-width: 680px) {
+
   /* >>> single line: swatch, title(+cost stacked under it), toggle, kebab.
      edit/delete/actions/copy move into the kebab so titles keep full width */
   .cp-row {

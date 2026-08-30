@@ -807,7 +807,8 @@ defineExpose({
             <select v-model="syncFrom" class="ep-field-select-sm">
               <option value="">{{ syncMode === 'import' ? t("trigger.sync.select") : (syncConf?.is_active ?
                 t("trigger.sync.change") : t("trigger.sync.select")) }}</option>
-              <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{ ch }}</option>
+              <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{ ch
+                }}</option>
             </select>
             <button v-if="syncMode === 'import'" class="ep-sync-save-btn" @click="runImport"
               :disabled="syncImporting || !syncFrom">
@@ -822,8 +823,10 @@ defineExpose({
               t("trigger.sync.pull") }}</button>
             <button class="ep-sync-stop-btn" @click="stopSync">{{ t("trigger.sync.stop") }}</button>
           </div>
-          <div v-if="syncMode === 'ongoing' && syncConf?.last_synced" class="ep-sync-last">{{ t("trigger.sync.last") }} {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
-          <div v-if="syncMsg" class="ep-sync-msg" :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{ syncMsg }}</div>
+          <div v-if="syncMode === 'ongoing' && syncConf?.last_synced" class="ep-sync-last">{{ t("trigger.sync.last") }}
+            {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
+          <div v-if="syncMsg" class="ep-sync-msg"
+            :class="{ err: syncMsg.includes('fail') || syncMsg.includes('Error') }">{{ syncMsg }}</div>
         </div>
       </div>
     </Teleport>
@@ -850,33 +853,30 @@ defineExpose({
     </div>
 
     <div v-else class="ep-row-list">
-      <div v-for="trigger in triggers" :key="trigger.id" class="ep-list-row trigger-row"
+      <div v-for="trigger in triggers" :key="trigger.id" class="ep-row-grid trigger-row"
         :class="{ inactive: !trigger.is_active }">
-        <div class="trigger-toggle-wrap">
-          <button class="ep-switch" :class="{ on: trigger.is_active, off: !trigger.is_active, disabled: !canToggle }"
-            @click="canToggle && toggleActive(trigger)"><span class="ep-switch-knob"></span></button>
+        <div class="ep-cell-name">
+          <span v-if="isAutoNamed(trigger)" class="ep-tag keyword"><span v-html="iconSvgFor('link')"></span> {{
+            autoNamedTagLabel(trigger) }}</span>
+          <span v-else class="trigger-name-text">{{ trigger.name }}</span>
         </div>
-        <div class="trigger-info" @click="openEdit(trigger)">
-          <div v-if="isAutoNamed(trigger)" class="trigger-name">
-            <span class="ep-meta-pill linked-command"><span v-html="iconSvgFor('link')"></span> {{ autoNamedTagLabel(trigger) }}</span>
-          </div>
-          <div v-else class="trigger-name">{{ trigger.name }}</div>
-          <div class="trigger-meta">
-            <span class="ep-meta-pill event">{{
-              eventLabel(trigger.event_type)
-              }}</span>
-            <span v-if="trigger.match_pattern" class="ep-meta-pill pattern">{{ matchLabel(trigger.match_type) }}: "{{
-              trigger.match_pattern.slice(0, 20)
+        <div class="ep-cell-text ep-row-cell-hover" @click="openEdit(trigger)">
+          <span class="trigger-response">{{ trigger.response.slice(0, 60)
+            }}{{ trigger.response.length > 60 ? "…" : "" }}</span>
+        </div>
+        <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(trigger)">
+          <span class="ep-tag event-type">{{ eventLabel(trigger.event_type) }}</span>
+          <span v-if="trigger.match_pattern" class="ep-tag arg">{{ matchLabel(trigger.match_type) }}: "{{
+            trigger.match_pattern.slice(0, 20)
             }}{{ trigger.match_pattern.length > 20 ? "…" : "" }}"</span>
-            <span class="ep-meta-pill action"><span v-html="iconSvgFor('arrow-right')"></span> {{ actionLabel(trigger.action_type) }}</span>
-            <span v-if="trigger.enabled_when !== 'always'" class="ep-meta-pill when">{{ trigger.enabled_when }}</span>
-            <span v-if="trigger.required_game" class="ep-meta-pill game">{{ trigger.required_game }}</span>
-            <span v-if="trigger.cooldown_sec" class="ep-meta-pill cd"><span v-html="iconSvgFor('clock')"></span> {{ trigger.cooldown_sec }}s cd</span>
-          </div>
-          <div class="trigger-response">
-            {{ trigger.response.slice(0, 80)
-            }}{{ trigger.response.length > 80 ? "…" : "" }}
-          </div>
+        </div>
+        <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(trigger)">
+          <span class="ep-tag action"><span v-html="iconSvgFor('arrow-right')"></span> {{
+            actionLabel(trigger.action_type) }}</span>
+          <span v-if="trigger.enabled_when !== 'always'" class="ep-tag condition">{{ trigger.enabled_when }}</span>
+          <span v-if="trigger.required_game" class="ep-tag condition">{{ trigger.required_game }}</span>
+          <span v-if="trigger.cooldown_sec" class="ep-tag cooldown"><span v-html="iconSvgFor('clock')"></span> {{
+            trigger.cooldown_sec }}s</span>
         </div>
         <div class="ep-row-actions">
           <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(trigger)" :class="{ disabled: !canEdit }">
@@ -889,6 +889,8 @@ defineExpose({
             :disabled="saving === trigger.name">
             <span v-html="iconSvgFor('trash')"></span>
           </button>
+          <button class="ep-switch" :class="{ on: trigger.is_active, off: !trigger.is_active, disabled: !canToggle }"
+            @click.stop="canToggle && toggleActive(trigger)"><span class="ep-switch-knob"></span></button>
         </div>
         <RowKebabMenu :items="triggerKebabItems(trigger)" @click.stop />
       </div>
@@ -917,196 +919,198 @@ defineExpose({
             <div v-if="error" class="ep-toast error">{{ error }}</div>
 
             <div v-if="!isAutoNamed()" class="ep-tabs">
-              <button class="ep-tab" :class="{ active: editTab === 'settings' }"
-                @click="editTab = 'settings'">{{ t("edit.tab_response") }}</button>
-              <button class="ep-tab" :class="{ active: editTab === 'advanced' }"
-                @click="editTab = 'advanced'">{{ t("edit.tab_behavior") }}</button>
+              <button class="ep-tab" :class="{ active: editTab === 'settings' }" @click="editTab = 'settings'">{{
+                t("edit.tab_response") }}</button>
+              <button class="ep-tab" :class="{ active: editTab === 'advanced' }" @click="editTab = 'advanced'">{{
+                t("edit.tab_behavior") }}</button>
             </div>
 
             <template v-if="editTab === 'settings'">
-            <div class="ep-field-group">
-              <label class="ep-field-label">{{
-                t("trigger.field.event")
-                }}</label>
-              <div class="event-grid">
-                <button v-for="e in EVENT_TYPES" :key="e.value" class="event-btn"
-                  :class="{ active: editTrigger.event_type === e.value }" @click="editTrigger.event_type = e.value"
-                  :title="e.hint">
-                  {{ e.label }}
-                </button>
-              </div>
-            </div>
-
-            <div v-if="needsPattern(editTrigger.event_type ?? 'message')" class="ep-field-group">
-              <label class="ep-field-label">{{
-                t("trigger.field.match")
-                }}</label>
-              <div class="match-row">
-                <select v-model="editTrigger.match_type" class="ep-field-select match-type">
-                  <option v-for="m in MATCH_TYPES" :key="m.value" :value="m.value">
-                    {{ m.label }}
-                  </option>
-                </select>
-                <input v-model="editTrigger.match_pattern" class="ep-field-input" placeholder="!lurk or hello" />
-              </div>
-            </div>
-
-            <div v-if="editTrigger.event_type === 'channel_point_reward'" class="ep-field-group">
-              <label class="ep-field-label">{{ t("trigger.field.reward") }}</label>
-              <TypeaheadInput :model-value="rewardTitleById[editTrigger.event_reward_id ?? ''] ?? ''"
-                :items="rewardOptions.map((r) => r.title)" placeholder="pick a reward"
-                @select="(item: any) => (editTrigger.event_reward_id = rewardOptions.find((r) => r.title === item.label)?.id ?? '')" />
-            </div>
-
-            <div v-if="editTrigger.event_type === 'category'" class="ep-field-group">
-              <label class="ep-field-label">{{ t("trigger.field.category") }}</label>
-              <TypeaheadInput :model-value="editTrigger.required_game ?? ''" :fetch-items="fetchCategories"
-                :min-chars="1" placeholder="Just Chatting"
-                @update:model-value="(v: string) => (editTrigger.required_game = v)"
-                @select="(item: any) => (editTrigger.required_game = item.label)" />
-            </div>
-
-            <div class="ep-field-group">
-              <label class="ep-field-label">{{
-                t("trigger.field.action")
-                }}</label>
-              <div class="action-grid">
-                <button v-for="a in ACTION_TYPES" :key="a.value" class="action-btn"
-                  :class="{ active: editTrigger.action_type === a.value }" @click="editTrigger.action_type = a.value">
-                  {{ a.label }}
-                </button>
-              </div>
-            </div>
-
-            <template v-if="editTrigger.action_type === 'channel_point_reward'">
               <div class="ep-field-group">
-                <label class="ep-field-label">{{ t("trigger.field.reward") }}</label>
-                <TypeaheadInput :model-value="rewardTitleById[editTrigger.action_reward_id ?? ''] ?? ''"
-                  :items="manageableRewardOptions.map((r) => r.title)" placeholder="pick a bot-created reward"
-                  @select="(item: any) => (editTrigger.action_reward_id = manageableRewardOptions.find((r) => r.title === item.label)?.id ?? '')" />
-              </div>
-              <div class="ep-field-group">
-                <label class="ep-field-label">{{ t("trigger.field.reward_state") }}</label>
-                <div class="action-grid">
-                  <button class="action-btn" :class="{ active: editTrigger.action_reward_state === 'activate' }"
-                    @click="editTrigger.action_reward_state = 'activate'">{{ t("trigger.reward_state.activate") }}</button>
-                  <button class="action-btn" :class="{ active: editTrigger.action_reward_state === 'deactivate' }"
-                    @click="editTrigger.action_reward_state = 'deactivate'">{{ t("trigger.reward_state.deactivate") }}</button>
-                </div>
-              </div>
-              <div v-if="editTrigger.event_type === 'category'" class="ep-field-group">
-                <label class="ep-field-label">{{ t("trigger.field.gate_mode") }}</label>
-                <div class="action-grid">
-                  <button v-for="m in CATEGORY_MODES" :key="m.value" class="action-btn"
-                    :class="{ active: editTrigger.event_category_mode === m.value }"
-                    @click="editTrigger.event_category_mode = m.value">
-                    {{ t(m.label) }}
+                <label class="ep-field-label">{{
+                  t("trigger.field.event")
+                  }}</label>
+                <div class="event-grid">
+                  <button v-for="e in EVENT_TYPES" :key="e.value" class="event-btn"
+                    :class="{ active: editTrigger.event_type === e.value }" @click="editTrigger.event_type = e.value"
+                    :title="e.hint">
+                    {{ e.label }}
                   </button>
                 </div>
-                <div v-if="isCategoryGate()" class="ep-field-hint">{{ t("trigger.gate.hint") }}</div>
               </div>
-            </template>
 
-            <template v-else-if="editTrigger.action_type === 'run_command'">
-              <div class="ep-field-group">
-                <label class="ep-field-label">{{ t("trigger.field.command") }}</label>
-                <TypeaheadInput :model-value="editTrigger.response ?? ''" :items="commandNames" placeholder="shoutout"
-                  @update:model-value="(v: string) => (editTrigger.response = v)" />
+              <div v-if="needsPattern(editTrigger.event_type ?? 'message')" class="ep-field-group">
+                <label class="ep-field-label">{{
+                  t("trigger.field.match")
+                  }}</label>
+                <div class="match-row">
+                  <select v-model="editTrigger.match_type" class="ep-field-select match-type">
+                    <option v-for="m in MATCH_TYPES" :key="m.value" :value="m.value">
+                      {{ m.label }}
+                    </option>
+                  </select>
+                  <input v-model="editTrigger.match_pattern" class="ep-field-input" placeholder="!lurk or hello" />
+                </div>
               </div>
-              <div class="ep-field-group">
-                <label class="ep-field-label">{{ t("trigger.field.args") }}
-                  <span class="ep-field-hint">{{ placeholderHint() }}</span>
-                </label>
-                <input v-model="editTrigger.action_extra" class="ep-field-input" />
-              </div>
-              <div v-if="needsInputWarning()" class="cp-input-warning">
-                <span v-html="iconSvgFor('alert-triangle')"></span>
-                <span>{{ t("cp.actions.need_input_warning") }}</span>
-              </div>
-            </template>
 
-            <template v-else-if="editTrigger.action_type === 'create_command'">
-              <div class="ep-field-group">
-                <label class="ep-field-label">{{ t("trigger.field.command_name") }}
-                  <span class="ep-field-hint">{{ placeholderHint() }}</span>
-                </label>
-                <input v-model="editTrigger.action_extra" class="ep-field-input" placeholder="{user}" />
+              <div v-if="editTrigger.event_type === 'channel_point_reward'" class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.reward") }}</label>
+                <TypeaheadInput :model-value="rewardTitleById[editTrigger.event_reward_id ?? ''] ?? ''"
+                  :items="rewardOptions.map((r) => r.title)" placeholder="pick a reward"
+                  @select="(item: any) => (editTrigger.event_reward_id = rewardOptions.find((r) => r.title === item.label)?.id ?? '')" />
               </div>
+
+              <div v-if="editTrigger.event_type === 'category'" class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.category") }}</label>
+                <TypeaheadInput :model-value="editTrigger.required_game ?? ''" :fetch-items="fetchCategories"
+                  :min-chars="1" placeholder="Just Chatting"
+                  @update:model-value="(v: string) => (editTrigger.required_game = v)"
+                  @select="(item: any) => (editTrigger.required_game = item.label)" />
+              </div>
+
               <div class="ep-field-group">
-                <label class="ep-field-label">{{ t("trigger.field.command_response") }}
-                  <span class="ep-field-hint">{{ placeholderHint() }}</span>
+                <label class="ep-field-label">{{
+                  t("trigger.field.action")
+                  }}</label>
+                <div class="action-grid">
+                  <button v-for="a in ACTION_TYPES" :key="a.value" class="action-btn"
+                    :class="{ active: editTrigger.action_type === a.value }" @click="editTrigger.action_type = a.value">
+                    {{ a.label }}
+                  </button>
+                </div>
+              </div>
+
+              <template v-if="editTrigger.action_type === 'channel_point_reward'">
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{ t("trigger.field.reward") }}</label>
+                  <TypeaheadInput :model-value="rewardTitleById[editTrigger.action_reward_id ?? ''] ?? ''"
+                    :items="manageableRewardOptions.map((r) => r.title)" placeholder="pick a bot-created reward"
+                    @select="(item: any) => (editTrigger.action_reward_id = manageableRewardOptions.find((r) => r.title === item.label)?.id ?? '')" />
+                </div>
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{ t("trigger.field.reward_state") }}</label>
+                  <div class="action-grid">
+                    <button class="action-btn" :class="{ active: editTrigger.action_reward_state === 'activate' }"
+                      @click="editTrigger.action_reward_state = 'activate'">{{ t("trigger.reward_state.activate")
+                      }}</button>
+                    <button class="action-btn" :class="{ active: editTrigger.action_reward_state === 'deactivate' }"
+                      @click="editTrigger.action_reward_state = 'deactivate'">{{ t("trigger.reward_state.deactivate")
+                      }}</button>
+                  </div>
+                </div>
+                <div v-if="editTrigger.event_type === 'category'" class="ep-field-group">
+                  <label class="ep-field-label">{{ t("trigger.field.gate_mode") }}</label>
+                  <div class="action-grid">
+                    <button v-for="m in CATEGORY_MODES" :key="m.value" class="action-btn"
+                      :class="{ active: editTrigger.event_category_mode === m.value }"
+                      @click="editTrigger.event_category_mode = m.value">
+                      {{ t(m.label) }}
+                    </button>
+                  </div>
+                  <div v-if="isCategoryGate()" class="ep-field-hint">{{ t("trigger.gate.hint") }}</div>
+                </div>
+              </template>
+
+              <template v-else-if="editTrigger.action_type === 'run_command'">
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{ t("trigger.field.command") }}</label>
+                  <TypeaheadInput :model-value="editTrigger.response ?? ''" :items="commandNames" placeholder="shoutout"
+                    @update:model-value="(v: string) => (editTrigger.response = v)" />
+                </div>
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{ t("trigger.field.args") }}
+                    <span class="ep-field-hint">{{ placeholderHint() }}</span>
+                  </label>
+                  <input v-model="editTrigger.action_extra" class="ep-field-input" />
+                </div>
+                <div v-if="needsInputWarning()" class="cp-input-warning">
+                  <span v-html="iconSvgFor('alert-triangle')"></span>
+                  <span>{{ t("cp.actions.need_input_warning") }}</span>
+                </div>
+              </template>
+
+              <template v-else-if="editTrigger.action_type === 'create_command'">
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{ t("trigger.field.command_name") }}
+                    <span class="ep-field-hint">{{ placeholderHint() }}</span>
+                  </label>
+                  <input v-model="editTrigger.action_extra" class="ep-field-input" placeholder="{user}" />
+                </div>
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{ t("trigger.field.command_response") }}
+                    <span class="ep-field-hint">{{ placeholderHint() }}</span>
+                  </label>
+                  <div ref="editorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
+                    data-placeholder="$user.mention just got a new command! PogChamp" @input="onEditorInput"></div>
+                  <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
+                </div>
+                <div v-if="needsInputWarning()" class="cp-input-warning">
+                  <span v-html="iconSvgFor('alert-triangle')"></span>
+                  <span>{{ t("cp.actions.need_input_warning") }}</span>
+                </div>
+              </template>
+
+              <div v-else class="ep-field-group">
+                <label class="ep-field-label">
+                  {{
+                    editTrigger.action_type === "say"
+                      ? t("trigger.field.response")
+                      : t("trigger.field.value")
+                  }}
+                  <span class="ep-field-hint">{{
+                    editTrigger.action_type === "shoutout"
+                      ? "Optional - who to shout out. Leave blank to shout out whoever/whatever triggered this (the raider, for raids)."
+                    : editTrigger.event_type === "channel_point_reward"
+                    ? t("trigger.field.resp_hint_cp")
+                    : t("trigger.field.resp_hint")
+                    }}</span>
                 </label>
                 <div ref="editorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
-                  data-placeholder="$user.mention just got a new command! PogChamp" @input="onEditorInput"></div>
+                  :data-placeholder="editTrigger.action_type === 'shoutout' ? 'leave blank for the raider, or e.g. $user.name' : '$user.mention just triggered this! PogChamp'"
+                  @input="onEditorInput"></div>
                 <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
+                <div v-if="needsInputWarning()" class="cp-input-warning">
+                  <span v-html="iconSvgFor('alert-triangle')"></span>
+                  <span>{{ t("cp.actions.need_input_warning") }}</span>
+                </div>
               </div>
-              <div v-if="needsInputWarning()" class="cp-input-warning">
-                <span v-html="iconSvgFor('alert-triangle')"></span>
-                <span>{{ t("cp.actions.need_input_warning") }}</span>
-              </div>
-            </template>
-
-            <div v-else class="ep-field-group">
-              <label class="ep-field-label">
-                {{
-                  editTrigger.action_type === "say"
-                    ? t("trigger.field.response")
-                    : t("trigger.field.value")
-                }}
-                <span class="ep-field-hint">{{
-                  editTrigger.action_type === "shoutout"
-                    ? "Optional - who to shout out. Leave blank to shout out whoever/whatever triggered this (the raider, for raids)."
-                    : editTrigger.event_type === "channel_point_reward"
-                      ? t("trigger.field.resp_hint_cp")
-                      : t("trigger.field.resp_hint")
-                  }}</span>
-              </label>
-              <div ref="editorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
-                :data-placeholder="editTrigger.action_type === 'shoutout' ? 'leave blank for the raider, or e.g. $user.name' : '$user.mention just triggered this! PogChamp'"
-                @input="onEditorInput"></div>
-              <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
-              <div v-if="needsInputWarning()" class="cp-input-warning">
-                <span v-html="iconSvgFor('alert-triangle')"></span>
-                <span>{{ t("cp.actions.need_input_warning") }}</span>
-              </div>
-            </div>
             </template>
 
             <template v-if="editTab === 'advanced' && !isAutoNamed()">
-            <div class="ep-row-3">
-              <div class="ep-field-group">
-                <label class="ep-field-label">{{
-                  t("trigger.field.active_when")
-                  }}</label>
-                <select v-model="editTrigger.enabled_when" class="ep-field-select">
-                  <option value="always">{{ t("trigger.when.always") }}</option>
-                  <option value="online">{{ t("trigger.when.online") }}</option>
-                  <option value="offline">
-                    {{ t("trigger.when.offline") }}
-                  </option>
-                </select>
+              <div class="ep-row-3">
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{
+                    t("trigger.field.active_when")
+                    }}</label>
+                  <select v-model="editTrigger.enabled_when" class="ep-field-select">
+                    <option value="always">{{ t("trigger.when.always") }}</option>
+                    <option value="online">{{ t("trigger.when.online") }}</option>
+                    <option value="offline">
+                      {{ t("trigger.when.offline") }}
+                    </option>
+                  </select>
+                </div>
+                <div v-if="editTrigger.event_type !== 'category'" class="ep-field-group">
+                  <label class="ep-field-label">{{
+                    t("trigger.field.game")
+                    }}</label>
+                  <input v-model="editTrigger.required_game" class="ep-field-input" placeholder="optional" />
+                </div>
+                <div class="ep-field-group">
+                  <label class="ep-field-label">{{ t("trigger.field.cd") }}
+                    <span class="ep-field-hint">s</span></label>
+                  <input v-model.number="editTrigger.cooldown_sec" type="number" min="0" class="ep-field-input" />
+                </div>
               </div>
-              <div v-if="editTrigger.event_type !== 'category'" class="ep-field-group">
-                <label class="ep-field-label">{{
-                  t("trigger.field.game")
-                  }}</label>
-                <input v-model="editTrigger.required_game" class="ep-field-input" placeholder="optional" />
-              </div>
-              <div class="ep-field-group">
-                <label class="ep-field-label">{{ t("trigger.field.cd") }}
-                  <span class="ep-field-hint">s</span></label>
-                <input v-model.number="editTrigger.cooldown_sec" type="number" min="0" class="ep-field-input" />
-              </div>
-            </div>
 
-            <div class="ep-field-group">
-              <label class="ep-field-label">{{ t("trigger.field.condition") }}
-                <span class="ep-field-hint">{{
-                  t("trigger.field.cond_hint")
-                  }}</span></label>
-              <input v-model="editTrigger.condition" class="ep-field-input ep-mono"
-                placeholder="$channel.game == Just Chatting" />
-            </div>
+              <div class="ep-field-group">
+                <label class="ep-field-label">{{ t("trigger.field.condition") }}
+                  <span class="ep-field-hint">{{
+                    t("trigger.field.cond_hint")
+                    }}</span></label>
+                <input v-model="editTrigger.condition" class="ep-field-input ep-mono"
+                  placeholder="$channel.game == Just Chatting" />
+              </div>
             </template>
 
             <div class="ep-panel-footer">
@@ -1193,56 +1197,23 @@ defineExpose({
   flex-wrap: wrap;
 }
 
-.trigger-toggle-wrap {
-  flex-shrink: 0;
+.trigger-row {
+  grid-template-columns: 160px 1fr 190px 220px auto;
 }
 
-.trigger-info {
-  flex: 1;
-  cursor: pointer;
-  min-width: 0;
-}
-
-.trigger-name {
+.trigger-name-text {
   font-size: 13px;
   font-weight: 600;
   color: #e0e0e0;
-  margin-bottom: 4px;
-}
-
-.trigger-meta {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-bottom: 4px;
 }
 
 .trigger-response {
   font-size: 11px;
-  color: #555;
+  color: #888;
   font-family: "Consolas", "Fira Mono", monospace;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.ep-meta-pill.event {
-  color: #569cd6;
-  border-color: #569cd644;
-  background: #569cd611;
-}
-
-.ep-meta-pill.pattern {
-  color: #e5c07b;
-  border-color: #e5c07b44;
-  background: #e5c07b11;
-  font-family: monospace;
-}
-
-.ep-meta-pill.action {
-  color: #4ec9b0;
-  border-color: #4ec9b044;
-  background: #4ec9b011;
 }
 
 .ep-meta-pill.linked-command {
@@ -1250,12 +1221,6 @@ defineExpose({
   border-color: #9d6cff44;
   background: #9d6cff11;
   font-family: monospace;
-}
-
-.ep-meta-pill.cd {
-  color: #c792ea;
-  border-color: #c792ea44;
-  background: #c792ea11;
 }
 
 .event-grid,
@@ -1305,7 +1270,8 @@ defineExpose({
 .match-type {
   width: 140px;
   flex-shrink: 0;
-  height: 36px; /* >>> matches input height */
+  height: 36px;
+  /* >>> matches input height */
 }
 
 .match-row .ep-field-input {
@@ -1346,7 +1312,7 @@ defineExpose({
   }
 
   /* >>> edit/share/delete move into the kebab on phone */
-  .trigger-row > .ep-row-actions {
+  .trigger-row>.ep-row-actions {
     display: none;
   }
 

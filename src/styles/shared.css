@@ -590,6 +590,24 @@
 .ep-btn-action.share:hover {
   background: rgba(78, 201, 176, 0.1);
 }
+/* >>> access severity - everyone (default/no modifier) / mod / broadcaster */
+.ep-btn-action.access {
+  color: #555;
+}
+.ep-btn-action.access.access-mod {
+  border-color: #c792ea55;
+  color: #c792ea;
+}
+.ep-btn-action.access.access-bc {
+  border-color: #f1494955;
+  color: #f14949;
+}
+/* >>> real Twitch mod/broadcaster badge, shown in place of text once loaded
+   (see loadTwitchBadges()-style fetch already used by RolesView.vue etc.) */
+.access-badge-icon {
+  width: 14px;
+  height: 14px;
+}
 .ep-btn-action:disabled,
 .ep-btn-action.disabled {
   opacity: 0.4;
@@ -788,6 +806,44 @@
 .ep-row-cell-center {
   display: flex;
   align-items: center;
+}
+/* >>> row-level "name" cell - bold, fills full height, holds an optional
+   expander (.row-chevron-cell) inline so hover/click reaches the row's true
+   left edge instead of starting after a separate chevron column */
+.ep-cell-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e0e0e0;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  gap: 7px;
+}
+.row-chevron-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  flex-shrink: 0;
+}
+/* >>> a single-line text cell (description, etc.) */
+.ep-cell-text {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0 6px;
+}
+/* >>> a cell holding a group of .ep-tag chips (aliases/keywords, cooldowns,
+   event+pattern, etc.) - wraps instead of overflowing */
+.ep-cell-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  padding: 4px 6px;
 }
 .ep-row-header {
   display: grid;
@@ -1287,10 +1343,10 @@
   width: 30px;
 }
 /* slight width variance per row so a repeated block doesn't look mechanically identical */
-.ep-skeleton-row:nth-child(3n+2) .ep-skeleton-line.title {
+.ep-skeleton-row:nth-child(3n + 2) .ep-skeleton-line.title {
   width: 22%;
 }
-.ep-skeleton-row:nth-child(3n+3) .ep-skeleton-line.title {
+.ep-skeleton-row:nth-child(3n + 3) .ep-skeleton-line.title {
   width: 40%;
 }
 .ep-skeleton-row:nth-child(2n) .ep-skeleton-line.meta {

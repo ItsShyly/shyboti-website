@@ -98,6 +98,7 @@ const saving = ref<string | null>(null);
 const editOpen = ref(false);
 const editingCmd = ref("");
 const editIsBuiltIn = ref(true);
+const editInitialTab = ref<"response" | "args" | "flags" | "behavior">("response");
 
 // >>> new command name input state
 const creatingNew = ref(false);
@@ -105,9 +106,14 @@ const newCmdName = ref("");
 const newCmdError = ref("");
 const newCmdInput = ref<HTMLInputElement | null>(null);
 
-function openEdit(name: string, builtIn: boolean) {
+function openEdit(
+  name: string,
+  builtIn: boolean,
+  initialTab?: "response" | "args" | "flags" | "behavior",
+) {
   editingCmd.value = name;
   editIsBuiltIn.value = builtIn;
+  editInitialTab.value = initialTab ?? "response";
   editOpen.value = true;
 }
 
@@ -206,6 +212,28 @@ async function loadKeywordTags() {
 }
 onMounted(loadKeywordTags);
 watch(() => session.value?.channel, loadKeywordTags);
+
+// >>> real Twitch badges for the access button, same pattern as
+// RolesView.vue's loadTwitchBadges - reuses the existing backend proxy
+const modBadgeUrl = ref("");
+const bcBadgeUrl = ref("");
+async function loadAccessBadges() {
+  if (!session.value) return;
+  const ch = session.value.channel;
+  try {
+    const res = await fetch(`${API}/twitch/badges/${encodeURIComponent(ch)}`, {
+      headers: { Authorization: `Bearer ${session.value.token}` },
+    });
+    if (!res.ok) return;
+    const d = (await res.json()) as any;
+    if (session.value?.channel !== ch) return;
+    const badgeMap = d?.badgeMap ?? {};
+    modBadgeUrl.value = String(badgeMap["moderator/1"]?.image_url_2x ?? badgeMap["moderator/1"]?.image_url_1x ?? "");
+    bcBadgeUrl.value = String(badgeMap["broadcaster/1"]?.image_url_2x ?? badgeMap["broadcaster/1"]?.image_url_1x ?? "");
+  } catch { }
+}
+onMounted(loadAccessBadges);
+watch(() => session.value?.channel, loadAccessBadges);
 
 // >>> command name -> its aliases (channel-created + global), for row-list tags
 const aliasesByCommand = ref<Record<string, string[]>>({});
@@ -692,6 +720,34 @@ function cycleAccess(cmd: Command | CustomCommand) {
   else updateCommand(cmd as Command);
 }
 
+// >>> per-subcommand access override, independent of the command's own access
+async function cycleArgAccess(
+  cmd: Command,
+  variant: Command["argVariants"][number],
+) {
+  if (!canEdit.value || !session.value) return;
+  const order: Array<"everyone" | "mod" | "broadcaster"> = [
+    "everyone",
+    "mod",
+    "broadcaster",
+  ];
+  const next = order[(order.indexOf(variant.access) + 1) % order.length]!;
+  variant.access = next;
+  try {
+    await fetch(
+      `${API}/commands/${session.value.channel}/${cmd.name}/arg-access`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.value.token}`,
+        },
+        body: JSON.stringify({ argKey: variant.argKey, access: next }),
+      },
+    );
+  } catch { }
+}
+
 function restrictionLabel(cmd: {
   modOnly: boolean;
   broadcasterOnly: boolean;
@@ -1152,8 +1208,7 @@ onUnmounted(() => {
       <button class="ep-tab" :class="{ active: activeTab === 'Custom' }" @click="activeTab = 'Custom'">
         {{ t("cmd.title_custom") }}
       </button>
-      <button v-if="canView" class="ep-tab" :class="{ active: activeTab === 'Extras' }"
-        @click="activeTab = 'Extras'">
+      <button v-if="canView" class="ep-tab" :class="{ active: activeTab === 'Extras' }" @click="activeTab = 'Extras'">
         {{ t("cmd.title_extras") }}
       </button>
       <button v-if="canViewObs" class="ep-tab" :class="{ active: activeTab === 'Obs' }" @click="activeTab = 'Obs'">
@@ -1175,7 +1230,7 @@ onUnmounted(() => {
             </div>
             <div>{{ t("cmd.header.desc") }}</div>
             <div>{{ t("cmd.header.tags") }}</div>
-            <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.header.gcd") }}/{{ t("cmd.header.ucd") }}<span class="sort-arrow"
+            <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.header.cooldowns") }}<span class="sort-arrow"
                 v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
             </div>
             <div>{{ t("cmd.header.access") }}</div>
@@ -1227,37 +1282,44 @@ onUnmounted(() => {
                   <span v-if="commandsWithRemovedDefaultAlias.has(cmd.name)" class="cmd-renamed-hint"
                     :title="t('cmd.default_alias_changed_hint')">↺</span>
                 </div>
-                <div class="cmd-desc ep-row-cell-hover" @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
+                <div class="cmd-desc ep-row-cell-hover"
+                  @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
                   <span class="cmd-desc-text">{{ cmdDesc(cmd) }}</span>
                 </div>
-                <div class="cmd-tags ep-row-cell-hover" @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
-                  <span v-for="al in (aliasesByCommand[cmd.name] ?? []).slice(0, 3)" :key="al"
-                    class="ep-tag keyword">{{ prefix }}{{ al }}</span>
+                <div class="cmd-tags ep-row-cell-hover"
+                  @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true, 'args')">
+                  <span v-for="al in (aliasesByCommand[cmd.name] ?? []).slice(0, 3)" :key="al" class="ep-tag keyword">{{
+                    prefix }}{{ al }}</span>
                   <span v-if="(aliasesByCommand[cmd.name]?.length ?? 0) > 3" class="ep-tag keyword">
                     +{{ aliasesByCommand[cmd.name]!.length - 3 }}
                   </span>
-                  <span v-for="kw in (keywordsByCommand[cmd.name] ?? []).slice(0, 3)" :key="kw"
-                    class="ep-tag arg"><span v-html="iconSvgFor('link')"></span> {{ kw }}</span>
+                  <span v-for="kw in (keywordsByCommand[cmd.name] ?? []).slice(0, 3)" :key="kw" class="ep-tag arg"><span
+                      v-html="iconSvgFor('link')"></span> {{ kw }}</span>
                   <span v-if="(keywordsByCommand[cmd.name]?.length ?? 0) > 3" class="ep-tag arg">
                     +{{ keywordsByCommand[cmd.name]!.length - 3 }}
                   </span>
                 </div>
-                <div class="cmd-cooldowns ep-row-cell-hover" @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
+                <div class="cmd-cooldowns ep-row-cell-hover"
+                  @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true, 'behavior')">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ cmd.cooldown }}s</span>
                   <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
                 </div>
                 <div>
-                  <button class="ep-btn-action access" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }"
-                    @click="cycleAccess(cmd)">
-                    {{ restrictionLabel(cmd) }}
+                  <button class="ep-btn-action access"
+                    :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }"
+                    :title="restrictionLabel(cmd)" @click="cycleAccess(cmd)">
+                    <img v-if="cmd.broadcasterOnly && bcBadgeUrl" :src="bcBadgeUrl" class="access-badge-icon" alt="" />
+                    <img v-else-if="cmd.modOnly && modBadgeUrl" :src="modBadgeUrl" class="access-badge-icon" alt="" />
+                    <template v-else>{{ restrictionLabel(cmd) }}</template>
                   </button>
                 </div>
                 <div>
-                  <button class="ep-btn-action edit" :class="{ disabled: BLOCKED.includes(cmd.name) || !canEdit }" @click.stop="
-                    canEdit &&
-                    !BLOCKED.includes(cmd.name) &&
-                    openEdit(cmd.name, true)
-                    ">
+                  <button class="ep-btn-action edit" :class="{ disabled: BLOCKED.includes(cmd.name) || !canEdit }"
+                    @click.stop="
+                      canEdit &&
+                      !BLOCKED.includes(cmd.name) &&
+                      openEdit(cmd.name, true)
+                      ">
                     {{
                       BLOCKED.includes(cmd.name)
                         ? t("cmd.blocked")
@@ -1283,12 +1345,17 @@ onUnmounted(() => {
                       v.usage.replace(/^<(\$[^>]+)>$/, "[$1]")
                         }}</span>
                   </div>
-                  <span class="ep-tag access arg-access-btn" :class="{
+                  <button class="ep-btn-action access arg-access-btn" :class="{
                     'access-mod': v.access === 'mod',
                     'access-bc': v.access === 'broadcaster',
-                  }" :title="t('cmd.arg_access_title')">
-                    {{ argAccessLabel(v.access) }}
-                  </span>
+                  }" :title="t('cmd.arg_access_title') + ': ' + argAccessLabel(v.access)"
+                    @click="cycleArgAccess(cmd, v)">
+                    <img v-if="v.access === 'broadcaster' && bcBadgeUrl" :src="bcBadgeUrl" class="access-badge-icon"
+                      alt="" />
+                    <img v-else-if="v.access === 'mod' && modBadgeUrl" :src="modBadgeUrl" class="access-badge-icon"
+                      alt="" />
+                    <template v-else>{{ argAccessLabel(v.access) }}</template>
+                  </button>
                 </div>
               </template>
             </template>
@@ -1306,7 +1373,7 @@ onUnmounted(() => {
           </div>
           <div>{{ t("cmd.header.desc") }}</div>
           <div>{{ t("cmd.header.tags") }}</div>
-          <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.sort.gcd") }}/{{ t("cmd.header.ucd") }}<span class="sort-arrow"
+          <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.header.cooldowns") }}<span class="sort-arrow"
               v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
           </div>
           <div>{{ t("cmd.sort.access") }}</div>
@@ -1352,8 +1419,9 @@ onUnmounted(() => {
                 <div class="cmd-name" :class="{ 'ep-row-cell-hover': customHasArgs(cmd) }"
                   @click="customHasArgs(cmd) && toggleExpandCustom(cmd.name)">
                   <span class="row-chevron-cell">
-                    <button v-if="customHasArgs(cmd)" class="ep-row-expander" :class="{ open: expandedCustom.has(cmd.name) }"
-                      :title="t('cmd.show_arg_variants')" v-html="iconSvgFor('chevron-down')">
+                    <button v-if="customHasArgs(cmd)" class="ep-row-expander"
+                      :class="{ open: expandedCustom.has(cmd.name) }" :title="t('cmd.show_arg_variants')"
+                      v-html="iconSvgFor('chevron-down')">
                     </button>
                   </span>
                   <span class="cmd-cat-dot" style="background: #9d6cff"></span>
@@ -1362,31 +1430,35 @@ onUnmounted(() => {
                 <div class="cmd-desc ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
                   <span class="cmd-desc-text">{{ cmd.description }}</span>
                 </div>
-                <div class="cmd-tags ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
-                  <span v-for="al in (aliasesByCommand[cmd.name] ?? []).slice(0, 3)" :key="al"
-                    class="ep-tag keyword">{{ prefix }}{{ al }}</span>
+                <div class="cmd-tags ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false, 'args')">
+                  <span v-for="al in (aliasesByCommand[cmd.name] ?? []).slice(0, 3)" :key="al" class="ep-tag keyword">{{
+                    prefix }}{{ al }}</span>
                   <span v-if="(aliasesByCommand[cmd.name]?.length ?? 0) > 3" class="ep-tag keyword">
                     +{{ aliasesByCommand[cmd.name]!.length - 3 }}
                   </span>
-                  <span v-for="kw in (keywordsByCommand[cmd.name] ?? []).slice(0, 3)" :key="kw"
-                    class="ep-tag arg"><span v-html="iconSvgFor('link')"></span> {{ kw }}</span>
+                  <span v-for="kw in (keywordsByCommand[cmd.name] ?? []).slice(0, 3)" :key="kw" class="ep-tag arg"><span
+                      v-html="iconSvgFor('link')"></span> {{ kw }}</span>
                   <span v-if="(keywordsByCommand[cmd.name]?.length ?? 0) > 3" class="ep-tag arg">
                     +{{ keywordsByCommand[cmd.name]!.length - 3 }}
                   </span>
                   <span v-for="fl in cmd.flags ?? []" :key="fl" class="ep-tag condition">{{ fl }}</span>
                 </div>
-                <div class="cmd-cooldowns ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
+                <div class="cmd-cooldowns ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false, 'behavior')">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ cmd.cooldown }}s</span>
                   <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
                 </div>
                 <div>
-                  <button class="ep-btn-action access" :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }"
-                    @click="cycleAccess(cmd)">
-                    {{ restrictionLabel(cmd) }}
+                  <button class="ep-btn-action access"
+                    :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }"
+                    :title="restrictionLabel(cmd)" @click="cycleAccess(cmd)">
+                    <img v-if="cmd.broadcasterOnly && bcBadgeUrl" :src="bcBadgeUrl" class="access-badge-icon" alt="" />
+                    <img v-else-if="cmd.modOnly && modBadgeUrl" :src="modBadgeUrl" class="access-badge-icon" alt="" />
+                    <template v-else>{{ restrictionLabel(cmd) }}</template>
                   </button>
                 </div>
                 <div class="custom-actions">
-                  <button class="ep-btn-action edit" :class="{ disabled: !canEdit }" @click="canEdit && openEdit(cmd.name, false)">
+                  <button class="ep-btn-action edit" :class="{ disabled: !canEdit }"
+                    @click="canEdit && openEdit(cmd.name, false)">
                     {{ canEdit ? t("cmd.edit") : t("cmd.view") }}
                   </button>
                   <button class="ep-btn-action share" @click="openShare(cmd.name)" :title="t('mod.share')"
@@ -1464,7 +1536,7 @@ onUnmounted(() => {
               <div></div>
               <div>{{ t("cmd.header.name") }}</div>
               <div>{{ t("cmd.header.desc") }}</div>
-              <div>{{ t("cmd.header.gcd") }}/{{ t("cmd.header.ucd") }}</div>
+              <div>{{ t("cmd.header.cooldowns") }}</div>
               <div>{{ t("cmd.header.access") }}</div>
               <div>{{ t("cmd.sort.actions") }}</div>
               <div></div>
@@ -1489,13 +1561,20 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div>
-                  <button class="ep-btn-action access" :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }"
-                    @click="openObsEdit({ kind: 'scene', command: b.command })">
-                    {{ obsAccessLabel(b.access) }}
+                  <button class="ep-btn-action access"
+                    :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }"
+                    :title="obsAccessLabel(b.access)" @click="openObsEdit({ kind: 'scene', command: b.command })">
+                    <img v-if="b.access === 'broadcaster' && bcBadgeUrl" :src="bcBadgeUrl" class="access-badge-icon"
+                      alt="" />
+                    <img v-else-if="b.access === 'mod' && modBadgeUrl" :src="modBadgeUrl" class="access-badge-icon"
+                      alt="" />
+                    <template v-else>{{ obsAccessLabel(b.access) }}</template>
                   </button>
                 </div>
                 <div class="custom-actions">
-                  <button class="ep-btn-action edit" @click="openObsEdit({ kind: 'scene', command: b.command })">{{ t('cmd.edit') }}</button>
+                  <button class="ep-btn-action edit" @click="openObsEdit({ kind: 'scene', command: b.command })">{{
+                    t('cmd.edit')
+                  }}</button>
                   <button class="ep-btn-action del" :class="{ confirm: obsDeleteConfirm === 'scene:' + b.command }"
                     @click="deleteObsBinding('scene', b.command)">
                     <template v-if="obsDeleteConfirm === 'scene:' + b.command">{{ t('cmd.delete_sure') }}</template>
@@ -1511,7 +1590,8 @@ onUnmounted(() => {
               <div v-for="b in obsSourceBindings" :key="'so' + b.command" class="ep-row-grid cmd-obs-row">
                 <div class="row-chevron-cell"></div>
                 <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
-                    class="cmd-name-text">{{ prefix }}{{ b.command }}</span></div>
+                    class="cmd-name-text">{{
+                      prefix }}{{ b.command }}</span></div>
                 <div class="cmd-desc">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} · {{ b.source }}<template
                     v-if="b.action === 'volume' && b.value !== undefined"> @ {{ b.value }}%</template>
                 </div>
@@ -1528,13 +1608,20 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div>
-                  <button class="ep-btn-action access" :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }"
-                    @click="openObsEdit({ kind: 'source', command: b.command })">
-                    {{ obsAccessLabel(b.access) }}
+                  <button class="ep-btn-action access"
+                    :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }"
+                    :title="obsAccessLabel(b.access)" @click="openObsEdit({ kind: 'source', command: b.command })">
+                    <img v-if="b.access === 'broadcaster' && bcBadgeUrl" :src="bcBadgeUrl" class="access-badge-icon"
+                      alt="" />
+                    <img v-else-if="b.access === 'mod' && modBadgeUrl" :src="modBadgeUrl" class="access-badge-icon"
+                      alt="" />
+                    <template v-else>{{ obsAccessLabel(b.access) }}</template>
                   </button>
                 </div>
                 <div class="custom-actions">
-                  <button class="ep-btn-action edit" @click="openObsEdit({ kind: 'source', command: b.command })">{{ t('cmd.edit') }}</button>
+                  <button class="ep-btn-action edit" @click="openObsEdit({ kind: 'source', command: b.command })">{{
+                    t('cmd.edit')
+                  }}</button>
                   <button class="ep-btn-action del" :class="{ confirm: obsDeleteConfirm === 'source:' + b.command }"
                     @click="deleteObsBinding('source', b.command)">
                     <template v-if="obsDeleteConfirm === 'source:' + b.command">{{ t('cmd.delete_sure') }}</template>
@@ -1550,7 +1637,8 @@ onUnmounted(() => {
               <div v-for="(entry, action) in obsArgCommands" :key="'arg' + action" class="ep-row-grid cmd-obs-row">
                 <div class="row-chevron-cell"></div>
                 <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
-                    class="cmd-name-text">{{ prefix }}{{ obsArgCommand(entry) }}</span></div>
+                    class="cmd-name-text">{{
+                      prefix }}{{ obsArgCommand(entry) }}</span></div>
                 <div class="cmd-desc">{{ OBS_ACTION_LABEL[action] ?? action }} · <span class="obs-arg-usage-inline">{{
                   obsArgUsage(action) }}</span></div>
                 <div class="cmd-cooldowns">
@@ -1568,14 +1656,21 @@ onUnmounted(() => {
                   </div>
                 </div>
                 <div>
-                  <button class="ep-btn-action access" :class="{ 'access-mod': obsArgAccess(entry) === 'mod', 'access-bc': obsArgAccess(entry) === 'broadcaster' }"
+                  <button class="ep-btn-action access"
+                    :class="{ 'access-mod': obsArgAccess(entry) === 'mod', 'access-bc': obsArgAccess(entry) === 'broadcaster' }"
+                    :title="obsAccessLabel(obsArgAccess(entry))"
                     @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">
-                    {{ obsAccessLabel(obsArgAccess(entry)) }}
+                    <img v-if="obsArgAccess(entry) === 'broadcaster' && bcBadgeUrl" :src="bcBadgeUrl"
+                      class="access-badge-icon" alt="" />
+                    <img v-else-if="obsArgAccess(entry) === 'mod' && modBadgeUrl" :src="modBadgeUrl"
+                      class="access-badge-icon" alt="" />
+                    <template v-else>{{ obsAccessLabel(obsArgAccess(entry)) }}</template>
                   </button>
                 </div>
                 <div class="custom-actions">
                   <button class="ep-btn-action edit"
-                    @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">{{ t('cmd.edit') }}</button>
+                    @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">{{
+                      t('cmd.edit') }}</button>
                   <button class="ep-btn-action del" :class="{ confirm: obsDeleteConfirm === 'arg:' + action }"
                     @click="deleteObsBinding('arg', action)">
                     <template v-if="obsDeleteConfirm === 'arg:' + action">{{ t('cmd.delete_sure') }}</template>
@@ -1687,7 +1782,7 @@ onUnmounted(() => {
   </div>
 
   <CommandEditPanel :cmdName="editingCmd" :channel="session?.channel ?? ''" :open="editOpen" :isBuiltIn="editIsBuiltIn"
-    :prefix="prefix" @close="editOpen = false" @saved="onEditSaved" />
+    :initialTab="editInitialTab" :prefix="prefix" @close="editOpen = false" @saved="onEditSaved" />
 
   <ObsCommandEditPanel :open="obsEditOpen" :channel="session?.channel ?? ''" :sceneBindings="obsSceneBindings"
     :sourceBindings="obsSourceBindings" :argCommands="obsArgCommands" :editTarget="obsEditTarget" :prefix="prefix"
@@ -1766,26 +1861,32 @@ onUnmounted(() => {
 .ep-row-grid.cmd-default-row {
   grid-template-columns: 168px 1fr 160px 140px 90px 110px 50px;
 }
+
 .ep-row-header.cmd-custom-row,
 .ep-row-grid.cmd-custom-row {
   grid-template-columns: 168px 1fr 160px 140px 90px 150px 50px;
 }
+
 /* >>> self-contained (indent, usage, desc), not tracking the parent's exact
    column layout - this sub-row only ever shows those 3 pieces */
 .arg-variant-row.cmd-custom-row {
   grid-template-columns: 28px 1fr 1fr;
 }
+
 .ep-row-header.cmd-obs-row,
 .ep-row-grid.cmd-obs-row {
   grid-template-columns: 28px 140px 1fr 140px 90px 50px 150px;
 }
+
 .ep-row-grid.saving {
   opacity: 0.6;
   pointer-events: none;
 }
+
 .ep-row-grid.expanded {
   border-bottom: none;
 }
+
 .ep-row-grid.expandable {
   cursor: pointer;
 }
@@ -1853,13 +1954,7 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-.row-chevron-cell {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  flex-shrink: 0;
-}
+/* >>> .row-chevron-cell comes from shared.css */
 
 .arg-variant-row {
   display: grid;
@@ -1891,22 +1986,22 @@ onUnmounted(() => {
   grid-column: 3;
 }
 
-/* >>> Default tab's arg-variant-row is a dense sub-detail row, self-contained
-   rather than tracking the parent's exact 7-column layout: indent, usage
-   (full remaining width - default commands never have a usage desc), access. */
+/* >>> Default tab's arg-variant-row tracks the PARENT .cmd-default-row's
+   exact columns, so the access button lines up directly under the parent
+   row's own access button instead of using an unrelated column count. */
 .arg-variant-row.cmd-default-row {
-  grid-template-columns: 28px 1fr 90px;
+  grid-template-columns: 168px 1fr 160px 140px 90px 110px 50px;
 }
+
 .arg-variant-usage-wide {
-  grid-column: 2;
+  /* >>> spans name+desc+tags+cooldowns - default commands never have a
+     usage desc, so usage gets all that width instead */
+  grid-column: 1 / 5;
 }
 
 .arg-access-btn {
-  grid-column: 3;
+  grid-column: 5;
   justify-self: start;
-  font-size: 10px;
-  padding: 3px 8px;
-  height: 22px;
 }
 
 .arg-variant-row:last-of-type {
@@ -1958,16 +2053,8 @@ onUnmounted(() => {
 
 /* >>> .ep-switch comes from shared.css */
 
-.cmd-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: #e0e0e0;
-  display: flex;
-  align-items: center;
-  height: 100%;
-  gap: 7px;
-}
-
+/* >>> .ep-cell-name layout lives in shared.css now - only command-specific
+   content (cat dot, name text, rename hint) stays local */
 .cmd-cat-dot {
   width: 6px;
   height: 6px;
@@ -2042,6 +2129,7 @@ onUnmounted(() => {
   color: #c792ea;
   background: rgba(199, 146, 234, 0.08);
 }
+
 .ep-tag.access-bc {
   border-color: #f1494955;
   color: #f14949;
@@ -2101,36 +2189,8 @@ onUnmounted(() => {
   gap: 6px;
 }
 
-.cmd-desc {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  overflow: hidden;
-  padding: 0 6px;
-}
-
-.cmd-tags,
-.cmd-cooldowns {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  min-width: 0;
-  padding: 4px 6px;
-}
-
-.ep-btn-action.access {
-  color: #555;
-}
-.ep-btn-action.access.access-mod {
-  border-color: #c792ea55;
-  color: #c792ea;
-}
-.ep-btn-action.access.access-bc {
-  border-color: #f1494955;
-  color: #f14949;
-}
+/* >>> .ep-cell-text (.cmd-desc)/.ep-cell-tags (.cmd-tags/.cmd-cooldowns)/
+   .ep-btn-action.access(.access-mod/.access-bc) come from shared.css */
 
 .cmd-desc-text {
   font-size: 11px;
