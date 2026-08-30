@@ -549,7 +549,15 @@ defineExpose({
       {{ t("timer.empty") }}
     </div>
 
-    <div v-else class="ep-row-list">
+    <div v-else class="timer-table">
+      <div class="ep-row-header timer-row">
+        <div>{{ t("timer.field.name") }}</div>
+        <div>{{ t("timer.field.response") }}</div>
+        <div>{{ t("timer.field.interval") }}</div>
+        <div>{{ t("timer.field.condition") }}</div>
+        <div></div>
+      </div>
+      <div class="ep-row-list">
       <div v-for="timer in timers" :key="timer.id" class="ep-row-grid timer-row"
         :class="{ inactive: !timer.is_active }">
         <div class="ep-cell-name">
@@ -587,6 +595,7 @@ defineExpose({
               class="ep-switch-knob"></span></button>
         </div>
         <RowKebabMenu :items="timerKebabItems(timer)" @click.stop />
+      </div>
       </div>
     </div>
 
@@ -730,6 +739,20 @@ defineExpose({
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* >>> single wrapper for header+list - .ep-view puts a 16px gap between its
+   own direct children, which would otherwise split the header from the rows */
+.timer-table {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.timer-table > .ep-row-list {
+  flex: 1;
+  min-height: 0;
 }
 
 .timer-row {

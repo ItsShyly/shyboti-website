@@ -1513,7 +1513,6 @@ onUnmounted(() => {
 
           <template v-else>
             <div class="ep-row-header cmd-obs-row">
-              <div></div>
               <div>{{ t("cmd.header.name") }}</div>
               <div>{{ t("cmd.header.desc") }}</div>
               <div>{{ t("cmd.header.cooldowns") }}</div>
@@ -1524,7 +1523,6 @@ onUnmounted(() => {
 
             <div class="rows">
               <div v-for="b in obsSceneBindings" :key="'sc' + b.command" class="ep-row-grid cmd-obs-row">
-                <div class="row-chevron-cell"></div>
                 <div class="ep-cell-name-desc ep-row-cell-hover" @click="openObsEdit({ kind: 'scene', command: b.command })">
                   <span class="cmd-cat-dot" style="background: #e5c07b"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ b.command }}</span>
@@ -1562,7 +1560,6 @@ onUnmounted(() => {
               </div>
 
               <div v-for="b in obsSourceBindings" :key="'so' + b.command" class="ep-row-grid cmd-obs-row">
-                <div class="row-chevron-cell"></div>
                 <div class="ep-cell-name-desc ep-row-cell-hover" @click="openObsEdit({ kind: 'source', command: b.command })">
                   <span class="cmd-cat-dot" style="background: #e5c07b"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ b.command }}</span>
@@ -1602,7 +1599,6 @@ onUnmounted(() => {
               </div>
 
               <div v-for="(entry, action) in obsArgCommands" :key="'arg' + action" class="ep-row-grid cmd-obs-row">
-                <div class="row-chevron-cell"></div>
                 <div class="ep-cell-name-desc ep-row-cell-hover"
                   @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">
                   <span class="cmd-cat-dot" style="background: #e5c07b"></span>
@@ -1821,12 +1817,12 @@ onUnmounted(() => {
    actions). */
 .ep-row-header.cmd-default-row,
 .ep-row-grid.cmd-default-row {
-  grid-template-columns: 168px 1fr 160px 140px 90px 110px 50px;
+  grid-template-columns: 200px 1fr 160px 140px 90px 110px 50px;
 }
 
 .ep-row-header.cmd-custom-row,
 .ep-row-grid.cmd-custom-row {
-  grid-template-columns: 168px 1fr 160px 140px 90px 150px 50px;
+  grid-template-columns: 200px 1fr 160px 140px 90px 150px 50px;
 }
 
 /* >>> self-contained (indent, usage, desc), not tracking the parent's exact
@@ -1835,9 +1831,11 @@ onUnmounted(() => {
   grid-template-columns: 28px 1fr 1fr;
 }
 
+/* >>> no chevron column - OBS bindings never expand, so name+desc start at
+   the row's true left edge like Custom's merged cell does */
 .ep-row-header.cmd-obs-row,
 .ep-row-grid.cmd-obs-row {
-  grid-template-columns: 28px 140px 1fr 140px 90px 150px 50px;
+  grid-template-columns: 140px 1fr 140px 90px 150px 50px;
 }
 
 .ep-row-grid.saving {
@@ -1955,7 +1953,7 @@ onUnmounted(() => {
    exact columns, so the access button lines up directly under the parent
    row's own access button instead of using an unrelated column count. */
 .arg-variant-row.cmd-default-row {
-  grid-template-columns: 168px 1fr 160px 140px 90px 110px 50px;
+  grid-template-columns: 200px 1fr 160px 140px 90px 110px 50px;
   /* >>> matches .ep-row-grid's padding so this sub-row's columns line up
      exactly under the parent row's columns */
   padding: 6px 14px 6px 0;
@@ -2045,14 +2043,6 @@ onUnmounted(() => {
   font-weight: 700;
   color: #e0e0e0;
 }
-/* >>> OBS rows keep the chevron as its own (always-empty) column, so
-   name+desc there are tracks 2+3, not 1+2, and don't need the left inset
-   (the chevron column already provides it) */
-.cmd-obs-row .ep-cell-name-desc {
-  grid-column: 2 / 4;
-  padding-left: 0;
-}
-
 .cmd-renamed-hint {
   color: #9d6cff;
   font-size: 11px;

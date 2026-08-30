@@ -1286,8 +1286,11 @@ async function saveActions() {
   display: none;
 }
 
+/* >>> reward name caps out instead of running unbounded (1fr) - an
+   unbounded name track was pushing price/effect out from under their
+   headers, since a long title forced the track past its share */
 .cp-row {
-  grid-template-columns: 44px 1fr 90px 220px auto;
+  grid-template-columns: 44px minmax(140px, 280px) 90px 220px auto;
 }
 
 /* >>> left-aligned, flush with the header label above it (was centered,
@@ -1312,6 +1315,10 @@ async function saveActions() {
   display: flex;
   align-items: center;
   gap: 10px;
+  /* >>> grid items refuse to shrink below their content's natural width by
+     default - without this a long title forced the whole 2-track span
+     wider than its columns, dragging effect/actions out of alignment */
+  min-width: 0;
 }
 
 .cp-main {

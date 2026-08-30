@@ -852,7 +852,15 @@ defineExpose({
       {{ t("trigger.empty") }}
     </div>
 
-    <div v-else class="ep-row-list">
+    <div v-else class="trigger-table">
+      <div class="ep-row-header trigger-row">
+        <div>{{ t("trigger.field.name") }}</div>
+        <div>{{ t("trigger.field.response") }}</div>
+        <div>{{ t("trigger.field.match") }}</div>
+        <div>{{ t("trigger.field.action") }}</div>
+        <div></div>
+      </div>
+      <div class="ep-row-list">
       <div v-for="trigger in triggers" :key="trigger.id" class="ep-row-grid trigger-row"
         :class="{ inactive: !trigger.is_active }">
         <div class="ep-cell-name">
@@ -893,6 +901,7 @@ defineExpose({
             @click.stop="canToggle && toggleActive(trigger)"><span class="ep-switch-knob"></span></button>
         </div>
         <RowKebabMenu :items="triggerKebabItems(trigger)" @click.stop />
+      </div>
       </div>
     </div>
 
@@ -1195,6 +1204,20 @@ defineExpose({
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+}
+
+/* >>> single wrapper for header+list - .ep-view puts a 16px gap between its
+   own direct children, which would otherwise split the header from the rows */
+.trigger-table {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.trigger-table > .ep-row-list {
+  flex: 1;
+  min-height: 0;
 }
 
 .trigger-row {

@@ -229,9 +229,11 @@ defineExpose({
               <!-- >>> no per-column destination here (one edit panel only) - name+action share one hover zone -->
               <div class="obsauto-content ep-row-cell-hover" @click="canEdit && openEdit(rule.id)">
                 <span class="obsauto-title">{{ ruleTitle(rule) }}</span>
-                <span class="ep-tag action">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
-                <span class="ep-tag condition">{{ rule.target }}<template
-                    v-if="rule.action === 'volume' && rule.value !== undefined"> @ {{ rule.value }}%</template></span>
+                <div class="obsauto-tags">
+                  <span class="ep-tag action">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
+                  <span class="ep-tag condition">{{ rule.target }}<template
+                      v-if="rule.action === 'volume' && rule.value !== undefined"> @ {{ rule.value }}%</template></span>
+                </div>
               </div>
               <div class="ep-row-actions">
                 <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(rule.id)"
@@ -282,11 +284,14 @@ defineExpose({
   grid-template-columns: 1fr 220px auto;
 }
 
-/* >>> spans the name+action tracks - one hover/click zone, only one edit destination */
+/* >>> spans the name+action tracks - one hover/click zone, only one edit
+   destination - but title and tags stay visually separated (space-between)
+   instead of running together */
 .obsauto-content {
   grid-column: 1 / 3;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
   padding-left: 10px;
 }
@@ -296,6 +301,18 @@ defineExpose({
   font-weight: 600;
   color: #e0e0e0;
   font-family: "Consolas", "Fira Mono", monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.obsauto-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .obs-rule-link {

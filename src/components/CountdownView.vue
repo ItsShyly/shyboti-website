@@ -433,7 +433,15 @@ defineExpose({
       {{ t("countdown.empty") }}
     </div>
 
-    <div v-else class="ep-row-list">
+    <div v-else class="countdown-table">
+      <div class="ep-row-header countdown-row">
+        <div>{{ t("countdown.field.name") }}</div>
+        <div>{{ t("countdown.header.status") }}</div>
+        <div>{{ t("countdown.field.seconds") }}</div>
+        <div></div>
+        <div></div>
+      </div>
+      <div class="ep-row-list">
       <div v-for="cd in countdowns" :key="cd.id" class="ep-row-grid countdown-row" :class="{ inactive: !cd.is_active }">
         <div class="ep-cell-name">
           <span class="cd-status-dot" :class="cd.status ?? 'idle'"></span>
@@ -497,6 +505,7 @@ defineExpose({
           </button>
         </div>
         <RowKebabMenu :items="countdownKebabItems(cd)" @click.stop />
+      </div>
       </div>
     </div>
 
@@ -649,6 +658,20 @@ defineExpose({
 </template>
 
 <style scoped>
+/* >>> single wrapper for header+list - .ep-view puts a 16px gap between its
+   own direct children, which would otherwise split the header from the rows */
+.countdown-table {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.countdown-table > .ep-row-list {
+  flex: 1;
+  min-height: 0;
+}
+
 .countdown-row {
   grid-template-columns: 160px 130px 200px auto auto;
 }

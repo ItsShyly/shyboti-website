@@ -961,7 +961,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         <div class="mod-table">
           <div class="ep-row-header mod-item-row">
             <div>{{ t("mod.header.term") }}</div>
-            <div>{{ t("mod.header.effect") }}</div>
+            <div class="mod-header-effect">{{ t("mod.header.effect") }}</div>
             <div>{{ t("cmd.sort.actions") }}</div>
           </div>
           <template v-for="section in blockedSections" :key="section.group?.id ?? 'ungrouped'">
@@ -1038,7 +1038,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         <div class="mod-table">
           <div class="ep-row-header mod-item-row">
             <div>{{ t("mod.header.filter") }}</div>
-            <div>{{ t("mod.header.effect") }}</div>
+            <div class="mod-header-effect">{{ t("mod.header.effect") }}</div>
             <div>{{ t("cmd.sort.actions") }}</div>
           </div>
           <template v-for="section in spamSections" :key="section.group?.id ?? 'ungrouped'">
@@ -1567,6 +1567,10 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   justify-content: center;
 }
 
+.mod-header-effect {
+  text-align: center;
+}
+
 .mod-group-header {
   display: flex;
   align-items: center;
@@ -1613,9 +1617,11 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   margin-left: 20px;
 }
 
-/* >>> list rows - term grows, effect tags get a fixed lane, actions sizes to its buttons */
+/* >>> term/filter grows but caps out (was 1fr - unbounded, which shoved
+   the effect tags all the way to the right and made short left-aligned
+   term text look adrift in a huge empty column) */
 .mod-item-row {
-  grid-template-columns: 1fr 200px auto;
+  grid-template-columns: minmax(180px, 420px) 200px minmax(200px, auto);
 }
 
 .nuke-item-row {
