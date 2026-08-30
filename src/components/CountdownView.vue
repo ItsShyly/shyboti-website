@@ -454,8 +454,8 @@ defineExpose({
 
         <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(cd)">
           <span class="ep-tag cooldown"><span v-html="iconSvgFor('clock')"></span> {{ fmtDuration(cd.duration_sec)
-            }}</span>
-          <span v-if="cd.tick_every_sec" class="ep-tag cooldown user"><span v-html="iconSvgFor('refresh-cw')"></span> {{
+          }}</span>
+          <span v-if="cd.tick_every_sec" class="ep-tag cooldown"><span v-html="iconSvgFor('refresh-cw')"></span> {{
             cd.tick_every_sec }}s</span>
           <span v-if="cd.enabled_when !== 'always'" class="ep-tag condition">{{ cd.enabled_when }}</span>
           <span v-if="cd.condition" class="ep-tag condition">if …</span>
@@ -521,7 +521,7 @@ defineExpose({
               <label class="ep-field-label">{{ t("countdown.field.seconds") }}
                 <span class="ep-field-hint">{{
                   t("countdown.field.secs_hint")
-                }}</span></label>
+                  }}</span></label>
               <div class="dur-row">
                 <input v-model.number="editCountdown.duration_sec" type="number" min="1" class="ep-field-input" />
                 <span class="ep-field-hint">= {{ fmtDuration(editCountdown.duration_sec ?? 60) }}</span>
@@ -532,7 +532,7 @@ defineExpose({
               <label class="ep-field-label">{{ t("countdown.field.msg_start") }}
                 <span class="ep-field-hint">{{
                   t("countdown.field.resp_hint")
-                }}</span></label>
+                  }}</span></label>
               <div ref="startEditorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
                 :data-placeholder="t('countdown.placeholder.msg_start')" @focus="activeField = 'msg_start'"
                 @input="onEditorInput(startEditorRef, 'msg_start')"></div>
@@ -543,7 +543,7 @@ defineExpose({
                 <label class="ep-field-label">{{ t("countdown.field.msg_tick") }}
                   <span class="ep-field-hint">{{
                     t("countdown.field.tick_hint")
-                  }}</span></label>
+                    }}</span></label>
                 <div ref="tickEditorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
                   :data-placeholder="t('countdown.placeholder.msg_tick')" @focus="activeField = 'msg_tick'"
                   @input="onEditorInput(tickEditorRef, 'msg_tick')"></div>
@@ -559,7 +559,7 @@ defineExpose({
               <label class="ep-field-label">{{ t("countdown.field.msg_end") }}
                 <span class="ep-field-hint">{{
                   t("countdown.field.resp_hint")
-                }}</span></label>
+                  }}</span></label>
               <div ref="endEditorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
                 :data-placeholder="t('countdown.placeholder.msg_end')" @focus="activeField = 'msg_end'"
                 @input="onEditorInput(endEditorRef, 'msg_end')"></div>
@@ -573,7 +573,7 @@ defineExpose({
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("countdown.field.active_when")
-                }}</label>
+                  }}</label>
                 <select v-model="editCountdown.enabled_when" class="ep-field-select">
                   <option value="always">
                     {{ t("countdown.when.always") }}
@@ -590,7 +590,7 @@ defineExpose({
                 <label class="ep-field-label">{{ t("countdown.field.condition") }}
                   <span class="ep-field-hint">{{
                     t("countdown.field.cond_hint")
-                  }}</span></label>
+                    }}</span></label>
                 <input v-model="editCountdown.condition" class="ep-field-input ep-mono"
                   placeholder="$channel.viewers > 10" />
               </div>

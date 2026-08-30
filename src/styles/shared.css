@@ -590,9 +590,14 @@
 .ep-btn-action.share:hover {
   background: rgba(78, 201, 176, 0.1);
 }
-/* >>> access severity - everyone (default/no modifier) / mod / broadcaster */
+/* >>> access severity - everyone (default/no modifier) / mod / broadcaster.
+   Fixed width so cycling through labels/badge icons doesn't resize the button. */
 .ep-btn-action.access {
   color: #555;
+  width: 90px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .ep-btn-action.access.access-mod {
   border-color: #c792ea55;
@@ -779,7 +784,8 @@
   /* >>> no gap = adjacent cells sit flush against each other, no breathing room */
   column-gap: 10px;
   min-height: 44px;
-  padding: 0 14px 0 10px;
+  /* >>> no left padding - first cell's hover reaches the row's true edge */
+  padding: 0 14px 0 0;
   background: #18181c;
   border-bottom: 1px solid #121216;
   transition: opacity 0.2s;
@@ -818,6 +824,7 @@
   align-items: center;
   height: 100%;
   gap: 7px;
+  padding-left: 10px;
 }
 .row-chevron-cell {
   display: flex;
@@ -849,13 +856,17 @@
   display: grid;
   align-items: center;
   column-gap: 10px;
-  padding: 8px 14px 8px 10px;
-  background: #141418;
+  padding: 8px 14px 8px 0;
+  background: #101014;
   color: #555;
   font-size: 10px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   border-bottom: 1px solid #1e1e24;
+}
+/* >>> matches .ep-cell-name's left inset so header labels line up with rows */
+.ep-row-header > *:first-child {
+  padding-left: 10px;
 }
 .ep-row-expander {
   width: 20px;

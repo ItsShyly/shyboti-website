@@ -641,6 +641,22 @@ async function toggleActive(kind: "blocked" | "spam", item: BlockedTerm | SpamFi
   }
 }
 
+// >>> group header switch - on only while every member is active
+function groupAllActive(tab: "blocked" | "spam", groupId: number): boolean {
+  const items = tab === "blocked" ? blockedTerms.value : spamFilters.value;
+  const members = items.filter((i) => i.group_id === groupId);
+  return members.length > 0 && members.every((i) => !!i.is_active);
+}
+async function toggleGroupActive(tab: "blocked" | "spam", groupId: number) {
+  if (!session.value || !canManage.value) return;
+  const items = tab === "blocked" ? blockedTerms.value : spamFilters.value;
+  const members = items.filter((i) => i.group_id === groupId);
+  const next = !groupAllActive(tab, groupId);
+  for (const item of members) {
+    if (!!item.is_active !== next) await toggleActive(tab, item);
+  }
+}
+
 const deleteConfirmPanel = ref(false);
 function requestDelete() {
   if (!deleteConfirmPanel.value) {
@@ -942,6 +958,10 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <div v-if="!blockedTerms.length && !modGroups.blocked.length" class="ep-empty">{{ botPresent ?
         t("mod.empty.blocked") : t("mod.no_bot") }}</div>
       <template v-else>
+        <div class="ep-row-header mod-item-row">
+          <div>{{ t("mod.header.term") }}</div>
+          <div>{{ t("mod.header.action") }}</div>
+        </div>
         <template v-for="section in blockedSections" :key="section.group?.id ?? 'ungrouped'">
           <div class="mod-section" @dragover.prevent
             @drop="assignGroup('blocked', section.group ? section.group.id : null)">
@@ -957,6 +977,10 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   v-html="iconSvgFor('corner-up-right')"></button>
                 <button class="ep-btn-action del" @click.stop="deleteGroup('blocked', section.group.id)"
                   v-html="iconSvgFor('trash')"></button>
+                <button class="ep-switch" :class="{ on: groupAllActive('blocked', section.group.id) }"
+                  :title="t('mod.group.toggle_all')" @click.stop="toggleGroupActive('blocked', section.group.id)">
+                  <span class="ep-switch-knob"></span>
+                </button>
               </div>
             </div>
             <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
@@ -1007,6 +1031,10 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <div v-if="!spamFilters.length && !modGroups.spam.length" class="ep-empty">{{ botPresent ? t("mod.empty.spam") :
         t("mod.no_bot") }}</div>
       <template v-else>
+        <div class="ep-row-header mod-item-row">
+          <div>{{ t("mod.header.filter") }}</div>
+          <div>{{ t("mod.header.action") }}</div>
+        </div>
         <template v-for="section in spamSections" :key="section.group?.id ?? 'ungrouped'">
           <div class="mod-section" @dragover.prevent
             @drop="assignGroup('spam', section.group ? section.group.id : null)">
@@ -1022,6 +1050,10 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   v-html="iconSvgFor('corner-up-right')"></button>
                 <button class="ep-btn-action del" @click.stop="deleteGroup('spam', section.group.id)"
                   v-html="iconSvgFor('trash')"></button>
+                <button class="ep-switch" :class="{ on: groupAllActive('spam', section.group.id) }"
+                  :title="t('mod.group.toggle_all')" @click.stop="toggleGroupActive('spam', section.group.id)">
+                  <span class="ep-switch-knob"></span>
+                </button>
               </div>
             </div>
             <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
@@ -1383,7 +1415,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
             <div v-if="fNukeExpiry && fNukeStay" class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.nuke.expiry") }} <span class="ep-field-hint">{{ t("mod.nuke.min")
-                  }}</span></label>
+              }}</span></label>
               <input v-model.number="fNukeExpiryMins" type="number" min="1" class="ep-field-input" />
             </div>
           </template>

@@ -1134,7 +1134,7 @@ onUnmounted(() => {
           <template v-else-if="activeTab === 'Custom'">{{ customCommands.length }} {{ customCommands.length !== 1 ?
             t('cmd.count_plural') : t('cmd.count') }}</template>
           <template v-else-if="activeTab === 'Obs' && obsPaired">{{ obsCommandCount }} OBS {{ t('cmd.count_plural')
-          }}</template>
+            }}</template>
           <template v-else>&mdash;</template>
         </div>
       </div>
@@ -1179,7 +1179,7 @@ onUnmounted(() => {
                 syncRunning
                   ? '…' : t('cmd.sync.pull') }}</button>
               <button v-if="syncConf?.is_active" class="ep-sync-stop-btn" @click="stopSync">{{ t('cmd.sync.stop')
-              }}</button>
+                }}</button>
             </div>
             <div v-if="syncMode === 'ongoing' && syncConf?.last_synced" class="ep-sync-last">{{ t('cmd.sync.last') }}
               {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
@@ -1197,7 +1197,7 @@ onUnmounted(() => {
             t('cmd.new') }}</button>
         <button v-else-if="activeTab === 'Obs' && obsPaired" class="ep-btn-new" @click="openObsEdit(null)">+ {{
           t('cmd.new')
-        }}</button>
+          }}</button>
       </div>
     </div>
 
@@ -1268,7 +1268,7 @@ onUnmounted(() => {
                 saving: saving === cmd.name,
                 expanded: expandedDefault.has(cmd.name),
               }">
-                <div class="cmd-name" :class="{ 'ep-row-cell-hover': cmd.argVariants?.length }"
+                <div class="ep-cell-name" :class="{ 'ep-row-cell-hover': cmd.argVariants?.length }"
                   @click="cmd.argVariants?.length && toggleExpandDefault(cmd.name)">
                   <span class="row-chevron-cell">
                     <button v-if="cmd.argVariants?.length" class="ep-row-expander"
@@ -1282,11 +1282,11 @@ onUnmounted(() => {
                   <span v-if="commandsWithRemovedDefaultAlias.has(cmd.name)" class="cmd-renamed-hint"
                     :title="t('cmd.default_alias_changed_hint')">↺</span>
                 </div>
-                <div class="cmd-desc ep-row-cell-hover"
+                <div class="ep-cell-text ep-row-cell-hover"
                   @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
                   <span class="cmd-desc-text">{{ cmdDesc(cmd) }}</span>
                 </div>
-                <div class="cmd-tags ep-row-cell-hover"
+                <div class="ep-cell-tags ep-row-cell-hover"
                   @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true, 'args')">
                   <span v-for="al in (aliasesByCommand[cmd.name] ?? []).slice(0, 3)" :key="al" class="ep-tag keyword">{{
                     prefix }}{{ al }}</span>
@@ -1299,12 +1299,12 @@ onUnmounted(() => {
                     +{{ keywordsByCommand[cmd.name]!.length - 3 }}
                   </span>
                 </div>
-                <div class="cmd-cooldowns ep-row-cell-hover"
+                <div class="ep-cell-tags ep-row-cell-hover"
                   @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true, 'behavior')">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ cmd.cooldown }}s</span>
-                  <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
+                  <span class="ep-tag cooldown">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
                 </div>
-                <div>
+                <div class="ep-row-cell-center">
                   <button class="ep-btn-action access"
                     :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }"
                     :title="restrictionLabel(cmd)" @click="cycleAccess(cmd)">
@@ -1313,7 +1313,7 @@ onUnmounted(() => {
                     <template v-else>{{ restrictionLabel(cmd) }}</template>
                   </button>
                 </div>
-                <div>
+                <div class="ep-row-cell-center">
                   <button class="ep-btn-action edit" :class="{ disabled: BLOCKED.includes(cmd.name) || !canEdit }"
                     @click.stop="
                       canEdit &&
@@ -1343,7 +1343,7 @@ onUnmounted(() => {
                   <div class="arg-variant-usage arg-variant-usage-wide">
                     <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{
                       v.usage.replace(/^<(\$[^>]+)>$/, "[$1]")
-                        }}</span>
+                    }}</span>
                   </div>
                   <button class="ep-btn-action access arg-access-btn" :class="{
                     'access-mod': v.access === 'mod',
@@ -1416,7 +1416,7 @@ onUnmounted(() => {
           <div class="rows">
             <template v-for="cmd in filteredCustom()" :key="cmd.name">
               <div class="ep-row-grid cmd-custom-row" :class="{ expanded: expandedCustom.has(cmd.name) }">
-                <div class="cmd-name" :class="{ 'ep-row-cell-hover': customHasArgs(cmd) }"
+                <div class="ep-cell-name" :class="{ 'ep-row-cell-hover': customHasArgs(cmd) }"
                   @click="customHasArgs(cmd) && toggleExpandCustom(cmd.name)">
                   <span class="row-chevron-cell">
                     <button v-if="customHasArgs(cmd)" class="ep-row-expander"
@@ -1427,10 +1427,10 @@ onUnmounted(() => {
                   <span class="cmd-cat-dot" style="background: #9d6cff"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ cmd.name }}</span>
                 </div>
-                <div class="cmd-desc ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
+                <div class="ep-cell-text ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
                   <span class="cmd-desc-text">{{ cmd.description }}</span>
                 </div>
-                <div class="cmd-tags ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false, 'args')">
+                <div class="ep-cell-tags ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false, 'args')">
                   <span v-for="al in (aliasesByCommand[cmd.name] ?? []).slice(0, 3)" :key="al" class="ep-tag keyword">{{
                     prefix }}{{ al }}</span>
                   <span v-if="(aliasesByCommand[cmd.name]?.length ?? 0) > 3" class="ep-tag keyword">
@@ -1443,11 +1443,11 @@ onUnmounted(() => {
                   </span>
                   <span v-for="fl in cmd.flags ?? []" :key="fl" class="ep-tag condition">{{ fl }}</span>
                 </div>
-                <div class="cmd-cooldowns ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false, 'behavior')">
+                <div class="ep-cell-tags ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false, 'behavior')">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ cmd.cooldown }}s</span>
-                  <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
+                  <span class="ep-tag cooldown">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
                 </div>
-                <div>
+                <div class="ep-row-cell-center">
                   <button class="ep-btn-action access"
                     :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }"
                     :title="restrictionLabel(cmd)" @click="cycleAccess(cmd)">
@@ -1492,7 +1492,7 @@ onUnmounted(() => {
                   <div class="arg-variant-indent"></div>
                   <div class="arg-variant-usage">
                     <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{ v.usage
-                    }}</span>
+                      }}</span>
                   </div>
                   <div class="arg-variant-desc">{{ v.desc || "" }}</div>
                 </div>
@@ -1545,10 +1545,10 @@ onUnmounted(() => {
             <div class="rows">
               <div v-for="b in obsSceneBindings" :key="'sc' + b.command" class="ep-row-grid cmd-obs-row">
                 <div class="row-chevron-cell"></div>
-                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
+                <div class="ep-cell-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
                     class="cmd-name-text">{{ prefix }}{{ b.command }}</span></div>
-                <div class="cmd-desc">switch scene · {{ b.scene }}</div>
-                <div class="cmd-cooldowns">
+                <div class="ep-cell-text">switch scene · {{ b.scene }}</div>
+                <div class="ep-cell-tags">
                   <div class="cd-input-wrap">
                     <input type="number" min="0" class="cd-input" :value="b.cooldown ?? 0"
                       @change="onObsCooldownInput(b, 'cooldown', ($event.target as HTMLInputElement).value)" />
@@ -1560,7 +1560,7 @@ onUnmounted(() => {
                     <span class="cd-unit">s</span>
                   </div>
                 </div>
-                <div>
+                <div class="ep-row-cell-center">
                   <button class="ep-btn-action access"
                     :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }"
                     :title="obsAccessLabel(b.access)" @click="openObsEdit({ kind: 'scene', command: b.command })">
@@ -1574,7 +1574,7 @@ onUnmounted(() => {
                 <div class="custom-actions">
                   <button class="ep-btn-action edit" @click="openObsEdit({ kind: 'scene', command: b.command })">{{
                     t('cmd.edit')
-                  }}</button>
+                    }}</button>
                   <button class="ep-btn-action del" :class="{ confirm: obsDeleteConfirm === 'scene:' + b.command }"
                     @click="deleteObsBinding('scene', b.command)">
                     <template v-if="obsDeleteConfirm === 'scene:' + b.command">{{ t('cmd.delete_sure') }}</template>
@@ -1589,13 +1589,13 @@ onUnmounted(() => {
 
               <div v-for="b in obsSourceBindings" :key="'so' + b.command" class="ep-row-grid cmd-obs-row">
                 <div class="row-chevron-cell"></div>
-                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
+                <div class="ep-cell-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
                     class="cmd-name-text">{{
                       prefix }}{{ b.command }}</span></div>
-                <div class="cmd-desc">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} · {{ b.source }}<template
+                <div class="ep-cell-text">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} · {{ b.source }}<template
                     v-if="b.action === 'volume' && b.value !== undefined"> @ {{ b.value }}%</template>
                 </div>
-                <div class="cmd-cooldowns">
+                <div class="ep-cell-tags">
                   <div class="cd-input-wrap">
                     <input type="number" min="0" class="cd-input" :value="b.cooldown ?? 0"
                       @change="onObsCooldownInput(b, 'cooldown', ($event.target as HTMLInputElement).value)" />
@@ -1607,7 +1607,7 @@ onUnmounted(() => {
                     <span class="cd-unit">s</span>
                   </div>
                 </div>
-                <div>
+                <div class="ep-row-cell-center">
                   <button class="ep-btn-action access"
                     :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }"
                     :title="obsAccessLabel(b.access)" @click="openObsEdit({ kind: 'source', command: b.command })">
@@ -1621,7 +1621,7 @@ onUnmounted(() => {
                 <div class="custom-actions">
                   <button class="ep-btn-action edit" @click="openObsEdit({ kind: 'source', command: b.command })">{{
                     t('cmd.edit')
-                  }}</button>
+                    }}</button>
                   <button class="ep-btn-action del" :class="{ confirm: obsDeleteConfirm === 'source:' + b.command }"
                     @click="deleteObsBinding('source', b.command)">
                     <template v-if="obsDeleteConfirm === 'source:' + b.command">{{ t('cmd.delete_sure') }}</template>
@@ -1636,12 +1636,13 @@ onUnmounted(() => {
 
               <div v-for="(entry, action) in obsArgCommands" :key="'arg' + action" class="ep-row-grid cmd-obs-row">
                 <div class="row-chevron-cell"></div>
-                <div class="cmd-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
+                <div class="ep-cell-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
                     class="cmd-name-text">{{
                       prefix }}{{ obsArgCommand(entry) }}</span></div>
-                <div class="cmd-desc">{{ OBS_ACTION_LABEL[action] ?? action }} · <span class="obs-arg-usage-inline">{{
-                  obsArgUsage(action) }}</span></div>
-                <div class="cmd-cooldowns">
+                <div class="ep-cell-text">{{ OBS_ACTION_LABEL[action] ?? action }} · <span
+                    class="obs-arg-usage-inline">{{
+                      obsArgUsage(action) }}</span></div>
+                <div class="ep-cell-tags">
                   <div class="cd-input-wrap">
                     <input type="number" min="0" class="cd-input"
                       :value="typeof entry === 'string' ? 0 : ((entry as any).cooldown ?? 0)"
@@ -1655,7 +1656,7 @@ onUnmounted(() => {
                     <span class="cd-unit">s</span>
                   </div>
                 </div>
-                <div>
+                <div class="ep-row-cell-center">
                   <button class="ep-btn-action access"
                     :class="{ 'access-mod': obsArgAccess(entry) === 'mod', 'access-bc': obsArgAccess(entry) === 'broadcaster' }"
                     :title="obsAccessLabel(obsArgAccess(entry))"
@@ -1875,7 +1876,7 @@ onUnmounted(() => {
 
 .ep-row-header.cmd-obs-row,
 .ep-row-grid.cmd-obs-row {
-  grid-template-columns: 28px 140px 1fr 140px 90px 50px 150px;
+  grid-template-columns: 28px 140px 1fr 140px 90px 150px 50px;
 }
 
 .ep-row-grid.saving {
@@ -1967,7 +1968,7 @@ onUnmounted(() => {
 }
 
 .arg-variant-usage {
-  padding-left: 8px;
+  padding-left: 10px;
 }
 
 .arg-variant-desc {
@@ -1991,6 +1992,9 @@ onUnmounted(() => {
    row's own access button instead of using an unrelated column count. */
 .arg-variant-row.cmd-default-row {
   grid-template-columns: 168px 1fr 160px 140px 90px 110px 50px;
+  /* >>> matches .ep-row-grid's padding so this sub-row's columns line up
+     exactly under the parent row's columns */
+  padding: 6px 14px 6px 0;
 }
 
 .arg-variant-usage-wide {
@@ -2001,7 +2005,7 @@ onUnmounted(() => {
 
 .arg-access-btn {
   grid-column: 5;
-  justify-self: start;
+  justify-self: center;
 }
 
 .arg-variant-row:last-of-type {
@@ -2068,28 +2072,22 @@ onUnmounted(() => {
   cursor: help;
 }
 
+/* >>> looks like a normal .ep-tag.cooldown, but holds an editable input -
+   OBS bindings edit cooldowns inline, unlike Default/Custom's display-only tags */
 .cd-input-wrap {
   display: inline-flex;
   align-items: center;
-  height: 28px;
-  background: #111217;
-  padding: 0 6px 0 8px;
+  font-size: 10px;
+  padding: 1px 6px;
+  border: 1px solid #9d6cff44;
+  background: #9d6cff11;
   transition:
     background 0.15s,
     opacity 0.15s;
 }
 
 .cd-input-wrap:focus-within {
-  background: #1a1a24;
-  outline: 1px solid #6f2bff55;
-}
-
-.cd-input-wrap.user {
-  background: #111e26;
-}
-
-.cd-input-wrap.user:focus-within {
-  background: #141f2e;
+  border-color: #9d6cff;
 }
 
 .cd-input-wrap.disabled {
@@ -2098,13 +2096,13 @@ onUnmounted(() => {
 }
 
 .cd-input {
-  width: 38px;
+  width: 26px;
   background: transparent;
   border: none;
   outline: none;
-  color: #e0e0e0;
+  color: #9d6cff;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 10px;
   text-align: right;
   -moz-appearance: textfield;
   appearance: textfield;
@@ -2117,9 +2115,9 @@ onUnmounted(() => {
 }
 
 .cd-unit {
-  font-size: 11px;
-  color: #555;
-  margin-left: 2px;
+  font-size: 10px;
+  color: #9d6cff;
+  margin-left: 1px;
 }
 
 /* >>> read-only .ep-tag access severity colors - matches the old .access-btn
@@ -2189,8 +2187,8 @@ onUnmounted(() => {
   gap: 6px;
 }
 
-/* >>> .ep-cell-text (.cmd-desc)/.ep-cell-tags (.cmd-tags/.cmd-cooldowns)/
-   .ep-btn-action.access(.access-mod/.access-bc) come from shared.css */
+/* >>> .ep-cell-name/.ep-cell-text/.ep-cell-tags/.ep-btn-action.access
+   (.access-mod/.access-bc) come from shared.css */
 
 .cmd-desc-text {
   font-size: 11px;
@@ -2440,14 +2438,14 @@ onUnmounted(() => {
 }
 
 @media (max-width: 680px) {
-  .table-header {
+  .ep-row-header {
     display: none;
   }
 
   /* >>> single line on phone: chevron, toggle, name, kebab. access/edit/share/
      delete move into the kebab, cooldowns live in the edit panel only */
-  .table-row,
-  .custom-row {
+  .ep-row-grid.cmd-default-row,
+  .ep-row-grid.cmd-custom-row {
     display: flex;
     align-items: center;
     height: auto;
@@ -2457,14 +2455,14 @@ onUnmounted(() => {
 
   /* >>> fixed width regardless of content - was collapsing on rows with no
      arg variants, shifting the toggle left/right row to row */
-  .table-row>.row-chevron-cell,
-  .custom-row>.row-chevron-cell {
+  .ep-row-grid.cmd-default-row>.row-chevron-cell,
+  .ep-row-grid.cmd-custom-row>.row-chevron-cell {
     width: 20px;
     flex-shrink: 0;
   }
 
-  .table-row>.cmd-name,
-  .custom-row>.cmd-name {
+  .ep-row-grid.cmd-default-row>.ep-cell-name,
+  .ep-row-grid.cmd-custom-row>.ep-cell-name {
     flex: 1;
     min-width: 0;
   }
@@ -2476,16 +2474,16 @@ onUnmounted(() => {
     min-width: 0;
   }
 
-  .table-row>.cmd-desc,
-  .custom-row>.cmd-desc,
-  .table-row>*:nth-child(5),
-  .custom-row>*:nth-child(5),
-  .table-row>*:nth-child(6),
-  .custom-row>*:nth-child(6),
-  .table-row>*:nth-child(7),
-  .custom-row>*:nth-child(7),
-  .table-row>*:nth-child(8),
-  .custom-row>*:nth-child(8) {
+  .ep-row-grid.cmd-default-row>.ep-cell-text,
+  .ep-row-grid.cmd-custom-row>.ep-cell-text,
+  .ep-row-grid.cmd-default-row>*:nth-child(5),
+  .ep-row-grid.cmd-custom-row>*:nth-child(5),
+  .ep-row-grid.cmd-default-row>*:nth-child(6),
+  .ep-row-grid.cmd-custom-row>*:nth-child(6),
+  .ep-row-grid.cmd-default-row>*:nth-child(7),
+  .ep-row-grid.cmd-custom-row>*:nth-child(7),
+  .ep-row-grid.cmd-default-row>*:nth-child(8),
+  .ep-row-grid.cmd-custom-row>*:nth-child(8) {
     display: none;
   }
 

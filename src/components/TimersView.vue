@@ -505,7 +505,7 @@ defineExpose({
               <option value="">{{ syncMode === 'import' ? t("timer.sync.select") : (syncConf?.is_active ?
                 t("timer.sync.change") : t("timer.sync.select")) }}</option>
               <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{ ch
-                }}</option>
+              }}</option>
             </select>
             <button v-if="syncMode === 'import'" class="ep-sync-save-btn" @click="runImport"
               :disabled="syncImporting || !syncFrom">
@@ -557,14 +557,14 @@ defineExpose({
         </div>
         <div class="ep-cell-text timer-resp-cell ep-row-cell-hover" @click="openEdit(timer)">
           <span class="timer-response">{{ timer.response.slice(0, 60)
-            }}{{ timer.response.length > 60 ? "…" : "" }}</span>
+          }}{{ timer.response.length > 60 ? "…" : "" }}</span>
           <span v-if="timer.is_active" class="timer-next">{{ fmtNextFire(timer) }}</span>
         </div>
         <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(timer)">
           <span class="ep-tag cooldown"><span v-html="iconSvgFor('clock')"></span> {{ fmtInterval(timer.interval_sec)
-            }}</span>
-          <span v-if="timer.min_messages" class="ep-tag cooldown user"><span
-              v-html="iconSvgFor('message-circle')"></span> {{ timer.min_messages }}+</span>
+          }}</span>
+          <span v-if="timer.min_messages" class="ep-tag cooldown"><span v-html="iconSvgFor('message-circle')"></span> {{
+            timer.min_messages }}+</span>
         </div>
         <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(timer)">
           <span v-if="timer.enabled_when !== 'always'" class="ep-tag condition">{{ timer.enabled_when }}</span>
@@ -611,7 +611,7 @@ defineExpose({
               <label class="ep-field-label">{{ t("timer.field.response") }}
                 <span class="ep-field-hint">{{
                   t("timer.field.resp_hint")
-                  }}</span></label>
+                }}</span></label>
               <div ref="editorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
                 data-placeholder="Hello chat! $channel.viewers viewers right now." @input="onEditorInput"></div>
               <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
@@ -621,7 +621,7 @@ defineExpose({
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("timer.field.interval")
-                  }}</label>
+                }}</label>
                 <div class="interval-row">
                   <input v-model.number="editTimer.interval_sec" type="number" min="30" class="ep-field-input" />
                   <span class="ep-field-hint">{{ t("timer.field.interval_hint") }} ·
@@ -632,7 +632,7 @@ defineExpose({
                 <label class="ep-field-label">{{ t("timer.field.min_msgs") }}
                   <span class="ep-field-hint">{{
                     t("timer.field.min_msgs_hint")
-                    }}</span></label>
+                  }}</span></label>
                 <input v-model.number="editTimer.min_messages" type="number" min="0" class="ep-field-input" />
               </div>
             </div>
@@ -641,7 +641,7 @@ defineExpose({
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("timer.field.active_when")
-                  }}</label>
+                }}</label>
                 <select v-model="editTimer.enabled_when" class="ep-field-select">
                   <option value="always">{{ t("timer.when.always") }}</option>
                   <option value="online">{{ t("timer.when.online") }}</option>
@@ -652,7 +652,7 @@ defineExpose({
                 <label class="ep-field-label">{{ t("timer.field.game") }}
                   <span class="ep-field-hint">{{
                     t("timer.field.game_hint")
-                    }}</span></label>
+                  }}</span></label>
                 <input v-model="editTimer.required_game" class="ep-field-input" placeholder="Just Chatting" />
               </div>
             </div>
@@ -661,7 +661,7 @@ defineExpose({
               <label class="ep-field-label">{{ t("timer.field.condition") }}
                 <span class="ep-field-hint">{{
                   t("timer.field.cond_hint")
-                  }}</span></label>
+                }}</span></label>
               <input v-model="editTimer.condition" class="ep-field-input ep-mono" placeholder="$channel.viewers > 10" />
             </div>
 

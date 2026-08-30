@@ -935,6 +935,13 @@ async function saveActions() {
         <div v-else-if="!rewards.length" class="ep-empty">{{ t("cp.empty") }}</div>
 
         <template v-else>
+          <div class="ep-row-header cp-row">
+            <div></div>
+            <div>{{ t("cp.header.reward") }}</div>
+            <div>{{ t("cp.header.actions") }}</div>
+            <div></div>
+          </div>
+
           <div v-if="botRewards.length" class="cp-group">
             <div class="cp-group-header">
               <span>{{ t("cp.group.bot") }}</span>
@@ -945,20 +952,22 @@ async function saveActions() {
                 <div class="ep-row-cell-center">
                   <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
                 </div>
-                <div class="cp-main ep-row-cell-hover" @click="canEdit && openEdit(r)">
+                <div class="cp-main">
                   <div class="cp-title-row">
                     <span class="cp-title">{{ r.title }}</span>
                   </div>
                   <div class="cp-cost">
                     <span class="cp-cost-dot"></span>
                     <span>{{ r.cost }}</span>
-                    <span v-if="categoryGates[r.id]" class="ep-tag condition">
-                      {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
-                    </span>
-                    <span v-for="at in actionTypesByReward[r.id] ?? []" :key="at" class="ep-tag action">
-                      {{ actionTagLabel(at) }}
-                    </span>
                   </div>
+                </div>
+                <div class="ep-cell-tags cp-actions-cell">
+                  <span v-if="categoryGates[r.id]" class="ep-tag condition">
+                    {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
+                  </span>
+                  <span v-for="at in actionTypesByReward[r.id] ?? []" :key="at" class="ep-tag action">
+                    {{ actionTagLabel(at) }}
+                  </span>
                 </div>
                 <div class="ep-row-actions">
                   <div class="cp-action-slot">
@@ -992,18 +1001,20 @@ async function saveActions() {
                   <div class="cp-cost">
                     <span class="cp-cost-dot"></span>
                     <span>{{ r.cost }}</span>
-                    <span v-if="categoryGates[r.id]" class="ep-tag condition">
-                      {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
-                    </span>
-                    <span v-for="at in actionTypesByReward[r.id] ?? []" :key="at" class="ep-tag action">
-                      {{ actionTagLabel(at) }}
-                    </span>
                   </div>
+                </div>
+                <div class="ep-cell-tags cp-actions-cell">
+                  <span v-if="categoryGates[r.id]" class="ep-tag condition">
+                    {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
+                  </span>
+                  <span v-for="at in actionTypesByReward[r.id] ?? []" :key="at" class="ep-tag action">
+                    {{ actionTagLabel(at) }}
+                  </span>
                 </div>
                 <div class="ep-row-actions">
                   <div class="cp-action-slot">
                     <button v-if="canEdit" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn")
-                      }}</button>
+                    }}</button>
                     <button v-if="isSiteAdminMode" class="ep-btn-action copy" :disabled="copyingRewardId === r.id"
                       :title="t('cp.admin.copy_reward_hint')" @click="copyReward(r)"
                       v-html="iconSvgFor('copy')"></button>
@@ -1266,14 +1277,11 @@ async function saveActions() {
 }
 
 .cp-row {
-  display: grid;
-  grid-template-columns: 40px 1fr auto;
-  align-items: center;
-  gap: 12px;
+  grid-template-columns: 44px 1fr 220px auto;
 }
 
-.cp-row.inactive {
-  opacity: 0.55;
+.cp-actions-cell {
+  justify-content: center;
 }
 
 .cp-swatch {
@@ -1439,12 +1447,15 @@ async function saveActions() {
      edit/delete/actions/copy move into the kebab so titles keep full width */
   .cp-row {
     grid-template-columns: 32px 1fr auto;
-    gap: 10px;
   }
 
   .cp-swatch {
     width: 32px;
     height: 32px;
+  }
+
+  .cp-actions-cell {
+    display: none;
   }
 
   .cp-action-slot {

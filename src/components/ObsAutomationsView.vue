@@ -216,31 +216,39 @@ defineExpose({
         {{ t('obsauto.empty') }}
       </div>
 
-      <div v-else class="ep-row-list">
-        <div v-for="rule in rules" :key="rule.id" class="ep-row-grid obsauto-row" :class="{ inactive: !rule.enabled }">
-          <div class="ep-cell-name ep-row-cell-hover" @click="canEdit && openEdit(rule.id)">
-            <span class="obsauto-title">{{ ruleTitle(rule) }}</span>
-          </div>
-          <div class="ep-cell-tags ep-row-cell-hover" @click="canEdit && openEdit(rule.id)">
-            <span class="ep-tag action">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
-            <span class="ep-tag condition">{{ rule.target }}<template
-                v-if="rule.action === 'volume' && rule.value !== undefined"> @ {{ rule.value }}%</template></span>
-          </div>
-          <div class="ep-row-actions">
-            <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(rule.id)"
-              :class="{ disabled: !canEdit }">
-              {{ canEdit ? t('obsauto.edit_btn') : t('obsauto.view_btn') }}
-            </button>
-            <button v-if="canEdit" class="ep-btn-action del" @click.stop="deleteRule(rule.id)"
-              :disabled="saving === rule.id" v-html="iconSvgFor('x')">
-            </button>
-            <button class="ep-switch" :class="{ on: rule.enabled, off: !rule.enabled, disabled: !canEdit }"
-              @click.stop="canEdit && toggleRule(rule)"
-              :title="rule.enabled ? t('obsauto.disable_title') : t('obsauto.enable_title')"><span
-                class="ep-switch-knob"></span></button>
+      <template v-else>
+        <div class="ep-row-header obsauto-row">
+          <div>{{ t('obsauto.header.trigger') }}</div>
+          <div>{{ t('obsauto.header.action') }}</div>
+          <div></div>
+        </div>
+        <div class="ep-row-list">
+          <div v-for="rule in rules" :key="rule.id" class="ep-row-grid obsauto-row"
+            :class="{ inactive: !rule.enabled }">
+            <div class="ep-cell-name ep-row-cell-hover" @click="canEdit && openEdit(rule.id)">
+              <span class="obsauto-title">{{ ruleTitle(rule) }}</span>
+            </div>
+            <div class="ep-cell-tags ep-row-cell-hover" @click="canEdit && openEdit(rule.id)">
+              <span class="ep-tag action">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
+              <span class="ep-tag condition">{{ rule.target }}<template
+                  v-if="rule.action === 'volume' && rule.value !== undefined"> @ {{ rule.value }}%</template></span>
+            </div>
+            <div class="ep-row-actions">
+              <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(rule.id)"
+                :class="{ disabled: !canEdit }">
+                {{ canEdit ? t('obsauto.edit_btn') : t('obsauto.view_btn') }}
+              </button>
+              <button v-if="canEdit" class="ep-btn-action del" @click.stop="deleteRule(rule.id)"
+                :disabled="saving === rule.id" v-html="iconSvgFor('x')">
+              </button>
+              <button class="ep-switch" :class="{ on: rule.enabled, off: !rule.enabled, disabled: !canEdit }"
+                @click.stop="canEdit && toggleRule(rule)"
+                :title="rule.enabled ? t('obsauto.disable_title') : t('obsauto.enable_title')"><span
+                  class="ep-switch-knob"></span></button>
+            </div>
           </div>
         </div>
-      </div>
+      </template>
     </template>
   </div>
 
