@@ -413,12 +413,12 @@ function openNew() {
   editOpen.value = true;
 }
 
-function openEdit(r: Reward) {
+function openEdit(r: Reward, initialTab?: "settings" | "actions") {
   if (!r.manageable || !canEdit.value) return;
   isNew.value = false;
   editingId.value = r.id;
   deleteConfirm.value = false;
-  editTab.value = "settings";
+  editTab.value = initialTab ?? "settings";
   clearFieldErrors();
   limitsEnabled.value = !!(
     r.globalCooldown ||
@@ -952,16 +952,19 @@ async function saveActions() {
                 <div class="ep-row-cell-center">
                   <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
                 </div>
-                <div class="cp-main">
-                  <div class="cp-title-row">
-                    <span class="cp-title">{{ r.title }}</span>
+                <!-- >>> reward+price share one hover zone - one edit destination, no reason to split -->
+                <div class="cp-reward-price ep-row-cell-hover" @click="canEdit && openEdit(r)">
+                  <div class="cp-main">
+                    <div class="cp-title-row">
+                      <span class="cp-title">{{ r.title }}</span>
+                    </div>
+                  </div>
+                  <div class="cp-cost">
+                    <span class="cp-cost-dot"></span>
+                    <span>{{ r.cost }}</span>
                   </div>
                 </div>
-                <div class="cp-cost">
-                  <span class="cp-cost-dot"></span>
-                  <span>{{ r.cost }}</span>
-                </div>
-                <div class="ep-cell-tags cp-actions-cell">
+                <div class="ep-cell-tags cp-actions-cell ep-row-cell-hover" @click="canEdit && openEdit(r, 'actions')">
                   <span v-if="categoryGates[r.id]" class="ep-tag condition">
                     {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
                   </span>
@@ -1010,7 +1013,7 @@ async function saveActions() {
                   <span class="cp-cost-dot"></span>
                   <span>{{ r.cost }}</span>
                 </div>
-                <div class="ep-cell-tags cp-actions-cell">
+                <div class="ep-cell-tags cp-actions-cell ep-row-cell-hover" @click="canEdit && openActions(r)">
                   <span v-if="categoryGates[r.id]" class="ep-tag condition">
                     {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
                   </span>
@@ -1287,8 +1290,11 @@ async function saveActions() {
   grid-template-columns: 44px 1fr 90px 220px auto;
 }
 
+/* >>> left-aligned, flush with the header label above it (was centered,
+   which drifted it away from "Effect") */
 .cp-actions-cell {
-  justify-content: center;
+  justify-content: flex-start;
+  padding-left: 0;
 }
 
 .cp-swatch {
@@ -1298,16 +1304,28 @@ async function saveActions() {
   flex-shrink: 0;
 }
 
+/* >>> spans the reward+price tracks (2/4) - one hover zone, one edit
+   destination. Internal split mirrors those tracks' widths (1fr/90px) so
+   "Reward"/"Price" header labels still land over the right half each. */
+.cp-reward-price {
+  grid-column: 2 / 4;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .cp-main {
   display: flex;
   align-items: center;
   min-width: 0;
+  flex: 1;
 }
 
 .cp-title-row {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .cp-title {
@@ -1316,6 +1334,7 @@ async function saveActions() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 
 .cp-cost {
@@ -1324,6 +1343,7 @@ async function saveActions() {
   gap: 6px;
   font-size: 13px;
   color: #999;
+  flex: 0 0 80px;
 }
 
 .cp-cost-dot {
@@ -1460,6 +1480,12 @@ async function saveActions() {
   .cp-swatch {
     width: 32px;
     height: 32px;
+  }
+
+  /* >>> only 3 tracks now - stop spanning into the (removed) price track,
+     which on this template would overlap the actions column instead */
+  .cp-reward-price {
+    grid-column: 2;
   }
 
   .cp-cost {

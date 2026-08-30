@@ -217,34 +217,35 @@ defineExpose({
       </div>
 
       <template v-else>
-        <div class="ep-row-header obsauto-row">
-          <div>{{ t('obsauto.header.trigger') }}</div>
-          <div>{{ t('obsauto.header.action') }}</div>
-          <div></div>
-        </div>
-        <div class="ep-row-list">
-          <div v-for="rule in rules" :key="rule.id" class="ep-row-grid obsauto-row"
-            :class="{ inactive: !rule.enabled }">
-            <div class="ep-cell-name ep-row-cell-hover" @click="canEdit && openEdit(rule.id)">
-              <span class="obsauto-title">{{ ruleTitle(rule) }}</span>
-            </div>
-            <div class="ep-cell-tags ep-row-cell-hover" @click="canEdit && openEdit(rule.id)">
-              <span class="ep-tag action">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
-              <span class="ep-tag condition">{{ rule.target }}<template
-                  v-if="rule.action === 'volume' && rule.value !== undefined"> @ {{ rule.value }}%</template></span>
-            </div>
-            <div class="ep-row-actions">
-              <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(rule.id)"
-                :class="{ disabled: !canEdit }">
-                {{ canEdit ? t('obsauto.edit_btn') : t('obsauto.view_btn') }}
-              </button>
-              <button v-if="canEdit" class="ep-btn-action del" @click.stop="deleteRule(rule.id)"
-                :disabled="saving === rule.id" v-html="iconSvgFor('x')">
-              </button>
-              <button class="ep-switch" :class="{ on: rule.enabled, off: !rule.enabled, disabled: !canEdit }"
-                @click.stop="canEdit && toggleRule(rule)"
-                :title="rule.enabled ? t('obsauto.disable_title') : t('obsauto.enable_title')"><span
-                  class="ep-switch-knob"></span></button>
+        <div class="obsauto-table">
+          <div class="ep-row-header obsauto-row">
+            <div>{{ t('obsauto.header.trigger') }}</div>
+            <div>{{ t('obsauto.header.action') }}</div>
+            <div></div>
+          </div>
+          <div class="ep-row-list">
+            <div v-for="rule in rules" :key="rule.id" class="ep-row-grid obsauto-row"
+              :class="{ inactive: !rule.enabled }">
+              <!-- >>> no per-column destination here (one edit panel only) - name+action share one hover zone -->
+              <div class="obsauto-content ep-row-cell-hover" @click="canEdit && openEdit(rule.id)">
+                <span class="obsauto-title">{{ ruleTitle(rule) }}</span>
+                <span class="ep-tag action">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
+                <span class="ep-tag condition">{{ rule.target }}<template
+                    v-if="rule.action === 'volume' && rule.value !== undefined"> @ {{ rule.value }}%</template></span>
+              </div>
+              <div class="ep-row-actions">
+                <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(rule.id)"
+                  :class="{ disabled: !canEdit }">
+                  {{ canEdit ? t('obsauto.edit_btn') : t('obsauto.view_btn') }}
+                </button>
+                <button v-if="canEdit" class="ep-btn-action del" @click.stop="deleteRule(rule.id)"
+                  :disabled="saving === rule.id" v-html="iconSvgFor('x')">
+                </button>
+                <button class="ep-switch" :class="{ on: rule.enabled, off: !rule.enabled, disabled: !canEdit }"
+                  @click.stop="canEdit && toggleRule(rule)"
+                  :title="rule.enabled ? t('obsauto.disable_title') : t('obsauto.enable_title')"><span
+                    class="ep-switch-knob"></span></button>
+              </div>
             </div>
           </div>
         </div>
@@ -265,8 +266,29 @@ defineExpose({
   flex-wrap: wrap;
 }
 
+.obsauto-table {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.obsauto-table::-webkit-scrollbar {
+  display: none;
+}
+
 .obsauto-row {
   grid-template-columns: 1fr 220px auto;
+}
+
+/* >>> spans the name+action tracks - one hover/click zone, only one edit destination */
+.obsauto-content {
+  grid-column: 1 / 3;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-left: 10px;
 }
 
 .obsauto-title {

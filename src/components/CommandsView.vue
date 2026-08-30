@@ -1394,18 +1394,16 @@ onUnmounted(() => {
           <div class="rows">
             <template v-for="cmd in filteredCustom()" :key="cmd.name">
               <div class="ep-row-grid cmd-custom-row" :class="{ expanded: expandedCustom.has(cmd.name) }">
-                <div class="ep-cell-name" :class="{ 'ep-row-cell-hover': customHasArgs(cmd) }"
-                  @click="customHasArgs(cmd) && toggleExpandCustom(cmd.name)">
+                <!-- >>> name+desc always open the same panel tab - one hover zone, not two -->
+                <div class="ep-cell-name-desc ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
                   <span class="row-chevron-cell">
                     <button v-if="customHasArgs(cmd)" class="ep-row-expander"
                       :class="{ open: expandedCustom.has(cmd.name) }" :title="t('cmd.show_arg_variants')"
-                      v-html="iconSvgFor('chevron-down')">
+                      @click.stop="toggleExpandCustom(cmd.name)" v-html="iconSvgFor('chevron-down')">
                     </button>
                   </span>
                   <span class="cmd-cat-dot" style="background: #9d6cff"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ cmd.name }}</span>
-                </div>
-                <div class="ep-cell-text ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
                   <span class="cmd-desc-text">{{ cmd.description }}</span>
                 </div>
                 <div class="ep-cell-tags ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false, 'args')">
@@ -1527,9 +1525,11 @@ onUnmounted(() => {
             <div class="rows">
               <div v-for="b in obsSceneBindings" :key="'sc' + b.command" class="ep-row-grid cmd-obs-row">
                 <div class="row-chevron-cell"></div>
-                <div class="ep-cell-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
-                    class="cmd-name-text">{{ prefix }}{{ b.command }}</span></div>
-                <div class="ep-cell-text"><span class="cmd-desc-text">switch scene · {{ b.scene }}</span></div>
+                <div class="ep-cell-name-desc ep-row-cell-hover" @click="openObsEdit({ kind: 'scene', command: b.command })">
+                  <span class="cmd-cat-dot" style="background: #e5c07b"></span>
+                  <span class="cmd-name-text">{{ prefix }}{{ b.command }}</span>
+                  <span class="cmd-desc-text">switch scene · {{ b.scene }}</span>
+                </div>
                 <div class="ep-cell-tags ep-row-cell-hover" @click="openObsEdit({ kind: 'scene', command: b.command })">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ b.cooldown ?? 0 }}s</span>
                   <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ b.userCooldown ?? 0 }}s</span>
@@ -1563,10 +1563,10 @@ onUnmounted(() => {
 
               <div v-for="b in obsSourceBindings" :key="'so' + b.command" class="ep-row-grid cmd-obs-row">
                 <div class="row-chevron-cell"></div>
-                <div class="ep-cell-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
-                    class="cmd-name-text">{{
-                      prefix }}{{ b.command }}</span></div>
-                <div class="ep-cell-text"><span class="cmd-desc-text">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} ·
+                <div class="ep-cell-name-desc ep-row-cell-hover" @click="openObsEdit({ kind: 'source', command: b.command })">
+                  <span class="cmd-cat-dot" style="background: #e5c07b"></span>
+                  <span class="cmd-name-text">{{ prefix }}{{ b.command }}</span>
+                  <span class="cmd-desc-text">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} ·
                     {{ b.source }}<template v-if="b.action === 'volume' && b.value !== undefined"> @ {{ b.value
                       }}%</template></span>
                 </div>
@@ -1603,11 +1603,13 @@ onUnmounted(() => {
 
               <div v-for="(entry, action) in obsArgCommands" :key="'arg' + action" class="ep-row-grid cmd-obs-row">
                 <div class="row-chevron-cell"></div>
-                <div class="ep-cell-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
-                    class="cmd-name-text">{{
-                      prefix }}{{ obsArgCommand(entry) }}</span></div>
-                <div class="ep-cell-text"><span class="cmd-desc-text">{{ OBS_ACTION_LABEL[action] ?? action }} ·
-                    <span class="obs-arg-usage-inline">{{ obsArgUsage(action) }}</span></span></div>
+                <div class="ep-cell-name-desc ep-row-cell-hover"
+                  @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">
+                  <span class="cmd-cat-dot" style="background: #e5c07b"></span>
+                  <span class="cmd-name-text">{{ prefix }}{{ obsArgCommand(entry) }}</span>
+                  <span class="cmd-desc-text">{{ OBS_ACTION_LABEL[action] ?? action }} ·
+                    <span class="obs-arg-usage-inline">{{ obsArgUsage(action) }}</span></span>
+                </div>
                 <div class="ep-cell-tags ep-row-cell-hover"
                   @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ typeof entry === 'string' ? 0 : ((entry as
@@ -1919,6 +1921,9 @@ onUnmounted(() => {
 .arg-variant-row {
   display: grid;
   grid-template-columns: 28px 50px 140px 1fr 110px 90px 90px 110px;
+  /* >>> matches .ep-row-grid's column-gap - without it, columns sit flush
+     and drift further left of the parent row's columns with each track */
+  column-gap: 10px;
   padding: 6px 16px 6px 8px;
   background: #222226;
   border-top: 1px solid #1e1e22;
@@ -2025,6 +2030,29 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+/* >>> Custom/OBS tabs: name+desc share one hover zone (both open the same
+   panel tab, unlike Default which never merges its columns) - spans the
+   name+desc tracks so the header's separate Name/Description labels still
+   line up roughly over their half of this cell */
+.ep-cell-name-desc {
+  grid-column: 1 / 3;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  gap: 7px;
+  padding-left: 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #e0e0e0;
+}
+/* >>> OBS rows keep the chevron as its own (always-empty) column, so
+   name+desc there are tracks 2+3, not 1+2, and don't need the left inset
+   (the chevron column already provides it) */
+.cmd-obs-row .ep-cell-name-desc {
+  grid-column: 2 / 4;
+  padding-left: 0;
+}
+
 .cmd-renamed-hint {
   color: #9d6cff;
   font-size: 11px;
@@ -2103,12 +2131,13 @@ onUnmounted(() => {
 
 .cmd-desc-text {
   font-size: 11px;
+  font-weight: 400;
   color: #8d8d8d;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-  flex-shrink: 1;
+  flex: 1;
 }
 
 .ep-tag.keyword,
@@ -2373,7 +2402,7 @@ onUnmounted(() => {
   }
 
   .ep-row-grid.cmd-default-row>.ep-cell-name,
-  .ep-row-grid.cmd-custom-row>.ep-cell-name {
+  .ep-row-grid.cmd-custom-row>.ep-cell-name-desc {
     flex: 1;
     min-width: 0;
   }
@@ -2385,16 +2414,19 @@ onUnmounted(() => {
     min-width: 0;
   }
 
+  /* >>> default-row: name(1) desc(2) tags(3) cooldowns(4) access(5) edit(6) switch(7) */
   .ep-row-grid.cmd-default-row>.ep-cell-text,
-  .ep-row-grid.cmd-custom-row>.ep-cell-text,
+  .ep-row-grid.cmd-default-row>*:nth-child(3),
+  .ep-row-grid.cmd-default-row>*:nth-child(4),
   .ep-row-grid.cmd-default-row>*:nth-child(5),
-  .ep-row-grid.cmd-custom-row>*:nth-child(5),
   .ep-row-grid.cmd-default-row>*:nth-child(6),
-  .ep-row-grid.cmd-custom-row>*:nth-child(6),
   .ep-row-grid.cmd-default-row>*:nth-child(7),
-  .ep-row-grid.cmd-custom-row>*:nth-child(7),
-  .ep-row-grid.cmd-default-row>*:nth-child(8),
-  .ep-row-grid.cmd-custom-row>*:nth-child(8) {
+  /* >>> custom-row: name+desc(1, merged) tags(2) cooldowns(3) access(4) actions(5) switch(6) */
+  .ep-row-grid.cmd-custom-row>*:nth-child(2),
+  .ep-row-grid.cmd-custom-row>*:nth-child(3),
+  .ep-row-grid.cmd-custom-row>*:nth-child(4),
+  .ep-row-grid.cmd-custom-row>*:nth-child(5),
+  .ep-row-grid.cmd-custom-row>*:nth-child(6) {
     display: none;
   }
 

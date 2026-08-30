@@ -958,71 +958,74 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <div v-if="!blockedTerms.length && !modGroups.blocked.length" class="ep-empty">{{ botPresent ?
         t("mod.empty.blocked") : t("mod.no_bot") }}</div>
       <template v-else>
-        <div class="ep-row-header mod-item-row">
-          <div>{{ t("mod.header.term") }}</div>
-          <div>{{ t("mod.header.effect") }}</div>
-          <div>{{ t("cmd.sort.actions") }}</div>
-        </div>
-        <template v-for="section in blockedSections" :key="section.group?.id ?? 'ungrouped'">
-          <div class="mod-section" @dragover.prevent
-            @drop="assignGroup('blocked', section.group ? section.group.id : null)">
-            <div v-if="section.group" class="mod-group-header">
-              <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
-                @click="toggleGroupOpen(section.group.id)"></span>
-              <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{ t("mod.group.reason_prefix")
-              }}{{ section.group.name }}</span>
-              <span class="mod-group-count">{{ section.items.length }}</span>
-              <div v-if="canManage" class="ep-row-actions">
-                <button class="ep-btn-action share" :title="t('mod.share')"
-                  @click.stop="openShareGroup('blocked', section.group.id, section.group.name)"
-                  v-html="iconSvgFor('corner-up-right')"></button>
-                <button class="ep-btn-action del" @click.stop="deleteGroup('blocked', section.group.id)"
-                  v-html="iconSvgFor('trash')"></button>
-                <button class="ep-switch" :class="{ on: groupAllActive('blocked', section.group.id) }"
-                  :title="t('mod.group.toggle_all')" @click.stop="toggleGroupActive('blocked', section.group.id)">
-                  <span class="ep-switch-knob"></span>
-                </button>
-              </div>
-            </div>
-            <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
-              :class="{ 'mod-group-members': section.group }">
-              <div v-for="term in section.items" :key="term.id" class="ep-row-grid mod-item-row"
-                :class="{ inactive: !term.is_active }" draggable="true" @dragstart="onDragStart(term.id)">
-                <div class="mod-item-main ep-row-cell-hover" @click="canManage && openEditBlocked(term)">
-                  <div class="mod-item-title">
-                    <span v-if="term.is_regex" class="ep-tag keyword">{{ t("mod.badge.regex") }}</span>
-                    <span v-if="term.action === 'automod' && !term.twitch_term_id" class="ep-tag arg"
-                      :title="t('mod.badge.automod_pending_hint')">
-                      {{ t("mod.badge.automod_pending") }}
-                    </span>
-                    <span class="item-term">{{ term.term }}</span>
-                  </div>
-                </div>
-                <div class="ep-cell-tags ep-row-cell-hover" @click="canManage && openEditBlocked(term)">
-                  <span class="ep-tag" :style="actionPillStyle(term.action)">{{
-                    actionLabel(term.action) }}</span>
-                  <span v-if="term.action !== 'delete' && term.action !== 'automod'" class="ep-tag cooldown">{{
-                    fmtDur(term.duration) }}</span>
-                </div>
-                <div class="ep-row-actions">
-                  <button v-if="canManage && term.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
-                    @click.stop="removeFromGroup('blocked', term.id)" v-html="iconSvgFor('corner-up-left')"></button>
-                  <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
-                  }}</button>
-                  <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
-                    @click.stop="openShare('blocked', term.id, term.term)"
-                    v-html="iconSvgFor('corner-up-right')"></button>
-                  <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('blocked', term.id)"
-                    v-html="iconSvgFor('trash')"></button>
-                  <button class="ep-switch" :class="{ on: term.is_active, off: !term.is_active, disabled: !canManage }"
-                    @click.stop="toggleActive('blocked', term)" :title="term.is_active ? 'Disable' : 'Enable'"><span
-                      class="ep-switch-knob"></span></button>
-                </div>
-                <RowKebabMenu :items="blockedKebabItems(term)" @click.stop />
-              </div>
-            </div>
+        <div class="mod-table">
+          <div class="ep-row-header mod-item-row">
+            <div>{{ t("mod.header.term") }}</div>
+            <div>{{ t("mod.header.effect") }}</div>
+            <div>{{ t("cmd.sort.actions") }}</div>
           </div>
-        </template>
+          <template v-for="section in blockedSections" :key="section.group?.id ?? 'ungrouped'">
+            <div class="mod-section" @dragover.prevent
+              @drop="assignGroup('blocked', section.group ? section.group.id : null)">
+              <div v-if="section.group" class="mod-group-header">
+                <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
+                  @click="toggleGroupOpen(section.group.id)"></span>
+                <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{
+                  t("mod.group.reason_prefix")
+                }}{{ section.group.name }}</span>
+                <span class="mod-group-count">{{ section.items.length }}</span>
+                <div v-if="canManage" class="ep-row-actions">
+                  <button class="ep-btn-action share" :title="t('mod.share')"
+                    @click.stop="openShareGroup('blocked', section.group.id, section.group.name)"
+                    v-html="iconSvgFor('corner-up-right')"></button>
+                  <button class="ep-btn-action del" @click.stop="deleteGroup('blocked', section.group.id)"
+                    v-html="iconSvgFor('trash')"></button>
+                  <button class="ep-switch" :class="{ on: groupAllActive('blocked', section.group.id) }"
+                    :title="t('mod.group.toggle_all')" @click.stop="toggleGroupActive('blocked', section.group.id)">
+                    <span class="ep-switch-knob"></span>
+                  </button>
+                </div>
+              </div>
+              <div v-if="!section.group || openGroups.has(section.group.id)" class="mod-group-rows"
+                :class="{ 'mod-group-members': section.group }">
+                <div v-for="term in section.items" :key="term.id" class="ep-row-grid mod-item-row"
+                  :class="{ inactive: !term.is_active }" draggable="true" @dragstart="onDragStart(term.id)">
+                  <div class="mod-item-main ep-row-cell-hover" @click="canManage && openEditBlocked(term)">
+                    <div class="mod-item-title">
+                      <span v-if="term.is_regex" class="ep-tag keyword">{{ t("mod.badge.regex") }}</span>
+                      <span v-if="term.action === 'automod' && !term.twitch_term_id" class="ep-tag arg"
+                        :title="t('mod.badge.automod_pending_hint')">
+                        {{ t("mod.badge.automod_pending") }}
+                      </span>
+                      <span class="item-term">{{ term.term }}</span>
+                    </div>
+                  </div>
+                  <div class="ep-cell-tags mod-effect-cell ep-row-cell-hover" @click="canManage && openEditBlocked(term)">
+                    <span class="ep-tag" :style="actionPillStyle(term.action)">{{
+                      actionLabel(term.action) }}</span>
+                    <span v-if="term.action !== 'delete' && term.action !== 'automod'" class="ep-tag cooldown">{{
+                      fmtDur(term.duration) }}</span>
+                  </div>
+                  <div class="ep-row-actions">
+                    <button v-if="canManage && term.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
+                      @click.stop="removeFromGroup('blocked', term.id)" v-html="iconSvgFor('corner-up-left')"></button>
+                    <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
+                    }}</button>
+                    <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
+                      @click.stop="openShare('blocked', term.id, term.term)"
+                      v-html="iconSvgFor('corner-up-right')"></button>
+                    <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('blocked', term.id)"
+                      v-html="iconSvgFor('trash')"></button>
+                    <button class="ep-switch" :class="{ on: term.is_active, off: !term.is_active, disabled: !canManage }"
+                      @click.stop="toggleActive('blocked', term)" :title="term.is_active ? 'Disable' : 'Enable'"><span
+                        class="ep-switch-knob"></span></button>
+                  </div>
+                  <RowKebabMenu :items="blockedKebabItems(term)" @click.stop />
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
       </template>
     </template>
     <!-- ^^^ blocked terms list ^^^ -->
@@ -1032,66 +1035,69 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <div v-if="!spamFilters.length && !modGroups.spam.length" class="ep-empty">{{ botPresent ? t("mod.empty.spam") :
         t("mod.no_bot") }}</div>
       <template v-else>
-        <div class="ep-row-header mod-item-row">
-          <div>{{ t("mod.header.filter") }}</div>
-          <div>{{ t("mod.header.effect") }}</div>
-          <div>{{ t("cmd.sort.actions") }}</div>
-        </div>
-        <template v-for="section in spamSections" :key="section.group?.id ?? 'ungrouped'">
-          <div class="mod-section" @dragover.prevent
-            @drop="assignGroup('spam', section.group ? section.group.id : null)">
-            <div v-if="section.group" class="mod-group-header">
-              <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
-                @click="toggleGroupOpen(section.group.id)"></span>
-              <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{ t("mod.group.reason_prefix")
-              }}{{ section.group.name }}</span>
-              <span class="mod-group-count">{{ section.items.length }}</span>
-              <div v-if="canManage" class="ep-row-actions">
-                <button class="ep-btn-action share" :title="t('mod.share')"
-                  @click.stop="openShareGroup('spam', section.group.id, section.group.name)"
-                  v-html="iconSvgFor('corner-up-right')"></button>
-                <button class="ep-btn-action del" @click.stop="deleteGroup('spam', section.group.id)"
-                  v-html="iconSvgFor('trash')"></button>
-                <button class="ep-switch" :class="{ on: groupAllActive('spam', section.group.id) }"
-                  :title="t('mod.group.toggle_all')" @click.stop="toggleGroupActive('spam', section.group.id)">
-                  <span class="ep-switch-knob"></span>
-                </button>
-              </div>
-            </div>
-            <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
-              :class="{ 'mod-group-members': section.group }">
-              <div v-for="f in section.items" :key="f.id" class="ep-row-grid mod-item-row"
-                :class="{ inactive: !f.is_active }" draggable="true" @dragstart="onDragStart(f.id)">
-                <div class="mod-item-main ep-row-cell-hover" @click="canManage && openEditSpam(f)">
-                  <div class="spam-label">
-                    <span class="spam-name">{{ spamLabel(f).name }}</span>
-                    <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
-                  </div>
-                </div>
-                <div class="ep-cell-tags ep-row-cell-hover" @click="canManage && openEditSpam(f)">
-                  <span class="ep-tag" :style="actionPillStyle(f.action)">{{ actionLabel(f.action)
-                  }}</span>
-                  <span v-if="f.action !== 'delete'" class="ep-tag cooldown">{{ fmtDur(f.duration) }}</span>
-                </div>
-                <div class="ep-row-actions">
-                  <button v-if="canManage && f.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
-                    @click.stop="removeFromGroup('spam', f.id)" v-html="iconSvgFor('corner-up-left')"></button>
-                  <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit")
-                  }}</button>
-                  <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
-                    @click.stop="openShare('spam', f.id, spamLabel(f).name)"
-                    v-html="iconSvgFor('corner-up-right')"></button>
-                  <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)"
-                    v-html="iconSvgFor('trash')"></button>
-                  <button class="ep-switch" :class="{ on: f.is_active, off: !f.is_active, disabled: !canManage }"
-                    @click.stop="toggleActive('spam', f)" :title="f.is_active ? 'Disable' : 'Enable'"><span
-                      class="ep-switch-knob"></span></button>
-                </div>
-                <RowKebabMenu :items="spamKebabItems(f)" @click.stop />
-              </div>
-            </div>
+        <div class="mod-table">
+          <div class="ep-row-header mod-item-row">
+            <div>{{ t("mod.header.filter") }}</div>
+            <div>{{ t("mod.header.effect") }}</div>
+            <div>{{ t("cmd.sort.actions") }}</div>
           </div>
-        </template>
+          <template v-for="section in spamSections" :key="section.group?.id ?? 'ungrouped'">
+            <div class="mod-section" @dragover.prevent
+              @drop="assignGroup('spam', section.group ? section.group.id : null)">
+              <div v-if="section.group" class="mod-group-header">
+                <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
+                  @click="toggleGroupOpen(section.group.id)"></span>
+                <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{
+                  t("mod.group.reason_prefix")
+                }}{{ section.group.name }}</span>
+                <span class="mod-group-count">{{ section.items.length }}</span>
+                <div v-if="canManage" class="ep-row-actions">
+                  <button class="ep-btn-action share" :title="t('mod.share')"
+                    @click.stop="openShareGroup('spam', section.group.id, section.group.name)"
+                    v-html="iconSvgFor('corner-up-right')"></button>
+                  <button class="ep-btn-action del" @click.stop="deleteGroup('spam', section.group.id)"
+                    v-html="iconSvgFor('trash')"></button>
+                  <button class="ep-switch" :class="{ on: groupAllActive('spam', section.group.id) }"
+                    :title="t('mod.group.toggle_all')" @click.stop="toggleGroupActive('spam', section.group.id)">
+                    <span class="ep-switch-knob"></span>
+                  </button>
+                </div>
+              </div>
+              <div v-if="!section.group || openGroups.has(section.group.id)" class="mod-group-rows"
+                :class="{ 'mod-group-members': section.group }">
+                <div v-for="f in section.items" :key="f.id" class="ep-row-grid mod-item-row"
+                  :class="{ inactive: !f.is_active }" draggable="true" @dragstart="onDragStart(f.id)">
+                  <div class="mod-item-main ep-row-cell-hover" @click="canManage && openEditSpam(f)">
+                    <div class="spam-label">
+                      <span class="spam-name">{{ spamLabel(f).name }}</span>
+                      <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
+                    </div>
+                  </div>
+                  <div class="ep-cell-tags mod-effect-cell ep-row-cell-hover" @click="canManage && openEditSpam(f)">
+                    <span class="ep-tag" :style="actionPillStyle(f.action)">{{ actionLabel(f.action)
+                    }}</span>
+                    <span v-if="f.action !== 'delete'" class="ep-tag cooldown">{{ fmtDur(f.duration) }}</span>
+                  </div>
+                  <div class="ep-row-actions">
+                    <button v-if="canManage && f.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
+                      @click.stop="removeFromGroup('spam', f.id)" v-html="iconSvgFor('corner-up-left')"></button>
+                    <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit")
+                    }}</button>
+                    <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
+                      @click.stop="openShare('spam', f.id, spamLabel(f).name)"
+                      v-html="iconSvgFor('corner-up-right')"></button>
+                    <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)"
+                      v-html="iconSvgFor('trash')"></button>
+                    <button class="ep-switch" :class="{ on: f.is_active, off: !f.is_active, disabled: !canManage }"
+                      @click.stop="toggleActive('spam', f)" :title="f.is_active ? 'Disable' : 'Enable'"><span
+                        class="ep-switch-knob"></span></button>
+                  </div>
+                  <RowKebabMenu :items="spamKebabItems(f)" @click.stop />
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
       </template>
     </template>
     <!-- ^^^ spam filters list ^^^ -->
@@ -1101,6 +1107,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <div v-if="!nukes.length && !modGroups.nukes.length" class="ep-empty">{{ botPresent ? t("mod.empty.nukes") :
         t("mod.no_bot") }}</div>
       <template v-else>
+        <div class="mod-table">
         <template v-for="section in nukeSections" :key="section.group?.id ?? 'ungrouped'">
           <div class="mod-section" @dragover.prevent
             @drop="assignGroup('nukes', section.group ? section.group.id : null)">
@@ -1118,7 +1125,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   v-html="iconSvgFor('trash')"></button>
               </div>
             </div>
-            <div v-if="!section.group || openGroups.has(section.group.id)" class="ep-row-list"
+            <div v-if="!section.group || openGroups.has(section.group.id)" class="mod-group-rows"
               :class="{ 'mod-group-members': section.group }">
               <div v-for="n in section.items" :key="n.id" class="ep-list-row nuke-item-row" draggable="true"
                 @dragstart="onDragStart(n.id)">
@@ -1183,6 +1190,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
           </div>
         </template>
+        </div>
       </template>
     </template>
     <!-- ^^^ nukes list ^^^ -->
@@ -1526,9 +1534,37 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 }
 
 /* >>> groups */
+/* >>> single wrapper for header+all sections - .ep-view puts a 16px gap
+   between its own direct children, which was splitting the header away
+   from the rows and each group away from the next. This is now the ONE
+   .ep-view child, so it owns the scroll/flex role .ep-row-list used to. */
+.mod-table {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.mod-table::-webkit-scrollbar {
+  display: none;
+}
+
 .mod-section {
   display: flex;
   flex-direction: column;
+}
+
+/* >>> plain stacking wrapper for a group's rows - NOT .ep-row-list, which
+   carries flex:1/overflow-y:auto meant for exactly one page-level list;
+   nesting that per-group collapsed each group's rows unpredictably */
+.mod-group-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.mod-effect-cell {
+  justify-content: center;
 }
 
 .mod-group-header {
