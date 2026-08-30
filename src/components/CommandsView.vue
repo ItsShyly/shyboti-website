@@ -411,41 +411,6 @@ function onObsSaved() {
   fetchObsCommands();
 }
 
-// >>> obs inline cooldown editing
-const obsCdTimers = ref<Record<string, ReturnType<typeof setTimeout>>>({});
-
-function onObsCooldownInput(
-  b: ObsSceneBind | ObsSourceBind,
-  field: "cooldown" | "userCooldown",
-  raw: string,
-) {
-  const val = parseInt(raw);
-  if (isNaN(val) || val < 0) return;
-  (b as any)[field] = val;
-  const key = `obs_${b.command}_${field}`;
-  clearTimeout(obsCdTimers.value[key]);
-  obsCdTimers.value[key] = setTimeout(() => saveObsBindings(), 600);
-}
-
-function onObsArgCooldownInput(
-  action: string,
-  field: "cooldown" | "userCooldown",
-  raw: string,
-) {
-  const val = parseInt(raw);
-  if (isNaN(val) || val < 0) return;
-  const entry = obsArgCommands.value[action];
-  if (!entry) return;
-  if (typeof entry === "string") {
-    obsArgCommands.value[action] = { command: entry, [field]: val };
-  } else {
-    (entry as any)[field] = val;
-  }
-  const key = `obs_arg_${action}_${field}`;
-  clearTimeout(obsCdTimers.value[key]);
-  obsCdTimers.value[key] = setTimeout(() => saveObsBindings(), 600);
-}
-
 async function saveObsBindings() {
   if (!session.value) return;
   await fetch(`${API}/obs/${session.value.channel}/bindings`, {
@@ -535,6 +500,19 @@ function getCustomArgVariants(
   }
   if (/\{args\}|\$args\b/i.test(src)) return [{ usage: "<args>", desc: "" }];
   return [];
+}
+
+// >>> excludes $if/$foreach/etc (Control Flow) - only real variable/data tokens
+const SCRIPT_CONTROL_FLOW = new Set(["if", "else", "foreach", "repeat", "define", "index"]);
+function scriptVarsUsed(cmd: CustomCommand): string[] {
+  const src = `${cmd.response || ""} ${cmd.rule || ""} ${cmd.text1 || ""} ${cmd.text2 || ""}`;
+  const found = new Set<string>();
+  for (const m of src.matchAll(/\$([a-zA-Z_][a-zA-Z0-9_]*)/g)) {
+    const word = m[1]!.toLowerCase();
+    if (SCRIPT_CONTROL_FLOW.has(word)) continue;
+    found.add("$" + word);
+  }
+  return [...found];
 }
 
 const sortField = ref<"name" | "cooldown" | "isActive">("name");
@@ -1302,7 +1280,7 @@ onUnmounted(() => {
                 <div class="ep-cell-tags ep-row-cell-hover"
                   @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true, 'behavior')">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ cmd.cooldown }}s</span>
-                  <span class="ep-tag cooldown">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
+                  <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
                 </div>
                 <div class="ep-row-cell-center">
                   <button class="ep-btn-action access"
@@ -1442,10 +1420,14 @@ onUnmounted(() => {
                     +{{ keywordsByCommand[cmd.name]!.length - 3 }}
                   </span>
                   <span v-for="fl in cmd.flags ?? []" :key="fl" class="ep-tag condition">{{ fl }}</span>
+                  <span v-for="vr in scriptVarsUsed(cmd).slice(0, 4)" :key="vr" class="ep-tag variable">{{ vr }}</span>
+                  <span v-if="scriptVarsUsed(cmd).length > 4" class="ep-tag variable">
+                    +{{ scriptVarsUsed(cmd).length - 4 }}
+                  </span>
                 </div>
                 <div class="ep-cell-tags ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false, 'behavior')">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ cmd.cooldown }}s</span>
-                  <span class="ep-tag cooldown">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
+                  <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
                 </div>
                 <div class="ep-row-cell-center">
                   <button class="ep-btn-action access"
@@ -1547,18 +1529,10 @@ onUnmounted(() => {
                 <div class="row-chevron-cell"></div>
                 <div class="ep-cell-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
                     class="cmd-name-text">{{ prefix }}{{ b.command }}</span></div>
-                <div class="ep-cell-text">switch scene · {{ b.scene }}</div>
-                <div class="ep-cell-tags">
-                  <div class="cd-input-wrap">
-                    <input type="number" min="0" class="cd-input" :value="b.cooldown ?? 0"
-                      @change="onObsCooldownInput(b, 'cooldown', ($event.target as HTMLInputElement).value)" />
-                    <span class="cd-unit">s</span>
-                  </div>
-                  <div class="cd-input-wrap user">
-                    <input type="number" min="0" class="cd-input" :value="b.userCooldown ?? 0"
-                      @change="onObsCooldownInput(b, 'userCooldown', ($event.target as HTMLInputElement).value)" />
-                    <span class="cd-unit">s</span>
-                  </div>
+                <div class="ep-cell-text"><span class="cmd-desc-text">switch scene · {{ b.scene }}</span></div>
+                <div class="ep-cell-tags ep-row-cell-hover" @click="openObsEdit({ kind: 'scene', command: b.command })">
+                  <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ b.cooldown ?? 0 }}s</span>
+                  <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ b.userCooldown ?? 0 }}s</span>
                 </div>
                 <div class="ep-row-cell-center">
                   <button class="ep-btn-action access"
@@ -1592,20 +1566,13 @@ onUnmounted(() => {
                 <div class="ep-cell-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
                     class="cmd-name-text">{{
                       prefix }}{{ b.command }}</span></div>
-                <div class="ep-cell-text">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} · {{ b.source }}<template
-                    v-if="b.action === 'volume' && b.value !== undefined"> @ {{ b.value }}%</template>
+                <div class="ep-cell-text"><span class="cmd-desc-text">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} ·
+                    {{ b.source }}<template v-if="b.action === 'volume' && b.value !== undefined"> @ {{ b.value
+                      }}%</template></span>
                 </div>
-                <div class="ep-cell-tags">
-                  <div class="cd-input-wrap">
-                    <input type="number" min="0" class="cd-input" :value="b.cooldown ?? 0"
-                      @change="onObsCooldownInput(b, 'cooldown', ($event.target as HTMLInputElement).value)" />
-                    <span class="cd-unit">s</span>
-                  </div>
-                  <div class="cd-input-wrap user">
-                    <input type="number" min="0" class="cd-input" :value="b.userCooldown ?? 0"
-                      @change="onObsCooldownInput(b, 'userCooldown', ($event.target as HTMLInputElement).value)" />
-                    <span class="cd-unit">s</span>
-                  </div>
+                <div class="ep-cell-tags ep-row-cell-hover" @click="openObsEdit({ kind: 'source', command: b.command })">
+                  <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ b.cooldown ?? 0 }}s</span>
+                  <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ b.userCooldown ?? 0 }}s</span>
                 </div>
                 <div class="ep-row-cell-center">
                   <button class="ep-btn-action access"
@@ -1639,22 +1606,14 @@ onUnmounted(() => {
                 <div class="ep-cell-name"><span class="cmd-cat-dot" style="background: #e5c07b"></span><span
                     class="cmd-name-text">{{
                       prefix }}{{ obsArgCommand(entry) }}</span></div>
-                <div class="ep-cell-text">{{ OBS_ACTION_LABEL[action] ?? action }} · <span
-                    class="obs-arg-usage-inline">{{
-                      obsArgUsage(action) }}</span></div>
-                <div class="ep-cell-tags">
-                  <div class="cd-input-wrap">
-                    <input type="number" min="0" class="cd-input"
-                      :value="typeof entry === 'string' ? 0 : ((entry as any).cooldown ?? 0)"
-                      @change="onObsArgCooldownInput(action, 'cooldown', ($event.target as HTMLInputElement).value)" />
-                    <span class="cd-unit">s</span>
-                  </div>
-                  <div class="cd-input-wrap user">
-                    <input type="number" min="0" class="cd-input"
-                      :value="typeof entry === 'string' ? 0 : ((entry as any).userCooldown ?? 0)"
-                      @change="onObsArgCooldownInput(action, 'userCooldown', ($event.target as HTMLInputElement).value)" />
-                    <span class="cd-unit">s</span>
-                  </div>
+                <div class="ep-cell-text"><span class="cmd-desc-text">{{ OBS_ACTION_LABEL[action] ?? action }} ·
+                    <span class="obs-arg-usage-inline">{{ obsArgUsage(action) }}</span></span></div>
+                <div class="ep-cell-tags ep-row-cell-hover"
+                  @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">
+                  <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ typeof entry === 'string' ? 0 : ((entry as
+                    any).cooldown ?? 0) }}s</span>
+                  <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ typeof entry === 'string' ? 0 :
+                    ((entry as any).userCooldown ?? 0) }}s</span>
                 </div>
                 <div class="ep-row-cell-center">
                   <button class="ep-btn-action access"
@@ -2070,54 +2029,6 @@ onUnmounted(() => {
   color: #9d6cff;
   font-size: 11px;
   cursor: help;
-}
-
-/* >>> looks like a normal .ep-tag.cooldown, but holds an editable input -
-   OBS bindings edit cooldowns inline, unlike Default/Custom's display-only tags */
-.cd-input-wrap {
-  display: inline-flex;
-  align-items: center;
-  font-size: 10px;
-  padding: 1px 6px;
-  border: 1px solid #9d6cff44;
-  background: #9d6cff11;
-  transition:
-    background 0.15s,
-    opacity 0.15s;
-}
-
-.cd-input-wrap:focus-within {
-  border-color: #9d6cff;
-}
-
-.cd-input-wrap.disabled {
-  opacity: 0.3;
-  pointer-events: none;
-}
-
-.cd-input {
-  width: 26px;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: #9d6cff;
-  font-family: inherit;
-  font-size: 10px;
-  text-align: right;
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-
-.cd-input::-webkit-outer-spin-button,
-.cd-input::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-
-.cd-unit {
-  font-size: 10px;
-  color: #9d6cff;
-  margin-left: 1px;
 }
 
 /* >>> read-only .ep-tag access severity colors - matches the old .access-btn

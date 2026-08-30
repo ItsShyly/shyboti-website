@@ -935,17 +935,17 @@ async function saveActions() {
         <div v-else-if="!rewards.length" class="ep-empty">{{ t("cp.empty") }}</div>
 
         <template v-else>
-          <div class="ep-row-header cp-row">
-            <div></div>
-            <div>{{ t("cp.header.reward") }}</div>
-            <div>{{ t("cp.header.actions") }}</div>
-            <div></div>
-          </div>
-
           <div v-if="botRewards.length" class="cp-group">
             <div class="cp-group-header">
               <span>{{ t("cp.group.bot") }}</span>
               <span class="cp-group-count">{{ botRewards.length }}</span>
+            </div>
+            <div class="ep-row-header cp-row">
+              <div></div>
+              <div>{{ t("cp.header.reward") }}</div>
+              <div>{{ t("cp.header.price") }}</div>
+              <div>{{ t("cp.header.effect") }}</div>
+              <div>{{ t("cmd.sort.actions") }}</div>
             </div>
             <div class="ep-row-list">
               <div v-for="r in botRewards" :key="r.id" class="ep-row-grid cp-row" :class="{ inactive: !r.isEnabled }">
@@ -956,10 +956,10 @@ async function saveActions() {
                   <div class="cp-title-row">
                     <span class="cp-title">{{ r.title }}</span>
                   </div>
-                  <div class="cp-cost">
-                    <span class="cp-cost-dot"></span>
-                    <span>{{ r.cost }}</span>
-                  </div>
+                </div>
+                <div class="cp-cost">
+                  <span class="cp-cost-dot"></span>
+                  <span>{{ r.cost }}</span>
                 </div>
                 <div class="ep-cell-tags cp-actions-cell">
                   <span v-if="categoryGates[r.id]" class="ep-tag condition">
@@ -988,6 +988,13 @@ async function saveActions() {
               <span>{{ t("cp.group.twitch") }}</span>
               <span class="cp-group-count">{{ twitchRewards.length }}</span>
             </div>
+            <div class="ep-row-header cp-row">
+              <div></div>
+              <div>{{ t("cp.header.reward") }}</div>
+              <div>{{ t("cp.header.price") }}</div>
+              <div>{{ t("cp.header.effect") }}</div>
+              <div>{{ t("cmd.sort.actions") }}</div>
+            </div>
             <div class="ep-row-list">
               <div v-for="r in twitchRewards" :key="r.id" class="ep-row-grid cp-row"
                 :class="{ inactive: !r.isEnabled }">
@@ -998,10 +1005,10 @@ async function saveActions() {
                   <div class="cp-title-row">
                     <span class="cp-title">{{ r.title }}</span>
                   </div>
-                  <div class="cp-cost">
-                    <span class="cp-cost-dot"></span>
-                    <span>{{ r.cost }}</span>
-                  </div>
+                </div>
+                <div class="cp-cost">
+                  <span class="cp-cost-dot"></span>
+                  <span>{{ r.cost }}</span>
                 </div>
                 <div class="ep-cell-tags cp-actions-cell">
                   <span v-if="categoryGates[r.id]" class="ep-tag condition">
@@ -1277,7 +1284,7 @@ async function saveActions() {
 }
 
 .cp-row {
-  grid-template-columns: 44px 1fr 220px auto;
+  grid-template-columns: 44px 1fr 90px 220px auto;
 }
 
 .cp-actions-cell {
@@ -1293,8 +1300,7 @@ async function saveActions() {
 
 .cp-main {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
   min-width: 0;
 }
 
@@ -1315,7 +1321,6 @@ async function saveActions() {
 .cp-cost {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 6px;
   font-size: 13px;
   color: #999;
@@ -1442,9 +1447,12 @@ async function saveActions() {
    ChannelPointActionsEditor.vue, which owns that markup */
 
 @media (max-width: 680px) {
+  .ep-row-header {
+    display: none;
+  }
 
-  /* >>> single line: swatch, title(+cost stacked under it), toggle, kebab.
-     edit/delete/actions/copy move into the kebab so titles keep full width */
+  /* >>> single line: swatch, title, toggle, kebab. price/edit/delete/actions/
+     copy move into the kebab so titles keep full width */
   .cp-row {
     grid-template-columns: 32px 1fr auto;
   }
@@ -1452,6 +1460,10 @@ async function saveActions() {
   .cp-swatch {
     width: 32px;
     height: 32px;
+  }
+
+  .cp-cost {
+    display: none;
   }
 
   .cp-actions-cell {

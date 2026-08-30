@@ -960,7 +960,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <template v-else>
         <div class="ep-row-header mod-item-row">
           <div>{{ t("mod.header.term") }}</div>
-          <div>{{ t("mod.header.action") }}</div>
+          <div>{{ t("mod.header.effect") }}</div>
+          <div>{{ t("cmd.sort.actions") }}</div>
         </div>
         <template v-for="section in blockedSections" :key="section.group?.id ?? 'ungrouped'">
           <div class="mod-section" @dragover.prevent
@@ -996,12 +997,12 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     </span>
                     <span class="item-term">{{ term.term }}</span>
                   </div>
-                  <div class="ep-cell-tags">
-                    <span class="ep-tag" :style="actionPillStyle(term.action)">{{
-                      actionLabel(term.action) }}</span>
-                    <span v-if="term.action !== 'delete' && term.action !== 'automod'" class="ep-tag cooldown">{{
-                      fmtDur(term.duration) }}</span>
-                  </div>
+                </div>
+                <div class="ep-cell-tags ep-row-cell-hover" @click="canManage && openEditBlocked(term)">
+                  <span class="ep-tag" :style="actionPillStyle(term.action)">{{
+                    actionLabel(term.action) }}</span>
+                  <span v-if="term.action !== 'delete' && term.action !== 'automod'" class="ep-tag cooldown">{{
+                    fmtDur(term.duration) }}</span>
                 </div>
                 <div class="ep-row-actions">
                   <button v-if="canManage && term.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
@@ -1033,7 +1034,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <template v-else>
         <div class="ep-row-header mod-item-row">
           <div>{{ t("mod.header.filter") }}</div>
-          <div>{{ t("mod.header.action") }}</div>
+          <div>{{ t("mod.header.effect") }}</div>
+          <div>{{ t("cmd.sort.actions") }}</div>
         </div>
         <template v-for="section in spamSections" :key="section.group?.id ?? 'ungrouped'">
           <div class="mod-section" @dragover.prevent
@@ -1065,11 +1067,11 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     <span class="spam-name">{{ spamLabel(f).name }}</span>
                     <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
                   </div>
-                  <div class="ep-cell-tags">
-                    <span class="ep-tag" :style="actionPillStyle(f.action)">{{ actionLabel(f.action)
-                    }}</span>
-                    <span v-if="f.action !== 'delete'" class="ep-tag cooldown">{{ fmtDur(f.duration) }}</span>
-                  </div>
+                </div>
+                <div class="ep-cell-tags ep-row-cell-hover" @click="canManage && openEditSpam(f)">
+                  <span class="ep-tag" :style="actionPillStyle(f.action)">{{ actionLabel(f.action)
+                  }}</span>
+                  <span v-if="f.action !== 'delete'" class="ep-tag cooldown">{{ fmtDur(f.duration) }}</span>
                 </div>
                 <div class="ep-row-actions">
                   <button v-if="canManage && f.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
@@ -1575,9 +1577,9 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   margin-left: 20px;
 }
 
-/* >>> list rows - content cell grows, actions cell sizes to its buttons */
+/* >>> list rows - term grows, effect tags get a fixed lane, actions sizes to its buttons */
 .mod-item-row {
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr 200px auto;
 }
 
 .nuke-item-row {

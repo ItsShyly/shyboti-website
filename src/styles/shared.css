@@ -519,7 +519,9 @@
 .ep-row-list {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  /* >>> flush rows (border-bottom is the only separator) - matches the
+     header sitting directly above, so it reads as one table, not a gapped list */
+  gap: 0;
   overflow-y: auto;
   flex: 1;
   min-height: 0;
@@ -551,6 +553,8 @@
 }
 .ep-row-actions {
   display: flex;
+  align-items: center;
+  height: 100%;
   gap: 6px;
   flex-shrink: 0;
 }
@@ -948,6 +952,14 @@
   color: #c792ea;
   border-color: #c792ea44;
   background: #c792ea11;
+}
+/* >>> script variables used in a response - deliberately muted/desaturated
+   so aliases/keywords (the "identity" of the command) still pop more */
+.ep-tag.variable {
+  color: #8a8a96;
+  border-color: #8a8a9633;
+  background: #8a8a960a;
+  font-family: monospace;
 }
 
 /* Toasts */

@@ -455,7 +455,7 @@ defineExpose({
         <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(cd)">
           <span class="ep-tag cooldown"><span v-html="iconSvgFor('clock')"></span> {{ fmtDuration(cd.duration_sec)
           }}</span>
-          <span v-if="cd.tick_every_sec" class="ep-tag cooldown"><span v-html="iconSvgFor('refresh-cw')"></span> {{
+          <span v-if="cd.tick_every_sec" class="ep-tag cooldown user"><span v-html="iconSvgFor('refresh-cw')"></span> {{
             cd.tick_every_sec }}s</span>
           <span v-if="cd.enabled_when !== 'always'" class="ep-tag condition">{{ cd.enabled_when }}</span>
           <span v-if="cd.condition" class="ep-tag condition">if …</span>

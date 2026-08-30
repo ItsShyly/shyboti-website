@@ -563,7 +563,7 @@ defineExpose({
         <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(timer)">
           <span class="ep-tag cooldown"><span v-html="iconSvgFor('clock')"></span> {{ fmtInterval(timer.interval_sec)
           }}</span>
-          <span v-if="timer.min_messages" class="ep-tag cooldown"><span v-html="iconSvgFor('message-circle')"></span> {{
+          <span v-if="timer.min_messages" class="ep-tag cooldown user"><span v-html="iconSvgFor('message-circle')"></span> {{
             timer.min_messages }}+</span>
         </div>
         <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(timer)">
