@@ -18,6 +18,7 @@ import {
 } from "../composables/useContentEditableScript";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import { useResizableColumns } from "../composables/useResizableColumns";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
@@ -26,6 +27,58 @@ import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
+
+// vvv resizable/draggable columns vvv
+const TRIGGER_COL_LABEL: Record<string, () => string> = {
+  name: () => t("trigger.field.name"),
+  response: () => t("trigger.field.response"),
+  event: () => t("trigger.field.event"),
+  action: () => t("trigger.field.action"),
+  manage: () => t("cmd.sort.actions"),
+  switch: () => " ", // >>> nbsp so the header cell doesn't collapse
+};
+function triggerColLabel(key: string): string {
+  return TRIGGER_COL_LABEL[key]?.() ?? key;
+}
+const {
+  columns: triggerColumns,
+  gridTemplateColumns: triggerGridTemplateColumns,
+  orderOf: triggerOrderOf,
+  cellStyle: triggerCellStyle,
+  setHover: triggerSetHover,
+  clearHover: triggerClearHover,
+  resizingIndex: triggerResizingIndex,
+  startResize: triggerStartResize,
+  draggingIndex: triggerColDraggingIndex,
+  dragOverIndex: triggerColDragOverIndex,
+  onDragStart: triggerColDragStart,
+  onDragEnterCell: triggerColDragEnterCell,
+  onDrop: triggerColDrop,
+  onDragEnd: triggerColDragEnd,
+  sortKey: triggerSortKey,
+  sortDir: triggerSortDir,
+  applySort: triggerApplySort,
+  onHeaderPointerDown: triggerOnHeaderPointerDown,
+  onHeaderClick: triggerOnHeaderClick,
+} = useResizableColumns("trigger-row", [
+  { key: "name", label: "", width: 2, minWidth: 120, flex: true, sortable: true },
+  { key: "response", label: "", width: 4, minWidth: 150, flex: true, sortable: true },
+  { key: "event", label: "", width: 190, minWidth: 120, sortable: true },
+  { key: "action", label: "", width: 220, minWidth: 140, sortable: true },
+  { key: "manage", label: "", width: 180, minWidth: 150 },
+  { key: "switch", label: "", width: 50, minWidth: 50 },
+]);
+// ^^^ resizable/draggable columns ^^^
+
+const sortedTriggers = computed(() =>
+  triggerApplySort(triggers.value, (tr: Trigger, k) => {
+    if (k === "name") return tr.name;
+    if (k === "response") return tr.response;
+    if (k === "event") return eventLabel(tr.event_type ?? "message");
+    if (k === "action") return actionLabel(tr.action_type ?? "");
+    return null;
+  }),
+);
 
 // >>> opens edit panel from global search
 const searchOpenTrigger = inject<Ref<string | null>>(
@@ -853,32 +906,44 @@ defineExpose({
     </div>
 
     <div v-else class="trigger-table">
-      <div class="ep-row-header trigger-row">
-        <div>{{ t("trigger.field.name") }}</div>
-        <div>{{ t("trigger.field.response") }}</div>
-        <div>{{ t("trigger.field.match") }}</div>
-        <div>{{ t("trigger.field.action") }}</div>
-        <div></div>
+      <div class="ep-row-header trigger-row" :style="{ gridTemplateColumns: triggerGridTemplateColumns }">
+        <div v-for="(col, i) in triggerColumns" :key="col.key" class="ep-row-header-cell"
+          :class="{ dragging: triggerColDraggingIndex === i, 'drag-over': triggerColDragOverIndex === i,
+            sortable: col.sortable, 'sort-active': triggerSortKey === col.key }"
+          :style="{ order: i }" draggable="true" @mousedown="triggerOnHeaderPointerDown"
+          @click="triggerOnHeaderClick(i, $event)" @dragstart="triggerColDragStart(i)"
+          @dragenter.prevent="triggerColDragEnterCell(i)" @dragover.prevent @drop="triggerColDrop(i)"
+          @dragend="triggerColDragEnd()" @mouseenter="triggerSetHover(col.key)" @mouseleave="triggerClearHover()">
+          {{ triggerColLabel(col.key) }}
+          <span v-if="col.sortable" class="ep-sort-arrow" v-html="triggerSortKey === col.key
+            ? iconSvgFor(triggerSortDir === 'asc' ? 'chevron-up' : 'chevron-down')
+            : iconSvgFor('chevrons-up-down')"></span>
+          <span class="ep-col-resize-handle" :class="{ resizing: triggerResizingIndex === i }"
+            @mousedown="triggerStartResize(i, $event)" @click.stop @dragstart.stop.prevent></span>
+        </div>
       </div>
       <div class="ep-row-list">
-      <div v-for="trigger in triggers" :key="trigger.id" class="ep-row-grid trigger-row"
-        :class="{ inactive: !trigger.is_active }">
-        <div class="ep-cell-name">
+      <div v-for="trigger in sortedTriggers" :key="trigger.id" class="ep-row-grid trigger-row"
+        :style="{ gridTemplateColumns: triggerGridTemplateColumns }" :class="{ inactive: !trigger.is_active }">
+        <div class="ep-cell-name" :style="triggerCellStyle('name')">
           <span v-if="isAutoNamed(trigger)" class="ep-tag keyword"><span v-html="iconSvgFor('link')"></span> {{
             autoNamedTagLabel(trigger) }}</span>
           <span v-else class="trigger-name-text">{{ trigger.name }}</span>
         </div>
-        <div class="ep-cell-text ep-row-cell-hover" @click="openEdit(trigger)">
+        <div class="ep-cell-text ep-row-cell-hover" :style="triggerCellStyle('response')"
+          @click="openEdit(trigger)">
           <span class="trigger-response">{{ trigger.response.slice(0, 60)
             }}{{ trigger.response.length > 60 ? "…" : "" }}</span>
         </div>
-        <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(trigger)">
+        <div class="ep-cell-tags ep-row-cell-hover" :style="triggerCellStyle('event')"
+          @click="openEdit(trigger)">
           <span class="ep-tag event-type">{{ eventLabel(trigger.event_type) }}</span>
           <span v-if="trigger.match_pattern" class="ep-tag arg">{{ matchLabel(trigger.match_type) }}: "{{
             trigger.match_pattern.slice(0, 20)
             }}{{ trigger.match_pattern.length > 20 ? "…" : "" }}"</span>
         </div>
-        <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(trigger)">
+        <div class="ep-cell-tags ep-row-cell-hover" :style="triggerCellStyle('action')"
+          @click="openEdit(trigger)">
           <span class="ep-tag action"><span v-html="iconSvgFor('arrow-right')"></span> {{
             actionLabel(trigger.action_type) }}</span>
           <span v-if="trigger.enabled_when !== 'always'" class="ep-tag condition">{{ trigger.enabled_when }}</span>
@@ -886,7 +951,7 @@ defineExpose({
           <span v-if="trigger.cooldown_sec" class="ep-tag cooldown"><span v-html="iconSvgFor('clock')"></span> {{
             trigger.cooldown_sec }}s</span>
         </div>
-        <div class="ep-row-actions">
+        <div class="ep-row-actions" :style="triggerCellStyle('manage')">
           <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(trigger)" :class="{ disabled: !canEdit }">
             {{ canEdit ? t("trigger.edit") : t("trigger.view") }}
           </button>
@@ -897,6 +962,8 @@ defineExpose({
             :disabled="saving === trigger.name">
             <span v-html="iconSvgFor('trash')"></span>
           </button>
+        </div>
+        <div class="ep-row-cell-center ep-row-cell-end" :style="triggerCellStyle('switch')">
           <button class="ep-switch" :class="{ on: trigger.is_active, off: !trigger.is_active, disabled: !canToggle }"
             @click.stop="canToggle && toggleActive(trigger)"><span class="ep-switch-knob"></span></button>
         </div>

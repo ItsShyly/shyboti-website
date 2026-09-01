@@ -750,6 +750,7 @@ const searchOpenTimer = ref<string | null>(null);
 const searchOpenTrigger = ref<string | null>(null);
 provide("searchOpenTimer", searchOpenTimer);
 provide("searchOpenTrigger", searchOpenTrigger);
+
 </script>
 
 <template>
@@ -783,7 +784,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
         <span v-if="showLogsChip && logsQuery" class="search-match-nav">
           <span class="search-match-count">{{
             logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0 matches"
-            }}</span>
+          }}</span>
           <button v-if="logsMatchCount" class="search-match-step" title="Previous match (Shift+Enter)"
             @mousedown.prevent="logsRequestJump(-1)">
             <span v-html="iconSvg('chevron-up')"></span>
@@ -962,7 +963,7 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span v-if="showLogsChip && logsQuery" class="search-match-nav">
             <span class="search-match-count">{{
               logsMatchCount ? `${logsMatchIndex}/${logsMatchCount}` : "0"
-              }}</span>
+            }}</span>
             <button v-if="logsMatchCount" class="search-match-step" title="Previous match"
               @mousedown.prevent="logsRequestJump(-1)">
               <span v-html="iconSvg('chevron-up')"></span>
@@ -1103,12 +1104,12 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span class="footer-sep">|</span>
           <router-link to="/privacy" class="footer-link">{{
             t("footer.privacy")
-            }}</router-link>
+          }}</router-link>
         </footer>
       </main>
     </div>
     <span v-if="toast" class="toast toast-float"><span class="toast-icon" v-html="iconSvg('check')"></span>{{ toast
-      }}</span>
+    }}</span>
   </div>
 </template>
 
@@ -1982,6 +1983,7 @@ body.snippet-dragging * {
   background: #f1494933;
   border-color: #f1494988;
 }
+
 .admin-mode-switch.on .ep-switch-knob {
   background: #f14949;
 }
@@ -2154,7 +2156,6 @@ body.snippet-dragging * {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  /* >>> safety net - a page-level width bug should clip, not scroll the whole app */
   overflow-x: hidden;
   min-height: 0;
   min-width: 0;
@@ -2324,4 +2325,5 @@ body.snippet-dragging * {
     max-width: 300px;
   }
 }
+
 </style>

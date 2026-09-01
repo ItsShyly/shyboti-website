@@ -598,24 +598,28 @@
    Fixed width so cycling through labels/badge icons doesn't resize the button. */
 .ep-btn-action.access {
   color: #555;
-  width: 90px;
+  width: 35px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 .ep-btn-action.access.access-mod {
-  border-color: #c792ea55;
-  color: #c792ea;
+  border-color: #00ad03;
+  color: #00ad03;
 }
 .ep-btn-action.access.access-bc {
-  border-color: #f1494955;
-  color: #f14949;
+  border-color: #e91916;
+  color: #e91916;
 }
 /* >>> real Twitch mod/broadcaster badge, shown in place of text once loaded
    (see loadTwitchBadges()-style fetch already used by RolesView.vue etc.) */
 .access-badge-icon {
   width: 14px;
   height: 14px;
+}
+.access-users-icon {
+  display: inline-flex;
+  font-size: 14px;
 }
 .ep-btn-action:disabled,
 .ep-btn-action.disabled {
@@ -816,6 +820,11 @@
 .ep-row-cell-center {
   display: flex;
   align-items: center;
+  justify-content: center;
+}
+/* >>> switch column only - pins the toggle to the row's right edge */
+.ep-row-cell-end {
+  justify-content: flex-end;
 }
 /* >>> row-level "name" cell - bold, fills full height, holds an optional
    expander (.row-chevron-cell) inline so hover/click reaches the row's true
@@ -868,10 +877,86 @@
   text-transform: uppercase;
   border-bottom: 1px solid #1e1e24;
 }
-/* >>> matches .ep-cell-name's left inset so header labels line up with rows */
+
+.ep-row-header > * {
+  padding-left: 6px;
+}
+/* >>> matches .ep-cell-name's bigger left inset so the first header label
+   lines up with the name cell specifically */
 .ep-row-header > *:first-child {
   padding-left: 10px;
 }
+
+/* >>> resizable/draggable header cell (useResizableColumns.ts) - the
+   column-drag handle only shows on hover/active-drag, stays invisible
+   otherwise so the header doesn't look cluttered with grab bars */
+.ep-row-header-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: grab;
+  user-select: none;
+}
+.ep-row-header-cell:active {
+  cursor: grabbing;
+}
+.ep-row-header-cell.dragging {
+  opacity: 0.35;
+}
+.ep-row-header-cell.drag-over {
+  box-shadow: inset 2px 0 0 #6f2bff;
+}
+/* >>> sortable header: a short click toggles sort (drag still reorders) */
+.ep-row-header-cell.sortable {
+  cursor: pointer;
+}
+.ep-sort-arrow {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  color: #444;
+}
+.ep-sort-arrow svg {
+  width: 11px;
+  height: 11px;
+}
+.ep-row-header-cell.sort-active,
+.ep-row-header-cell.sort-active .ep-sort-arrow {
+  color: #9d6cff;
+}
+.ep-row-header-cell.sortable:hover .ep-sort-arrow {
+  color: #888;
+}
+.ep-col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -8px;
+  width: 16px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+}
+.ep-col-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 7px;
+  width: 2px;
+  background: transparent;
+  transition: background 0.1s;
+}
+.ep-row-header-cell:hover .ep-col-resize-handle::after,
+.ep-col-resize-handle.resizing::after {
+  background: #6f2bff;
+}
+/* >>> table wrapper needs this - fixed-px resizable columns can add up to
+   more than the viewport, so the table scrolls sideways instead of the
+   columns getting silently squashed back down */
+.ep-table-scroll {
+  overflow-x: auto;
+}
+
 .ep-row-expander {
   width: 20px;
   height: 20px;

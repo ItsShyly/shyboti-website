@@ -5,6 +5,7 @@ import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import { useResizableColumns } from "../composables/useResizableColumns";
 import ChannelPointActionsEditor from "./shared/ChannelPointActionsEditor.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
@@ -17,6 +18,55 @@ import {
 const { session, channelRole, adminMode } = useAuth();
 const { t } = useI18n();
 const overlay = useOverlayClose();
+
+// vvv resizable/draggable columns - swatch stays a fixed leading track,
+// outside the system, since it's decorative-only (no header label of its own) vvv
+const CP_COL_LABEL: Record<string, () => string> = {
+  reward: () => t("cp.header.reward"),
+  price: () => t("cp.header.price"),
+  action: () => t("cp.header.action"),
+  manage: () => t("cmd.sort.actions"),
+  switch: () => " ", // >>> nbsp keeps the header cell from collapsing
+};
+function cpColLabel(key: string): string {
+  return CP_COL_LABEL[key]?.() ?? key;
+}
+const {
+  columns: cpColumns,
+  gridTemplateColumns: cpColsGridTemplateColumns,
+  orderOf: cpOrderOf,
+  cellStyle: cpCellStyle,
+  setHover: cpSetHover,
+  clearHover: cpClearHover,
+  resizingIndex: cpResizingIndex,
+  startResize: cpStartResize,
+  draggingIndex: cpColDraggingIndex,
+  dragOverIndex: cpColDragOverIndex,
+  onDragStart: cpColDragStart,
+  onDragEnterCell: cpColDragEnterCell,
+  onDrop: cpColDrop,
+  onDragEnd: cpColDragEnd,
+  sortKey: cpSortKey,
+  sortDir: cpSortDir,
+  applySort: cpApplySort,
+  onHeaderPointerDown: cpOnHeaderPointerDown,
+  onHeaderClick: cpOnHeaderClick,
+  // >>> flex cols: width = fr-weight. fixed cols: width = px.
+} = useResizableColumns("cp-row", [
+  { key: "reward", label: "", width: 1, minWidth: 90, flex: true, sortable: true },
+  { key: "price", label: "", width: 150, minWidth: 50, sortable: true },
+  { key: "action", label: "", width: 2, minWidth: 80, flex: true },
+  { key: "manage", label: "", width: 200, minWidth: 190 },
+  { key: "switch", label: "", width: 50, minWidth: 50 },
+]);
+function cpSortVal(r: Reward, key: string): string | number | null {
+  if (key === "reward") return r.title;
+  if (key === "price") return r.cost;
+  return null;
+}
+// >>> swatch (44px) is fixed and not part of the resizable set
+const cpGridTemplateColumns = computed(() => `44px ${cpColsGridTemplateColumns.value}`);
+// ^^^ resizable/draggable columns ^^^
 
 interface Reward {
   id: string;
@@ -51,8 +101,12 @@ const canEdit = computed(
 
 const rewards = ref<Reward[]>([]);
 // >>> two groups: ours (fully editable) vs made in twitch's own dashboard (view-only)
-const botRewards = computed(() => rewards.value.filter((r) => r.manageable));
-const twitchRewards = computed(() => rewards.value.filter((r) => !r.manageable));
+const botRewards = computed(() =>
+  cpApplySort(rewards.value.filter((r) => r.manageable), cpSortVal),
+);
+const twitchRewards = computed(() =>
+  cpApplySort(rewards.value.filter((r) => !r.manageable), cpSortVal),
+);
 const loading = ref(false);
 const error = ref("");
 const saving = ref(false);
@@ -940,31 +994,39 @@ async function saveActions() {
               <span>{{ t("cp.group.bot") }}</span>
               <span class="cp-group-count">{{ botRewards.length }}</span>
             </div>
-            <div class="ep-row-header cp-row">
-              <div></div>
-              <div>{{ t("cp.header.reward") }}</div>
-              <div>{{ t("cp.header.price") }}</div>
-              <div>{{ t("cp.header.effect") }}</div>
-              <div>{{ t("cmd.sort.actions") }}</div>
+            <div class="ep-row-header cp-row" :style="{ gridTemplateColumns: cpGridTemplateColumns }">
+              <div :style="{ order: -1 }"></div>
+              <div v-for="(col, i) in cpColumns" :key="col.key" class="ep-row-header-cell" :class="{
+                dragging: cpColDraggingIndex === i, 'drag-over': cpColDragOverIndex === i,
+                'cp-header-action': col.key === 'action',
+                sortable: col.sortable, 'sort-active': cpSortKey === col.key,
+              }" :style="{ order: i }" draggable="true" @mousedown="cpOnHeaderPointerDown"
+                @click="cpOnHeaderClick(i, $event)" @dragstart="cpColDragStart(i)"
+                @dragenter.prevent="cpColDragEnterCell(i)" @dragover.prevent @drop="cpColDrop(i)"
+                @dragend="cpColDragEnd()" @mouseenter="cpSetHover(col.key)" @mouseleave="cpClearHover()">
+                {{ cpColLabel(col.key) }}
+                <span v-if="col.sortable" class="ep-sort-arrow" v-html="cpSortKey === col.key
+                  ? iconSvgFor(cpSortDir === 'asc' ? 'chevron-up' : 'chevron-down')
+                  : iconSvgFor('chevrons-up-down')"></span>
+                <span class="ep-col-resize-handle" :class="{ resizing: cpResizingIndex === i }"
+                  @mousedown="cpStartResize(i, $event)" @click.stop @dragstart.stop.prevent></span>
+              </div>
             </div>
             <div class="ep-row-list">
-              <div v-for="r in botRewards" :key="r.id" class="ep-row-grid cp-row" :class="{ inactive: !r.isEnabled }">
-                <div class="ep-row-cell-center">
+              <div v-for="r in botRewards" :key="r.id" class="ep-row-grid cp-row"
+                :style="{ gridTemplateColumns: cpGridTemplateColumns }" :class="{ inactive: !r.isEnabled }">
+                <div class="ep-row-cell-center" :style="{ order: -1 }">
                   <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
                 </div>
-                <!-- >>> reward+price share one hover zone - one edit destination, no reason to split -->
-                <div class="cp-reward-price ep-row-cell-hover" @click="canEdit && openEdit(r)">
-                  <div class="cp-main">
-                    <div class="cp-title-row">
-                      <span class="cp-title">{{ r.title }}</span>
-                    </div>
-                  </div>
-                  <div class="cp-cost">
-                    <span class="cp-cost-dot"></span>
-                    <span>{{ r.cost }}</span>
-                  </div>
+                <div class="cp-reward ep-row-cell-hover" :style="cpCellStyle('reward')" @click="canEdit && openEdit(r)">
+                  <span class="cp-title">{{ r.title }}</span>
                 </div>
-                <div class="ep-cell-tags cp-actions-cell ep-row-cell-hover" @click="canEdit && openEdit(r, 'actions')">
+                <div class="cp-cost ep-row-cell-hover" :style="cpCellStyle('price')" @click="canEdit && openEdit(r)">
+                  <span class="cp-cost-dot"></span>
+                  <span>{{ r.cost }}</span>
+                </div>
+                <div class="ep-cell-tags cp-actions-cell ep-row-cell-hover" :style="cpCellStyle('action')"
+                  @click="canEdit && openEdit(r, 'actions')">
                   <span v-if="categoryGates[r.id]" class="ep-tag condition">
                     {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
                   </span>
@@ -972,12 +1034,12 @@ async function saveActions() {
                     {{ actionTagLabel(at) }}
                   </span>
                 </div>
-                <div class="ep-row-actions">
-                  <div class="cp-action-slot">
-                    <button v-if="canEdit" class="ep-btn-action edit" @click="openEdit(r)">{{ t("cp.edit") }}</button>
-                    <button v-if="canEdit" class="ep-btn-action del" :class="{ confirm: rowDeleteConfirmId === r.id }"
-                      :title="t('cp.panel.delete')" @click="requestRowDelete(r)" v-html="iconSvgFor('trash')"></button>
-                  </div>
+                <div class="ep-row-actions" :style="cpCellStyle('manage')">
+                  <button v-if="canEdit" class="ep-btn-action edit" @click="openEdit(r)">{{ t("cp.edit") }}</button>
+                  <button v-if="canEdit" class="ep-btn-action del" :class="{ confirm: rowDeleteConfirmId === r.id }"
+                    :title="t('cp.panel.delete')" @click="requestRowDelete(r)" v-html="iconSvgFor('trash')"></button>
+                </div>
+                <div class="ep-row-cell-center ep-row-cell-end" :style="cpCellStyle('switch')">
                   <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: !canEdit }"
                     :title="t('cp.enabled')" @click="toggleEnabled(r)"><span class="ep-switch-knob"></span></button>
                 </div>
@@ -991,29 +1053,40 @@ async function saveActions() {
               <span>{{ t("cp.group.twitch") }}</span>
               <span class="cp-group-count">{{ twitchRewards.length }}</span>
             </div>
-            <div class="ep-row-header cp-row">
-              <div></div>
-              <div>{{ t("cp.header.reward") }}</div>
-              <div>{{ t("cp.header.price") }}</div>
-              <div>{{ t("cp.header.effect") }}</div>
-              <div>{{ t("cmd.sort.actions") }}</div>
+            <div class="ep-row-header cp-row" :style="{ gridTemplateColumns: cpGridTemplateColumns }">
+              <div :style="{ order: -1 }"></div>
+              <div v-for="(col, i) in cpColumns" :key="col.key" class="ep-row-header-cell" :class="{
+                dragging: cpColDraggingIndex === i, 'drag-over': cpColDragOverIndex === i,
+                'cp-header-action': col.key === 'action',
+                sortable: col.sortable, 'sort-active': cpSortKey === col.key,
+              }" :style="{ order: i }" draggable="true" @mousedown="cpOnHeaderPointerDown"
+                @click="cpOnHeaderClick(i, $event)" @dragstart="cpColDragStart(i)"
+                @dragenter.prevent="cpColDragEnterCell(i)" @dragover.prevent @drop="cpColDrop(i)"
+                @dragend="cpColDragEnd()" @mouseenter="cpSetHover(col.key)" @mouseleave="cpClearHover()">
+                {{ cpColLabel(col.key) }}
+                <span v-if="col.sortable" class="ep-sort-arrow" v-html="cpSortKey === col.key
+                  ? iconSvgFor(cpSortDir === 'asc' ? 'chevron-up' : 'chevron-down')
+                  : iconSvgFor('chevrons-up-down')"></span>
+                <span class="ep-col-resize-handle" :class="{ resizing: cpResizingIndex === i }"
+                  @mousedown="cpStartResize(i, $event)" @click.stop @dragstart.stop.prevent></span>
+              </div>
             </div>
             <div class="ep-row-list">
               <div v-for="r in twitchRewards" :key="r.id" class="ep-row-grid cp-row"
-                :class="{ inactive: !r.isEnabled }">
-                <div class="ep-row-cell-center">
+                :style="{ gridTemplateColumns: cpGridTemplateColumns }" :class="{ inactive: !r.isEnabled }">
+                <div class="ep-row-cell-center" :style="{ order: -1 }">
                   <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
                 </div>
-                <div class="cp-main">
-                  <div class="cp-title-row">
-                    <span class="cp-title">{{ r.title }}</span>
-                  </div>
+                <!-- >>> view-only reward, not clickable -->
+                <div class="cp-reward" :style="cpCellStyle('reward')">
+                  <span class="cp-title">{{ r.title }}</span>
                 </div>
-                <div class="cp-cost">
+                <div class="cp-cost" :style="cpCellStyle('price')">
                   <span class="cp-cost-dot"></span>
                   <span>{{ r.cost }}</span>
                 </div>
-                <div class="ep-cell-tags cp-actions-cell ep-row-cell-hover" @click="canEdit && openActions(r)">
+                <div class="ep-cell-tags cp-actions-cell ep-row-cell-hover" :style="cpCellStyle('action')"
+                  @click="canEdit && openActions(r)">
                   <span v-if="categoryGates[r.id]" class="ep-tag condition">
                     {{ t("cp.gate.only_active_on") }} {{ categoryGates[r.id]?.category }}
                   </span>
@@ -1021,16 +1094,15 @@ async function saveActions() {
                     {{ actionTagLabel(at) }}
                   </span>
                 </div>
-                <div class="ep-row-actions">
-                  <div class="cp-action-slot">
-                    <button v-if="canEdit" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn")
+                <div class="ep-row-actions" :style="cpCellStyle('manage')">
+                  <button v-if="canEdit" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn")
                     }}</button>
-                    <button v-if="isSiteAdminMode" class="ep-btn-action copy" :disabled="copyingRewardId === r.id"
-                      :title="t('cp.admin.copy_reward_hint')" @click="copyReward(r)"
-                      v-html="iconSvgFor('copy')"></button>
-                    <button class="ep-btn-action locked" disabled :title="t('cp.locked_hint')"
-                      v-html="iconSvgFor('lock')"></button>
-                  </div>
+                  <button v-if="isSiteAdminMode" class="ep-btn-action copy" :disabled="copyingRewardId === r.id"
+                    :title="t('cp.admin.copy_reward_hint')" @click="copyReward(r)" v-html="iconSvgFor('copy')"></button>
+                  <button class="ep-btn-action locked" disabled :title="t('cp.locked_hint')"
+                    v-html="iconSvgFor('lock')"></button>
+                </div>
+                <div class="ep-row-cell-center ep-row-cell-end" :style="cpCellStyle('switch')">
                   <button class="ep-switch" :class="{ on: r.isEnabled, off: !r.isEnabled, disabled: true }"
                     :title="t('cp.locked_hint')"><span class="ep-switch-knob"></span></button>
                 </div>
@@ -1286,18 +1358,15 @@ async function saveActions() {
   display: none;
 }
 
-/* >>> reward name caps out instead of running unbounded (1fr) - an
-   unbounded name track was pushing price/effect out from under their
-   headers, since a long title forced the track past its share */
-.cp-row {
-  grid-template-columns: 44px minmax(140px, 280px) 90px 220px auto;
-}
-
 /* >>> left-aligned, flush with the header label above it (was centered,
    which drifted it away from "Effect") */
 .cp-actions-cell {
   justify-content: flex-start;
   padding-left: 0;
+}
+
+.cp-header-action {
+  padding-left: 0 !important;
 }
 
 .cp-swatch {
@@ -1307,32 +1376,12 @@ async function saveActions() {
   flex-shrink: 0;
 }
 
-/* >>> spans the reward+price tracks (2/4) - one hover zone, one edit
-   destination. Internal split mirrors those tracks' widths (1fr/90px) so
-   "Reward"/"Price" header labels still land over the right half each. */
-.cp-reward-price {
-  grid-column: 2 / 4;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  /* >>> grid items refuse to shrink below their content's natural width by
-     default - without this a long title forced the whole 2-track span
-     wider than its columns, dragging effect/actions out of alignment */
-  min-width: 0;
-}
-
-.cp-main {
+/* >>> min-width:0 so a long title ellipsises instead of widening the track */
+.cp-reward {
   display: flex;
   align-items: center;
   min-width: 0;
-  flex: 1;
-}
-
-.cp-title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
+  padding-left: 6px;
 }
 
 .cp-title {
@@ -1350,7 +1399,7 @@ async function saveActions() {
   gap: 6px;
   font-size: 13px;
   color: #999;
-  flex: 0 0 80px;
+  padding-left: 6px;
 }
 
 .cp-cost-dot {
@@ -1383,17 +1432,6 @@ async function saveActions() {
   letter-spacing: 0;
 }
 
-/* >>> fixed width so the enable switch lines up across both groups,
-   regardless of "Edit" vs the longer locked label */
-.cp-action-slot {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 6px;
-  width: 250px;
-  flex-shrink: 0;
-  flex-wrap: nowrap;
-}
 
 .ep-btn-action.actions {
   border-color: #4ec9b044;
@@ -1479,9 +1517,10 @@ async function saveActions() {
   }
 
   /* >>> single line: swatch, title, toggle, kebab. price/edit/delete/actions/
-     copy move into the kebab so titles keep full width */
+     copy move into the kebab so titles keep full width. !important beats the
+     inline grid-template-columns from useResizableColumns */
   .cp-row {
-    grid-template-columns: 32px 1fr auto;
+    grid-template-columns: 32px 1fr auto !important;
   }
 
   .cp-swatch {
@@ -1489,9 +1528,8 @@ async function saveActions() {
     height: 32px;
   }
 
-  /* >>> only 3 tracks now - stop spanning into the (removed) price track,
-     which on this template would overlap the actions column instead */
-  .cp-reward-price {
+  /* >>> only 3 tracks on mobile - pin the reward to the middle one */
+  .cp-reward {
     grid-column: 2;
   }
 
@@ -1503,7 +1541,8 @@ async function saveActions() {
     display: none;
   }
 
-  .cp-action-slot {
+  /* >>> edit/delete/actions move into the kebab; the enable switch stays */
+  .cp-row>.ep-row-actions {
     display: none;
   }
 }

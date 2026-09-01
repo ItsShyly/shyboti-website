@@ -12,7 +12,12 @@ import {
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
-import { iconSvg as iconSvgFor } from "../composables/icons";
+import {
+  iconSvg as iconSvgFor,
+  MOD_BADGE_PLACEHOLDER,
+  BC_BADGE_PLACEHOLDER,
+} from "../composables/icons";
+import { useResizableColumns } from "../composables/useResizableColumns";
 import CommandEditPanel from "./CommandEditPanel.vue";
 import ObsCommandEditPanel from "./ObsCommandEditPanel.vue";
 import type { ObsSceneBind, ObsSourceBind, ObsArgEntry } from "./ObsCommandEditPanel.vue";
@@ -515,16 +520,191 @@ function scriptVarsUsed(cmd: CustomCommand): string[] {
   return [...found];
 }
 
-const sortField = ref<"name" | "cooldown" | "isActive">("name");
-const sortDir = ref<"asc" | "desc">("asc");
-function setSort(field: typeof sortField.value) {
-  if (sortField.value === field)
-    sortDir.value = sortDir.value === "asc" ? "desc" : "asc";
-  else {
-    sortField.value = field;
-    sortDir.value = "asc";
-  }
+// >>> access as a rank so it sorts everyone < mod < broadcaster
+function accessRank(c: { modOnly: boolean; broadcasterOnly: boolean }): number {
+  return c.broadcasterOnly ? 2 : c.modOnly ? 1 : 0;
 }
+function defaultSortVal(cmd: Command, k: string): string | number | null {
+  if (k === "name") return cmd.renamedTo || cmd.name;
+  if (k === "desc") return cmdDesc(cmd);
+  if (k === "cooldowns") return cmd.cooldown;
+  if (k === "access") return accessRank(cmd);
+  return null;
+}
+function customSortVal(cmd: CustomCommand, k: string): string | number | null {
+  if (k === "name") return cmd.name;
+  if (k === "desc") return cmd.description;
+  if (k === "cooldowns") return cmd.cooldown;
+  if (k === "access") return accessRank(cmd);
+  return null;
+}
+
+// vvv resizable/draggable columns (Default tab - pilot for useResizableColumns) vvv
+const DEFAULT_COL_LABEL: Record<string, () => string> = {
+  name: () => t("cmd.header.name"),
+  desc: () => t("cmd.header.desc"),
+  tags: () => t("cmd.header.tags"),
+  cooldowns: () => t("cmd.header.cooldowns"),
+  access: () => t("cmd.header.access"),
+  manage: () => t("cmd.sort.actions"),
+  switch: () => " ",
+};
+function colLabel(key: string): string {
+  return DEFAULT_COL_LABEL[key]?.() ?? key;
+}
+const {
+  columns: defaultColumns,
+  gridTemplateColumns: defaultGridTemplateColumns,
+  orderOf: defaultOrderOf,
+  cellStyle: defaultCellStyle,
+  setHover: defaultSetHover,
+  clearHover: defaultClearHover,
+  resizingIndex: defaultResizingIndex,
+  startResize: defaultStartResize,
+  draggingIndex: defaultDraggingIndex,
+  dragOverIndex: defaultDragOverIndex,
+  onDragStart: defaultDragStart,
+  onDragEnterCell: defaultDragEnterCell,
+  onDrop: defaultDrop,
+  onDragEnd: defaultDragEnd,
+  sortKey: defaultSortKey,
+  sortDir: defaultSortDir,
+  applySort: defaultApplySort,
+  onHeaderPointerDown: defaultOnHeaderPointerDown,
+  onHeaderClick: defaultOnHeaderClick,
+} = useResizableColumns("cmd-default", [
+  { key: "name", label: "", width: 3, minWidth: 140, flex: true, sortable: true },
+  { key: "desc", label: "", width: 8, minWidth: 160, flex: true, sortable: true },
+  { key: "tags", label: "", width: 150, minWidth: 100 },
+  { key: "cooldowns", label: "", width: 100, minWidth: 100, sortable: true },
+  { key: "access", label: "", width: 50, minWidth: 50, sortable: true },
+  { key: "manage", label: "", width: 50, minWidth: 50 },
+  { key: "switch", label: "", width: 50, minWidth: 50 },
+]);
+// ^^^ resizable/draggable columns ^^^
+
+// vvv resizable/draggable columns - Custom tab vvv
+const CUSTOM_COL_LABEL: Record<string, () => string> = {
+  name: () => t("cmd.header.name"),
+  desc: () => t("cmd.header.desc"),
+  tags: () => t("cmd.header.tags"),
+  cooldowns: () => t("cmd.header.cooldowns"),
+  access: () => t("cmd.sort.access"),
+  manage: () => t("cmd.sort.actions"),
+  switch: () => " ",
+};
+function customColLabel(key: string): string {
+  return CUSTOM_COL_LABEL[key]?.() ?? key;
+}
+const {
+  columns: customColumns,
+  gridTemplateColumns: customGridTemplateColumns,
+  orderOf: customOrderOf,
+  cellStyle: customCellStyle,
+  setHover: customSetHover,
+  clearHover: customClearHover,
+  resizingIndex: customResizingIndex,
+  startResize: customStartResize,
+  draggingIndex: customDraggingIndex,
+  dragOverIndex: customDragOverIndex,
+  onDragStart: customDragStart,
+  onDragEnterCell: customDragEnterCell,
+  onDrop: customDrop,
+  onDragEnd: customDragEnd,
+  sortKey: customSortKey,
+  sortDir: customSortDir,
+  applySort: customApplySort,
+  onHeaderPointerDown: customOnHeaderPointerDown,
+  onHeaderClick: customOnHeaderClick,
+} = useResizableColumns("cmd-custom", [
+  { key: "name", label: "", width: 3, minWidth: 100, flex: true, sortable: true },
+  { key: "desc", label: "", width: 6, minWidth: 300, flex: true, sortable: true },
+  { key: "tags", label: "", width: 150, minWidth: 100 },
+  { key: "cooldowns", label: "", width: 100, minWidth: 100, sortable: true },
+  { key: "access", label: "", width: 50, minWidth: 50, sortable: true },
+  { key: "manage", label: "", width: 125, minWidth: 50 },
+  { key: "switch", label: "", width: 50, minWidth: 50 },
+]);
+// ^^^ resizable/draggable columns - Custom tab ^^^
+
+// vvv resizable/draggable columns - OBS tab vvv
+const OBS_COL_LABEL: Record<string, () => string> = {
+  name: () => t("cmd.header.name"),
+  desc: () => t("cmd.header.desc"),
+  cooldowns: () => t("cmd.header.cooldowns"),
+  access: () => t("cmd.header.access"),
+  manage: () => t("cmd.sort.actions"),
+  switch: () => " ",
+};
+function obsColLabel(key: string): string {
+  return OBS_COL_LABEL[key]?.() ?? key;
+}
+const {
+  columns: obsColumns,
+  gridTemplateColumns: obsGridTemplateColumns,
+  orderOf: obsOrderOf,
+  cellStyle: obsCellStyle,
+  setHover: obsSetHover,
+  clearHover: obsClearHover,
+  resizingIndex: obsResizingIndex,
+  startResize: obsStartResize,
+  draggingIndex: obsDraggingIndex,
+  dragOverIndex: obsDragOverIndex,
+  onDragStart: obsDragStart,
+  onDragEnterCell: obsDragEnterCell,
+  onDrop: obsDrop,
+  onDragEnd: obsDragEnd,
+  sortKey: obsSortKey,
+  sortDir: obsSortDir,
+  applySort: obsApplySort,
+  onHeaderPointerDown: obsOnHeaderPointerDown,
+  onHeaderClick: obsOnHeaderClick,
+} = useResizableColumns("cmd-obs", [
+  { key: "name", label: "", width: 2, minWidth: 50, flex: true, sortable: true },
+  { key: "desc", label: "", width: 6, minWidth: 300, flex: true, sortable: true },
+  { key: "cooldowns", label: "", width: 100, minWidth: 100, sortable: true },
+  { key: "access", label: "", width: 50, minWidth: 50, sortable: true },
+  { key: "manage", label: "", width: 100, minWidth: 100 },
+  { key: "switch", label: "", width: 50, minWidth: 50 },
+]);
+// >>> everyone < mod < broadcaster
+function accessLevelRank(a?: string): number {
+  return a === "broadcaster" ? 2 : a === "mod" ? 1 : 0;
+}
+function obsBindSortVal(
+  b: ObsSceneBind | ObsSourceBind,
+  k: string,
+): string | number | null {
+  if (k === "name") return b.command;
+  if (k === "desc") return "scene" in b ? b.scene : b.source;
+  if (k === "access") return accessLevelRank(b.access);
+  if (k === "cooldowns") return b.cooldown ?? 0;
+  return null;
+}
+function obsArgSortVal(
+  action: string,
+  entry: ObsArgEntry,
+  k: string,
+): string | number | null {
+  if (k === "name") return obsArgCommand(entry);
+  if (k === "desc") return action;
+  if (k === "access") return accessLevelRank(obsArgAccess(entry));
+  if (k === "cooldowns")
+    return typeof entry === "string" ? 0 : (entry.cooldown ?? 0);
+  return null;
+}
+const sortedObsScene = computed(() =>
+  obsApplySort(obsSceneBindings.value, obsBindSortVal),
+);
+const sortedObsSource = computed(() =>
+  obsApplySort(obsSourceBindings.value, obsBindSortVal),
+);
+const sortedObsArg = computed(() =>
+  obsApplySort(Object.entries(obsArgCommands.value), ([action, entry], k) =>
+    obsArgSortVal(action, entry, k),
+  ),
+);
+// ^^^ resizable/draggable columns - OBS tab ^^^
 
 const BLOCKED = ["join", "leave", "pm2", "refresh", "whitelist", "git"];
 
@@ -572,30 +752,18 @@ const CAT_COLOR: Record<string, string> = {
   games: "#e06c75",
 };
 
-function sortByField<T extends Record<string, any>>(list: T[]): T[] {
-  return [...list].sort((a, b) => {
-    let av: any = a[sortField.value],
-      bv: any = b[sortField.value];
-    if (typeof av === "boolean") av = av ? 1 : 0;
-    if (typeof bv === "boolean") bv = bv ? 1 : 0;
-    if (av < bv) return sortDir.value === "asc" ? -1 : 1;
-    if (av > bv) return sortDir.value === "asc" ? 1 : -1;
-    return 0;
-  });
-}
-
 function filtered() {
   let list = commands.value.filter((c) => !BLOCKED.includes(c.name));
   if (search.value.trim())
     list = list.filter((c) => c.name.includes(search.value.toLowerCase()));
-  return sortByField(list);
+  return defaultApplySort(list, defaultSortVal);
 }
 
 function filteredCustom() {
   let list = customCommands.value;
   if (search.value.trim())
     list = list.filter((c) => c.name.includes(search.value.toLowerCase()));
-  return sortByField(list);
+  return customApplySort(list, customSortVal);
 }
 
 async function fetchCustomCommands() {
@@ -1112,7 +1280,7 @@ onUnmounted(() => {
           <template v-else-if="activeTab === 'Custom'">{{ customCommands.length }} {{ customCommands.length !== 1 ?
             t('cmd.count_plural') : t('cmd.count') }}</template>
           <template v-else-if="activeTab === 'Obs' && obsPaired">{{ obsCommandCount }} OBS {{ t('cmd.count_plural')
-            }}</template>
+          }}</template>
           <template v-else>&mdash;</template>
         </div>
       </div>
@@ -1157,7 +1325,7 @@ onUnmounted(() => {
                 syncRunning
                   ? '…' : t('cmd.sync.pull') }}</button>
               <button v-if="syncConf?.is_active" class="ep-sync-stop-btn" @click="stopSync">{{ t('cmd.sync.stop')
-                }}</button>
+              }}</button>
             </div>
             <div v-if="syncMode === 'ongoing' && syncConf?.last_synced" class="ep-sync-last">{{ t('cmd.sync.last') }}
               {{ new Date(syncConf.last_synced).toLocaleString() }}</div>
@@ -1175,7 +1343,7 @@ onUnmounted(() => {
             t('cmd.new') }}</button>
         <button v-else-if="activeTab === 'Obs' && obsPaired" class="ep-btn-new" @click="openObsEdit(null)">+ {{
           t('cmd.new')
-          }}</button>
+        }}</button>
       </div>
     </div>
 
@@ -1202,18 +1370,21 @@ onUnmounted(() => {
           {{ t("cmd.none") }} #{{ session?.channel }}
         </div>
         <template v-else>
-          <div class="ep-row-header cmd-default-row">
-            <div class="sort-col" @click="setSort('name')">{{ t("cmd.header.name") }}<span class="sort-arrow"
-                v-html="sortField === 'name' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
+          <div class="ep-row-header cmd-default-row" :style="{ gridTemplateColumns: defaultGridTemplateColumns }">
+            <div v-for="(col, i) in defaultColumns" :key="col.key" class="ep-row-header-cell"
+              :class="{ dragging: defaultDraggingIndex === i, 'drag-over': defaultDragOverIndex === i,
+                sortable: col.sortable, 'sort-active': defaultSortKey === col.key }"
+              :style="{ order: i }" draggable="true" @mousedown="defaultOnHeaderPointerDown"
+              @click="defaultOnHeaderClick(i, $event)" @dragstart="defaultDragStart(i)"
+              @dragenter.prevent="defaultDragEnterCell(i)" @dragover.prevent @drop="defaultDrop(i)"
+              @dragend="defaultDragEnd()" @mouseenter="defaultSetHover(col.key)" @mouseleave="defaultClearHover()">
+              {{ colLabel(col.key) }}
+              <span v-if="col.sortable" class="ep-sort-arrow" v-html="defaultSortKey === col.key
+                ? iconSvgFor(defaultSortDir === 'asc' ? 'chevron-up' : 'chevron-down')
+                : iconSvgFor('chevrons-up-down')"></span>
+              <span class="ep-col-resize-handle" :class="{ resizing: defaultResizingIndex === i }"
+                @mousedown="defaultStartResize(i, $event)" @click.stop @dragstart.stop.prevent></span>
             </div>
-            <div>{{ t("cmd.header.desc") }}</div>
-            <div>{{ t("cmd.header.tags") }}</div>
-            <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.header.cooldowns") }}<span class="sort-arrow"
-                v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
-            </div>
-            <div>{{ t("cmd.header.access") }}</div>
-            <div>{{ t("cmd.sort.actions") }}</div>
-            <div></div>
           </div>
           <div v-if="loading" class="rows">
             <div class="ep-row-grid cmd-default-row" v-for="i in 8" :key="i">
@@ -1242,12 +1413,14 @@ onUnmounted(() => {
           </div>
           <div v-else class="rows">
             <template v-for="cmd in filtered()" :key="cmd.name">
-              <div class="ep-row-grid cmd-default-row" :class="{
-                saving: saving === cmd.name,
-                expanded: expandedDefault.has(cmd.name),
-              }">
+              <div class="ep-row-grid cmd-default-row" :style="{ gridTemplateColumns: defaultGridTemplateColumns }"
+                :class="{
+                  saving: saving === cmd.name,
+                  expanded: expandedDefault.has(cmd.name),
+                  inactive: !cmd.isActive,
+                }">
                 <div class="ep-cell-name" :class="{ 'ep-row-cell-hover': cmd.argVariants?.length }"
-                  @click="cmd.argVariants?.length && toggleExpandDefault(cmd.name)">
+                  :style="defaultCellStyle('name')" @click="cmd.argVariants?.length && toggleExpandDefault(cmd.name)">
                   <span class="row-chevron-cell">
                     <button v-if="cmd.argVariants?.length" class="ep-row-expander"
                       :class="{ open: expandedDefault.has(cmd.name) }" :title="t('cmd.show_arg_variants')"
@@ -1260,11 +1433,11 @@ onUnmounted(() => {
                   <span v-if="commandsWithRemovedDefaultAlias.has(cmd.name)" class="cmd-renamed-hint"
                     :title="t('cmd.default_alias_changed_hint')">↺</span>
                 </div>
-                <div class="ep-cell-text ep-row-cell-hover"
+                <div class="ep-cell-text ep-row-cell-hover" :style="defaultCellStyle('desc')"
                   @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true)">
                   <span class="cmd-desc-text">{{ cmdDesc(cmd) }}</span>
                 </div>
-                <div class="ep-cell-tags ep-row-cell-hover"
+                <div class="ep-cell-tags ep-row-cell-hover" :style="defaultCellStyle('tags')"
                   @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true, 'args')">
                   <span v-for="al in (aliasesByCommand[cmd.name] ?? []).slice(0, 3)" :key="al" class="ep-tag keyword">{{
                     prefix }}{{ al }}</span>
@@ -1277,21 +1450,24 @@ onUnmounted(() => {
                     +{{ keywordsByCommand[cmd.name]!.length - 3 }}
                   </span>
                 </div>
-                <div class="ep-cell-tags ep-row-cell-hover"
+                <div class="ep-cell-tags ep-row-cell-hover" :style="defaultCellStyle('cooldowns')"
                   @click="canEdit && !BLOCKED.includes(cmd.name) && openEdit(cmd.name, true, 'behavior')">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ cmd.cooldown }}s</span>
                   <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
                 </div>
-                <div class="ep-row-cell-center">
+                <div class="ep-row-cell-center" :style="defaultCellStyle('access')">
                   <button class="ep-btn-action access"
                     :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }"
                     :title="restrictionLabel(cmd)" @click="cycleAccess(cmd)">
                     <img v-if="cmd.broadcasterOnly && bcBadgeUrl" :src="bcBadgeUrl" class="access-badge-icon" alt="" />
                     <img v-else-if="cmd.modOnly && modBadgeUrl" :src="modBadgeUrl" class="access-badge-icon" alt="" />
-                    <template v-else>{{ restrictionLabel(cmd) }}</template>
+                    <span v-else-if="cmd.broadcasterOnly" class="access-badge-icon"
+                      v-html="BC_BADGE_PLACEHOLDER"></span>
+                    <span v-else-if="cmd.modOnly" class="access-badge-icon" v-html="MOD_BADGE_PLACEHOLDER"></span>
+                    <span v-else class="access-users-icon" v-html="iconSvgFor('users')"></span>
                   </button>
                 </div>
-                <div class="ep-row-cell-center">
+                <div class="ep-row-cell-center" :style="defaultCellStyle('manage')">
                   <button class="ep-btn-action edit" :class="{ disabled: BLOCKED.includes(cmd.name) || !canEdit }"
                     @click.stop="
                       canEdit &&
@@ -1307,7 +1483,7 @@ onUnmounted(() => {
                     }}
                   </button>
                 </div>
-                <div class="ep-row-cell-center">
+                <div class="ep-row-cell-center ep-row-cell-end" :style="defaultCellStyle('switch')">
                   <div class="ep-switch" :class="[
                     cmd.isActive ? 'on' : 'off',
                     { disabled: !canToggle },
@@ -1316,12 +1492,13 @@ onUnmounted(() => {
                 <RowKebabMenu :items="builtInKebabItems(cmd)" @click.stop />
               </div>
               <template v-if="expandedDefault.has(cmd.name) && cmd.argVariants?.length">
-                <div v-for="(v, vi) in cmd.argVariants" :key="vi" class="arg-variant-row cmd-default-row">
+                <div v-for="(v, vi) in cmd.argVariants" :key="vi" class="arg-variant-row cmd-default-row"
+                  :style="{ gridTemplateColumns: defaultGridTemplateColumns }">
                   <div class="arg-variant-indent"></div>
                   <div class="arg-variant-usage arg-variant-usage-wide">
                     <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{
                       v.usage.replace(/^<(\$[^>]+)>$/, "[$1]")
-                    }}</span>
+                        }}</span>
                   </div>
                   <button class="ep-btn-action access arg-access-btn" :class="{
                     'access-mod': v.access === 'mod',
@@ -1332,7 +1509,11 @@ onUnmounted(() => {
                       alt="" />
                     <img v-else-if="v.access === 'mod' && modBadgeUrl" :src="modBadgeUrl" class="access-badge-icon"
                       alt="" />
-                    <template v-else>{{ argAccessLabel(v.access) }}</template>
+                    <span v-else-if="v.access === 'broadcaster'" class="access-badge-icon"
+                      v-html="BC_BADGE_PLACEHOLDER"></span>
+                    <span v-else-if="v.access === 'mod'" class="access-badge-icon"
+                      v-html="MOD_BADGE_PLACEHOLDER"></span>
+                    <span v-else class="access-users-icon" v-html="iconSvgFor('users')"></span>
                   </button>
                 </div>
               </template>
@@ -1345,18 +1526,22 @@ onUnmounted(() => {
       <!-- vvv custom tab vvv -->
       <template v-if="activeTab === 'Custom'">
 
-        <div v-if="customLoading || filteredCustom().length > 0" class="ep-row-header cmd-custom-row">
-          <div class="sort-col" @click="setSort('name')">{{ t("cmd.sort.name") }}<span class="sort-arrow"
-              v-html="sortField === 'name' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
+        <div v-if="customLoading || filteredCustom().length > 0" class="ep-row-header cmd-custom-row"
+          :style="{ gridTemplateColumns: customGridTemplateColumns }">
+          <div v-for="(col, i) in customColumns" :key="col.key" class="ep-row-header-cell"
+            :class="{ dragging: customDraggingIndex === i, 'drag-over': customDragOverIndex === i,
+              sortable: col.sortable, 'sort-active': customSortKey === col.key }"
+            :style="{ order: i }" draggable="true" @mousedown="customOnHeaderPointerDown"
+            @click="customOnHeaderClick(i, $event)" @dragstart="customDragStart(i)"
+            @dragenter.prevent="customDragEnterCell(i)" @dragover.prevent @drop="customDrop(i)"
+            @dragend="customDragEnd()" @mouseenter="customSetHover(col.key)" @mouseleave="customClearHover()">
+            {{ customColLabel(col.key) }}
+            <span v-if="col.sortable" class="ep-sort-arrow" v-html="customSortKey === col.key
+              ? iconSvgFor(customSortDir === 'asc' ? 'chevron-up' : 'chevron-down')
+              : iconSvgFor('chevrons-up-down')"></span>
+            <span class="ep-col-resize-handle" :class="{ resizing: customResizingIndex === i }"
+              @mousedown="customStartResize(i, $event)" @click.stop @dragstart.stop.prevent></span>
           </div>
-          <div>{{ t("cmd.header.desc") }}</div>
-          <div>{{ t("cmd.header.tags") }}</div>
-          <div class="sort-col" @click="setSort('cooldown')">{{ t("cmd.header.cooldowns") }}<span class="sort-arrow"
-              v-html="sortField === 'cooldown' ? iconSvgFor(sortDir === 'asc' ? 'chevron-up' : 'chevron-down') : iconSvgFor('chevrons-up-down')"></span>
-          </div>
-          <div>{{ t("cmd.sort.access") }}</div>
-          <div>{{ t("cmd.sort.actions") }}</div>
-          <div></div>
         </div>
 
         <div v-if="customLoading" class="rows">
@@ -1393,20 +1578,25 @@ onUnmounted(() => {
         <template v-else>
           <div class="rows">
             <template v-for="cmd in filteredCustom()" :key="cmd.name">
-              <div class="ep-row-grid cmd-custom-row" :class="{ expanded: expandedCustom.has(cmd.name) }">
-                <!-- >>> name+desc always open the same panel tab - one hover zone, not two -->
-                <div class="ep-cell-name-desc ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false)">
+              <div class="ep-row-grid cmd-custom-row" :style="{ gridTemplateColumns: customGridTemplateColumns }"
+                :class="{ expanded: expandedCustom.has(cmd.name), inactive: !cmd.isActive }">
+                <div class="ep-cell-name" :class="{ 'ep-row-cell-hover': customHasArgs(cmd) }"
+                  :style="customCellStyle('name')" @click="customHasArgs(cmd) && toggleExpandCustom(cmd.name)">
                   <span class="row-chevron-cell">
                     <button v-if="customHasArgs(cmd)" class="ep-row-expander"
                       :class="{ open: expandedCustom.has(cmd.name) }" :title="t('cmd.show_arg_variants')"
-                      @click.stop="toggleExpandCustom(cmd.name)" v-html="iconSvgFor('chevron-down')">
+                      v-html="iconSvgFor('chevron-down')">
                     </button>
                   </span>
                   <span class="cmd-cat-dot" style="background: #9d6cff"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ cmd.name }}</span>
+                </div>
+                <div class="ep-cell-text ep-row-cell-hover" :style="customCellStyle('desc')"
+                  @click="canEdit && openEdit(cmd.name, false)">
                   <span class="cmd-desc-text">{{ cmd.description }}</span>
                 </div>
-                <div class="ep-cell-tags ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false, 'args')">
+                <div class="ep-cell-tags ep-row-cell-hover" :style="customCellStyle('tags')"
+                  @click="canEdit && openEdit(cmd.name, false, 'args')">
                   <span v-for="al in (aliasesByCommand[cmd.name] ?? []).slice(0, 3)" :key="al" class="ep-tag keyword">{{
                     prefix }}{{ al }}</span>
                   <span v-if="(aliasesByCommand[cmd.name]?.length ?? 0) > 3" class="ep-tag keyword">
@@ -1423,20 +1613,24 @@ onUnmounted(() => {
                     +{{ scriptVarsUsed(cmd).length - 4 }}
                   </span>
                 </div>
-                <div class="ep-cell-tags ep-row-cell-hover" @click="canEdit && openEdit(cmd.name, false, 'behavior')">
+                <div class="ep-cell-tags ep-row-cell-hover" :style="customCellStyle('cooldowns')"
+                  @click="canEdit && openEdit(cmd.name, false, 'behavior')">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ cmd.cooldown }}s</span>
                   <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ cmd.userCooldown }}s</span>
                 </div>
-                <div class="ep-row-cell-center">
+                <div class="ep-row-cell-center" :style="customCellStyle('access')">
                   <button class="ep-btn-action access"
                     :class="{ 'access-mod': cmd.modOnly, 'access-bc': cmd.broadcasterOnly }"
                     :title="restrictionLabel(cmd)" @click="cycleAccess(cmd)">
                     <img v-if="cmd.broadcasterOnly && bcBadgeUrl" :src="bcBadgeUrl" class="access-badge-icon" alt="" />
                     <img v-else-if="cmd.modOnly && modBadgeUrl" :src="modBadgeUrl" class="access-badge-icon" alt="" />
-                    <template v-else>{{ restrictionLabel(cmd) }}</template>
+                    <span v-else-if="cmd.broadcasterOnly" class="access-badge-icon"
+                      v-html="BC_BADGE_PLACEHOLDER"></span>
+                    <span v-else-if="cmd.modOnly" class="access-badge-icon" v-html="MOD_BADGE_PLACEHOLDER"></span>
+                    <span v-else class="access-users-icon" v-html="iconSvgFor('users')"></span>
                   </button>
                 </div>
-                <div class="custom-actions">
+                <div class="custom-actions" :style="customCellStyle('manage')">
                   <button class="ep-btn-action edit" :class="{ disabled: !canEdit }"
                     @click="canEdit && openEdit(cmd.name, false)">
                     {{ canEdit ? t("cmd.edit") : t("cmd.view") }}
@@ -1456,7 +1650,7 @@ onUnmounted(() => {
                     <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
                 </div>
-                <div class="ep-row-cell-center">
+                <div class="ep-row-cell-center ep-row-cell-end" :style="customCellStyle('switch')">
                   <div class="ep-switch" :class="[
                     cmd.isActive ? 'on' : 'off',
                     { disabled: !canToggle },
@@ -1472,7 +1666,7 @@ onUnmounted(() => {
                   <div class="arg-variant-indent"></div>
                   <div class="arg-variant-usage">
                     <span class="arg-prefix">{{ prefix }}{{ cmd.name }}</span><span class="arg-args">{{ v.usage
-                      }}</span>
+                    }}</span>
                   </div>
                   <div class="arg-variant-desc">{{ v.desc || "" }}</div>
                 </div>
@@ -1512,27 +1706,41 @@ onUnmounted(() => {
           </div>
 
           <template v-else>
-            <div class="ep-row-header cmd-obs-row">
-              <div>{{ t("cmd.header.name") }}</div>
-              <div>{{ t("cmd.header.desc") }}</div>
-              <div>{{ t("cmd.header.cooldowns") }}</div>
-              <div>{{ t("cmd.header.access") }}</div>
-              <div>{{ t("cmd.sort.actions") }}</div>
-              <div></div>
+            <div class="ep-row-header cmd-obs-row" :style="{ gridTemplateColumns: obsGridTemplateColumns }">
+              <div v-for="(col, i) in obsColumns" :key="col.key" class="ep-row-header-cell"
+                :class="{ dragging: obsDraggingIndex === i, 'drag-over': obsDragOverIndex === i,
+                  sortable: col.sortable, 'sort-active': obsSortKey === col.key }" :style="{ order: i }"
+                draggable="true" @mousedown="obsOnHeaderPointerDown" @click="obsOnHeaderClick(i, $event)"
+                @dragstart="obsDragStart(i)" @dragenter.prevent="obsDragEnterCell(i)" @dragover.prevent
+                @drop="obsDrop(i)" @dragend="obsDragEnd()" @mouseenter="obsSetHover(col.key)"
+                @mouseleave="obsClearHover()">
+                {{ obsColLabel(col.key) }}
+                <span v-if="col.sortable" class="ep-sort-arrow" v-html="obsSortKey === col.key
+                  ? iconSvgFor(obsSortDir === 'asc' ? 'chevron-up' : 'chevron-down')
+                  : iconSvgFor('chevrons-up-down')"></span>
+                <span class="ep-col-resize-handle" :class="{ resizing: obsResizingIndex === i }"
+                  @mousedown="obsStartResize(i, $event)" @click.stop @dragstart.stop.prevent></span>
+              </div>
             </div>
 
             <div class="rows">
-              <div v-for="b in obsSceneBindings" :key="'sc' + b.command" class="ep-row-grid cmd-obs-row">
-                <div class="ep-cell-name-desc ep-row-cell-hover" @click="openObsEdit({ kind: 'scene', command: b.command })">
+              <div v-for="b in sortedObsScene" :key="'sc' + b.command" class="ep-row-grid cmd-obs-row"
+                :style="{ gridTemplateColumns: obsGridTemplateColumns }">
+                <div class="ep-cell-name ep-row-cell-hover" :style="obsCellStyle('name')"
+                  @click="openObsEdit({ kind: 'scene', command: b.command })">
                   <span class="cmd-cat-dot" style="background: #e5c07b"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ b.command }}</span>
+                </div>
+                <div class="ep-cell-text ep-row-cell-hover" :style="obsCellStyle('desc')"
+                  @click="openObsEdit({ kind: 'scene', command: b.command })">
                   <span class="cmd-desc-text">switch scene · {{ b.scene }}</span>
                 </div>
-                <div class="ep-cell-tags ep-row-cell-hover" @click="openObsEdit({ kind: 'scene', command: b.command })">
+                <div class="ep-cell-tags ep-row-cell-hover" :style="obsCellStyle('cooldowns')"
+                  @click="openObsEdit({ kind: 'scene', command: b.command })">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ b.cooldown ?? 0 }}s</span>
                   <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ b.userCooldown ?? 0 }}s</span>
                 </div>
-                <div class="ep-row-cell-center">
+                <div class="ep-row-cell-center" :style="obsCellStyle('access')">
                   <button class="ep-btn-action access"
                     :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }"
                     :title="obsAccessLabel(b.access)" @click="openObsEdit({ kind: 'scene', command: b.command })">
@@ -1540,38 +1748,48 @@ onUnmounted(() => {
                       alt="" />
                     <img v-else-if="b.access === 'mod' && modBadgeUrl" :src="modBadgeUrl" class="access-badge-icon"
                       alt="" />
-                    <template v-else>{{ obsAccessLabel(b.access) }}</template>
+                    <span v-else-if="b.access === 'broadcaster'" class="access-badge-icon"
+                      v-html="BC_BADGE_PLACEHOLDER"></span>
+                    <span v-else-if="b.access === 'mod'" class="access-badge-icon"
+                      v-html="MOD_BADGE_PLACEHOLDER"></span>
+                    <span v-else class="access-users-icon" v-html="iconSvgFor('users')"></span>
                   </button>
                 </div>
-                <div class="custom-actions">
+                <div class="custom-actions" :style="obsCellStyle('manage')">
                   <button class="ep-btn-action edit" @click="openObsEdit({ kind: 'scene', command: b.command })">{{
                     t('cmd.edit')
-                    }}</button>
+                  }}</button>
                   <button class="ep-btn-action del" :class="{ confirm: obsDeleteConfirm === 'scene:' + b.command }"
                     @click="deleteObsBinding('scene', b.command)">
                     <template v-if="obsDeleteConfirm === 'scene:' + b.command">{{ t('cmd.delete_sure') }}</template>
                     <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
                 </div>
-                <div class="ep-row-cell-center">
+                <div class="ep-row-cell-center ep-row-cell-end" :style="obsCellStyle('switch')">
                   <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
                 <RowKebabMenu :items="obsBindingKebabItems('scene', b.command, b.command)" @click.stop />
               </div>
 
-              <div v-for="b in obsSourceBindings" :key="'so' + b.command" class="ep-row-grid cmd-obs-row">
-                <div class="ep-cell-name-desc ep-row-cell-hover" @click="openObsEdit({ kind: 'source', command: b.command })">
+              <div v-for="b in sortedObsSource" :key="'so' + b.command" class="ep-row-grid cmd-obs-row"
+                :style="{ gridTemplateColumns: obsGridTemplateColumns }">
+                <div class="ep-cell-name ep-row-cell-hover" :style="obsCellStyle('name')"
+                  @click="openObsEdit({ kind: 'source', command: b.command })">
                   <span class="cmd-cat-dot" style="background: #e5c07b"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ b.command }}</span>
+                </div>
+                <div class="ep-cell-text ep-row-cell-hover" :style="obsCellStyle('desc')"
+                  @click="openObsEdit({ kind: 'source', command: b.command })">
                   <span class="cmd-desc-text">{{ OBS_ACTION_LABEL[b.action] ?? b.action }} ·
                     {{ b.source }}<template v-if="b.action === 'volume' && b.value !== undefined"> @ {{ b.value
-                      }}%</template></span>
+                    }}%</template></span>
                 </div>
-                <div class="ep-cell-tags ep-row-cell-hover" @click="openObsEdit({ kind: 'source', command: b.command })">
+                <div class="ep-cell-tags ep-row-cell-hover" :style="obsCellStyle('cooldowns')"
+                  @click="openObsEdit({ kind: 'source', command: b.command })">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ b.cooldown ?? 0 }}s</span>
                   <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ b.userCooldown ?? 0 }}s</span>
                 </div>
-                <div class="ep-row-cell-center">
+                <div class="ep-row-cell-center" :style="obsCellStyle('access')">
                   <button class="ep-btn-action access"
                     :class="{ 'access-mod': b.access === 'mod', 'access-bc': b.access === 'broadcaster' }"
                     :title="obsAccessLabel(b.access)" @click="openObsEdit({ kind: 'source', command: b.command })">
@@ -1579,41 +1797,49 @@ onUnmounted(() => {
                       alt="" />
                     <img v-else-if="b.access === 'mod' && modBadgeUrl" :src="modBadgeUrl" class="access-badge-icon"
                       alt="" />
-                    <template v-else>{{ obsAccessLabel(b.access) }}</template>
+                    <span v-else-if="b.access === 'broadcaster'" class="access-badge-icon"
+                      v-html="BC_BADGE_PLACEHOLDER"></span>
+                    <span v-else-if="b.access === 'mod'" class="access-badge-icon"
+                      v-html="MOD_BADGE_PLACEHOLDER"></span>
+                    <span v-else class="access-users-icon" v-html="iconSvgFor('users')"></span>
                   </button>
                 </div>
-                <div class="custom-actions">
+                <div class="custom-actions" :style="obsCellStyle('manage')">
                   <button class="ep-btn-action edit" @click="openObsEdit({ kind: 'source', command: b.command })">{{
                     t('cmd.edit')
-                    }}</button>
+                  }}</button>
                   <button class="ep-btn-action del" :class="{ confirm: obsDeleteConfirm === 'source:' + b.command }"
                     @click="deleteObsBinding('source', b.command)">
                     <template v-if="obsDeleteConfirm === 'source:' + b.command">{{ t('cmd.delete_sure') }}</template>
                     <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
                 </div>
-                <div class="ep-row-cell-center">
+                <div class="ep-row-cell-center ep-row-cell-end" :style="obsCellStyle('switch')">
                   <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
                 <RowKebabMenu :items="obsBindingKebabItems('source', b.command, b.command)" @click.stop />
               </div>
 
-              <div v-for="(entry, action) in obsArgCommands" :key="'arg' + action" class="ep-row-grid cmd-obs-row">
-                <div class="ep-cell-name-desc ep-row-cell-hover"
+              <div v-for="[action, entry] in sortedObsArg" :key="'arg' + action" class="ep-row-grid cmd-obs-row"
+                :style="{ gridTemplateColumns: obsGridTemplateColumns }">
+                <div class="ep-cell-name ep-row-cell-hover" :style="obsCellStyle('name')"
                   @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">
                   <span class="cmd-cat-dot" style="background: #e5c07b"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ obsArgCommand(entry) }}</span>
+                </div>
+                <div class="ep-cell-text ep-row-cell-hover" :style="obsCellStyle('desc')"
+                  @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">
                   <span class="cmd-desc-text">{{ OBS_ACTION_LABEL[action] ?? action }} ·
                     <span class="obs-arg-usage-inline">{{ obsArgUsage(action) }}</span></span>
                 </div>
-                <div class="ep-cell-tags ep-row-cell-hover"
+                <div class="ep-cell-tags ep-row-cell-hover" :style="obsCellStyle('cooldowns')"
                   @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">
                   <span class="ep-tag cooldown">{{ t("cmd.header.gcd") }}: {{ typeof entry === 'string' ? 0 : ((entry as
                     any).cooldown ?? 0) }}s</span>
                   <span class="ep-tag cooldown user">{{ t("cmd.header.ucd") }}: {{ typeof entry === 'string' ? 0 :
                     ((entry as any).userCooldown ?? 0) }}s</span>
                 </div>
-                <div class="ep-row-cell-center">
+                <div class="ep-row-cell-center" :style="obsCellStyle('access')">
                   <button class="ep-btn-action access"
                     :class="{ 'access-mod': obsArgAccess(entry) === 'mod', 'access-bc': obsArgAccess(entry) === 'broadcaster' }"
                     :title="obsAccessLabel(obsArgAccess(entry))"
@@ -1622,10 +1848,14 @@ onUnmounted(() => {
                       class="access-badge-icon" alt="" />
                     <img v-else-if="obsArgAccess(entry) === 'mod' && modBadgeUrl" :src="modBadgeUrl"
                       class="access-badge-icon" alt="" />
-                    <template v-else>{{ obsAccessLabel(obsArgAccess(entry)) }}</template>
+                    <span v-else-if="obsArgAccess(entry) === 'broadcaster'" class="access-badge-icon"
+                      v-html="BC_BADGE_PLACEHOLDER"></span>
+                    <span v-else-if="obsArgAccess(entry) === 'mod'" class="access-badge-icon"
+                      v-html="MOD_BADGE_PLACEHOLDER"></span>
+                    <span v-else class="access-users-icon" v-html="iconSvgFor('users')"></span>
                   </button>
                 </div>
-                <div class="custom-actions">
+                <div class="custom-actions" :style="obsCellStyle('manage')">
                   <button class="ep-btn-action edit"
                     @click="openObsEdit({ kind: 'arg', command: obsArgCommand(entry) })">{{
                       t('cmd.edit') }}</button>
@@ -1635,7 +1865,7 @@ onUnmounted(() => {
                     <span v-else v-html="iconSvgFor('trash')"></span>
                   </button>
                 </div>
-                <div class="ep-row-cell-center">
+                <div class="ep-row-cell-center ep-row-cell-end" :style="obsCellStyle('switch')">
                   <div class="ep-switch on"><span class="ep-switch-knob"></span></div>
                 </div>
                 <RowKebabMenu :items="obsBindingKebabItems('arg', obsArgCommand(entry), String(action))" @click.stop />
@@ -1831,8 +2061,9 @@ onUnmounted(() => {
   grid-template-columns: 28px 1fr 1fr;
 }
 
-/* >>> no chevron column - OBS bindings never expand, so name+desc start at
-   the row's true left edge like Custom's merged cell does */
+/* >>> no chevron column - OBS bindings never expand, so name starts at the
+   row's true left edge (inline style from useResizableColumns wins; this is
+   the fallback for unstyled rows) */
 .ep-row-header.cmd-obs-row,
 .ep-row-grid.cmd-obs-row {
   grid-template-columns: 140px 1fr 140px 90px 150px 50px;
@@ -1854,21 +2085,6 @@ onUnmounted(() => {
 .custom-table-header,
 .custom-row {
   grid-template-columns: 28px 50px 140px 1fr 110px 90px 90px 150px;
-}
-
-.sort-col {
-  cursor: pointer;
-  user-select: none;
-}
-
-.sort-col:hover {
-  color: #aaa;
-}
-
-.sort-arrow {
-  font-size: 9px;
-  color: #555;
-  margin-left: 3px;
 }
 
 .table-header {
@@ -2028,21 +2244,6 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-/* >>> Custom/OBS tabs: name+desc share one hover zone (both open the same
-   panel tab, unlike Default which never merges its columns) - spans the
-   name+desc tracks so the header's separate Name/Description labels still
-   line up roughly over their half of this cell */
-.ep-cell-name-desc {
-  grid-column: 1 / 3;
-  display: flex;
-  align-items: center;
-  height: 100%;
-  gap: 7px;
-  padding-left: 10px;
-  font-size: 14px;
-  font-weight: 700;
-  color: #e0e0e0;
-}
 .cmd-renamed-hint {
   color: #9d6cff;
   font-size: 11px;
@@ -2392,7 +2593,7 @@ onUnmounted(() => {
   }
 
   .ep-row-grid.cmd-default-row>.ep-cell-name,
-  .ep-row-grid.cmd-custom-row>.ep-cell-name-desc {
+  .ep-row-grid.cmd-custom-row>.ep-cell-name {
     flex: 1;
     min-width: 0;
   }
@@ -2411,12 +2612,13 @@ onUnmounted(() => {
   .ep-row-grid.cmd-default-row>*:nth-child(5),
   .ep-row-grid.cmd-default-row>*:nth-child(6),
   .ep-row-grid.cmd-default-row>*:nth-child(7),
-  /* >>> custom-row: name+desc(1, merged) tags(2) cooldowns(3) access(4) actions(5) switch(6) */
-  .ep-row-grid.cmd-custom-row>*:nth-child(2),
+  /* >>> custom-row: name(1) desc(2) tags(3) cooldowns(4) access(5) actions(6) switch(7) */
+  .ep-row-grid.cmd-custom-row>.ep-cell-text,
   .ep-row-grid.cmd-custom-row>*:nth-child(3),
   .ep-row-grid.cmd-custom-row>*:nth-child(4),
   .ep-row-grid.cmd-custom-row>*:nth-child(5),
-  .ep-row-grid.cmd-custom-row>*:nth-child(6) {
+  .ep-row-grid.cmd-custom-row>*:nth-child(6),
+  .ep-row-grid.cmd-custom-row>*:nth-child(7) {
     display: none;
   }
 

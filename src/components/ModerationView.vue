@@ -6,11 +6,48 @@ import { useI18n } from "../i18n";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import { REGEX_REF_GROUPS, looksLikeRegex } from "../composables/regexReference";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import { useResizableColumns } from "../composables/useResizableColumns";
 import RefPanel from "./shared/RefPanel.vue";
 import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
+
+// vvv resizable/draggable columns - shared by blocked+spam (same 3-column shape) vvv
+const {
+  columns: modColumns,
+  gridTemplateColumns: modGridTemplateColumns,
+  orderOf: modOrderOf,
+  cellStyle: modCellStyle,
+  setHover: modSetHover,
+  clearHover: modClearHover,
+  resizingIndex: modResizingIndex,
+  startResize: modStartResize,
+  draggingIndex: modColDraggingIndex,
+  dragOverIndex: modColDragOverIndex,
+  onDragStart: modColDragStart,
+  onDragEnterCell: modColDragEnterCell,
+  onDrop: modColDrop,
+  onDragEnd: modColDragEnd,
+  sortKey: modSortKey,
+  sortDir: modSortDir,
+  applySort: modApplySort,
+  onHeaderPointerDown: modOnHeaderPointerDown,
+  onHeaderClick: modOnHeaderClick,
+} = useResizableColumns("mod-item", [
+  { key: "term", label: "", width: 1, minWidth: 50, flex: true, sortable: true },
+  { key: "action", label: "", width: 2, minWidth: 120, flex: true, sortable: true },
+  { key: "manage", label: "", width: 170, minWidth: 170 },
+  { key: "switch", label: "", width: 50, minWidth: 50 },
+]);
+function modColLabel(key: string, tab: "blocked" | "spam"): string {
+  if (key === "term") return tab === "blocked" ? t("mod.header.term") : t("mod.header.filter");
+  if (key === "action") return t("mod.header.action");
+  if (key === "manage") return t("cmd.sort.actions");
+  if (key === "switch") return " "; // >>> non-breaking, keeps the header cell from collapsing
+  return key;
+}
+// ^^^ resizable/draggable columns ^^^
 
 const canView = computed(() => channelRole.value?.permissions.moderation_view ?? false);
 // >>> avoids a false needs-bot flash before load
@@ -126,11 +163,19 @@ function membersOf(tab: Tab, groupId: number) {
 function ungroupedOf(tab: Tab) {
   return itemsOf(tab).filter((i) => !i.group_id);
 }
+function modSortVal(tab: Tab, item: any, k: string): string | number | null {
+  if (k === "term")
+    return tab === "spam" ? spamLabel(item).name : (item.term ?? item.trigger);
+  if (k === "action") return actionLabel(item.action);
+  return null;
+}
 // >>> ungrouped bucket keeps one v-for for all rows
 function sectionsOf(tab: Tab): { group: ModGroup | null; items: any[] }[] {
+  const sort = (items: any[]) =>
+    modApplySort(items, (it, k) => modSortVal(tab, it, k));
   return [
-    ...modGroups[tab].map((g) => ({ group: g, items: membersOf(tab, g.id) })),
-    { group: null, items: ungroupedOf(tab) },
+    ...modGroups[tab].map((g) => ({ group: g, items: sort(membersOf(tab, g.id)) })),
+    { group: null, items: sort(ungroupedOf(tab)) },
   ];
 }
 const blockedSections = computed(() => sectionsOf("blocked"));
@@ -647,6 +692,11 @@ function groupAllActive(tab: "blocked" | "spam", groupId: number): boolean {
   const members = items.filter((i) => i.group_id === groupId);
   return members.length > 0 && members.every((i) => !!i.is_active);
 }
+// >>> dims the group header only when nothing in it is active
+function groupAnyActive(tab: "blocked" | "spam", groupId: number): boolean {
+  const items = tab === "blocked" ? blockedTerms.value : spamFilters.value;
+  return items.some((i) => i.group_id === groupId && !!i.is_active);
+}
 async function toggleGroupActive(tab: "blocked" | "spam", groupId: number) {
   if (!session.value || !canManage.value) return;
   const items = tab === "blocked" ? blockedTerms.value : spamFilters.value;
@@ -959,27 +1009,44 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         t("mod.empty.blocked") : t("mod.no_bot") }}</div>
       <template v-else>
         <div class="mod-table">
-          <div class="ep-row-header mod-item-row">
-            <div>{{ t("mod.header.term") }}</div>
-            <div class="mod-header-effect">{{ t("mod.header.effect") }}</div>
-            <div>{{ t("cmd.sort.actions") }}</div>
+          <div class="ep-row-header mod-item-row" :style="{ gridTemplateColumns: modGridTemplateColumns }">
+            <div v-for="(col, i) in modColumns" :key="col.key" class="ep-row-header-cell" :class="{
+              dragging: modColDraggingIndex === i, 'drag-over': modColDragOverIndex === i,
+              'mod-header-action': col.key === 'action', 'mod-header-actions': col.key === 'manage',
+              sortable: col.sortable, 'sort-active': modSortKey === col.key,
+            }" :style="{ order: i }" draggable="true" @mousedown="modOnHeaderPointerDown"
+              @click="modOnHeaderClick(i, $event)" @dragstart="modColDragStart(i)"
+              @dragenter.prevent="modColDragEnterCell(i)" @dragover.prevent @drop="modColDrop(i)"
+              @dragend="modColDragEnd()" @mouseenter="modSetHover(col.key)" @mouseleave="modClearHover()">
+              {{ modColLabel(col.key, 'blocked') }}
+              <span v-if="col.sortable" class="ep-sort-arrow" v-html="modSortKey === col.key
+                ? iconSvgFor(modSortDir === 'asc' ? 'chevron-up' : 'chevron-down')
+                : iconSvgFor('chevrons-up-down')"></span>
+              <span class="ep-col-resize-handle" :class="{ resizing: modResizingIndex === i }"
+                @mousedown="modStartResize(i, $event)" @click.stop @dragstart.stop.prevent></span>
+            </div>
           </div>
           <template v-for="section in blockedSections" :key="section.group?.id ?? 'ungrouped'">
             <div class="mod-section" @dragover.prevent
               @drop="assignGroup('blocked', section.group ? section.group.id : null)">
-              <div v-if="section.group" class="mod-group-header">
-                <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
-                  @click="toggleGroupOpen(section.group.id)"></span>
-                <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{
-                  t("mod.group.reason_prefix")
-                }}{{ section.group.name }}</span>
-                <span class="mod-group-count">{{ section.items.length }}</span>
-                <div v-if="canManage" class="ep-row-actions">
+              <div v-if="section.group" class="mod-group-header"
+                :class="{ inactive: !groupAnyActive('blocked', section.group.id) }"
+                :style="{ gridTemplateColumns: modGridTemplateColumns }"
+                @click="toggleGroupOpen(section.group.id)">
+                <div class="mod-group-title" :style="modCellStyle('term')">
+                  <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"></span>
+                  <span class="mod-group-name">{{ t("mod.group.reason_prefix") }}{{ section.group.name }}</span>
+                  <span class="mod-group-count">{{ section.items.length }}</span>
+                </div>
+                <div :style="modCellStyle('action')"></div>
+                <div v-if="canManage" class="ep-row-actions" :style="modCellStyle('manage')">
                   <button class="ep-btn-action share" :title="t('mod.share')"
                     @click.stop="openShareGroup('blocked', section.group.id, section.group.name)"
                     v-html="iconSvgFor('corner-up-right')"></button>
                   <button class="ep-btn-action del" @click.stop="deleteGroup('blocked', section.group.id)"
                     v-html="iconSvgFor('trash')"></button>
+                </div>
+                <div v-if="canManage" class="ep-row-cell-center ep-row-cell-end" :style="modCellStyle('switch')">
                   <button class="ep-switch" :class="{ on: groupAllActive('blocked', section.group.id) }"
                     :title="t('mod.group.toggle_all')" @click.stop="toggleGroupActive('blocked', section.group.id)">
                     <span class="ep-switch-knob"></span>
@@ -989,8 +1056,10 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <div v-if="!section.group || openGroups.has(section.group.id)" class="mod-group-rows"
                 :class="{ 'mod-group-members': section.group }">
                 <div v-for="term in section.items" :key="term.id" class="ep-row-grid mod-item-row"
-                  :class="{ inactive: !term.is_active }" draggable="true" @dragstart="onDragStart(term.id)">
-                  <div class="mod-item-main ep-row-cell-hover" @click="canManage && openEditBlocked(term)">
+                  :style="{ gridTemplateColumns: modGridTemplateColumns }" :class="{ inactive: !term.is_active }"
+                  draggable="true" @dragstart="onDragStart(term.id)">
+                  <div class="mod-item-main ep-row-cell-hover" :style="modCellStyle('term')"
+                    @click="canManage && openEditBlocked(term)">
                     <div class="mod-item-title">
                       <span v-if="term.is_regex" class="ep-tag keyword">{{ t("mod.badge.regex") }}</span>
                       <span v-if="term.action === 'automod' && !term.twitch_term_id" class="ep-tag arg"
@@ -1000,23 +1069,27 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                       <span class="item-term">{{ term.term }}</span>
                     </div>
                   </div>
-                  <div class="ep-cell-tags mod-effect-cell ep-row-cell-hover" @click="canManage && openEditBlocked(term)">
+                  <div class="ep-cell-tags mod-action-cell ep-row-cell-hover" :style="modCellStyle('action')"
+                    @click="canManage && openEditBlocked(term)">
                     <span class="ep-tag" :style="actionPillStyle(term.action)">{{
                       actionLabel(term.action) }}</span>
                     <span v-if="term.action !== 'delete' && term.action !== 'automod'" class="ep-tag cooldown">{{
                       fmtDur(term.duration) }}</span>
                   </div>
-                  <div class="ep-row-actions">
+                  <div class="ep-row-actions" :style="modCellStyle('manage')">
                     <button v-if="canManage && term.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
                       @click.stop="removeFromGroup('blocked', term.id)" v-html="iconSvgFor('corner-up-left')"></button>
                     <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
-                    }}</button>
+                      }}</button>
                     <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
                       @click.stop="openShare('blocked', term.id, term.term)"
                       v-html="iconSvgFor('corner-up-right')"></button>
                     <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('blocked', term.id)"
                       v-html="iconSvgFor('trash')"></button>
-                    <button class="ep-switch" :class="{ on: term.is_active, off: !term.is_active, disabled: !canManage }"
+                  </div>
+                  <div class="ep-row-cell-center ep-row-cell-end" :style="modCellStyle('switch')">
+                    <button class="ep-switch"
+                      :class="{ on: term.is_active, off: !term.is_active, disabled: !canManage }"
                       @click.stop="toggleActive('blocked', term)" :title="term.is_active ? 'Disable' : 'Enable'"><span
                         class="ep-switch-knob"></span></button>
                   </div>
@@ -1036,27 +1109,44 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         t("mod.no_bot") }}</div>
       <template v-else>
         <div class="mod-table">
-          <div class="ep-row-header mod-item-row">
-            <div>{{ t("mod.header.filter") }}</div>
-            <div class="mod-header-effect">{{ t("mod.header.effect") }}</div>
-            <div>{{ t("cmd.sort.actions") }}</div>
+          <div class="ep-row-header mod-item-row" :style="{ gridTemplateColumns: modGridTemplateColumns }">
+            <div v-for="(col, i) in modColumns" :key="col.key" class="ep-row-header-cell" :class="{
+              dragging: modColDraggingIndex === i, 'drag-over': modColDragOverIndex === i,
+              'mod-header-action': col.key === 'action', 'mod-header-actions': col.key === 'manage',
+              sortable: col.sortable, 'sort-active': modSortKey === col.key,
+            }" :style="{ order: i }" draggable="true" @mousedown="modOnHeaderPointerDown"
+              @click="modOnHeaderClick(i, $event)" @dragstart="modColDragStart(i)"
+              @dragenter.prevent="modColDragEnterCell(i)" @dragover.prevent @drop="modColDrop(i)"
+              @dragend="modColDragEnd()" @mouseenter="modSetHover(col.key)" @mouseleave="modClearHover()">
+              {{ modColLabel(col.key, 'spam') }}
+              <span v-if="col.sortable" class="ep-sort-arrow" v-html="modSortKey === col.key
+                ? iconSvgFor(modSortDir === 'asc' ? 'chevron-up' : 'chevron-down')
+                : iconSvgFor('chevrons-up-down')"></span>
+              <span class="ep-col-resize-handle" :class="{ resizing: modResizingIndex === i }"
+                @mousedown="modStartResize(i, $event)" @click.stop @dragstart.stop.prevent></span>
+            </div>
           </div>
           <template v-for="section in spamSections" :key="section.group?.id ?? 'ungrouped'">
             <div class="mod-section" @dragover.prevent
               @drop="assignGroup('spam', section.group ? section.group.id : null)">
-              <div v-if="section.group" class="mod-group-header">
-                <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
-                  @click="toggleGroupOpen(section.group.id)"></span>
-                <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{
-                  t("mod.group.reason_prefix")
-                }}{{ section.group.name }}</span>
-                <span class="mod-group-count">{{ section.items.length }}</span>
-                <div v-if="canManage" class="ep-row-actions">
+              <div v-if="section.group" class="mod-group-header"
+                :class="{ inactive: !groupAnyActive('spam', section.group.id) }"
+                :style="{ gridTemplateColumns: modGridTemplateColumns }"
+                @click="toggleGroupOpen(section.group.id)">
+                <div class="mod-group-title" :style="modCellStyle('term')">
+                  <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"></span>
+                  <span class="mod-group-name">{{ t("mod.group.reason_prefix") }}{{ section.group.name }}</span>
+                  <span class="mod-group-count">{{ section.items.length }}</span>
+                </div>
+                <div :style="modCellStyle('action')"></div>
+                <div v-if="canManage" class="ep-row-actions" :style="modCellStyle('manage')">
                   <button class="ep-btn-action share" :title="t('mod.share')"
                     @click.stop="openShareGroup('spam', section.group.id, section.group.name)"
                     v-html="iconSvgFor('corner-up-right')"></button>
                   <button class="ep-btn-action del" @click.stop="deleteGroup('spam', section.group.id)"
                     v-html="iconSvgFor('trash')"></button>
+                </div>
+                <div v-if="canManage" class="ep-row-cell-center ep-row-cell-end" :style="modCellStyle('switch')">
                   <button class="ep-switch" :class="{ on: groupAllActive('spam', section.group.id) }"
                     :title="t('mod.group.toggle_all')" @click.stop="toggleGroupActive('spam', section.group.id)">
                     <span class="ep-switch-knob"></span>
@@ -1066,28 +1156,33 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <div v-if="!section.group || openGroups.has(section.group.id)" class="mod-group-rows"
                 :class="{ 'mod-group-members': section.group }">
                 <div v-for="f in section.items" :key="f.id" class="ep-row-grid mod-item-row"
-                  :class="{ inactive: !f.is_active }" draggable="true" @dragstart="onDragStart(f.id)">
-                  <div class="mod-item-main ep-row-cell-hover" @click="canManage && openEditSpam(f)">
+                  :style="{ gridTemplateColumns: modGridTemplateColumns }" :class="{ inactive: !f.is_active }"
+                  draggable="true" @dragstart="onDragStart(f.id)">
+                  <div class="mod-item-main ep-row-cell-hover" :style="modCellStyle('term')"
+                    @click="canManage && openEditSpam(f)">
                     <div class="spam-label">
                       <span class="spam-name">{{ spamLabel(f).name }}</span>
                       <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
                     </div>
                   </div>
-                  <div class="ep-cell-tags mod-effect-cell ep-row-cell-hover" @click="canManage && openEditSpam(f)">
+                  <div class="ep-cell-tags mod-action-cell ep-row-cell-hover" :style="modCellStyle('action')"
+                    @click="canManage && openEditSpam(f)">
                     <span class="ep-tag" :style="actionPillStyle(f.action)">{{ actionLabel(f.action)
-                    }}</span>
+                      }}</span>
                     <span v-if="f.action !== 'delete'" class="ep-tag cooldown">{{ fmtDur(f.duration) }}</span>
                   </div>
-                  <div class="ep-row-actions">
+                  <div class="ep-row-actions" :style="modCellStyle('manage')">
                     <button v-if="canManage && f.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
                       @click.stop="removeFromGroup('spam', f.id)" v-html="iconSvgFor('corner-up-left')"></button>
                     <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit")
-                    }}</button>
+                      }}</button>
                     <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
                       @click.stop="openShare('spam', f.id, spamLabel(f).name)"
                       v-html="iconSvgFor('corner-up-right')"></button>
                     <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)"
                       v-html="iconSvgFor('trash')"></button>
+                  </div>
+                  <div class="ep-row-cell-center ep-row-cell-end" :style="modCellStyle('switch')">
                     <button class="ep-switch" :class="{ on: f.is_active, off: !f.is_active, disabled: !canManage }"
                       @click.stop="toggleActive('spam', f)" :title="f.is_active ? 'Disable' : 'Enable'"><span
                         class="ep-switch-knob"></span></button>
@@ -1108,88 +1203,91 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         t("mod.no_bot") }}</div>
       <template v-else>
         <div class="mod-table">
-        <template v-for="section in nukeSections" :key="section.group?.id ?? 'ungrouped'">
-          <div class="mod-section" @dragover.prevent
-            @drop="assignGroup('nukes', section.group ? section.group.id : null)">
-            <div v-if="section.group" class="mod-group-header">
-              <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"
-                @click="toggleGroupOpen(section.group.id)"></span>
-              <span class="mod-group-name" @click="toggleGroupOpen(section.group.id)">{{ t("mod.group.reason_prefix")
-              }}{{ section.group.name }}</span>
-              <span class="mod-group-count">{{ section.items.length }}</span>
-              <div v-if="canManage" class="ep-row-actions">
-                <button class="ep-btn-action share" :title="t('mod.share')"
-                  @click.stop="openShareGroup('nukes', section.group.id, section.group.name)"
-                  v-html="iconSvgFor('corner-up-right')"></button>
-                <button class="ep-btn-action del" @click.stop="deleteGroup('nukes', section.group.id)"
-                  v-html="iconSvgFor('trash')"></button>
-              </div>
-            </div>
-            <div v-if="!section.group || openGroups.has(section.group.id)" class="mod-group-rows"
-              :class="{ 'mod-group-members': section.group }">
-              <div v-for="n in section.items" :key="n.id" class="ep-list-row nuke-item-row" draggable="true"
-                @dragstart="onDragStart(n.id)">
-                <div class="nuke-row-badges">
-                  <span v-if="n.stay_active" class="ep-tag action" :title="t('mod.nuke.stay_hint')">{{
-                    t("mod.badge.stay") }}</span>
-                  <span v-if="n.is_regex" class="ep-tag keyword" :title="t('mod.nuke.regex_hint')">{{
-                    t("mod.badge.regex") }}</span>
-                  <span v-if="n.match_exact" class="ep-tag arg" :title="t('mod.nuke.exact_hint')">{{
-                    t("mod.badge.exact") }}</span>
+          <template v-for="section in nukeSections" :key="section.group?.id ?? 'ungrouped'">
+            <div class="mod-section" @dragover.prevent
+              @drop="assignGroup('nukes', section.group ? section.group.id : null)">
+              <div v-if="section.group" class="mod-group-header"
+                :style="{ gridTemplateColumns: modGridTemplateColumns }"
+                @click="toggleGroupOpen(section.group.id)">
+                <div class="mod-group-title" :style="modCellStyle('term')">
+                  <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"></span>
+                  <span class="mod-group-name">{{ t("mod.group.reason_prefix") }}{{ section.group.name }}</span>
+                  <span class="mod-group-count">{{ section.items.length }}</span>
                 </div>
-                <span class="item-label">{{ n.label }}</span>
-                <span class="item-term nuke-trigger">{{ n.trigger }}</span>
-                <span class="ep-tag" :style="actionPillStyle(n.action)">{{ actionLabel(n.action)
-                }}</span>
-                <span v-if="n.action !== 'delete'" class="ep-tag cooldown">{{ fmtDur(n.duration) }}</span>
-                <div class="lookback-wrap">
-                  <span class="lookback-lbl" v-html="iconSvgFor('corner-down-left')"></span>
-                  <input type="number" min="1" max="1440" :value="nukeLookbackOverride[n.id] ?? n.lookback ?? 30"
-                    @input="nukeLookbackOverride[n.id] = parseInt(($event.target as HTMLInputElement).value)"
-                    class="ep-field-input lookback-input" :title="t('mod.nuke.lookback')" />
-                  <span class="lookback-hint">{{ t("mod.nuke.min") }}</span>
-                </div>
-                <div v-if="n.stay_active" class="expiry-wrap">
-                  <span v-if="n.expires_at" class="expiry-badge"
-                    :class="{ expired: nukeExpiresIn(n) === t('mod.nuke.expired') }">
-                    {{ nukeExpiresIn(n) === t("mod.nuke.expired") ? t("mod.nuke.expired") : `${t("mod.nuke.expires")}
-                    ${nukeExpiresIn(n)}` }}
-                    <button v-if="canManage" class="expiry-clear" @click="setNukeExpiry(n, null)"
-                      v-html="iconSvgFor('x')"></button>
-                  </span>
-                  <select v-else-if="canManage" class="ep-field-select-sm expiry-select"
-                    @change="setNukeExpiry(n, parseInt(($event.target as HTMLSelectElement).value))"
-                    :title="t('mod.nuke.expiry')">
-                    <option value="0">{{ t("mod.nuke.set_expiry") }}</option>
-                    <option value="15">{{ t("mod.nuke.expiry_15") }}</option>
-                    <option value="30">{{ t("mod.nuke.expiry_30") }}</option>
-                    <option value="60">{{ t("mod.nuke.expiry_1h") }}</option>
-                    <option value="120">{{ t("mod.nuke.expiry_2h") }}</option>
-                    <option value="240">{{ t("mod.nuke.expiry_4h") }}</option>
-                    <option value="480">{{ t("mod.nuke.expiry_8h") }}</option>
-                  </select>
-                </div>
-                <div class="ep-row-actions">
-                  <button v-if="canManage && n.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
-                    @click.stop="removeFromGroup('nukes', n.id)" v-html="iconSvgFor('corner-up-left')"></button>
-                  <button v-if="canManage" class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }"
-                    @click="fireNuke(n.id)">
-                    <template v-if="nukeConfirm === n.id"><span v-html="iconSvgFor('alert-triangle')"></span> {{
-                      t("mod.nuke.sure") }}</template>
-                    <template v-else><span v-html="iconSvgFor('zap')"></span> {{ t("mod.nuke.fire") }}</template>
-                  </button>
-                  <button v-if="canManage" class="ep-btn-action edit" @click="openEditNuke(n)">{{ t("mod.edit")
-                  }}</button>
-                  <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
-                    @click.stop="openShare('nukes', n.id, n.label)" v-html="iconSvgFor('corner-up-right')"></button>
-                  <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('nukes', n.id)"
+                <div :style="modCellStyle('action')"></div>
+                <div v-if="canManage" class="ep-row-actions" :style="modCellStyle('manage')">
+                  <button class="ep-btn-action share" :title="t('mod.share')"
+                    @click.stop="openShareGroup('nukes', section.group.id, section.group.name)"
+                    v-html="iconSvgFor('corner-up-right')"></button>
+                  <button class="ep-btn-action del" @click.stop="deleteGroup('nukes', section.group.id)"
                     v-html="iconSvgFor('trash')"></button>
                 </div>
-                <RowKebabMenu :items="nukeKebabItems(n)" @click.stop />
+              </div>
+              <div v-if="!section.group || openGroups.has(section.group.id)" class="mod-group-rows"
+                :class="{ 'mod-group-members': section.group }">
+                <div v-for="n in section.items" :key="n.id" class="ep-list-row nuke-item-row" draggable="true"
+                  @dragstart="onDragStart(n.id)">
+                  <div class="nuke-row-badges">
+                    <span v-if="n.stay_active" class="ep-tag action" :title="t('mod.nuke.stay_hint')">{{
+                      t("mod.badge.stay") }}</span>
+                    <span v-if="n.is_regex" class="ep-tag keyword" :title="t('mod.nuke.regex_hint')">{{
+                      t("mod.badge.regex") }}</span>
+                    <span v-if="n.match_exact" class="ep-tag arg" :title="t('mod.nuke.exact_hint')">{{
+                      t("mod.badge.exact") }}</span>
+                  </div>
+                  <span class="item-label">{{ n.label }}</span>
+                  <span class="item-term nuke-trigger">{{ n.trigger }}</span>
+                  <span class="ep-tag" :style="actionPillStyle(n.action)">{{ actionLabel(n.action)
+                    }}</span>
+                  <span v-if="n.action !== 'delete'" class="ep-tag cooldown">{{ fmtDur(n.duration) }}</span>
+                  <div class="lookback-wrap">
+                    <span class="lookback-lbl" v-html="iconSvgFor('corner-down-left')"></span>
+                    <input type="number" min="1" max="1440" :value="nukeLookbackOverride[n.id] ?? n.lookback ?? 30"
+                      @input="nukeLookbackOverride[n.id] = parseInt(($event.target as HTMLInputElement).value)"
+                      class="ep-field-input lookback-input" :title="t('mod.nuke.lookback')" />
+                    <span class="lookback-hint">{{ t("mod.nuke.min") }}</span>
+                  </div>
+                  <div v-if="n.stay_active" class="expiry-wrap">
+                    <span v-if="n.expires_at" class="expiry-badge"
+                      :class="{ expired: nukeExpiresIn(n) === t('mod.nuke.expired') }">
+                      {{ nukeExpiresIn(n) === t("mod.nuke.expired") ? t("mod.nuke.expired") : `${t("mod.nuke.expires")}
+                      ${nukeExpiresIn(n)}` }}
+                      <button v-if="canManage" class="expiry-clear" @click="setNukeExpiry(n, null)"
+                        v-html="iconSvgFor('x')"></button>
+                    </span>
+                    <select v-else-if="canManage" class="ep-field-select-sm expiry-select"
+                      @change="setNukeExpiry(n, parseInt(($event.target as HTMLSelectElement).value))"
+                      :title="t('mod.nuke.expiry')">
+                      <option value="0">{{ t("mod.nuke.set_expiry") }}</option>
+                      <option value="15">{{ t("mod.nuke.expiry_15") }}</option>
+                      <option value="30">{{ t("mod.nuke.expiry_30") }}</option>
+                      <option value="60">{{ t("mod.nuke.expiry_1h") }}</option>
+                      <option value="120">{{ t("mod.nuke.expiry_2h") }}</option>
+                      <option value="240">{{ t("mod.nuke.expiry_4h") }}</option>
+                      <option value="480">{{ t("mod.nuke.expiry_8h") }}</option>
+                    </select>
+                  </div>
+                  <div class="ep-row-actions">
+                    <button v-if="canManage && n.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
+                      @click.stop="removeFromGroup('nukes', n.id)" v-html="iconSvgFor('corner-up-left')"></button>
+                    <button v-if="canManage" class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }"
+                      @click="fireNuke(n.id)">
+                      <template v-if="nukeConfirm === n.id"><span v-html="iconSvgFor('alert-triangle')"></span> {{
+                        t("mod.nuke.sure") }}</template>
+                      <template v-else><span v-html="iconSvgFor('zap')"></span> {{ t("mod.nuke.fire") }}</template>
+                    </button>
+                    <button v-if="canManage" class="ep-btn-action edit" @click="openEditNuke(n)">{{ t("mod.edit")
+                      }}</button>
+                    <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
+                      @click.stop="openShare('nukes', n.id, n.label)" v-html="iconSvgFor('corner-up-right')"></button>
+                    <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('nukes', n.id)"
+                      v-html="iconSvgFor('trash')"></button>
+                  </div>
+                  <RowKebabMenu :items="nukeKebabItems(n)" @click.stop />
+                </div>
               </div>
             </div>
-          </div>
-        </template>
+          </template>
         </div>
       </template>
     </template>
@@ -1425,7 +1523,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
             <div v-if="fNukeExpiry && fNukeStay" class="ep-field-group">
               <label class="ep-field-label">{{ t("mod.nuke.expiry") }} <span class="ep-field-hint">{{ t("mod.nuke.min")
-              }}</span></label>
+                  }}</span></label>
               <input v-model.number="fNukeExpiryMins" type="number" min="1" class="ep-field-input" />
             </div>
           </template>
@@ -1501,7 +1599,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
         <select v-model="shareTarget" class="ep-field-select-sm" style="width: 100%; margin-top: 12px">
           <option value="">{{ t("mod.share.select") }}</option>
           <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{ ch
-          }}</option>
+            }}</option>
         </select>
         <div v-if="shareError" class="ep-modal-msg err">{{ shareError }}</div>
         <div v-if="shareSuccess" class="ep-modal-msg ok">{{ shareSuccess }}</div>
@@ -1546,6 +1644,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   overflow-y: auto;
   scrollbar-width: none;
 }
+
 .mod-table::-webkit-scrollbar {
   display: none;
 }
@@ -1563,22 +1662,37 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   flex-direction: column;
 }
 
-.mod-effect-cell {
-  justify-content: center;
+.mod-action-cell {
+  justify-content: flex-start;
 }
 
-.mod-header-effect {
-  text-align: center;
+.mod-header-action {
+  text-align: left;
 }
 
 .mod-group-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  display: grid;
+  align-items: stretch;
+  column-gap: 10px;
+  min-height: 44px;
+  padding: 0 14px 0 0;
   background: #1c1c20;
   border-bottom: 1px solid #1e1e1e;
   cursor: pointer;
+  transition: opacity 0.2s;
+}
+.mod-group-header.inactive {
+  opacity: 0.45;
+}
+
+/* >>> holds chevron+name+count, sits in the term column so the group's
+   action buttons line up with the rows' actions column below */
+.mod-group-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding-left: 10px;
 }
 
 .mod-group-chevron {
@@ -1612,16 +1726,43 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   flex-shrink: 0;
 }
 
-.mod-group-members {
-  border-left: 2px solid #2a2a30;
-  margin-left: 20px;
+/* >>> member rows keep the full-width grid so every column past the term
+   lines up exactly with the header + ungrouped rows. only the term text is
+   pushed past the guide line, and the line is each row's own ::before so it
+   dims together with a deactivated row instead of bleeding through */
+.mod-group-members>.ep-row-grid.mod-item-row,
+.mod-group-members>.nuke-item-row {
+  position: relative;
+}
+/* >>> masks the row's own bg strip left of the line with the panel colour so
+   the row reads as starting at the line, then draws the line as a border */
+.mod-group-members>.ep-row-grid.mod-item-row::before,
+.mod-group-members>.nuke-item-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 20px;
+  background: #141418;
+  border-right: 2px solid #2a2a30;
+}
+.mod-group-members>.ep-row-grid .mod-item-main {
+  padding-left: 32px;
+}
+.mod-group-members>.nuke-item-row {
+  padding-left: 24px;
 }
 
 /* >>> term/filter grows but caps out (was 1fr - unbounded, which shoved
    the effect tags all the way to the right and made short left-aligned
    term text look adrift in a huge empty column) */
 .mod-item-row {
-  grid-template-columns: minmax(180px, 420px) 200px minmax(200px, auto);
+  grid-template-columns: minmax(180px, 300px) 200px minmax(200px, auto);
+}
+
+.mod-header-actions {
+  text-align: left;
 }
 
 .nuke-item-row {
@@ -1638,24 +1779,33 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
 }
 
 .mod-item-main {
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   justify-content: center;
   gap: 4px;
   flex: 1;
   min-width: 0;
-  padding: 0 6px;
+  padding: 0 6px 0 10px;
   cursor: pointer;
 }
 
 .mod-item-title {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
   min-width: 0;
+  width: 100%;
+}
+
+/* >>> start-aligned to match the header label above it */
+.mod-item-row>.ep-row-actions {
+  justify-content: flex-start;
 }
 
 .item-label {

@@ -11,6 +11,7 @@ export const ICONS: Record<string, string> = {
   "alert-triangle": `<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>`,
   "user-plus": `<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line>`,
   "user-minus": `<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="23" y1="11" x2="17" y2="11"></line>`,
+  users: `<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>`,
   trash: `<polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line>`,
   dot: `<circle cx="12" cy="12" r="3"></circle>`,
   grip: `<circle cx="9" cy="6" r="1"></circle><circle cx="9" cy="12" r="1"></circle><circle cx="9" cy="18" r="1"></circle><circle cx="15" cy="6" r="1"></circle><circle cx="15" cy="12" r="1"></circle><circle cx="15" cy="18" r="1"></circle>`,
@@ -62,6 +63,11 @@ export const ICONS: Record<string, string> = {
   sliders: `<line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line>`,
   activity: `<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>`,
 };
+
+// >>> fixed-color badge placeholders (shield+check/star, twitch mod/broadcaster
+// colors) - shown while the real twitch badge image is still loading
+export const MOD_BADGE_PLACEHOLDER = `<svg viewBox="0 0 24 24" width="14" height="14"><path fill="#00ad03" d="M12 2l8 3v6c0 5.2-3.4 9.4-8 11-4.6-1.6-8-5.8-8-11V5l8-3z"/><path fill="#fff" d="M10.4 14.3L7.8 11.7l-1.4 1.4 4 4 7-7-1.4-1.4z"/></svg>`;
+export const BC_BADGE_PLACEHOLDER = `<svg viewBox="0 0 24 24" width="14" height="14"><path fill="#e91916" d="M12 2l8 3v6c0 5.2-3.4 9.4-8 11-4.6-1.6-8-5.8-8-11V5l8-3z"/><path fill="#fff" d="M12 6.8l1.5 3 3.3.5-2.4 2.3.6 3.3-2.9-1.6-3 1.6.6-3.3-2.4-2.3 3.3-.5z"/></svg>`;
 
 // >>> 1em default so icons scale with text size
 export function iconSvg(name: string): string {

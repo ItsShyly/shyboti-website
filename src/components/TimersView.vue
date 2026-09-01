@@ -19,12 +19,61 @@ import {
 } from "../composables/useContentEditableScript";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import { useResizableColumns } from "../composables/useResizableColumns";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
 import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
+
+// vvv resizable/draggable columns vvv
+const TIMER_COL_LABEL: Record<string, () => string> = {
+  name: () => t("timer.field.name"),
+  response: () => t("timer.field.response"),
+  interval: () => t("timer.field.interval"),
+  condition: () => t("timer.field.condition"),
+  manage: () => t("cmd.sort.actions"),
+  switch: () => " ", // >>> nbsp keeps the header cell from collapsing
+};
+function timerColLabel(key: string): string {
+  return TIMER_COL_LABEL[key]?.() ?? key;
+}
+const {
+  columns: timerColumns,
+  gridTemplateColumns: timerGridTemplateColumns,
+  orderOf: timerOrderOf,
+  cellStyle: timerCellStyle,
+  setHover: timerSetHover,
+  clearHover: timerClearHover,
+  resizingIndex: timerResizingIndex,
+  startResize: timerStartResize,
+  draggingIndex: timerColDraggingIndex,
+  dragOverIndex: timerColDragOverIndex,
+  onDragStart: timerColDragStart,
+  onDragEnterCell: timerColDragEnterCell,
+  onDrop: timerColDrop,
+  onDragEnd: timerColDragEnd,
+  sortKey: timerSortKey,
+  sortDir: timerSortDir,
+  applySort: timerApplySort,
+  onHeaderPointerDown: timerOnHeaderPointerDown,
+  onHeaderClick: timerOnHeaderClick,
+} = useResizableColumns("timer-row", [
+  { key: "name", label: "", width: 2, minWidth: 120, flex: true, sortable: true },
+  { key: "response", label: "", width: 4, minWidth: 150, flex: true, sortable: true },
+  { key: "interval", label: "", width: 150, minWidth: 100 },
+  { key: "condition", label: "", width: 190, minWidth: 120 },
+  { key: "manage", label: "", width: 150, minWidth: 150 },
+  { key: "switch", label: "", width: 50, minWidth: 50 },
+]);
+// ^^^ resizable/draggable columns ^^^
+
+const sortedTimers = computed(() =>
+  timerApplySort(timers.value, (ti: Timer, k) =>
+    k === "name" ? ti.name : k === "response" ? ti.response : null,
+  ),
+);
 
 // >>> opens edit panel from global search
 const searchOpenTimer = inject<Ref<string | null>>(
@@ -505,7 +554,7 @@ defineExpose({
               <option value="">{{ syncMode === 'import' ? t("timer.sync.select") : (syncConf?.is_active ?
                 t("timer.sync.change") : t("timer.sync.select")) }}</option>
               <option v-for="ch in availableChannels.filter((c) => c !== session?.channel)" :key="ch" :value="ch">#{{ ch
-              }}</option>
+                }}</option>
             </select>
             <button v-if="syncMode === 'import'" class="ep-sync-save-btn" @click="runImport"
               :disabled="syncImporting || !syncFrom">
@@ -550,52 +599,65 @@ defineExpose({
     </div>
 
     <div v-else class="timer-table">
-      <div class="ep-row-header timer-row">
-        <div>{{ t("timer.field.name") }}</div>
-        <div>{{ t("timer.field.response") }}</div>
-        <div>{{ t("timer.field.interval") }}</div>
-        <div>{{ t("timer.field.condition") }}</div>
-        <div></div>
+      <div class="ep-row-header timer-row" :style="{ gridTemplateColumns: timerGridTemplateColumns }">
+        <div v-for="(col, i) in timerColumns" :key="col.key" class="ep-row-header-cell"
+          :class="{ dragging: timerColDraggingIndex === i, 'drag-over': timerColDragOverIndex === i,
+            sortable: col.sortable, 'sort-active': timerSortKey === col.key }"
+          :style="{ order: i }" draggable="true" @mousedown="timerOnHeaderPointerDown"
+          @click="timerOnHeaderClick(i, $event)" @dragstart="timerColDragStart(i)"
+          @dragenter.prevent="timerColDragEnterCell(i)" @dragover.prevent @drop="timerColDrop(i)"
+          @dragend="timerColDragEnd()" @mouseenter="timerSetHover(col.key)" @mouseleave="timerClearHover()">
+          {{ timerColLabel(col.key) }}
+          <span v-if="col.sortable" class="ep-sort-arrow" v-html="timerSortKey === col.key
+            ? iconSvgFor(timerSortDir === 'asc' ? 'chevron-up' : 'chevron-down')
+            : iconSvgFor('chevrons-up-down')"></span>
+          <span class="ep-col-resize-handle" :class="{ resizing: timerResizingIndex === i }"
+            @mousedown="timerStartResize(i, $event)" @click.stop @dragstart.stop.prevent></span>
+        </div>
       </div>
       <div class="ep-row-list">
-      <div v-for="timer in timers" :key="timer.id" class="ep-row-grid timer-row"
-        :class="{ inactive: !timer.is_active }">
-        <div class="ep-cell-name">
-          <span class="timer-name-text">{{ timer.name }}</span>
+        <div v-for="timer in sortedTimers" :key="timer.id" class="ep-row-grid timer-row"
+          :style="{ gridTemplateColumns: timerGridTemplateColumns }" :class="{ inactive: !timer.is_active }">
+          <div class="ep-cell-name" :style="timerCellStyle('name')">
+            <span class="timer-name-text">{{ timer.name }}</span>
+          </div>
+          <div class="ep-cell-text timer-resp-cell ep-row-cell-hover" :style="timerCellStyle('response')"
+            @click="openEdit(timer)">
+            <span class="timer-response">{{ timer.response.slice(0, 60)
+              }}{{ timer.response.length > 60 ? "…" : "" }}</span>
+            <span v-if="timer.is_active" class="timer-next">{{ fmtNextFire(timer) }}</span>
+          </div>
+          <div class="ep-cell-tags ep-row-cell-hover" :style="timerCellStyle('interval')" @click="openEdit(timer)">
+            <span class="ep-tag cooldown"><span v-html="iconSvgFor('clock')"></span> {{ fmtInterval(timer.interval_sec)
+              }}</span>
+            <span v-if="timer.min_messages" class="ep-tag cooldown user"><span
+                v-html="iconSvgFor('message-circle')"></span> {{
+                  timer.min_messages }}+</span>
+          </div>
+          <div class="ep-cell-tags ep-row-cell-hover" :style="timerCellStyle('condition')" @click="openEdit(timer)">
+            <span v-if="timer.enabled_when !== 'always'" class="ep-tag condition">{{ timer.enabled_when }}</span>
+            <span v-if="timer.required_game" class="ep-tag condition">{{ timer.required_game }}</span>
+            <span v-if="timer.condition" class="ep-tag condition">if …</span>
+          </div>
+          <div class="ep-row-actions" :style="timerCellStyle('manage')">
+            <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(timer)" :class="{ disabled: !canEdit }">
+              {{ canEdit ? t("timer.edit") : t("timer.view") }}
+            </button>
+            <button class="ep-btn-action share" @click.stop="openShare(timer.name)" :title="t('timer.share')">
+              <span v-html="iconSvgFor('corner-up-right')"></span>
+            </button>
+            <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteTimer(timer.name)"
+              :disabled="saving === timer.name">
+              <span v-html="iconSvgFor('trash')"></span>
+            </button>
+          </div>
+          <div class="ep-row-cell-center ep-row-cell-end" :style="timerCellStyle('switch')">
+            <button class="ep-switch" :class="{ on: timer.is_active, off: !timer.is_active, disabled: !canToggle }"
+              @click.stop="canToggle && toggleActive(timer)" :title="timer.is_active ? 'Disable' : 'Enable'"><span
+                class="ep-switch-knob"></span></button>
+          </div>
+          <RowKebabMenu :items="timerKebabItems(timer)" @click.stop />
         </div>
-        <div class="ep-cell-text timer-resp-cell ep-row-cell-hover" @click="openEdit(timer)">
-          <span class="timer-response">{{ timer.response.slice(0, 60)
-          }}{{ timer.response.length > 60 ? "…" : "" }}</span>
-          <span v-if="timer.is_active" class="timer-next">{{ fmtNextFire(timer) }}</span>
-        </div>
-        <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(timer)">
-          <span class="ep-tag cooldown"><span v-html="iconSvgFor('clock')"></span> {{ fmtInterval(timer.interval_sec)
-          }}</span>
-          <span v-if="timer.min_messages" class="ep-tag cooldown user"><span v-html="iconSvgFor('message-circle')"></span> {{
-            timer.min_messages }}+</span>
-        </div>
-        <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(timer)">
-          <span v-if="timer.enabled_when !== 'always'" class="ep-tag condition">{{ timer.enabled_when }}</span>
-          <span v-if="timer.required_game" class="ep-tag condition">{{ timer.required_game }}</span>
-          <span v-if="timer.condition" class="ep-tag condition">if …</span>
-        </div>
-        <div class="ep-row-actions">
-          <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(timer)" :class="{ disabled: !canEdit }">
-            {{ canEdit ? t("timer.edit") : t("timer.view") }}
-          </button>
-          <button class="ep-btn-action share" @click.stop="openShare(timer.name)" :title="t('timer.share')">
-            <span v-html="iconSvgFor('corner-up-right')"></span>
-          </button>
-          <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteTimer(timer.name)"
-            :disabled="saving === timer.name">
-            <span v-html="iconSvgFor('trash')"></span>
-          </button>
-          <button class="ep-switch" :class="{ on: timer.is_active, off: !timer.is_active, disabled: !canToggle }"
-            @click.stop="canToggle && toggleActive(timer)" :title="timer.is_active ? 'Disable' : 'Enable'"><span
-              class="ep-switch-knob"></span></button>
-        </div>
-        <RowKebabMenu :items="timerKebabItems(timer)" @click.stop />
-      </div>
       </div>
     </div>
 
@@ -620,7 +682,7 @@ defineExpose({
               <label class="ep-field-label">{{ t("timer.field.response") }}
                 <span class="ep-field-hint">{{
                   t("timer.field.resp_hint")
-                }}</span></label>
+                  }}</span></label>
               <div ref="editorRef" class="ep-script-editor" contenteditable="true" spellcheck="false"
                 data-placeholder="Hello chat! $channel.viewers viewers right now." @input="onEditorInput"></div>
               <RefPanel :title="t('edit.var_ref')" @insert="insertRefToken" />
@@ -630,7 +692,7 @@ defineExpose({
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("timer.field.interval")
-                }}</label>
+                  }}</label>
                 <div class="interval-row">
                   <input v-model.number="editTimer.interval_sec" type="number" min="30" class="ep-field-input" />
                   <span class="ep-field-hint">{{ t("timer.field.interval_hint") }} ·
@@ -641,7 +703,7 @@ defineExpose({
                 <label class="ep-field-label">{{ t("timer.field.min_msgs") }}
                   <span class="ep-field-hint">{{
                     t("timer.field.min_msgs_hint")
-                  }}</span></label>
+                    }}</span></label>
                 <input v-model.number="editTimer.min_messages" type="number" min="0" class="ep-field-input" />
               </div>
             </div>
@@ -650,7 +712,7 @@ defineExpose({
               <div class="ep-field-group">
                 <label class="ep-field-label">{{
                   t("timer.field.active_when")
-                }}</label>
+                  }}</label>
                 <select v-model="editTimer.enabled_when" class="ep-field-select">
                   <option value="always">{{ t("timer.when.always") }}</option>
                   <option value="online">{{ t("timer.when.online") }}</option>
@@ -661,7 +723,7 @@ defineExpose({
                 <label class="ep-field-label">{{ t("timer.field.game") }}
                   <span class="ep-field-hint">{{
                     t("timer.field.game_hint")
-                  }}</span></label>
+                    }}</span></label>
                 <input v-model="editTimer.required_game" class="ep-field-input" placeholder="Just Chatting" />
               </div>
             </div>
@@ -670,7 +732,7 @@ defineExpose({
               <label class="ep-field-label">{{ t("timer.field.condition") }}
                 <span class="ep-field-hint">{{
                   t("timer.field.cond_hint")
-                }}</span></label>
+                  }}</span></label>
               <input v-model="editTimer.condition" class="ep-field-input ep-mono" placeholder="$channel.viewers > 10" />
             </div>
 
@@ -750,7 +812,8 @@ defineExpose({
   min-height: 0;
   overflow: hidden;
 }
-.timer-table > .ep-row-list {
+
+.timer-table>.ep-row-list {
   flex: 1;
   min-height: 0;
 }

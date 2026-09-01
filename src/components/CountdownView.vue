@@ -10,12 +10,50 @@ import {
 } from "../composables/useContentEditableScript";
 import { useOverlayClose } from "../composables/useOverlayClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import { useResizableColumns } from "../composables/useResizableColumns";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
 import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
+
+// vvv resizable/draggable columns vvv
+const COUNTDOWN_COL_LABEL: Record<string, () => string> = {
+  controls: () => t("countdown.header.controls"),
+  name: () => t("countdown.field.name"),
+  status: () => t("countdown.header.status"),
+  duration: () => t("countdown.field.seconds"),
+  manage: () => t("cmd.sort.actions"),
+  switch: () => " ", // >>> nbsp keeps the header cell from collapsing
+};
+function countdownColLabel(key: string): string {
+  return COUNTDOWN_COL_LABEL[key]?.() ?? key;
+}
+const {
+  columns: countdownColumns,
+  gridTemplateColumns: countdownGridTemplateColumns,
+  orderOf: countdownOrderOf,
+  cellStyle: countdownCellStyle,
+  setHover: countdownSetHover,
+  clearHover: countdownClearHover,
+  resizingIndex: countdownResizingIndex,
+  startResize: countdownStartResize,
+  draggingIndex: countdownColDraggingIndex,
+  dragOverIndex: countdownColDragOverIndex,
+  onDragStart: countdownColDragStart,
+  onDragEnterCell: countdownColDragEnterCell,
+  onDrop: countdownColDrop,
+  onDragEnd: countdownColDragEnd,
+} = useResizableColumns("countdown-row", [
+  { key: "controls", label: "", width: 160, minWidth: 120 },
+  { key: "name", label: "", width: 2, minWidth: 120, flex: true },
+  { key: "status", label: "", width: 140, minWidth: 100 },
+  { key: "duration", label: "", width: 240, minWidth: 150 },
+  { key: "manage", label: "", width: 150, minWidth: 120 },
+  { key: "switch", label: "", width: 50, minWidth: 50 },
+]);
+// ^^^ resizable/draggable columns ^^^
 
 const canToggle = computed(
   () => channelRole.value?.permissions.automations_toggle ?? false,
@@ -392,6 +430,35 @@ async function controlCountdown(
   } catch { }
 }
 
+// >>> no PATCH route, so re-PUT the whole row with the flipped flag
+async function toggleActive(cd: Countdown) {
+  if (!session.value || !canToggle.value) return;
+  const next = cd.is_active ? 0 : 1;
+  try {
+    const res = await fetch(
+      `${API}/countdowns/${session.value.channel}/${encodeURIComponent(cd.name)}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.value.token}`,
+        },
+        body: JSON.stringify({
+          duration_sec: cd.duration_sec,
+          msg_start: cd.msg_start,
+          msg_tick: cd.msg_tick,
+          tick_every_sec: cd.tick_every_sec,
+          msg_end: cd.msg_end,
+          enabled_when: cd.enabled_when,
+          condition: cd.condition,
+          is_active: next,
+        }),
+      },
+    );
+    if (res.ok) cd.is_active = next;
+  } catch { }
+}
+
 // >>> header stuff lives in AutomationsView, exposed for it
 defineExpose({
   header: computed(() => ({
@@ -434,21 +501,27 @@ defineExpose({
     </div>
 
     <div v-else class="countdown-table">
-      <div class="ep-row-header countdown-row">
-        <div>{{ t("countdown.field.name") }}</div>
-        <div>{{ t("countdown.header.status") }}</div>
-        <div>{{ t("countdown.field.seconds") }}</div>
-        <div></div>
-        <div></div>
+      <div class="ep-row-header countdown-row" :style="{ gridTemplateColumns: countdownGridTemplateColumns }">
+        <div v-for="(col, i) in countdownColumns" :key="col.key" class="ep-row-header-cell"
+          :class="{ dragging: countdownColDraggingIndex === i, 'drag-over': countdownColDragOverIndex === i }"
+          :style="{ order: i }" draggable="true" @dragstart="countdownColDragStart(i)"
+          @dragenter.prevent="countdownColDragEnterCell(i)" @dragover.prevent @drop="countdownColDrop(i)"
+          @dragend="countdownColDragEnd()" @mouseenter="countdownSetHover(col.key)" @mouseleave="countdownClearHover()">
+          {{ countdownColLabel(col.key) }}
+          <span class="ep-col-resize-handle" :class="{ resizing: countdownResizingIndex === i }"
+            @mousedown="countdownStartResize(i, $event)" @click.stop @dragstart.stop.prevent></span>
+        </div>
       </div>
       <div class="ep-row-list">
-      <div v-for="cd in countdowns" :key="cd.id" class="ep-row-grid countdown-row" :class="{ inactive: !cd.is_active }">
-        <div class="ep-cell-name">
+      <div v-for="cd in countdowns" :key="cd.id" class="ep-row-grid countdown-row"
+        :style="{ gridTemplateColumns: countdownGridTemplateColumns }" :class="{ inactive: !cd.is_active }">
+        <div class="ep-cell-name" :style="countdownCellStyle('name')">
           <span class="cd-status-dot" :class="cd.status ?? 'idle'"></span>
           <span class="cd-name-text">{{ cd.name }}</span>
         </div>
 
-        <div class="ep-cell-text ep-row-cell-hover" @click="openEdit(cd)">
+        <div class="ep-cell-text ep-row-cell-hover" :style="countdownCellStyle('status')"
+          @click="openEdit(cd)">
           <span v-if="cd.status === 'running'" class="cd-remaining">
             {{ fmtRemaining(cd) }} {{ t("countdown.status.running") }}
           </span>
@@ -460,7 +533,8 @@ defineExpose({
           </span>
         </div>
 
-        <div class="ep-cell-tags ep-row-cell-hover" @click="openEdit(cd)">
+        <div class="ep-cell-tags ep-row-cell-hover" :style="countdownCellStyle('duration')"
+          @click="openEdit(cd)">
           <span class="ep-tag cooldown"><span v-html="iconSvgFor('clock')"></span> {{ fmtDuration(cd.duration_sec)
           }}</span>
           <span v-if="cd.tick_every_sec" class="ep-tag cooldown user"><span v-html="iconSvgFor('refresh-cw')"></span> {{
@@ -469,7 +543,7 @@ defineExpose({
           <span v-if="cd.condition" class="ep-tag condition">if …</span>
         </div>
 
-        <div class="cd-controls">
+        <div class="cd-controls" :style="countdownCellStyle('controls')">
           <button v-if="canToggle" class="ctrl-btn start" :class="{ active: cd.status === 'running' }" @click.stop="
             controlCountdown(
               cd.name,
@@ -491,7 +565,7 @@ defineExpose({
           </button>
         </div>
 
-        <div class="ep-row-actions">
+        <div class="ep-row-actions" :style="countdownCellStyle('manage')">
           <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(cd)" :class="{ disabled: !canEdit }">
             {{ canEdit ? t("countdown.edit") : t("countdown.view") }}
           </button>
@@ -503,6 +577,11 @@ defineExpose({
             :disabled="saving === cd.name">
             <span v-html="iconSvgFor('trash')"></span>
           </button>
+        </div>
+        <div class="ep-row-cell-center ep-row-cell-end" :style="countdownCellStyle('switch')">
+          <button class="ep-switch" :class="{ on: cd.is_active, off: !cd.is_active, disabled: !canToggle }"
+            @click.stop="toggleActive(cd)" :title="cd.is_active ? 'Disable' : 'Enable'"><span
+              class="ep-switch-knob"></span></button>
         </div>
         <RowKebabMenu :items="countdownKebabItems(cd)" @click.stop />
       </div>
@@ -673,7 +752,7 @@ defineExpose({
 }
 
 .countdown-row {
-  grid-template-columns: 160px 130px 200px auto auto;
+  grid-template-columns: 160px minmax(120px, 1fr) 140px 240px 150px 50px;
 }
 
 .cd-status-dot {
@@ -733,8 +812,10 @@ defineExpose({
 
 .cd-controls {
   display: flex;
+  align-items: center;
   gap: 5px;
   flex-shrink: 0;
+  padding-left: 10px;
 }
 
 .ctrl-btn {

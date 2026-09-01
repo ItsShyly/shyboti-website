@@ -5,10 +5,44 @@ import { useAuth } from "../auth";
 import ObsRuleEditPanel from "./ObsRuleEditPanel.vue";
 import type { ObsRule } from "./ObsRuleEditPanel.vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import { useResizableColumns } from "../composables/useResizableColumns";
 import { useI18n } from "../i18n";
 
 const { t } = useI18n();
 const { session, channelRole } = useAuth();
+
+// vvv resizable/draggable columns vvv
+const OBSAUTO_COL_LABEL: Record<string, () => string> = {
+  trigger: () => t("obsauto.header.trigger"),
+  action: () => t("obsauto.header.action"),
+  manage: () => t("cmd.sort.actions"),
+  switch: () => " ", // >>> nbsp keeps the header cell from collapsing
+};
+function obsAutoColLabel(key: string): string {
+  return OBSAUTO_COL_LABEL[key]?.() ?? key;
+}
+const {
+  columns: obsAutoColumns,
+  gridTemplateColumns: obsAutoGridTemplateColumns,
+  orderOf: obsAutoOrderOf,
+  cellStyle: obsAutoCellStyle,
+  setHover: obsAutoSetHover,
+  clearHover: obsAutoClearHover,
+  resizingIndex: obsAutoResizingIndex,
+  startResize: obsAutoStartResize,
+  draggingIndex: obsAutoColDraggingIndex,
+  dragOverIndex: obsAutoColDragOverIndex,
+  onDragStart: obsAutoColDragStart,
+  onDragEnterCell: obsAutoColDragEnterCell,
+  onDrop: obsAutoColDrop,
+  onDragEnd: obsAutoColDragEnd,
+} = useResizableColumns("obsauto-row", [
+  { key: "trigger", label: "", width: 3, minWidth: 130, flex: true },
+  { key: "action", label: "", width: 3, minWidth: 130, flex: true },
+  { key: "manage", label: "", width: 160, minWidth: 130 },
+  { key: "switch", label: "", width: 46, minWidth: 46 },
+]);
+// ^^^ resizable/draggable columns ^^^
 
 
 const canView = computed(
@@ -38,17 +72,17 @@ const RULE_ACTION_LABEL = computed<Record<string, string>>(() => ({
   category: t("obsrule.pill.category"),
 }));
 
-// >>> no trigger_type means a legacy bitrate-only rule
-function ruleTitle(rule: ObsRule): string {
+// >>> no trigger_type means a legacy bitrate-only rule - trigger side only,
+// the action side is its own column now
+function ruleTrigger(rule: ObsRule): string {
   const type = rule.trigger_type ?? "bitrate";
   if (type === "bitrate")
     return t("obsauto.title.bitrate", {
       condition: rule.condition === "above" ? t("obsrule.cond.above") : t("obsrule.cond.below"),
       kbps: rule.bitrate_kbps ?? 0,
     });
-  if (type === "category")
-    return t("obsauto.title.category", { category: rule.category_name ?? "?", target: rule.target });
-  return t("obsauto.title.scene", { scene: rule.trigger_scene ?? "?", target: rule.target });
+  if (type === "category") return rule.category_name ?? "?";
+  return rule.trigger_scene ?? "?";
 }
 
 // >>> category rule but missing required scope
@@ -218,24 +252,32 @@ defineExpose({
 
       <template v-else>
         <div class="obsauto-table">
-          <div class="ep-row-header obsauto-row">
-            <div>{{ t('obsauto.header.trigger') }}</div>
-            <div>{{ t('obsauto.header.action') }}</div>
-            <div></div>
+          <div class="ep-row-header obsauto-row" :style="{ gridTemplateColumns: obsAutoGridTemplateColumns }">
+            <div v-for="(col, i) in obsAutoColumns" :key="col.key" class="ep-row-header-cell"
+              :class="{ dragging: obsAutoColDraggingIndex === i, 'drag-over': obsAutoColDragOverIndex === i }"
+              :style="{ order: i }" draggable="true" @dragstart="obsAutoColDragStart(i)"
+              @dragenter.prevent="obsAutoColDragEnterCell(i)" @dragover.prevent @drop="obsAutoColDrop(i)"
+              @dragend="obsAutoColDragEnd()" @mouseenter="obsAutoSetHover(col.key)" @mouseleave="obsAutoClearHover()">
+              {{ obsAutoColLabel(col.key) }}
+              <span class="ep-col-resize-handle" :class="{ resizing: obsAutoResizingIndex === i }"
+                @mousedown="obsAutoStartResize(i, $event)" @click.stop @dragstart.stop.prevent></span>
+            </div>
           </div>
           <div class="ep-row-list">
             <div v-for="rule in rules" :key="rule.id" class="ep-row-grid obsauto-row"
-              :class="{ inactive: !rule.enabled }">
-              <!-- >>> no per-column destination here (one edit panel only) - name+action share one hover zone -->
-              <div class="obsauto-content ep-row-cell-hover" @click="canEdit && openEdit(rule.id)">
-                <span class="obsauto-title">{{ ruleTitle(rule) }}</span>
-                <div class="obsauto-tags">
-                  <span class="ep-tag action">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
-                  <span class="ep-tag condition">{{ rule.target }}<template
-                      v-if="rule.action === 'volume' && rule.value !== undefined"> @ {{ rule.value }}%</template></span>
-                </div>
+              :style="{ gridTemplateColumns: obsAutoGridTemplateColumns }" :class="{ inactive: !rule.enabled }">
+              <!-- >>> both cells open the same edit panel -->
+              <div class="obsauto-trigger ep-row-cell-hover" :style="obsAutoCellStyle('trigger')"
+                @click="canEdit && openEdit(rule.id)">
+                <span class="obsauto-title">{{ ruleTrigger(rule) }}</span>
               </div>
-              <div class="ep-row-actions">
+              <div class="ep-cell-tags ep-row-cell-hover" :style="obsAutoCellStyle('action')"
+                @click="canEdit && openEdit(rule.id)">
+                <span class="ep-tag action">{{ RULE_ACTION_LABEL[rule.action] ?? rule.action }}</span>
+                <span class="ep-tag condition">{{ rule.target }}<template
+                    v-if="rule.action === 'volume' && rule.value !== undefined"> @ {{ rule.value }}%</template></span>
+              </div>
+              <div class="ep-row-actions" :style="obsAutoCellStyle('manage')">
                 <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(rule.id)"
                   :class="{ disabled: !canEdit }">
                   {{ canEdit ? t('obsauto.edit_btn') : t('obsauto.view_btn') }}
@@ -243,6 +285,8 @@ defineExpose({
                 <button v-if="canEdit" class="ep-btn-action del" @click.stop="deleteRule(rule.id)"
                   :disabled="saving === rule.id" v-html="iconSvgFor('x')">
                 </button>
+              </div>
+              <div class="ep-row-cell-center ep-row-cell-end" :style="obsAutoCellStyle('switch')">
                 <button class="ep-switch" :class="{ on: rule.enabled, off: !rule.enabled, disabled: !canEdit }"
                   @click.stop="canEdit && toggleRule(rule)"
                   :title="rule.enabled ? t('obsauto.disable_title') : t('obsauto.enable_title')"><span
@@ -281,18 +325,12 @@ defineExpose({
 }
 
 .obsauto-row {
-  grid-template-columns: 1fr 220px auto;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) 180px 50px;
 }
 
-/* >>> spans the name+action tracks - one hover/click zone, only one edit
-   destination - but title and tags stay visually separated (space-between)
-   instead of running together */
-.obsauto-content {
-  grid-column: 1 / 3;
+.obsauto-trigger {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
   padding-left: 10px;
 }
 
@@ -305,14 +343,6 @@ defineExpose({
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
-}
-
-.obsauto-tags {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  flex-shrink: 0;
 }
 
 .obs-rule-link {
