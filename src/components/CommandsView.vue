@@ -27,6 +27,7 @@ import ColumnMenu from "./shared/ColumnMenu.vue";
 import { useRowContextMenu } from "../composables/useRowContextMenu";
 import { useClickAway } from "../composables/useClickAway";
 import { useRowSelection } from "../composables/useRowSelection";
+import { useDashboardColors } from "../composables/useDashboardColors";
 import { useConfirm } from "../composables/useConfirm";
 import ConfirmDialog from "./shared/ConfirmDialog.vue";
 import SelectionHint from "./shared/SelectionHint.vue";
@@ -1181,31 +1182,15 @@ function filtered() {
   return defaultApplySort(list, defaultSortVal);
 }
 
-// vvv per-command dot colour - localStorage, per channel (Custom tab) vvv
+// vvv per-command dot colour - shared per channel via the bot API (Custom tab) vvv
 const DEFAULT_CUSTOM_DOT = "#9d6cff";
 const DEFAULT_OBS_DOT = "#e5c07b";
-const cmdColors = ref<Record<string, string>>({});
-function colorKey(): string {
-  return `cmd-cat-colors-${session.value?.channel ?? ""}`;
-}
-function loadCmdColors() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(colorKey()) || "{}");
-    cmdColors.value = raw && typeof raw === "object" ? raw : {};
-  } catch {
-    cmdColors.value = {};
-  }
-}
-loadCmdColors();
-watch(() => session.value?.channel, loadCmdColors);
+const { colors: cmdColors, setColor: setDotColor } = useDashboardColors(
+  "cmd",
+  () => session.value?.channel,
+);
 function dotColor(kind: "custom" | "obs", name: string): string {
   return cmdColors.value[name] ?? (kind === "obs" ? DEFAULT_OBS_DOT : DEFAULT_CUSTOM_DOT);
-}
-function setDotColor(name: string, hex: string) {
-  cmdColors.value = { ...cmdColors.value, [name]: hex };
-  try {
-    localStorage.setItem(colorKey(), JSON.stringify(cmdColors.value));
-  } catch { }
 }
 // >>> colours on custom commands only - drives the header filter bar
 const customUsedColors = computed(() => [
