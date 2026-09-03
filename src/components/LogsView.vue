@@ -19,7 +19,12 @@ import {
 } from "../composables/useLogsSearch";
 import { VueDatePicker } from "@vuepic/vue-datepicker";
 import "@vuepic/vue-datepicker/dist/main.css";
-import { iconSvg } from "../composables/icons";
+import {
+  iconSvg,
+  MOD_BADGE_PLACEHOLDER,
+  VIP_BADGE_PLACEHOLDER,
+  BC_BADGE_PLACEHOLDER,
+} from "../composables/icons";
 // >>> vue-virtual-scroller removed, rolled our own below
 const _rowDomCache = new Map<string, Element>();
 const _ROW_CACHE_MAX = 600;
@@ -2558,6 +2563,16 @@ function buildBadgeChips(m: LogMsg): BadgeChip[] {
   return out;
 }
 
+// >>> twitch mod/vip/broadcaster fall back to an svg badge when the real
+// image is missing; other badges keep the text chip
+function badgePlaceholderSvg(b: BadgeChip): string {
+  if (b.kind !== "twitch") return "";
+  if (b.label === "moderator") return MOD_BADGE_PLACEHOLDER;
+  if (b.label === "vip") return VIP_BADGE_PLACEHOLDER;
+  if (b.label === "broadcaster") return BC_BADGE_PLACEHOLDER;
+  return "";
+}
+
 function getEventMeta(m: LogMsg): EventMeta | null {
   const tags = m.tags ?? {};
   if (tags["first-msg"] === "1") {
@@ -3587,6 +3602,8 @@ function paintNameStyle(paint: {
                         <template v-for="b in getRowData(item.msg).badges" :key="`${item.msg.id}-${b.kind}-${b.key}`">
                           <img v-if="b.imageUrl" class="badge-img" fetchpriority="high" :src="b.imageUrl"
                             :alt="b.title || b.label" :title="b.title || b.label" />
+                          <span v-else-if="badgePlaceholderSvg(b)" class="badge-ph" :title="b.title || b.label"
+                            v-html="badgePlaceholderSvg(b)"></span>
                           <span v-else class="badge-fallback" :title="b.title || b.label">{{ b.label }}</span>
                         </template>
                       </div>
@@ -3653,6 +3670,8 @@ function paintNameStyle(paint: {
                             @vnodeMounted="() => badgeLoadStart(b.imageUrl!)" @vnodeBeforeUpdate="
                               () => badgeLoadStart(b.imageUrl!)
                             " @load="badgeLoaded" @error="badgeError" />
+                          <span v-else-if="badgePlaceholderSvg(b)" class="badge-ph" :title="b.title || b.label"
+                            v-html="badgePlaceholderSvg(b)"></span>
                           <span v-else class="badge-fallback" :title="b.title || b.label">{{ b.label }}</span>
                         </template>
                       </div>
@@ -3678,6 +3697,8 @@ function paintNameStyle(paint: {
                               :key="`mob-${item.msg.id}-${b.kind}-${b.key}`">
                               <img v-if="b.imageUrl" class="badge-img" :src="b.imageUrl" :alt="b.title || b.label"
                                 :title="b.title || b.label" />
+                              <span v-else-if="badgePlaceholderSvg(b)" class="badge-ph" :title="b.title || b.label"
+                                v-html="badgePlaceholderSvg(b)"></span>
                               <span v-else class="badge-fallback" :title="b.title || b.label">{{ b.label }}</span>
                             </template>
                           </span>
@@ -4525,6 +4546,17 @@ function paintNameStyle(paint: {
   display: block;
   width: 18px;
   height: 18px;
+}
+
+:deep(.badge-ph) {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+}
+:deep(.badge-ph svg) {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 :deep(.badge-fallback) {
@@ -5542,7 +5574,8 @@ function paintNameStyle(paint: {
     vertical-align: middle;
   }
 
-  :deep(.log-mobile-badges .badge-img) {
+  :deep(.log-mobile-badges .badge-img),
+  :deep(.log-mobile-badges .badge-ph) {
     width: 16px;
     height: 16px;
   }
