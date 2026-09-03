@@ -234,6 +234,7 @@ interface Command {
   broadcasterOnly: boolean;
   renamedTo: string | null;
   description: string;
+  category?: string;
   argVariants: {
     usage: string;
     desc: string;
@@ -1122,52 +1123,24 @@ function openColCtx(e: MouseEvent, key: string, hideable?: boolean) {
 
 const BLOCKED = ["join", "leave", "pm2", "refresh", "whitelist", "git"];
 
-function inferCategory(name: string): string {
-  const utility = [
-    "ping",
-    "commands",
-    "join",
-    "leave",
-    "pm2",
-    "refresh",
-    "say",
-    "to",
-    "user",
-    "whitelist",
-    "git",
-    "cmd",
-    "command",
-    "message",
-    "timeout",
-    "ban",
-    "delete",
-  ];
-  const chat = [
-    "ask",
-    "song",
-    "gpt",
-    "7tv",
-    "talk",
-    "verify",
-    "shyboti",
-    "say",
-  ];
-  const games = ["66", "ssp", "sw", "bottle"];
-  if (utility.includes(name)) return "utility";
-  if (chat.includes(name)) return "chat";
-  if (games.includes(name)) return "games";
-  return "fun";
-}
-
+// >>> category comes from the backend (the command's folder). colour-coded,
+// not editable - custom rows get their own picker instead
 const CAT_COLOR: Record<string, string> = {
-  utility: "#7c83ff",
-  chat: "#4ec9b0",
-  fun: "#f9a84d",
+  ai: "#4ec9b0",
+  emotes: "#c586c0",
   games: "#e06c75",
+  fun: "#f9a84d",
+  moderation: "#f14c4c",
+  stream: "#569cd6",
+  info: "#6a9955",
+  reminders: "#d7ba7d",
+  config: "#7c83ff",
+  community: "#4fc1ff",
+  admin: "#808080",
+  utility: "#9d6cff",
 };
-// >>> default commands are colour-coded by inferred category (not editable)
-function defaultDotColor(name: string): string {
-  return CAT_COLOR[inferCategory(name)] ?? "#7c83ff";
+function defaultDotColor(category?: string): string {
+  return CAT_COLOR[category ?? ""] ?? "#7c83ff";
 }
 const defaultColorFilter = ref<string | null>(null);
 
@@ -1177,7 +1150,7 @@ function filtered() {
     list = list.filter((c) => c.name.includes(search.value.toLowerCase()));
   if (defaultColorFilter.value)
     list = list.filter(
-      (c) => defaultDotColor(c.name).toLowerCase() === defaultColorFilter.value,
+      (c) => defaultDotColor(c.category).toLowerCase() === defaultColorFilter.value,
     );
   return defaultApplySort(list, defaultSortVal);
 }
@@ -1209,7 +1182,7 @@ const defaultUsedColors = computed(() => [
   ...new Set(
     commands.value
       .filter((c) => !BLOCKED.includes(c.name))
-      .map((c) => defaultDotColor(c.name).toLowerCase()),
+      .map((c) => defaultDotColor(c.category).toLowerCase()),
   ),
 ]);
 const colorFilter = ref<string | null>(null);
@@ -1936,7 +1909,7 @@ onUnmounted(() => {
                       @click.stop="toggleExpandDefault(cmd.name)" v-html="iconSvgFor('chevron-down')">
                     </button>
                   </span>
-                  <span class="cmd-cat-dot" :style="{ background: defaultDotColor(cmd.name) }"></span>
+                  <span class="cmd-cat-dot" :style="{ background: defaultDotColor(cmd.category) }"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ cmd.renamedTo || cmd.name }}</span>
                   <span v-if="cmd.renamedTo" class="cmd-renamed-hint" :title="`Default: ${prefix}${cmd.name}`">↺</span>
                   <span v-if="commandsWithRemovedDefaultAlias.has(cmd.name)" class="cmd-renamed-hint"
