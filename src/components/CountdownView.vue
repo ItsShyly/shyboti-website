@@ -34,8 +34,17 @@ const rowColors = useRowColors(() => session.value?.channel, "countdown", "#7c83
 const cdBarColors = computed(() =>
   rowColors.usedColors(countdowns.value.map((x) => x.name)),
 );
+// >>> sort rank = the colour's slot in the header colour bar; uncoloured sinks
+function cdColorRank(name: string): number | null {
+  if (!rowColors.colors.value[name]) return null;
+  const i = cdBarColors.value.indexOf(rowColors.colorOf(name).toLowerCase());
+  return i < 0 ? null : i;
+}
 const shownCountdowns = computed(() =>
-  countdowns.value.filter((x) => rowColors.matchesFilter(x.name)),
+  countdownApplySort(
+    countdowns.value.filter((x) => rowColors.matchesFilter(x.name)),
+    (cd: Countdown, k) => (k === "color" ? cdColorRank(cd.name) : cd.name),
+  ),
 );
 
 const { confirmOpen, confirmData, ask: askConfirm, onConfirm, onCancel } = useConfirm();
@@ -86,6 +95,17 @@ function countdownRowCtx(e: MouseEvent, cd: Countdown) {
     },
   });
 }
+// >>> left-click the colour cell -> just the colour picker
+function openColorPicker(e: MouseEvent, name: string) {
+  openContext(e, {
+    swatch: {
+      label: t("cmd.dot_colour"),
+      current: rowColors.colorOf(name),
+      used: cdBarColors.value,
+      onPick: (hex: string) => rowColors.setColor(name, hex),
+    },
+  });
+}
 function openCountdownCtx(e: MouseEvent, cd: Countdown) {
   openContext(e, {
     items: canEdit.value
@@ -109,6 +129,7 @@ function openCountdownCtx(e: MouseEvent, cd: Countdown) {
 
 // vvv resizable/draggable columns vvv
 const COUNTDOWN_COL_LABEL: Record<string, () => string> = {
+  color: () => "",
   controls: () => t("countdown.header.controls"),
   name: () => t("countdown.field.name"),
   status: () => t("countdown.header.status"),
@@ -138,7 +159,13 @@ const {
   onDragEnterCell: countdownColDragEnterCell,
   onDrop: countdownColDrop,
   onDragEnd: countdownColDragEnd,
+  sortKey: countdownSortKey,
+  sortDir: countdownSortDir,
+  applySort: countdownApplySort,
+  onHeaderPointerDown: countdownOnHeaderPointerDown,
+  onHeaderClick: countdownOnHeaderClick,
 } = useResizableColumns("countdown-row", [
+  { key: "color", label: "", width: 30, minWidth: 26, sortable: true },
   { key: "controls", label: "", width: 160, minWidth: 120 },
   { key: "name", label: "", width: 2, minWidth: 120, flex: true, hideable: false },
   { key: "status", label: "", width: 140, minWidth: 100 },
@@ -149,7 +176,11 @@ const {
 const countdownColItems = computed(() =>
   countdownColumns.value
     .filter((c) => c.key !== "name")
-    .map((c) => ({ key: c.key, label: countdownColLabel(c.key), hideable: c.hideable })),
+    .map((c) => ({
+      key: c.key,
+      label: c.key === "color" ? t("cols.colour") : countdownColLabel(c.key),
+      hideable: c.hideable,
+    })),
 );
 function openCountdownColCtx(e: MouseEvent, key: string, hideable?: boolean) {
   if (hideable === false) return;
@@ -631,12 +662,17 @@ defineExpose({
     <div v-else class="countdown-table">
       <div class="ep-row-header countdown-row" :style="{ gridTemplateColumns: countdownGridTemplateColumns }">
         <div v-for="(col, i) in countdownVisibleColumns" :key="col.key" class="ep-row-header-cell"
-          :class="{ dragging: countdownColDraggingIndex === i, 'drag-over': countdownColDragOverIndex === i }"
-          :style="{ order: i }" draggable="true" @dragstart="countdownColDragStart(i)"
+          :class="{ dragging: countdownColDraggingIndex === i, 'drag-over': countdownColDragOverIndex === i,
+            sortable: col.sortable, 'sort-active': countdownSortKey === col.key }"
+          :style="{ order: i }" draggable="true" @mousedown="countdownOnHeaderPointerDown"
+          @click="countdownOnHeaderClick(i, $event)" @dragstart="countdownColDragStart(i)"
           @contextmenu.prevent="openCountdownColCtx($event, col.key, col.hideable)"
           @dragenter.prevent="countdownColDragEnterCell(i)" @dragover.prevent @drop="countdownColDrop(i)"
           @dragend="countdownColDragEnd()" @mouseenter="countdownSetHover(col.key)" @mouseleave="countdownClearHover()">
           {{ countdownColLabel(col.key) }}
+          <span v-if="col.sortable" class="ep-sort-arrow" v-html="countdownSortKey === col.key
+            ? iconSvgFor(countdownSortDir === 'asc' ? 'chevron-up' : 'chevron-down')
+            : iconSvgFor('chevrons-up-down')"></span>
           <span class="ep-col-resize-handle" :class="{ resizing: countdownResizingIndex === i }"
             @mousedown="countdownStartResize(i, $event)" @click.stop @dragstart.stop.prevent></span>
         </div>
@@ -651,8 +687,11 @@ defineExpose({
         }" @pointerdown="sel.onRowPointerDown($event, cd.name)"
         @click.capture="sel.onRowClickCapture($event, cd.name)"
         @contextmenu.prevent="countdownRowCtx($event, cd)">
-        <div class="ep-cell-name ep-row-cell-hover" :style="countdownCellStyle('name')" @click="openEdit(cd)">
+        <div class="ep-cell-color ep-cell-color--pick" data-no-sel :style="countdownCellStyle('color')"
+          @click.stop="openColorPicker($event, cd.name)">
           <span class="row-color-dot" :style="{ background: rowColors.colorOf(cd.name) }"></span>
+        </div>
+        <div class="ep-cell-name ep-row-cell-hover" :style="countdownCellStyle('name')" @click="openEdit(cd)">
           <span class="cd-status-dot" :class="cd.status ?? 'idle'"></span>
           <span class="cd-name-text">{{ cd.name }}</span>
         </div>
@@ -890,7 +929,7 @@ defineExpose({
 }
 
 .countdown-row {
-  grid-template-columns: 160px minmax(120px, 1fr) 140px 240px 150px 50px;
+  grid-template-columns: 30px 160px minmax(120px, 1fr) 140px 240px 150px 50px;
 }
 
 .cd-status-dot {

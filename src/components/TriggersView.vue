@@ -125,6 +125,17 @@ async function saveTriggerCd(trigger: Trigger, v: number) {
   }).catch(() => { });
 }
 
+// >>> left-click the colour cell -> just the colour picker
+function openColorPicker(e: MouseEvent, name: string) {
+  openContext(e, {
+    swatch: {
+      label: t("cmd.dot_colour"),
+      current: rowColors.colorOf(name),
+      used: trigBarColors.value,
+      onPick: (hex: string) => rowColors.setColor(name, hex),
+    },
+  });
+}
 function openTriggerCtx(e: MouseEvent, trigger: Trigger) {
   openContext(e, {
     items: canEdit.value
@@ -158,6 +169,7 @@ function openTriggerCtx(e: MouseEvent, trigger: Trigger) {
 
 // vvv resizable/draggable columns vvv
 const TRIGGER_COL_LABEL: Record<string, () => string> = {
+  color: () => "",
   name: () => t("trigger.field.name"),
   response: () => t("trigger.field.response"),
   event: () => t("trigger.field.event"),
@@ -193,6 +205,7 @@ const {
   onHeaderPointerDown: triggerOnHeaderPointerDown,
   onHeaderClick: triggerOnHeaderClick,
 } = useResizableColumns("trigger-row", [
+  { key: "color", label: "", width: 30, minWidth: 26, sortable: true },
   { key: "name", label: "", width: 2, minWidth: 120, flex: true, sortable: true, hideable: false },
   { key: "response", label: "", width: 4, minWidth: 150, flex: true, sortable: true },
   { key: "event", label: "", width: 190, minWidth: 120, sortable: true },
@@ -203,7 +216,11 @@ const {
 const triggerColItems = computed(() =>
   triggerColumns.value
     .filter((c) => c.key !== "name")
-    .map((c) => ({ key: c.key, label: triggerColLabel(c.key), hideable: c.hideable })),
+    .map((c) => ({
+      key: c.key,
+      label: c.key === "color" ? t("cols.colour") : triggerColLabel(c.key),
+      hideable: c.hideable,
+    })),
 );
 function openTriggerColCtx(e: MouseEvent, key: string, hideable?: boolean) {
   if (hideable === false) return;
@@ -215,6 +232,12 @@ function openTriggerColCtx(e: MouseEvent, key: string, hideable?: boolean) {
 }
 // ^^^ resizable/draggable columns ^^^
 
+// >>> sort rank = the colour's slot in the header colour bar; uncoloured sinks
+function triggerColorRank(name: string): number | null {
+  if (!rowColors.colors.value[name]) return null;
+  const i = trigBarColors.value.indexOf(rowColors.colorOf(name).toLowerCase());
+  return i < 0 ? null : i;
+}
 const sortedTriggers = computed(() =>
   triggerApplySort(
     triggers.value.filter((x) => rowColors.matchesFilter(x.name)),
@@ -223,6 +246,7 @@ const sortedTriggers = computed(() =>
       if (k === "response") return tr.response;
       if (k === "event") return eventLabel(tr.event_type ?? "message");
       if (k === "action") return actionLabel(tr.action_type ?? "");
+      if (k === "color") return triggerColorRank(tr.name);
       return null;
     },
   ),
@@ -1104,8 +1128,11 @@ defineExpose({
         }" @pointerdown="sel.onRowPointerDown($event, trigger.name)"
         @click.capture="sel.onRowClickCapture($event, trigger.name)"
         @contextmenu.prevent="triggerRowCtx($event, trigger)">
-        <div class="ep-cell-name ep-row-cell-hover" :style="triggerCellStyle('name')" @click="openEdit(trigger)">
+        <div class="ep-cell-color ep-cell-color--pick" data-no-sel :style="triggerCellStyle('color')"
+          @click.stop="openColorPicker($event, trigger.name)">
           <span class="row-color-dot" :style="{ background: rowColors.colorOf(trigger.name) }"></span>
+        </div>
+        <div class="ep-cell-name ep-row-cell-hover" :style="triggerCellStyle('name')" @click="openEdit(trigger)">
           <span v-if="isAutoNamed(trigger)" class="ep-tag keyword"><span v-html="iconSvgFor('link')"></span> {{
             autoNamedTagLabel(trigger) }}</span>
           <span v-else class="trigger-name-text">{{ trigger.name }}</span>
@@ -1470,7 +1497,7 @@ defineExpose({
 }
 
 .trigger-row {
-  grid-template-columns: 160px 1fr 190px 220px auto;
+  grid-template-columns: 30px 160px 1fr 190px 220px auto;
 }
 
 .trigger-name-text {

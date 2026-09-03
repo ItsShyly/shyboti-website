@@ -197,12 +197,14 @@ const {
   onHeaderPointerDown: modOnHeaderPointerDown,
   onHeaderClick: modOnHeaderClick,
 } = useResizableColumns("mod-item", [
+  { key: "color", label: "", width: 30, minWidth: 26, sortable: true },
   { key: "term", label: "", width: 1, minWidth: 50, flex: true, sortable: true, hideable: false },
   { key: "action", label: "", width: 2, minWidth: 120, flex: true, sortable: true },
   { key: "manage", label: "", width: 170, minWidth: 170 },
   { key: "switch", label: "", width: 50, minWidth: 50, hideable: false },
 ]);
 function modColLabel(key: string, tab: "blocked" | "spam" | "nukes"): string {
+  if (key === "color") return "";
   if (key === "term") return tab === "blocked" ? t("mod.header.term") : t("mod.header.filter");
   if (key === "action") return t("mod.header.action");
   if (key === "manage") return t("cmd.sort.actions");
@@ -214,7 +216,7 @@ const modColItems = computed(() =>
     .filter((c) => c.key !== "term")
     .map((c) => ({
       key: c.key,
-      label: modColLabel(c.key, "blocked"),
+      label: c.key === "color" ? t("cols.colour") : modColLabel(c.key, "blocked"),
       hideable: c.hideable,
     })),
 );
@@ -346,7 +348,26 @@ function modSortVal(tab: Tab, item: any, k: string): string | number | null {
   if (k === "term")
     return tab === "spam" ? spamLabel(item).name : (item.term ?? item.trigger);
   if (k === "action") return actionLabel(item.action);
+  if (k === "color") return modColorRank(String(item.id));
   return null;
+}
+// >>> sort rank = the colour's slot in the header colour bar; uncoloured sinks
+function modColorRank(id: string): number | null {
+  if (!rowColors.colors.value[id]) return null;
+  const i = modBarColors.value.indexOf(rowColors.colorOf(id).toLowerCase());
+  return i < 0 ? null : i;
+}
+// >>> left-click the colour cell -> just the colour picker
+function openModColorPicker(e: MouseEvent, item: any) {
+  if (!canManage.value) return;
+  openContext(e, {
+    swatch: {
+      label: t("cmd.dot_colour"),
+      current: rowColors.colorOf(String(item.id)),
+      used: modBarColors.value,
+      onPick: (hex: string) => rowColors.setColor(String(item.id), hex),
+    },
+  });
 }
 // >>> ungrouped bucket keeps one v-for for all rows
 // >>> per-row dot colour + header filter (localStorage per channel)
@@ -1249,6 +1270,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 :style="{ gridTemplateColumns: modGridTemplateColumns }"
                 @click="toggleGroupOpen(section.group.id)"
                 @contextmenu.prevent="openGroupCtx($event, 'blocked', section.group.id, section.group.name)">
+                <div :style="modCellStyle('color')"></div>
                 <div class="mod-group-title" :style="modCellStyle('term')">
                   <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"></span>
                   <span class="mod-group-name">{{ t("mod.group.reason_prefix") }}{{ section.group.name }}</span>
@@ -1279,10 +1301,13 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   @pointerdown="sel.onRowPointerDown($event, String(term.id))"
                   @click.capture="sel.onRowClickCapture($event, String(term.id))"
                   @contextmenu.prevent="modRowCtx($event, 'blocked', term, term.term)">
+                  <div class="ep-cell-color ep-cell-color--pick" data-no-sel draggable="false"
+                    :style="modCellStyle('color')" @click.stop="openModColorPicker($event, term)">
+                    <span class="row-color-dot" :style="{ background: rowColors.colorOf(String(term.id)) }"></span>
+                  </div>
                   <div class="mod-item-main ep-row-cell-hover" :style="modCellStyle('term')"
                     @click="canManage && openEditBlocked(term)">
                     <div class="mod-item-title">
-                      <span class="row-color-dot" :style="{ background: rowColors.colorOf(String(term.id)) }"></span>
                       <span v-if="term.is_regex" class="ep-tag keyword">{{ t("mod.badge.regex") }}</span>
                       <span v-if="term.action === 'automod' && !term.twitch_term_id" class="ep-tag arg"
                         :title="t('mod.badge.automod_pending_hint')">
@@ -1352,6 +1377,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 :style="{ gridTemplateColumns: modGridTemplateColumns }"
                 @click="toggleGroupOpen(section.group.id)"
                 @contextmenu.prevent="openGroupCtx($event, 'spam', section.group.id, section.group.name)">
+                <div :style="modCellStyle('color')"></div>
                 <div class="mod-group-title" :style="modCellStyle('term')">
                   <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"></span>
                   <span class="mod-group-name">{{ t("mod.group.reason_prefix") }}{{ section.group.name }}</span>
@@ -1382,10 +1408,13 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   @pointerdown="sel.onRowPointerDown($event, String(f.id))"
                   @click.capture="sel.onRowClickCapture($event, String(f.id))"
                   @contextmenu.prevent="modRowCtx($event, 'spam', f, spamLabel(f).name)">
+                  <div class="ep-cell-color ep-cell-color--pick" data-no-sel draggable="false"
+                    :style="modCellStyle('color')" @click.stop="openModColorPicker($event, f)">
+                    <span class="row-color-dot" :style="{ background: rowColors.colorOf(String(f.id)) }"></span>
+                  </div>
                   <div class="mod-item-main ep-row-cell-hover" :style="modCellStyle('term')"
                     @click="canManage && openEditSpam(f)">
                     <div class="spam-label">
-                      <span class="row-color-dot" :style="{ background: rowColors.colorOf(String(f.id)) }"></span>
                       <span class="spam-name">{{ spamLabel(f).name }}</span>
                       <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
                     </div>
@@ -1430,6 +1459,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 :style="{ gridTemplateColumns: modGridTemplateColumns }"
                 @click="toggleGroupOpen(section.group.id)"
                 @contextmenu.prevent="openGroupCtx($event, 'nukes', section.group.id, section.group.name)">
+                <div :style="modCellStyle('color')"></div>
                 <div class="mod-group-title" :style="modCellStyle('term')">
                   <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"></span>
                   <span class="mod-group-name">{{ t("mod.group.reason_prefix") }}{{ section.group.name }}</span>
@@ -1450,7 +1480,9 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                   @pointerdown="sel.onRowPointerDown($event, String(n.id))"
                   @click.capture="sel.onRowClickCapture($event, String(n.id))"
                   @contextmenu.prevent="modRowCtx($event, 'nukes', n, n.label)">
-                  <span class="row-color-dot" :style="{ background: rowColors.colorOf(String(n.id)) }"></span>
+                  <span class="row-color-dot nuke-color-dot" data-no-sel draggable="false"
+                    :style="{ background: rowColors.colorOf(String(n.id)) }"
+                    @click.stop="openModColorPicker($event, n)"></span>
                   <div class="nuke-row-badges">
                     <span v-if="n.stay_active" class="ep-tag action" :title="t('mod.nuke.stay_hint')">{{
                       t("mod.badge.stay") }}</span>
@@ -1977,7 +2009,11 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   border-right: 2px solid #2a2a30;
 }
 .mod-group-members>.ep-row-grid .mod-item-main {
-  padding-left: 32px;
+  padding-left: 10px;
+}
+/* >>> grouped rows: nudge the colour dot clear of the nesting mask/border */
+.mod-group-members>.ep-row-grid.mod-item-row>.ep-cell-color {
+  padding-left: 22px;
 }
 .mod-group-members>.nuke-item-row {
   padding-left: 24px;
@@ -1987,7 +2023,14 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
    the effect tags all the way to the right and made short left-aligned
    term text look adrift in a huge empty column) */
 .mod-item-row {
-  grid-template-columns: minmax(180px, 300px) 200px minmax(200px, auto);
+  grid-template-columns: 30px minmax(180px, 300px) 200px minmax(200px, auto);
+}
+.nuke-color-dot {
+  cursor: pointer;
+}
+.nuke-color-dot:hover {
+  outline: 2px solid #3a3a44;
+  outline-offset: 1px;
 }
 
 .mod-header-actions {

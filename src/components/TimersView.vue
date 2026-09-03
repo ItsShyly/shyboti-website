@@ -105,6 +105,17 @@ function timerRowCtx(e: MouseEvent, timer: Timer) {
     },
   });
 }
+// >>> left-click the colour cell -> just the colour picker
+function openColorPicker(e: MouseEvent, name: string) {
+  openContext(e, {
+    swatch: {
+      label: t("cmd.dot_colour"),
+      current: rowColors.colorOf(name),
+      used: timerBarColors.value,
+      onPick: (hex: string) => rowColors.setColor(name, hex),
+    },
+  });
+}
 function openTimerCtx(e: MouseEvent, timer: Timer) {
   openContext(e, {
     items: canEdit.value
@@ -128,6 +139,7 @@ function openTimerCtx(e: MouseEvent, timer: Timer) {
 
 // vvv resizable/draggable columns vvv
 const TIMER_COL_LABEL: Record<string, () => string> = {
+  color: () => "",
   name: () => t("timer.field.name"),
   response: () => t("timer.field.response"),
   interval: () => t("timer.field.interval"),
@@ -163,6 +175,7 @@ const {
   onHeaderPointerDown: timerOnHeaderPointerDown,
   onHeaderClick: timerOnHeaderClick,
 } = useResizableColumns("timer-row", [
+  { key: "color", label: "", width: 30, minWidth: 26, sortable: true },
   { key: "name", label: "", width: 2, minWidth: 120, flex: true, sortable: true, hideable: false },
   { key: "response", label: "", width: 4, minWidth: 150, flex: true, sortable: true },
   { key: "interval", label: "", width: 150, minWidth: 100 },
@@ -173,7 +186,11 @@ const {
 const timerColItems = computed(() =>
   timerColumns.value
     .filter((c) => c.key !== "name")
-    .map((c) => ({ key: c.key, label: timerColLabel(c.key), hideable: c.hideable })),
+    .map((c) => ({
+      key: c.key,
+      label: c.key === "color" ? t("cols.colour") : timerColLabel(c.key),
+      hideable: c.hideable,
+    })),
 );
 function openTimerColCtx(e: MouseEvent, key: string, hideable?: boolean) {
   if (hideable === false) return;
@@ -185,11 +202,23 @@ function openTimerColCtx(e: MouseEvent, key: string, hideable?: boolean) {
 }
 // ^^^ resizable/draggable columns ^^^
 
+// >>> sort rank = the colour's slot in the header colour bar; uncoloured sinks
+function timerColorRank(name: string): number | null {
+  if (!rowColors.colors.value[name]) return null;
+  const i = timerBarColors.value.indexOf(rowColors.colorOf(name).toLowerCase());
+  return i < 0 ? null : i;
+}
 const sortedTimers = computed(() =>
   timerApplySort(
     timers.value.filter((x) => rowColors.matchesFilter(x.name)),
     (ti: Timer, k) =>
-      k === "name" ? ti.name : k === "response" ? ti.response : null,
+      k === "name"
+        ? ti.name
+        : k === "response"
+          ? ti.response
+          : k === "color"
+            ? timerColorRank(ti.name)
+            : null,
   ),
 );
 
@@ -767,8 +796,11 @@ defineExpose({
           }" @pointerdown="sel.onRowPointerDown($event, timer.name)"
           @click.capture="sel.onRowClickCapture($event, timer.name)"
           @contextmenu.prevent="timerRowCtx($event, timer)">
-          <div class="ep-cell-name ep-row-cell-hover" :style="timerCellStyle('name')" @click="openEdit(timer)">
+          <div class="ep-cell-color ep-cell-color--pick" data-no-sel :style="timerCellStyle('color')"
+            @click.stop="openColorPicker($event, timer.name)">
             <span class="row-color-dot" :style="{ background: rowColors.colorOf(timer.name) }"></span>
+          </div>
+          <div class="ep-cell-name ep-row-cell-hover" :style="timerCellStyle('name')" @click="openEdit(timer)">
             <span class="timer-name-text">{{ timer.name }}</span>
           </div>
           <div class="ep-cell-text timer-resp-cell ep-row-cell-hover" :style="timerCellStyle('response')"
@@ -971,7 +1003,7 @@ defineExpose({
 }
 
 .timer-row {
-  grid-template-columns: 160px 1fr 150px 190px auto;
+  grid-template-columns: 30px 160px 1fr 150px 190px auto;
 }
 
 .timer-name-text {

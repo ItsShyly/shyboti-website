@@ -155,6 +155,11 @@ function colorSwatch(name: string) {
     onPick: (hex: string) => setDotColor(name, hex),
   };
 }
+// >>> left-click the colour cell -> just the colour picker, nothing else
+function openColorPicker(e: MouseEvent, name: string) {
+  if (!canEdit.value) return;
+  openContext(e, { swatch: colorSwatch(name) });
+}
 function openCustomCtx(e: MouseEvent, cmd: CustomCommand) {
   if (!canEdit.value) return;
   openContext(e, {
@@ -887,10 +892,27 @@ function scriptVarsUsed(cmd: CustomCommand): string[] {
 function accessRank(c: { modOnly: boolean; broadcasterOnly: boolean }): number {
   return c.broadcasterOnly ? 2 : c.modOnly ? 1 : 0;
 }
+// >>> sort rank = the colour's position in the header colour bar, so rows come
+// out grouped by colour in the same order the swatches show. custom rows that
+// never got a colour picked sink (null).
+function defaultColorRank(cmd: Command): number | null {
+  const i = defaultUsedColors.value.indexOf(
+    defaultDotColor(cmd.category).toLowerCase(),
+  );
+  return i < 0 ? null : i;
+}
+function customColorRank(cmd: CustomCommand): number | null {
+  if (!cmdColors.value[cmd.name]) return null;
+  const i = customUsedColors.value.indexOf(
+    dotColor("custom", cmd.name).toLowerCase(),
+  );
+  return i < 0 ? null : i;
+}
 function defaultSortVal(cmd: Command, k: string): string | number | null {
   if (k === "name") return cmd.renamedTo || cmd.name;
   if (k === "desc") return cmdDesc(cmd);
   if (k === "access") return accessRank(cmd);
+  if (k === "color") return defaultColorRank(cmd);
   return null;
 }
 function customSortVal(cmd: CustomCommand, k: string): string | number | null {
@@ -898,11 +920,13 @@ function customSortVal(cmd: CustomCommand, k: string): string | number | null {
   if (k === "desc") return cmd.description;
   if (k === "response") return cmd.response;
   if (k === "access") return accessRank(cmd);
+  if (k === "color") return customColorRank(cmd);
   return null;
 }
 
 // vvv resizable/draggable columns (Default tab - pilot for useResizableColumns) vvv
 const DEFAULT_COL_LABEL: Record<string, () => string> = {
+  color: () => "",
   name: () => t("cmd.header.name"),
   desc: () => t("cmd.header.desc"),
   tags: () => t("cmd.header.tags"),
@@ -938,6 +962,7 @@ const {
   onHeaderPointerDown: defaultOnHeaderPointerDown,
   onHeaderClick: defaultOnHeaderClick,
 } = useResizableColumns("cmd-default", [
+  { key: "color", label: "", width: 30, minWidth: 26, sortable: true },
   { key: "name", label: "", width: 3, minWidth: 140, flex: true, sortable: true, hideable: false },
   { key: "desc", label: "", width: 8, minWidth: 160, flex: true, sortable: true },
   { key: "tags", label: "", width: 150, minWidth: 100 },
@@ -949,6 +974,7 @@ const {
 
 // vvv resizable/draggable columns - Custom tab vvv
 const CUSTOM_COL_LABEL: Record<string, () => string> = {
+  color: () => "",
   name: () => t("cmd.header.name"),
   desc: () => t("cmd.header.desc"),
   response: () => t("cmd.header.response"),
@@ -985,6 +1011,7 @@ const {
   onHeaderPointerDown: customOnHeaderPointerDown,
   onHeaderClick: customOnHeaderClick,
 } = useResizableColumns("cmd-custom", [
+  { key: "color", label: "", width: 30, minWidth: 26, sortable: true },
   { key: "name", label: "", width: 3, minWidth: 100, flex: true, sortable: true, hideable: false },
   { key: "desc", label: "", width: 4, minWidth: 140, flex: true, sortable: true },
   { key: "response", label: "", width: 5, minWidth: 150, flex: true, sortable: true },
@@ -1103,7 +1130,7 @@ const colMenu = computed(() => {
 const colMenuItems = computed(() =>
   colMenu.value.cols.value.map((c) => ({
     key: c.key,
-    label: colMenu.value.label(c.key),
+    label: c.key === "color" ? t("cols.colour") : colMenu.value.label(c.key),
     hideable: c.hideable,
   })),
 );
@@ -1867,6 +1894,9 @@ onUnmounted(() => {
           <div v-if="loading" class="rows">
             <div class="ep-row-grid cmd-default-row" v-for="i in 8" :key="i">
               <div>
+                <div class="ep-skeleton-block ep-skeleton-square" style="width:8px;height:8px;"></div>
+              </div>
+              <div>
                 <div class="ep-skeleton-block" style="height:11px;width:80%;"></div>
               </div>
               <div>
@@ -1899,6 +1929,9 @@ onUnmounted(() => {
                 }" @pointerdown="selDefault.onRowPointerDown($event, cmd.name)"
                 @click.capture="selDefault.onRowClickCapture($event, cmd.name)"
                 @contextmenu.prevent="defaultRowCtx($event, cmd)">
+                <div class="ep-cell-color" :style="defaultCellStyle('color')">
+                  <span class="cmd-cat-dot" :style="{ background: defaultDotColor(cmd.category) }"></span>
+                </div>
                 <div class="ep-cell-name ep-row-cell-hover" :class="{ 'name-expandable': cmd.argVariants?.length }"
                   :style="defaultCellStyle('name')" @click="cmd.argVariants?.length
                     ? toggleExpandDefault(cmd.name)
@@ -1909,7 +1942,6 @@ onUnmounted(() => {
                       @click.stop="toggleExpandDefault(cmd.name)" v-html="iconSvgFor('chevron-down')">
                     </button>
                   </span>
-                  <span class="cmd-cat-dot" :style="{ background: defaultDotColor(cmd.category) }"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ cmd.renamedTo || cmd.name }}</span>
                   <span v-if="cmd.renamedTo" class="cmd-renamed-hint" :title="`Default: ${prefix}${cmd.name}`">↺</span>
                   <span v-if="commandsWithRemovedDefaultAlias.has(cmd.name)" class="cmd-renamed-hint"
@@ -2029,6 +2061,9 @@ onUnmounted(() => {
         <div v-if="customLoading" class="rows">
           <div class="ep-row-grid cmd-custom-row" v-for="i in 8" :key="i">
             <div>
+              <div class="ep-skeleton-block ep-skeleton-square" style="width:8px;height:8px;"></div>
+            </div>
+            <div>
               <div class="ep-skeleton-block" style="height:11px;width:80%;"></div>
             </div>
             <div>
@@ -2069,9 +2104,12 @@ onUnmounted(() => {
                 }" @pointerdown="selCustom.onRowPointerDown($event, cmd.name)"
                 @click.capture="selCustom.onRowClickCapture($event, cmd.name)"
                 @contextmenu.prevent="customRowCtx($event, cmd)">
+                <div class="ep-cell-color ep-cell-color--pick" data-no-sel
+                  :style="customCellStyle('color')" @click.stop="openColorPicker($event, cmd.name)">
+                  <span class="cmd-cat-dot" :style="{ background: dotColor('custom', cmd.name) }"></span>
+                </div>
                 <div class="ep-cell-name ep-row-cell-hover" :style="customCellStyle('name')"
                   @click="canEdit && openEdit(cmd.name, false)">
-                  <span class="cmd-cat-dot" :style="{ background: dotColor('custom', cmd.name) }"></span>
                   <span class="cmd-name-text">{{ prefix }}{{ cmd.name }}</span>
                 </div>
                 <div class="ep-cell-text ep-row-cell-hover" :style="customCellStyle('desc')"
@@ -2538,12 +2576,12 @@ onUnmounted(() => {
    switch. Cooldowns lost its own column - chips moved into tags. */
 .ep-row-header.cmd-default-row,
 .ep-row-grid.cmd-default-row {
-  grid-template-columns: 200px 1fr 160px 90px 110px 50px;
+  grid-template-columns: 30px 200px 1fr 160px 90px 110px 50px;
 }
 
 .ep-row-header.cmd-custom-row,
 .ep-row-grid.cmd-custom-row {
-  grid-template-columns: 200px 1fr 1fr 160px 90px 150px 50px;
+  grid-template-columns: 30px 200px 1fr 1fr 160px 90px 150px 50px;
 }
 
 /* >>> self-contained (indent, usage, desc), not tracking the parent's exact
@@ -2675,19 +2713,19 @@ onUnmounted(() => {
    exact columns, so the access button lines up directly under the parent
    row's own access button instead of using an unrelated column count. */
 .arg-variant-row.cmd-default-row {
-  grid-template-columns: 200px 1fr 160px 90px 110px 50px;
+  grid-template-columns: 30px 200px 1fr 160px 90px 110px 50px;
   /* >>> matches .ep-row-grid's padding so this sub-row's columns line up
      exactly under the parent row's columns */
   padding: 6px 14px 6px 0;
 }
 
 .arg-variant-usage-wide {
-  /* >>> spans name+desc+tags - default commands never have a usage desc */
-  grid-column: 1 / 4;
+  /* >>> spans name+desc+tags (col 1 is the colour dot) */
+  grid-column: 2 / 5;
 }
 
 .arg-access-btn {
-  grid-column: 4;
+  grid-column: 5;
   justify-self: center;
 }
 
@@ -3173,19 +3211,19 @@ onUnmounted(() => {
     min-width: 0;
   }
 
-  /* >>> row is now name(1) desc(2) tags(3) access(4) manage(5) switch(6) kebab(7) -
-     hide 2..6, keep name + kebab (kebab holds the moved actions) */
+  /* >>> row is now color(1) name(2) desc(3) tags(4) access(5) manage(6) switch(7)
+     kebab(8) - hide 3..7, keep the colour dot, name + kebab */
   .ep-row-grid.cmd-default-row>.ep-cell-text,
-  .ep-row-grid.cmd-default-row>*:nth-child(3),
   .ep-row-grid.cmd-default-row>*:nth-child(4),
   .ep-row-grid.cmd-default-row>*:nth-child(5),
   .ep-row-grid.cmd-default-row>*:nth-child(6),
+  .ep-row-grid.cmd-default-row>*:nth-child(7),
   .ep-row-grid.cmd-custom-row>.ep-cell-text,
-  .ep-row-grid.cmd-custom-row>*:nth-child(3),
   .ep-row-grid.cmd-custom-row>*:nth-child(4),
   .ep-row-grid.cmd-custom-row>*:nth-child(5),
   .ep-row-grid.cmd-custom-row>*:nth-child(6),
-  .ep-row-grid.cmd-custom-row>*:nth-child(7) {
+  .ep-row-grid.cmd-custom-row>*:nth-child(7),
+  .ep-row-grid.cmd-custom-row>*:nth-child(8) {
     display: none;
   }
 

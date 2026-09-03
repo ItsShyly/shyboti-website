@@ -866,6 +866,24 @@
   height: 8px;
   flex-shrink: 0;
 }
+/* >>> the leading sortable colour-dot column cell */
+.ep-cell-color {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+/* >>> --pick (non-Default lists): hovering name/desc/etc still hovers the whole
+   row (this cell included), but hovering the dot itself lights up only this
+   cell, and clicking it opens the colour picker */
+.ep-cell-color--pick {
+  cursor: pointer;
+}
+.ep-row-grid:not(.selected):not(.editing) > .ep-cell-color--pick:hover {
+  background: #23232c;
+}
+.ep-row-grid:not(.selected):not(.editing):has(> .ep-cell-color--pick:hover) {
+  background: #18181c;
+}
 /* >>> used-colour filter bar in a view header */
 .cmd-color-bar {
   display: flex;
