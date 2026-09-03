@@ -27,36 +27,63 @@ export function useRowSelection<T>(
   let downX = 0;
   let downY = 0;
   let dragging = false;
+  // >>> per-gesture state: key order cached at drag start (list can't change
+  // mid-drag), last row we were over, and rAF-coalesced move handling so a
+  // fast mousemove doesn't rebuild the Set + re-render every row per event
+  let dragKeys: string[] = [];
+  let lastOverKey: string | null = null;
+  let pendingMove: PointerEvent | null = null;
+  let rafId = 0;
 
   function keys(): string[] {
     return orderedItems().map(keyOf);
   }
-  function rangeKeys(a: string, b: string): string[] {
-    const ks = keys();
+  function rangeIn(ks: string[], a: string, b: string): string[] {
     const i = ks.indexOf(a);
     const j = ks.indexOf(b);
     if (i < 0 || j < 0) return [b];
     return ks.slice(Math.min(i, j), Math.max(i, j) + 1);
   }
+  function rangeKeys(a: string, b: string): string[] {
+    return rangeIn(keys(), a, b);
+  }
 
-  function onMove(e: PointerEvent) {
-    if (!downKey) return;
+  function processMove() {
+    rafId = 0;
+    const e = pendingMove;
+    pendingMove = null;
+    if (!e || !downKey) return;
     if (!dragging && Math.hypot(e.clientX - downX, e.clientY - downY) < 5) return;
     if (!dragging) {
       dragging = true;
+      dragKeys = keys();
       anchor.value = downKey;
+      lastOverKey = downKey;
       selected.value = new Set([downKey]);
       document.body.style.userSelect = "none";
       window.getSelection()?.removeAllRanges();
     }
     const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
     const k = el?.closest("[data-sel-key]")?.getAttribute("data-sel-key");
-    if (k) selected.value = new Set(rangeKeys(downKey, k));
+    // >>> only touch reactive state when we crossed into a different row
+    if (!k || k === lastOverKey) return;
+    lastOverKey = k;
+    selected.value = new Set(rangeIn(dragKeys, downKey, k));
+  }
+  function onMove(e: PointerEvent) {
+    if (!downKey) return;
+    pendingMove = e;
+    if (!rafId) rafId = requestAnimationFrame(processMove);
   }
   function onUp() {
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("dragstart", onNativeDrag, true);
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = 0;
+    pendingMove = null;
+    dragKeys = [];
+    lastOverKey = null;
     document.body.style.userSelect = "";
     downKey = null;
   }
@@ -84,7 +111,7 @@ export function useRowSelection<T>(
     downX = e.clientX;
     downY = e.clientY;
     dragging = false;
-    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointermove", onMove, { passive: true });
     window.addEventListener("pointerup", onUp);
     window.addEventListener("dragstart", onNativeDrag, true);
   }
