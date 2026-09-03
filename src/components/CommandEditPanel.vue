@@ -697,7 +697,7 @@ const COMPLETIONS = [
   '$args', '$args.count', '$1', '$2', '$3',
   '$query',
   '$random.int(,)', '$random.pick(,)', '$random.chance()',
-  '$time.now', '$time.unix', '$time.format(,)', '$time.ago()',
+  '$time.now', '$time.unix', '$time.format(,)', '$time.tz(,,)', '$time.ago()',
   '$text.len()', '$text.upper()', '$text.lower()', '$text.title()', '$text.trim()',
   '$text.contains(,)', '$text.starts(,)', '$text.ends(,)',
   '$text.replace(,,)', '$text.remove(,)', '$text.split(,)', '$text.join(,)',

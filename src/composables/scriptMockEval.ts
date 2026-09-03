@@ -461,6 +461,18 @@ function evalExpr(raw: string, env: MockEnv): string {
     const prop = inner.slice(4).replace(/^\./, "");
     if (!prop || prop === "now") return new Date().toISOString();
     if (prop === "unix") return String(Math.floor(Date.now() / 1000));
+    const tzM = prop.match(/^tz\((.+)\)$/);
+    const fmtM = prop.match(/^format\((.+)\)$/);
+    if (tzM || fmtM) {
+      const args = splitArgs((tzM ?? fmtM)![1]!);
+      const d = new Date((evalSrc(args[0] ?? "", env).trim() || new Date().toISOString()));
+      if (isNaN(d.getTime())) return "";
+      const zone = tzM ? evalSrc(args[1] ?? "", env) : evalSrc(args[2] ?? "", env);
+      const fmt = tzM
+        ? (args[2] ? evalSrc(args[2], env) : "YYYY-MM-DD HH:mm:ss")
+        : evalSrc(args[1] ?? "", env);
+      return mockFormatDate(d, fmt, zone.trim() || undefined);
+    }
     return "2025-01-01T00:00:00Z";
   }
 
@@ -713,5 +725,50 @@ function isTruthy(val: string): boolean {
   const n = Number(val);
   if (!isNaN(n)) return n !== 0;
   return true;
+}
+
+// >>> mirrors scriptEngine's $time.format / $time.tz for the editor preview
+const MOCK_TZ_ALIASES: Record<string, string> = {
+  utc: "UTC", z: "UTC", zulu: "UTC", gmt: "UTC",
+  cet: "Europe/Berlin", cest: "Europe/Berlin", berlin: "Europe/Berlin",
+  de: "Europe/Berlin", german: "Europe/Berlin", germany: "Europe/Berlin",
+  uk: "Europe/London", london: "Europe/London", bst: "Europe/London",
+  et: "America/New_York", est: "America/New_York", edt: "America/New_York",
+  ny: "America/New_York", nyc: "America/New_York",
+  pt: "America/Los_Angeles", pst: "America/Los_Angeles", pdt: "America/Los_Angeles",
+  la: "America/Los_Angeles",
+};
+function mockFormatDate(d: Date, fmt: string, zone?: string): string {
+  const f = fmt || "YYYY-MM-DD HH:mm:ss";
+  if (!zone) {
+    const p = (n: number) => String(n).padStart(2, "0");
+    return f
+      .replace(/YYYY/g, String(d.getFullYear()))
+      .replace(/MM/g, p(d.getMonth() + 1))
+      .replace(/DD/g, p(d.getDate()))
+      .replace(/HH/g, p(d.getHours()))
+      .replace(/mm/g, p(d.getMinutes()))
+      .replace(/ss/g, p(d.getSeconds()));
+  }
+  let parts: Intl.DateTimeFormatPart[];
+  try {
+    parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: MOCK_TZ_ALIASES[zone.toLowerCase()] ?? zone,
+      year: "numeric", month: "2-digit", day: "2-digit",
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+      hour12: false,
+    }).formatToParts(d);
+  } catch {
+    return "";
+  }
+  const g = (t: string) => parts.find((x) => x.type === t)?.value ?? "";
+  const hh = g("hour") === "24" ? "00" : g("hour");
+  return f
+    .replace(/YYYY/g, g("year"))
+    .replace(/MM/g, g("month"))
+    .replace(/DD/g, g("day"))
+    .replace(/HH/g, hh)
+    .replace(/mm/g, g("minute"))
+    .replace(/ss/g, g("second"));
 }
 // ^^^ end parser helpers ^^^

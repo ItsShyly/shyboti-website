@@ -351,9 +351,14 @@ export const REF_GROUPS: RefGroup[] = [
         example: "$time.ago($var.lastSeen) → 3 hours ago",
       },
       {
-        token: "$time.format(ts,fmt)",
-        desc: "Format timestamp",
+        token: "$time.format(ts,fmt[,zone])",
+        desc: "Format timestamp (optional timezone)",
         example: "$time.format($time.now,HH:mm) → 12:00",
+      },
+      {
+        token: "$time.tz(ts,zone[,fmt])",
+        desc: "Convert timestamp to a timezone. zone: Europe/Berlin, CEST, UTC, London…",
+        example: "$time.tz(2026-09-06T13:00:00Z,CEST,HH:mm) → 15:00",
       },
     ],
   },

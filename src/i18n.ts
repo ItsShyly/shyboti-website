@@ -145,7 +145,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cols.import_once": "One-time import",
     "cols.import_auto": "Auto-sync",
     "cols.reset": "Reset table columns",
-    "cols.local_only": "local only",
+    "cols.local_only": "local",
     "sel.n_selected": "{n} selected",
     "sel.delete": "Delete",
     "sel.delete_confirm": "Delete {n} items? This can't be undone.",
@@ -1917,7 +1917,8 @@ const translations: Record<Locale, Record<string, string>> = {
     "cols.local_only": "nur lokal",
     "sel.n_selected": "{n} ausgewählt",
     "sel.delete": "Löschen",
-    "sel.delete_confirm": "{n} Einträge löschen? Kann nicht rückgängig gemacht werden.",
+    "sel.delete_confirm":
+      "{n} Einträge löschen? Kann nicht rückgängig gemacht werden.",
     "sel.activate": "Aktivieren",
     "sel.deactivate": "Deaktivieren",
     "sel.access": "Zugriff",
