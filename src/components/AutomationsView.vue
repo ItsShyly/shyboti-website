@@ -8,6 +8,7 @@ import TimersView from "./TimersView.vue";
 import TriggersView from "./TriggersView.vue";
 import CountdownView from "./CountdownView.vue";
 import ObsAutomationsView from "./ObsAutomationsView.vue";
+import SelectionHint from "./shared/SelectionHint.vue";
 
 type Tab = "timers" | "triggers" | "countdowns" | "obs";
 const route = useRoute();
@@ -60,22 +61,24 @@ async function switchTab(tab: Tab) {
 </script>
 
 <template>
-  <div class="automations ep-view">
+  <div class="automations ep-view" :class="{ 'ep-panel-docked': !!activeChild?.panelOpen }">
 
     <div class="ep-view-header">
       <div>
         <div class="ep-view-title">{{ t("auto.title") }}</div>
         <div class="ep-view-sub">
-          <template v-if="activeChild?.header">{{ activeChild.header.count }} {{ activeChild.header.countLabel
+          <SelectionHint v-if="activeChild?.selCount" :count="activeChild.selCount" @clear="activeChild.clearSel()" />
+          <template v-else-if="activeChild?.header">{{ activeChild.header.count }} {{ activeChild.header.countLabel
           }}</template>
           <template v-else>&mdash;</template>
         </div>
+        <!-- >>> the active tab teleports its colour filter bar here -->
+        <div id="auto-color-bar"></div>
       </div>
       <div class="ep-view-header-right">
-        <!-- >>> teleport targets for the sync panel, one per tab -->
-        <div id="auto-sync-slot-timers"></div>
-        <div id="auto-sync-slot-triggers"></div>
-        <button class="ep-btn-reload" @click="activeChild?.reload?.()" :title="t('auto.reload')" v-html="iconSvgFor('refresh-cw')"></button>
+        <!-- >>> the active tab teleports its column/sync menu here -->
+        <div id="auto-header-tools"></div>
+        <button class="ep-btn-reload icon-only" @click="activeChild?.reload?.()" :title="t('auto.reload')" v-html="iconSvgFor('refresh-cw')"></button>
         <button class="ep-btn-new" :disabled="!activeChild?.header?.canCreate" @click="activeChild?.create?.()">
           + {{ activeChild?.header?.createLabel ?? t('auto.new') }}
         </button>

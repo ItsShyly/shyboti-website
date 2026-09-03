@@ -3,6 +3,7 @@ import { ref, watch, computed, nextTick } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import { useEscClose } from "../composables/useEscClose";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 import ReauthLink from "./shared/ReauthLink.vue";
@@ -49,6 +50,7 @@ const emit = defineEmits<{ (e: "close"): void; (e: "saved"): void }>();
 
 const { session } = useAuth();
 const overlay = useOverlayClose();
+useEscClose(() => props.open && emit("close"));
 const saving = ref(false);
 const saved = ref(false);
 const error = ref("");
@@ -122,11 +124,11 @@ watch(fAction, (a) => {
   }
 });
 
-// >>> fill form on open
+// >>> fill form on open - and on target change, since the docked panel stays open
 watch(
-  () => props.open,
-  async (open) => {
-    if (!open) return;
+  () => [props.open, props.editTarget],
+  async () => {
+    if (!props.open) return;
     error.value = "";
     populating = true;
     deleteConfirm.value = false;
@@ -312,7 +314,7 @@ const missingFields = computed(() => {
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="ep-overlay" v-bind="overlay.handlers(() => emit('close'))">
+    <div v-if="open" class="ep-overlay ep-overlay--dock" v-bind="overlay.handlers(() => emit('close'))">
       <div class="ep-panel obs-ep-panel">
         <div class="ep-panel-header">
           <div>

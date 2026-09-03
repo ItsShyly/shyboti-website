@@ -4,11 +4,19 @@ import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import { useEscClose } from "../composables/useEscClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import { useResizableColumns } from "../composables/useResizableColumns";
 import ChannelPointActionsEditor from "./shared/ChannelPointActionsEditor.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
+import RowContextMenu from "./shared/RowContextMenu.vue";
+import ColumnMenu from "./shared/ColumnMenu.vue";
+import { useRowContextMenu } from "../composables/useRowContextMenu";
+import { useRowSelection } from "../composables/useRowSelection";
+import { useConfirm } from "../composables/useConfirm";
+import ConfirmDialog from "./shared/ConfirmDialog.vue";
+import SelectionHint from "./shared/SelectionHint.vue";
 import {
   blankAction,
   actionNeedsInput,
@@ -18,6 +26,124 @@ import {
 const { session, channelRole, adminMode } = useAuth();
 const { t } = useI18n();
 const overlay = useOverlayClose();
+const { ctxOpen, ctxX, ctxY, ctxItems, ctxCooldowns, ctxTitle, openContext } =
+  useRowContextMenu();
+
+type RewardLimitField =
+  | "globalCooldown"
+  | "maxRedemptionsPerStream"
+  | "maxRedemptionsPerUserPerStream";
+
+async function saveRewardField(r: Reward, field: RewardLimitField, v: number) {
+  if (!r.manageable || !canEdit.value || !session.value) return;
+  const prev = r[field];
+  r[field] = v || null;
+  try {
+    const res = await fetch(
+      `${API}/channelpoints/${session.value.channel}/${r.id}`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.value.token}`,
+        },
+        body: JSON.stringify({ [field]: v || null }),
+      },
+    );
+    if (!res.ok) throw new Error();
+  } catch {
+    r[field] = prev;
+    error.value = errMsg("request_failed");
+  }
+}
+
+function openRewardCtx(e: MouseEvent, r: Reward) {
+  openContext(e, {
+    cooldowns:
+      r.manageable && canEdit.value
+        ? [
+          {
+            key: "gcd",
+            label: t("cp.field.cooldown"),
+            value: r.globalCooldown ?? 0,
+            onSave: (v) => saveRewardField(r, "globalCooldown", v),
+          },
+          {
+            key: "maxStream",
+            label: t("cp.field.max_stream"),
+            value: r.maxRedemptionsPerStream ?? 0,
+            onSave: (v) => saveRewardField(r, "maxRedemptionsPerStream", v),
+          },
+          {
+            key: "maxUser",
+            label: t("cp.field.max_user"),
+            value: r.maxRedemptionsPerUserPerStream ?? 0,
+            onSave: (v) => saveRewardField(r, "maxRedemptionsPerUserPerStream", v),
+          },
+        ]
+        : [],
+  });
+}
+
+// vvv row multi-select + bulk right-click actions vvv
+const { confirmOpen, confirmData, ask: askConfirm, onConfirm, onCancel } = useConfirm();
+// >>> only bot-created rewards can be bulk-acted on
+const sel = useRowSelection<Reward>(() => botRewards.value, (x) => x.id, {
+  onDelete: (items) => bulkDeleteRewards(items),
+});
+async function setRewardEnabled(r: Reward, enabled: boolean) {
+  if (r.manageable && r.isEnabled !== enabled) await toggleEnabled(r);
+}
+async function bulkDeleteRewards(items: Reward[]) {
+  const managed = items.filter((r) => r.manageable);
+  if (
+    !managed.length ||
+    !(await askConfirm({
+      title: t("confirm.delete_title"),
+      message: t("sel.delete_confirm", { n: managed.length }),
+      confirmLabel: t("sel.delete"),
+      danger: true,
+    }))
+  )
+    return;
+  for (const r of managed) await deleteRewardById(r.id);
+  sel.clear();
+  await load();
+}
+function rewardRowCtx(e: MouseEvent, r: Reward) {
+  if (!(sel.count.value > 1 && sel.isSelected(r.id))) return openRewardCtx(e, r);
+  const items = sel.selectedItems.value;
+  const managed = items.filter((x) => x.manageable);
+  const n = items.length;
+  const mixed = (f: RewardLimitField): number | null => {
+    const s = new Set(managed.map((x) => x[f] ?? 0));
+    return s.size === 1 ? [...s][0]! : null;
+  };
+  openContext(e, {
+    title: t("sel.n_selected", { n }),
+    items: canEdit.value
+      ? [
+        { key: "on", label: `${t("sel.activate")} (${n})`, icon: "check",
+          onClick: () => { managed.forEach((x) => setRewardEnabled(x, true)); sel.clear(); } },
+        { key: "off", label: `${t("sel.deactivate")} (${n})`,
+          onClick: () => { managed.forEach((x) => setRewardEnabled(x, false)); sel.clear(); } },
+        { key: "del", label: `${t("sel.delete")} (${managed.length})`, icon: "trash", danger: true,
+          onClick: () => bulkDeleteRewards(items) },
+      ]
+      : [],
+    cooldowns: canEdit.value
+      ? [
+        { key: "gcd", label: t("cp.field.cooldown"), value: mixed("globalCooldown"),
+          onSave: (v: number) => managed.forEach((x) => saveRewardField(x, "globalCooldown", v)) },
+        { key: "ms", label: t("cp.field.max_stream"), value: mixed("maxRedemptionsPerStream"),
+          onSave: (v: number) => managed.forEach((x) => saveRewardField(x, "maxRedemptionsPerStream", v)) },
+        { key: "mu", label: t("cp.field.max_user"), value: mixed("maxRedemptionsPerUserPerStream"),
+          onSave: (v: number) => managed.forEach((x) => saveRewardField(x, "maxRedemptionsPerUserPerStream", v)) },
+      ]
+      : [],
+  });
+}
+// ^^^ row multi-select ^^^
 
 // vvv resizable/draggable columns - swatch stays a fixed leading track,
 // outside the system, since it's decorative-only (no header label of its own) vvv
@@ -33,6 +159,10 @@ function cpColLabel(key: string): string {
 }
 const {
   columns: cpColumns,
+  visibleColumns: cpVisibleColumns,
+  hidden: cpHidden,
+  setColumnHidden: cpSetColHidden,
+  resetHidden: cpResetHidden,
   gridTemplateColumns: cpColsGridTemplateColumns,
   orderOf: cpOrderOf,
   cellStyle: cpCellStyle,
@@ -53,16 +183,29 @@ const {
   onHeaderClick: cpOnHeaderClick,
   // >>> flex cols: width = fr-weight. fixed cols: width = px.
 } = useResizableColumns("cp-row", [
-  { key: "reward", label: "", width: 1, minWidth: 90, flex: true, sortable: true },
+  { key: "reward", label: "", width: 1, minWidth: 90, flex: true, sortable: true, hideable: false },
   { key: "price", label: "", width: 150, minWidth: 50, sortable: true },
   { key: "action", label: "", width: 2, minWidth: 80, flex: true },
   { key: "manage", label: "", width: 200, minWidth: 190 },
-  { key: "switch", label: "", width: 50, minWidth: 50 },
+  { key: "switch", label: "", width: 50, minWidth: 50, hideable: false },
 ]);
 function cpSortVal(r: Reward, key: string): string | number | null {
   if (key === "reward") return r.title;
   if (key === "price") return r.cost;
   return null;
+}
+const cpColItems = computed(() =>
+  cpColumns.value
+    .filter((c) => c.key !== "reward")
+    .map((c) => ({ key: c.key, label: cpColLabel(c.key), hideable: c.hideable })),
+);
+function openCpColCtx(e: MouseEvent, key: string, hideable?: boolean) {
+  if (hideable === false) return;
+  openContext(e, {
+    items: [
+      { key: "hide", label: t("cols.hide"), icon: "eye-off", onClick: () => cpSetColHidden(key, true) },
+    ],
+  });
 }
 // >>> swatch (44px) is fixed and not part of the resizable set
 const cpGridTemplateColumns = computed(() => `44px ${cpColsGridTemplateColumns.value}`);
@@ -681,6 +824,10 @@ function reload() {
 // >>> "actions" panel is only the standalone flow now (twitch-created rewards);
 // >>> bot-created rewards get the same state via the settings panel's actions tab
 const actionsOpen = ref(false);
+useEscClose(() => {
+  editOpen.value = false;
+  actionsOpen.value = false;
+});
 const actionsReward = ref<Reward | null>(null);
 const actionsList = ref<RewardAction[]>([]);
 const refundOnFailure = ref(false);
@@ -940,14 +1087,19 @@ async function saveActions() {
 </script>
 
 <template>
-  <div class="ep-view">
+  <div class="ep-view" :class="{ 'ep-panel-docked': editOpen || actionsOpen }">
     <div class="ep-view-header">
       <div>
         <div class="ep-view-title">{{ t("twitch.title") }}</div>
-        <div class="ep-view-sub">{{ rewards.length }} {{ t("cp.tab") }}</div>
+        <div class="ep-view-sub">
+          <SelectionHint v-if="sel.count.value" :count="sel.count.value" @clear="sel.clear()" />
+          <template v-else>{{ rewards.length }} {{ t("cp.tab") }}</template>
+        </div>
       </div>
       <div v-if="canView" class="ep-view-header-right">
-        <button class="ep-btn-reload" :title="t('twitch.reload')" @click="reload"
+        <ColumnMenu :columns="cpColItems" :hidden="cpHidden" @set="(k: string, h: boolean) => cpSetColHidden(k, h)"
+          @show-all="cpResetHidden()" />
+        <button class="ep-btn-reload icon-only" :title="t('twitch.reload')" @click="reload"
           v-html="iconSvgFor('refresh-cw')"></button>
         <button v-if="canEdit" class="ep-btn-new" @click="openNew">
           + {{ t("cp.new") }}
@@ -996,14 +1148,15 @@ async function saveActions() {
             </div>
             <div class="ep-row-header cp-row" :style="{ gridTemplateColumns: cpGridTemplateColumns }">
               <div :style="{ order: -1 }"></div>
-              <div v-for="(col, i) in cpColumns" :key="col.key" class="ep-row-header-cell" :class="{
+              <div v-for="(col, i) in cpVisibleColumns" :key="col.key" class="ep-row-header-cell" :class="{
                 dragging: cpColDraggingIndex === i, 'drag-over': cpColDragOverIndex === i,
                 'cp-header-action': col.key === 'action',
                 sortable: col.sortable, 'sort-active': cpSortKey === col.key,
               }" :style="{ order: i }" draggable="true" @mousedown="cpOnHeaderPointerDown"
-                @click="cpOnHeaderClick(i, $event)" @dragstart="cpColDragStart(i)"
-                @dragenter.prevent="cpColDragEnterCell(i)" @dragover.prevent @drop="cpColDrop(i)"
-                @dragend="cpColDragEnd()" @mouseenter="cpSetHover(col.key)" @mouseleave="cpClearHover()">
+                @contextmenu.prevent="openCpColCtx($event, col.key, col.hideable)" @click="cpOnHeaderClick(i, $event)"
+                @dragstart="cpColDragStart(i)" @dragenter.prevent="cpColDragEnterCell(i)" @dragover.prevent
+                @drop="cpColDrop(i)" @dragend="cpColDragEnd()" @mouseenter="cpSetHover(col.key)"
+                @mouseleave="cpClearHover()">
                 {{ cpColLabel(col.key) }}
                 <span v-if="col.sortable" class="ep-sort-arrow" v-html="cpSortKey === col.key
                   ? iconSvgFor(cpSortDir === 'asc' ? 'chevron-up' : 'chevron-down')
@@ -1013,8 +1166,14 @@ async function saveActions() {
               </div>
             </div>
             <div class="ep-row-list">
-              <div v-for="r in botRewards" :key="r.id" class="ep-row-grid cp-row"
-                :style="{ gridTemplateColumns: cpGridTemplateColumns }" :class="{ inactive: !r.isEnabled }">
+              <div v-for="r in botRewards" :key="r.id" class="ep-row-grid cp-row" :data-sel-key="r.id"
+                :style="{ gridTemplateColumns: cpGridTemplateColumns }" :class="{
+                  inactive: !r.isEnabled,
+                  editing: (editOpen && editingId === r.id) || (actionsOpen && actionsReward?.id === r.id),
+                  selected: sel.isSelected(r.id),
+                }" @pointerdown="sel.onRowPointerDown($event, r.id)"
+                @click.capture="sel.onRowClickCapture($event, r.id)"
+                @contextmenu.prevent="rewardRowCtx($event, r)">
                 <div class="ep-row-cell-center" :style="{ order: -1 }">
                   <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
                 </div>
@@ -1033,6 +1192,13 @@ async function saveActions() {
                   <span v-for="at in actionTypesByReward[r.id] ?? []" :key="at" class="ep-tag action">
                     {{ actionTagLabel(at) }}
                   </span>
+                  <span v-if="r.globalCooldown" class="ep-tag cooldown" :title="t('cp.field.cooldown')"><span
+                      v-html="iconSvgFor('clock')"></span> {{ r.globalCooldown }}s<span class="cd-mark">G</span></span>
+                  <span v-if="r.maxRedemptionsPerStream" class="ep-tag cooldown" :title="t('cp.field.max_stream')"><span
+                      v-html="iconSvgFor('zap')"></span> {{ r.maxRedemptionsPerStream }}<span class="cd-mark">S</span></span>
+                  <span v-if="r.maxRedemptionsPerUserPerStream" class="ep-tag cooldown user"
+                    :title="t('cp.field.max_user')"><span v-html="iconSvgFor('zap')"></span> {{
+                      r.maxRedemptionsPerUserPerStream }}<span class="cd-mark">U</span></span>
                 </div>
                 <div class="ep-row-actions" :style="cpCellStyle('manage')">
                   <button v-if="canEdit" class="ep-btn-action edit" @click="openEdit(r)">{{ t("cp.edit") }}</button>
@@ -1055,14 +1221,15 @@ async function saveActions() {
             </div>
             <div class="ep-row-header cp-row" :style="{ gridTemplateColumns: cpGridTemplateColumns }">
               <div :style="{ order: -1 }"></div>
-              <div v-for="(col, i) in cpColumns" :key="col.key" class="ep-row-header-cell" :class="{
+              <div v-for="(col, i) in cpVisibleColumns" :key="col.key" class="ep-row-header-cell" :class="{
                 dragging: cpColDraggingIndex === i, 'drag-over': cpColDragOverIndex === i,
                 'cp-header-action': col.key === 'action',
                 sortable: col.sortable, 'sort-active': cpSortKey === col.key,
               }" :style="{ order: i }" draggable="true" @mousedown="cpOnHeaderPointerDown"
-                @click="cpOnHeaderClick(i, $event)" @dragstart="cpColDragStart(i)"
-                @dragenter.prevent="cpColDragEnterCell(i)" @dragover.prevent @drop="cpColDrop(i)"
-                @dragend="cpColDragEnd()" @mouseenter="cpSetHover(col.key)" @mouseleave="cpClearHover()">
+                @contextmenu.prevent="openCpColCtx($event, col.key, col.hideable)" @click="cpOnHeaderClick(i, $event)"
+                @dragstart="cpColDragStart(i)" @dragenter.prevent="cpColDragEnterCell(i)" @dragover.prevent
+                @drop="cpColDrop(i)" @dragend="cpColDragEnd()" @mouseenter="cpSetHover(col.key)"
+                @mouseleave="cpClearHover()">
                 {{ cpColLabel(col.key) }}
                 <span v-if="col.sortable" class="ep-sort-arrow" v-html="cpSortKey === col.key
                   ? iconSvgFor(cpSortDir === 'asc' ? 'chevron-up' : 'chevron-down')
@@ -1073,7 +1240,10 @@ async function saveActions() {
             </div>
             <div class="ep-row-list">
               <div v-for="r in twitchRewards" :key="r.id" class="ep-row-grid cp-row"
-                :style="{ gridTemplateColumns: cpGridTemplateColumns }" :class="{ inactive: !r.isEnabled }">
+                :style="{ gridTemplateColumns: cpGridTemplateColumns }" :class="{
+                  inactive: !r.isEnabled,
+                  editing: (editOpen && editingId === r.id) || (actionsOpen && actionsReward?.id === r.id),
+                }">
                 <div class="ep-row-cell-center" :style="{ order: -1 }">
                   <div class="cp-swatch" :style="{ background: r.backgroundColor }"></div>
                 </div>
@@ -1093,10 +1263,17 @@ async function saveActions() {
                   <span v-for="at in actionTypesByReward[r.id] ?? []" :key="at" class="ep-tag action">
                     {{ actionTagLabel(at) }}
                   </span>
+                  <span v-if="r.globalCooldown" class="ep-tag cooldown" :title="t('cp.field.cooldown')"><span
+                      v-html="iconSvgFor('clock')"></span> {{ r.globalCooldown }}s<span class="cd-mark">G</span></span>
+                  <span v-if="r.maxRedemptionsPerStream" class="ep-tag cooldown" :title="t('cp.field.max_stream')"><span
+                      v-html="iconSvgFor('zap')"></span> {{ r.maxRedemptionsPerStream }}<span class="cd-mark">S</span></span>
+                  <span v-if="r.maxRedemptionsPerUserPerStream" class="ep-tag cooldown user"
+                    :title="t('cp.field.max_user')"><span v-html="iconSvgFor('zap')"></span> {{
+                      r.maxRedemptionsPerUserPerStream }}<span class="cd-mark">U</span></span>
                 </div>
                 <div class="ep-row-actions" :style="cpCellStyle('manage')">
                   <button v-if="canEdit" class="ep-btn-action actions" @click="openActions(r)">{{ t("cp.actions.btn")
-                    }}</button>
+                  }}</button>
                   <button v-if="isSiteAdminMode" class="ep-btn-action copy" :disabled="copyingRewardId === r.id"
                     :title="t('cp.admin.copy_reward_hint')" @click="copyReward(r)" v-html="iconSvgFor('copy')"></button>
                   <button class="ep-btn-action locked" disabled :title="t('cp.locked_hint')"
@@ -1116,7 +1293,7 @@ async function saveActions() {
 
     <!-- vvv edit panel vvv -->
     <Teleport to="body">
-      <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(closePanel)">
+      <div v-if="editOpen" class="ep-overlay ep-overlay--dock" v-bind="overlay.handlers(closePanel)">
         <div class="ep-panel">
 
           <div class="ep-panel-header">
@@ -1269,7 +1446,7 @@ async function saveActions() {
 
     <!-- vvv shyboti actions panel vvv -->
     <Teleport to="body">
-      <div v-if="actionsOpen" class="ep-overlay" v-bind="overlay.handlers(closeActions)">
+      <div v-if="actionsOpen" class="ep-overlay ep-overlay--dock" v-bind="overlay.handlers(closeActions)">
         <div class="ep-panel">
 
           <div class="ep-panel-header">
@@ -1309,6 +1486,10 @@ async function saveActions() {
     </Teleport>
     <!-- ^^^ shyboti actions panel ^^^ -->
 
+    <RowContextMenu :open="ctxOpen" :x="ctxX" :y="ctxY" :items="ctxItems" :cooldowns="ctxCooldowns" :title="ctxTitle"
+      @close="ctxOpen = false" />
+    <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
+      :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
   </div>
 </template>
 

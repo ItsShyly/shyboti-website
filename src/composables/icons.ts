@@ -1,3 +1,7 @@
+import modBadgeSvg from "../assets/badges/mod.svg?raw";
+import vipBadgeSvg from "../assets/badges/vip.svg?raw";
+import bcBadgeSvg from "../assets/badges/broadcaster.svg?raw";
+
 // >>> feather icon set, no emojis - add new icons here
 export const ICONS: Record<string, string> = {
   plus: `<line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>`,
@@ -64,10 +68,11 @@ export const ICONS: Record<string, string> = {
   activity: `<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>`,
 };
 
-// >>> fixed-color badge placeholders (shield+check/star, twitch mod/broadcaster
-// colors) - shown while the real twitch badge image is still loading
-export const MOD_BADGE_PLACEHOLDER = `<svg viewBox="0 0 24 24" width="14" height="14"><path fill="#00ad03" d="M12 2l8 3v6c0 5.2-3.4 9.4-8 11-4.6-1.6-8-5.8-8-11V5l8-3z"/><path fill="#fff" d="M10.4 14.3L7.8 11.7l-1.4 1.4 4 4 7-7-1.4-1.4z"/></svg>`;
-export const BC_BADGE_PLACEHOLDER = `<svg viewBox="0 0 24 24" width="14" height="14"><path fill="#e91916" d="M12 2l8 3v6c0 5.2-3.4 9.4-8 11-4.6-1.6-8-5.8-8-11V5l8-3z"/><path fill="#fff" d="M12 6.8l1.5 3 3.3.5-2.4 2.3.6 3.3-2.9-1.6-3 1.6.6-3.3-2.4-2.3 3.3-.5z"/></svg>`;
+// >>> twitch mod/vip/broadcaster badge placeholders - shown while the real
+// twitch badge image is still loading (see loadTwitchBadges)
+export const MOD_BADGE_PLACEHOLDER = modBadgeSvg;
+export const VIP_BADGE_PLACEHOLDER = vipBadgeSvg;
+export const BC_BADGE_PLACEHOLDER = bcBadgeSvg;
 
 // >>> 1em default so icons scale with text size
 export function iconSvg(name: string): string {

@@ -3,7 +3,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
-import { iconSvg as iconSvgFor } from "../composables/icons";
+import { iconSvg as iconSvgFor, MOD_BADGE_PLACEHOLDER, VIP_BADGE_PLACEHOLDER } from "../composables/icons";
 import type { RolePermissions } from "../auth";
 import RoleDefaultsCard from "./RoleDefaultsCard.vue";
 
@@ -478,6 +478,8 @@ watch(() => session.value?.channel, loadAll);
           <div class="user-row" @click="toggleExpand(entry)">
             <img v-if="!entry.blocked && entry.role === 'mod' && modBadgeUrl" class="role-badge-icon" :src="modBadgeUrl" alt="" />
             <img v-else-if="!entry.blocked && entry.role === 'vip' && vipBadgeUrl" class="role-badge-icon" :src="vipBadgeUrl" alt="" />
+            <span v-else-if="!entry.blocked && entry.role === 'mod'" class="role-badge-icon role-badge-ph" v-html="MOD_BADGE_PLACEHOLDER"></span>
+            <span v-else-if="!entry.blocked && entry.role === 'vip'" class="role-badge-icon role-badge-ph" v-html="VIP_BADGE_PLACEHOLDER"></span>
             <span v-else class="user-dot" :class="entry.blocked ? 'blocked' : 'gray'"></span>
             <span class="user-name">{{ entry.username }}</span>
             <div class="user-badges">
@@ -906,6 +908,13 @@ watch(() => session.value?.channel, loadAll);
   width: 16px;
   height: 16px;
   flex-shrink: 0;
+}
+.role-badge-ph {
+  display: inline-flex;
+}
+.role-badge-ph :deep(svg) {
+  width: 100%;
+  height: 100%;
 }
 
 .user-name {

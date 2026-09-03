@@ -9,7 +9,7 @@ import { ref, computed, onMounted, watch } from "vue";
 import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
-import { iconSvg as iconSvgFor } from "../composables/icons";
+import { iconSvg as iconSvgFor, MOD_BADGE_PLACEHOLDER, VIP_BADGE_PLACEHOLDER } from "../composables/icons";
 import type { RolePermissions } from "../auth";
 import ReauthLink from "./shared/ReauthLink.vue";
 
@@ -219,6 +219,8 @@ watch(() => session.value?.channel, reload);
   <details class="ep-details defaults-card" :open="open">
     <summary @click.prevent="open = !open">
       <img v-if="twitchBadgeUrl" class="role-badge-icon" :src="twitchBadgeUrl" alt="" />
+      <span v-else-if="twitchBadgeKey === 'moderator/1'" class="role-badge-icon role-badge-ph" v-html="MOD_BADGE_PLACEHOLDER"></span>
+      <span v-else-if="twitchBadgeKey === 'vip/1'" class="role-badge-icon role-badge-ph" v-html="VIP_BADGE_PLACEHOLDER"></span>
       <span v-else class="role-badge-dot"></span>
       {{ accessLabel }}
       <div class="card-toggle" @click.stop>
@@ -338,6 +340,13 @@ watch(() => session.value?.channel, reload);
   width: 16px;
   height: 16px;
   flex-shrink: 0;
+}
+.role-badge-ph {
+  display: inline-flex;
+}
+.role-badge-ph :deep(svg) {
+  width: 100%;
+  height: 100%;
 }
 
 .role-badge-dot {

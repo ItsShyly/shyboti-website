@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="14" height="14">
+	<defs>
+		<image  width="500" height="500" id="mod-a" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAAH0AQMAAADxGE3JAAAAAXNSR0IB2cksfwAAAANQTFRFAK0DJdquxAAAAHhJREFUeJztyzENAAAMA6DVv+mJ6NfAT64T3/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/d93/dn/gPUpgH1slVP1AAAAABJRU5ErkJggg=="/>
+		<image  width="3" height="2" id="mod-b" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAMAAAACBAMAAABvWnspAAAAAXNSR0IB2cksfwAAABJQTFRFFhAlFhAlFhAlFhAlFhAlFhAl9RUhagAAAAZ0Uk5TBWhQBFtGnd1t6gAAAA5JREFUeJxjZJRnNJEBAAEUAHN+sbTdAAAAAElFTkSuQmCC"/>
+	</defs>
+	<use id="mod-bg" href="#mod-a" x="0" y="0"/>
+	<path id="mod-s1" fill="#ffffff" d="m276.62 396.02l-40.3 40.3-169-169 40.31-40.3 37.37 37.98 4.57 4.09 154.43-172.29 144.22-32.82-25.77 125.6-182.52 168.43zm-178.31 48.28l-40.31-40.3 169-169 18 18 22.3 22.3z"/>
+	<use id="mod-l5" href="#mod-b" x="75" y="425"/>
+</svg>

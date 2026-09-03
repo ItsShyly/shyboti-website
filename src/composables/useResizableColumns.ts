@@ -11,11 +11,13 @@ export interface ColumnDef {
   flex?: boolean;
   // >>> a short click on the header toggles sort on this column (asc -> desc -> off)
   sortable?: boolean;
+  // >>> false = can't be hidden (identity column, the blank switch column)
+  hideable?: boolean;
 }
 
 // >>> shared engine behind every resizable/draggable table header - header
-// drives width+order, rows read the same state, so a row's cell can never
-// drift out of sync with its own column
+// drives width+order+visibility, rows read the same state, so a row's cell can
+// never drift out of sync with its own column
 export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
   // >>> v3: flex-column widths are fr-weights now + column sets were reshuffled;
   // any older saved layout is incompatible
@@ -48,6 +50,47 @@ export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
   }
 
   const columns = ref<ColumnDef[]>(load());
+
+  // vvv hidden columns - persisted separately from the layout vvv
+  const hiddenStorageKey = `ep-table-cols-hidden-${tableId}-v1`;
+  function loadHidden(): Set<string> {
+    try {
+      const raw = JSON.parse(localStorage.getItem(hiddenStorageKey) || "[]");
+      if (!Array.isArray(raw)) return new Set();
+      const valid = new Set(
+        defaults.filter((d) => d.hideable !== false).map((d) => d.key),
+      );
+      return new Set((raw as string[]).filter((k) => valid.has(k)));
+    } catch {
+      return new Set();
+    }
+  }
+  const hidden = ref<Set<string>>(loadHidden());
+  function persistHidden() {
+    try {
+      localStorage.setItem(hiddenStorageKey, JSON.stringify([...hidden.value]));
+    } catch { }
+  }
+  function isHideable(key: string): boolean {
+    return columns.value.find((c) => c.key === key)?.hideable !== false;
+  }
+  function setColumnHidden(key: string, hide: boolean) {
+    if (hide && !isHideable(key)) return;
+    const next = new Set(hidden.value);
+    if (hide) next.add(key);
+    else next.delete(key);
+    hidden.value = next;
+    persistHidden();
+  }
+  function resetHidden() {
+    hidden.value = new Set();
+    persistHidden();
+  }
+  // >>> the columns actually rendered - header loops this, grid tracks this
+  const visibleColumns = computed(() =>
+    columns.value.filter((c) => !hidden.value.has(c.key)),
+  );
+  // ^^^ hidden columns ^^^
 
   // vvv sort state - persisted separately from the column layout vvv
   const sortStorageKey = `ep-table-sort-${tableId}-v1`;
@@ -116,16 +159,16 @@ export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
     } catch { }
   }
 
-  // >>> per-column px while a drag is in progress, [] otherwise. during a drag
-  // every track is a hard px so the boundary tracks the cursor 1:1 instead of
-  // fr-redistributing under it (that felt laggy/rubber-bandy)
+  // >>> per-visible-column px while a drag is in progress, [] otherwise. during a
+  // drag every track is a hard px so the boundary tracks the cursor 1:1 instead
+  // of fr-redistributing under it (that felt laggy/rubber-bandy)
   const livePx = ref<number[]>([]);
 
   // >>> flex columns split the leftover width by fr-weight (minWidth floor still
   // applies); fixed columns stay px. no flex column set -> old behavior, last
-  // column absorbs the slack
+  // column absorbs the slack. built from VISIBLE columns only.
   const gridTemplateColumns = computed(() => {
-    const cols = columns.value;
+    const cols = visibleColumns.value;
     if (livePx.value.length === cols.length) {
       return livePx.value.map((w) => `${w}px`).join(" ");
     }
@@ -141,11 +184,11 @@ export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
       .join(" ");
   });
 
-  // >>> current display position of a column, by its stable key - drives
-  // the CSS `order` on that column's header cell AND every row's matching
-  // cell, so dragging the header reorders every row's cells at once
+  // >>> display position of a column among the VISIBLE ones, by its stable key -
+  // drives the CSS `order` on that column's header cell AND every row's matching
+  // cell. hidden columns get 999 (their cell is display:none anyway).
   function orderOf(key: string): number {
-    const i = columns.value.findIndex((c) => c.key === key);
+    const i = visibleColumns.value.findIndex((c) => c.key === key);
     return i === -1 ? 999 : i;
   }
 
@@ -158,23 +201,33 @@ export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
   function clearHover() {
     hoveredKey.value = null;
   }
-  // >>> merges the order (position) with a hover highlight - use this on
-  // every row cell instead of a bare `{ order: orderOf(key) }` so the
-  // whole column lights up together when its header is hovered
-  function cellStyle(key: string): { order: number; background?: string } {
+  // >>> merges the order (position), a hover highlight, and hidden-ness - use
+  // this on every row cell instead of a bare `{ order: orderOf(key) }` so the
+  // whole column lights up together, and hiding a column just drops its cells
+  function cellStyle(key: string): {
+    order: number;
+    background?: string;
+    display?: string;
+  } {
     return {
       order: orderOf(key),
       background: hoveredKey.value === key ? "rgba(111, 43, 255, 0.08)" : undefined,
+      display: hidden.value.has(key) ? "none" : undefined,
     };
   }
   // ^^^ column hover ^^^
 
+  // >>> visible-index -> full-columns-array index
+  function realIndex(visIdx: number): number {
+    const col = visibleColumns.value[visIdx];
+    return col ? columns.value.indexOf(col) : -1;
+  }
+
   // vvv drag-resize (mousedown on the handle at a header cell's right edge) vvv
-  // >>> the dragged column trades width with its right-hand neighbour, in raw px,
-  // so the total row width never changes and the cursor tracks 1:1. on mouseup
-  // the pixel widths get baked back into the model (flex cols keep their px value
-  // as an fr-weight - only the ratio matters). moves are rAF-coalesced so a fast
-  // drag can't outrun the frame rate.
+  // >>> the dragged column trades width with its right-hand VISIBLE neighbour, in
+  // raw px, so the total row width never changes and the cursor tracks 1:1. on
+  // mouseup the pixel widths get baked back into the model (flex cols keep their
+  // px value as an fr-weight - only the ratio matters). moves are rAF-coalesced.
   const resizingIndex = ref<number | null>(null);
   let resizeStartX = 0;
   let resizeStartPx: number[] = [];
@@ -184,7 +237,7 @@ export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
   function startResize(index: number, e: MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
-    if (index >= columns.value.length - 1) return; // <<< no neighbour to trade with
+    if (index >= visibleColumns.value.length - 1) return; // <<< no neighbour to trade with
     const headerEl = (e.target as HTMLElement).closest(
       ".ep-row-header",
     ) as HTMLElement | null;
@@ -193,10 +246,13 @@ export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
           headerEl.querySelectorAll(".ep-row-header-cell"),
         ) as HTMLElement[])
       : [];
-    const measured = columns.value.map(
+    const measured = visibleColumns.value.map(
       (c, i) => cells[i]?.getBoundingClientRect().width ?? c.width,
     );
-    if (measured.length !== columns.value.length || measured.some((w) => w < 1))
+    if (
+      measured.length !== visibleColumns.value.length ||
+      measured.some((w) => w < 1)
+    )
       return; // <<< couldn't measure, don't start a broken drag
     resizeStartX = e.clientX;
     resizeClientX = e.clientX;
@@ -209,8 +265,9 @@ export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
   function applyResize() {
     const i = resizingIndex.value;
     if (i == null) return;
-    const minA = columns.value[i]?.minWidth ?? 60;
-    const minB = columns.value[i + 1]?.minWidth ?? 60;
+    const vis = visibleColumns.value;
+    const minA = vis[i]?.minWidth ?? 60;
+    const minB = vis[i + 1]?.minWidth ?? 60;
     const pair = resizeStartPx[i]! + resizeStartPx[i + 1]!;
     let a = Math.round(resizeStartPx[i]! + (resizeClientX - resizeStartX));
     a = Math.max(minA, Math.min(a, pair - minB));
@@ -234,9 +291,9 @@ export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
     }
     window.removeEventListener("mousemove", onResizeMove);
     window.removeEventListener("mouseup", stopResize);
-    if (livePx.value.length === columns.value.length) {
+    if (livePx.value.length === visibleColumns.value.length) {
       const px = livePx.value;
-      columns.value.forEach((c, i) => {
+      visibleColumns.value.forEach((c, i) => {
         c.width = px[i]!;
       });
     }
@@ -247,6 +304,8 @@ export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
   // ^^^ drag-resize ^^^
 
   // vvv drag-reorder (native HTML5 drag on the header cell itself) vvv
+  // >>> draggingIndex / dragOverIndex are VISIBLE indices (template matches them
+  // against the header loop index); translated to the full array only on drop
   const draggingIndex = ref<number | null>(null);
   const dragOverIndex = ref<number | null>(null);
 
@@ -271,7 +330,7 @@ export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
       Date.now() - hdrDownT > 500
     )
       return;
-    const key = columns.value[index]?.key;
+    const key = visibleColumns.value[index]?.key;
     if (key) toggleSort(key);
   }
 
@@ -284,16 +343,24 @@ export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
     dragOverIndex.value = index;
   }
   function onDrop(index: number) {
-    if (draggingIndex.value == null || draggingIndex.value === index) {
+    const visFrom = draggingIndex.value;
+    if (visFrom == null || visFrom === index) {
       draggingIndex.value = null;
       dragOverIndex.value = null;
       return;
     }
-    const [moved] = columns.value.splice(draggingIndex.value, 1);
-    columns.value.splice(index, 0, moved!);
+    const vis = visibleColumns.value;
+    const movedCol = vis[visFrom];
+    const targetCol = vis[index];
+    if (movedCol && targetCol) {
+      const arr = columns.value;
+      arr.splice(arr.indexOf(movedCol), 1);
+      const anchor = arr.indexOf(targetCol);
+      arr.splice(index > visFrom ? anchor + 1 : anchor, 0, movedCol);
+      persist();
+    }
     draggingIndex.value = null;
     dragOverIndex.value = null;
-    persist();
   }
   function onDragEnd() {
     draggingIndex.value = null;
@@ -306,10 +373,16 @@ export function useResizableColumns(tableId: string, defaults: ColumnDef[]) {
     try {
       localStorage.removeItem(storageKey);
     } catch { }
+    resetHidden();
   }
 
   return {
     columns,
+    visibleColumns,
+    hidden,
+    setColumnHidden,
+    resetHidden,
+    isHideable,
     gridTemplateColumns,
     orderOf,
     hoveredKey,

@@ -7,6 +7,12 @@
   justify-content: flex-end;
   z-index: 1000;
 }
+/* >>> list-view edit panels: right-edge drawer, no backdrop - the view shifts
+   left (.ep-panel-docked) so the table stays visible next to it */
+.ep-overlay.ep-overlay--dock {
+  inset: 52px 0 0 auto;
+  background: transparent;
+}
 .ep-panel {
   width: 580px;
   max-width: 100vw;
@@ -18,6 +24,10 @@
   overflow: hidden;
   animation: ep-slide-in 0.2s ease;
 }
+.ep-overlay--dock .ep-panel {
+  height: 100%;
+  animation: ep-slide-drawer 0.2s ease;
+}
 @keyframes ep-slide-in {
   from {
     transform: translateX(40px);
@@ -28,9 +38,26 @@
     opacity: 1;
   }
 }
+@keyframes ep-slide-drawer {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
 @media (max-width: 680px) {
+  /* >>> phones - drawer goes back to a full-screen overlay with backdrop */
+  .ep-overlay.ep-overlay--dock {
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+  }
+  .ep-view.ep-panel-docked {
+    padding-right: 0;
+  }
   .ep-panel {
     width: 100vw !important;
+    height: 100vh;
   }
   /* >>> title block wouldn't shrink, pushing the close X off-screen */
   .ep-panel-header {
@@ -457,6 +484,11 @@
   gap: 16px;
   height: 100%;
   min-height: 0;
+  /* >>> shifts left when the edit drawer is open so the table reflows */
+  transition: padding-right 0.22s ease;
+}
+.ep-view.ep-panel-docked {
+  padding-right: 580px;
 }
 .ep-view-header {
   display: flex;
@@ -487,6 +519,21 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   flex-shrink: 0;
+}
+/* >>> one height/padding/font for every header button - colors stay semantic */
+.ep-view-header-right > button,
+.ep-view-header-right .ep-sync-indicator,
+.ep-view-header-right .ep-sync-config-btn {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+/* >>> icon-only buttons stay square-ish */
+.ep-view-header-right > button.icon-only {
+  padding: 0 9px;
 }
 .ep-btn-reload {
   height: 28px;
@@ -801,19 +848,81 @@
 .ep-row-grid.inactive {
   opacity: 0.45;
 }
-/* >>> hover is per-cell (matches the demo), not whole-row - opt individual
-   clickable cells into this rather than hovering the entire row. Cells using
-   this fill their full grid track (see .ep-row-grid's align-items above) and
-   center their own content vertically via flex. */
+/* >>> hover the whole row from any cell */
+.ep-row-grid:hover {
+  background: #202028;
+}
+/* >>> the row whose edit drawer is currently open */
+.ep-row-grid.editing,
+.ep-row-grid.editing:hover,
+.ep-list-row.editing,
+.ep-list-row.editing:hover {
+  background: rgba(111, 43, 255, 0.12);
+  box-shadow: inset 2px 0 0 #6f2bff;
+}
+/* >>> small square colour dot at the start of a row's name cell */
+.row-color-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+/* >>> used-colour filter bar in a view header */
+.cmd-color-bar {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.cmd-color-sw {
+  width: 16px;
+  height: 16px;
+  border: 1px solid #2a2a30;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.cmd-color-sw:hover {
+  transform: scale(1.12);
+}
+.cmd-color-sw.active {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
+}
+.cmd-color-bar.dim .cmd-color-sw:not(.active) {
+  opacity: 0.45;
+}
+.cmd-color-clear {
+  border: none;
+  background: transparent;
+  color: #666;
+  font-family: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.cmd-color-clear:hover {
+  color: #9d6cff;
+}
+
+/* >>> rows in a multi-selection */
+.ep-row-grid.selected,
+.ep-list-row.selected {
+  background: rgba(111, 43, 255, 0.18);
+  box-shadow: inset 3px 0 0 #9d6cff;
+}
+.ep-row-grid.selected:hover,
+.ep-list-row.selected:hover {
+  background: rgba(111, 43, 255, 0.24);
+}
+/* >>> hover is whole-row now (.ep-row-grid:hover); this class just marks a
+   clickable cell - fills its grid track and centers content via flex */
 .ep-row-cell-hover {
   display: flex;
   align-items: center;
   height: 100%;
   cursor: pointer;
   transition: background 0.1s;
-}
-.ep-row-cell-hover:hover {
-  background: #202028;
 }
 /* >>> non-clickable grid cells (switch wrapper, blank header cells) still
    need centering now that .ep-row-grid stretches cells to full height */
@@ -1027,6 +1136,13 @@
   color: #61afef;
   border-color: #61afef44;
   background: #61afef11;
+}
+/* >>> tiny G/U letter tucked into the chip's top-left corner - the chip
+   colour is the real signal, the letter just confirms it */
+.ep-tag.cooldown .cd-mark {
+  align-self: flex-start;
+  font-size: 11px;
+  opacity: 0.5;
 }
 .ep-tag.access {
   color: #4ec9b0;
@@ -1250,6 +1366,13 @@
   flex-direction: column;
   gap: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+.ep-sync-panel-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #9d6cff;
 }
 .ep-sync-modes {
   display: flex;

@@ -4,18 +4,180 @@ import { API } from "../api";
 import { useAuth } from "../auth";
 import { useI18n } from "../i18n";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import { useEscClose } from "../composables/useEscClose";
+import { useClickAway } from "../composables/useClickAway";
 import { REGEX_REF_GROUPS, looksLikeRegex } from "../composables/regexReference";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import { useResizableColumns } from "../composables/useResizableColumns";
 import RefPanel from "./shared/RefPanel.vue";
 import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
+import RowContextMenu from "./shared/RowContextMenu.vue";
+import ColumnMenu from "./shared/ColumnMenu.vue";
+import { useRowContextMenu } from "../composables/useRowContextMenu";
+import { useRowSelection } from "../composables/useRowSelection";
+import { useConfirm } from "../composables/useConfirm";
+import { useRowColors } from "../composables/useRowColors";
+import ConfirmDialog from "./shared/ConfirmDialog.vue";
+import SelectionHint from "./shared/SelectionHint.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
+const { ctxOpen, ctxX, ctxY, ctxItems, ctxCooldowns, ctxSwatch, ctxTitle, openContext } =
+  useRowContextMenu();
+function openModCtx(
+  e: MouseEvent,
+  tab: Tab,
+  item: { id: number; group_id: number | null },
+  label: string,
+) {
+  if (!canManage.value) return;
+  const items: import("./shared/RowContextMenu.vue").ContextMenuItem[] = [
+    {
+      key: "share",
+      label: t("mod.share"),
+      icon: "corner-up-right",
+      onClick: () => openShare(tab, item.id, label),
+    },
+  ];
+  for (const g of modGroups[tab])
+    if (g.id !== item.group_id)
+      items.push({
+        key: "grp" + g.id,
+        label: `${t("mod.move_to_group")}: ${g.name}`,
+        icon: "corner-up-right",
+        onClick: () => bulkAssignGroup([item], g.id),
+      });
+  if (item.group_id)
+    items.push({
+      key: "ungroup",
+      label: t("mod.remove_from_group"),
+      icon: "corner-up-left",
+      onClick: () => removeFromGroup(tab, item.id),
+    });
+  openContext(e, {
+    items,
+    swatch: {
+      label: t("cmd.dot_colour"),
+      current: rowColors.colorOf(String(item.id)),
+      used: modBarColors.value,
+      onPick: (hex: string) => rowColors.setColor(String(item.id), hex),
+    },
+  });
+}
+function openGroupCtx(e: MouseEvent, tab: Tab, id: number, name: string) {
+  if (!canManage.value) return;
+  openContext(e, {
+    items: [
+      {
+        key: "share",
+        label: t("mod.share"),
+        icon: "corner-up-right",
+        onClick: () => openShareGroup(tab, id, name),
+      },
+    ],
+  });
+}
+
+// vvv row multi-select + bulk actions vvv
+const { confirmOpen, confirmData, ask: askConfirm, onConfirm, onCancel } = useConfirm();
+const sel = useRowSelection<{ id: number; is_active?: number }>(
+  () => sectionsOf(activeTab.value).flatMap((s) => s.items),
+  (x) => String(x.id),
+  { onDelete: (items) => bulkModDelete(items) },
+);
+async function bulkModDelete(items: { id: number }[]) {
+  if (
+    !(await askConfirm({
+      title: t("confirm.delete_title"),
+      message: t("sel.delete_confirm", { n: items.length }),
+      confirmLabel: t("sel.delete"),
+      danger: true,
+    }))
+  )
+    return;
+  for (const it of items) await deleteRow(activeTab.value, it.id);
+  sel.clear();
+}
+async function bulkAssignGroup(
+  items: { id: number; group_id?: number | null; reason?: string }[],
+  groupId: number | null,
+) {
+  const tab = activeTab.value;
+  for (const it of items) {
+    if (it.group_id === groupId) continue;
+    it.group_id = groupId;
+    if (groupId != null) it.reason = "";
+    await putGroupId(tab, it.id, groupId);
+  }
+  sel.clear();
+}
+function modRowCtx(
+  e: MouseEvent,
+  tab: Tab,
+  item: { id: number; group_id: number | null; is_active?: number },
+  label: string,
+) {
+  if (!(sel.count.value > 1 && sel.isSelected(String(item.id))))
+    return openModCtx(e, tab, item, label);
+  const items = sel.selectedItems.value as {
+    id: number;
+    is_active?: number;
+    group_id?: number | null;
+  }[];
+  const n = items.length;
+  const kind = activeTab.value;
+  openContext(e, {
+    title: t("sel.n_selected", { n }),
+    items: [
+      ...(kind !== "nukes" && canManage.value
+        ? [
+          { key: "on", label: `${t("sel.activate")} (${n})`, icon: "check",
+            onClick: () => {
+              items.filter((x) => !x.is_active)
+                .forEach((x) => toggleActive(kind as "blocked" | "spam", x as never));
+              sel.clear();
+            } },
+          { key: "off", label: `${t("sel.deactivate")} (${n})`,
+            onClick: () => {
+              items.filter((x) => x.is_active)
+                .forEach((x) => toggleActive(kind as "blocked" | "spam", x as never));
+              sel.clear();
+            } },
+        ]
+        : []),
+      ...(canManage.value
+        ? modGroups[kind].map((g) => ({
+          key: "grp" + g.id, icon: "corner-up-right",
+          label: `${t("mod.move_to_group")}: ${g.name}`,
+          onClick: () => bulkAssignGroup(items, g.id),
+        }))
+        : []),
+      ...(canManage.value && items.some((x) => x.group_id != null)
+        ? [{ key: "ungroup", icon: "corner-up-left", label: t("mod.remove_from_group"),
+          onClick: () => bulkAssignGroup(items, null) }]
+        : []),
+      ...(canManage.value
+        ? [{ key: "del", label: `${t("sel.delete")} (${n})`, icon: "trash", danger: true,
+          onClick: () => bulkModDelete(items) }]
+        : []),
+    ],
+    swatch: {
+      label: t("cmd.dot_colour"),
+      current: "",
+      used: modBarColors.value,
+      onPick: (hex: string) => items.forEach((x) => rowColors.setColor(String(x.id), hex)),
+    },
+  });
+}
+// ^^^ row multi-select ^^^
 
 // vvv resizable/draggable columns - shared by blocked+spam (same 3-column shape) vvv
 const {
   columns: modColumns,
+  visibleColumns: modVisibleColumns,
+  hidden: modHidden,
+  setColumnHidden: modSetColHidden,
+  resetHidden: modResetHidden,
   gridTemplateColumns: modGridTemplateColumns,
   orderOf: modOrderOf,
   cellStyle: modCellStyle,
@@ -35,17 +197,34 @@ const {
   onHeaderPointerDown: modOnHeaderPointerDown,
   onHeaderClick: modOnHeaderClick,
 } = useResizableColumns("mod-item", [
-  { key: "term", label: "", width: 1, minWidth: 50, flex: true, sortable: true },
+  { key: "term", label: "", width: 1, minWidth: 50, flex: true, sortable: true, hideable: false },
   { key: "action", label: "", width: 2, minWidth: 120, flex: true, sortable: true },
   { key: "manage", label: "", width: 170, minWidth: 170 },
-  { key: "switch", label: "", width: 50, minWidth: 50 },
+  { key: "switch", label: "", width: 50, minWidth: 50, hideable: false },
 ]);
-function modColLabel(key: string, tab: "blocked" | "spam"): string {
+function modColLabel(key: string, tab: "blocked" | "spam" | "nukes"): string {
   if (key === "term") return tab === "blocked" ? t("mod.header.term") : t("mod.header.filter");
   if (key === "action") return t("mod.header.action");
   if (key === "manage") return t("cmd.sort.actions");
   if (key === "switch") return " "; // >>> non-breaking, keeps the header cell from collapsing
   return key;
+}
+const modColItems = computed(() =>
+  modColumns.value
+    .filter((c) => c.key !== "term")
+    .map((c) => ({
+      key: c.key,
+      label: modColLabel(c.key, "blocked"),
+      hideable: c.hideable,
+    })),
+);
+function openModColCtx(e: MouseEvent, key: string, hideable?: boolean) {
+  if (hideable === false) return;
+  openContext(e, {
+    items: [
+      { key: "hide", label: t("cols.hide"), icon: "eye-off", onClick: () => modSetColHidden(key, true) },
+    ],
+  });
 }
 // ^^^ resizable/draggable columns ^^^
 
@@ -170,14 +349,21 @@ function modSortVal(tab: Tab, item: any, k: string): string | number | null {
   return null;
 }
 // >>> ungrouped bucket keeps one v-for for all rows
+// >>> per-row dot colour + header filter (localStorage per channel)
+const rowColors = useRowColors(() => session.value?.channel, "mod", "#7c83ff");
 function sectionsOf(tab: Tab): { group: ModGroup | null; items: any[] }[] {
   const sort = (items: any[]) =>
-    modApplySort(items, (it, k) => modSortVal(tab, it, k));
+    modApplySort(items, (it, k) => modSortVal(tab, it, k)).filter((i) =>
+      rowColors.matchesFilter(String(i.id)),
+    );
   return [
     ...modGroups[tab].map((g) => ({ group: g, items: sort(membersOf(tab, g.id)) })),
     { group: null, items: sort(ungroupedOf(tab)) },
   ];
 }
+const modBarColors = computed(() =>
+  rowColors.usedColors(itemsOf(activeTab.value).map((i) => String(i.id))),
+);
 const blockedSections = computed(() => sectionsOf("blocked"));
 const spamSections = computed(() => sectionsOf("spam"));
 const nukeSections = computed(() => sectionsOf("nukes"));
@@ -368,6 +554,17 @@ const overlay = useOverlayClose();
 const editOpen = ref(false);
 const editTab = ref<Tab>("blocked");
 const isNew = ref(true);
+useEscClose(() => {
+  editOpen.value = false;
+  groupPanelOpen.value = false;
+  shareOpen.value = false;
+});
+// >>> docked panel would show an item from the tab you just left
+watch(activeTab, () => {
+  editOpen.value = false;
+  groupPanelOpen.value = false;
+  sel.clear();
+});
 
 // >>> reason field is ignored once grouped
 const fGroupId = ref<number | null>(null);
@@ -781,6 +978,12 @@ function freshModSync(): ModSyncState {
 }
 const modSync: Record<Tab, ModSyncState> = reactive({ blocked: freshModSync(), spam: freshModSync(), nukes: freshModSync() });
 const curSync = computed(() => modSync[activeTab.value]);
+const syncWrapEl = ref<HTMLElement | null>(null);
+useClickAway(() => curSync.value.open, syncWrapEl, () => (curSync.value.open = false));
+function openModSyncPanel(mode: "ongoing" | "import") {
+  curSync.value.mode = mode;
+  curSync.value.open = true;
+}
 
 async function fetchModSync(tab: Tab) {
   if (!session.value) return;
@@ -904,32 +1107,43 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 </script>
 
 <template>
-  <div class="ep-view">
+  <div class="ep-view" :class="{ 'ep-panel-docked': editOpen || groupPanelOpen }">
     <div class="ep-view-header">
       <div>
         <div class="ep-view-title">{{ t("mod.title") }}</div>
         <div class="ep-view-sub">
-          <template v-if="activeTab === 'blocked'">{{ blockedTerms.length }} {{ t('mod.tab.blocked') }}</template>
+          <SelectionHint v-if="sel.count.value" :count="sel.count.value" @clear="sel.clear()" />
+          <template v-else-if="activeTab === 'blocked'">{{ blockedTerms.length }} {{ t('mod.tab.blocked') }}</template>
           <template v-else-if="activeTab === 'spam'">{{ spamFilters.length }} {{ t('mod.tab.spam') }}</template>
           <template v-else>{{ nukes.length }} {{ t('mod.tab.nukes') }}</template>
         </div>
+        <div v-if="modBarColors.length > 1" class="cmd-color-bar" :class="{ dim: rowColors.filter.value }">
+          <button v-for="c in modBarColors" :key="c" type="button" class="cmd-color-sw"
+            :class="{ active: rowColors.filter.value === c }" :style="{ background: c }"
+            :title="t('cmd.filter_by_colour')" @click="rowColors.toggleFilter(c)"></button>
+          <button v-if="rowColors.filter.value" type="button" class="cmd-color-clear"
+            @click="rowColors.filter.value = null">{{ t('cmd.filter_clear') }}</button>
+        </div>
       </div>
       <div class="ep-view-header-right">
-        <div v-if="botPresent" class="ep-sync-wrap">
-          <button v-if="curSync.conf?.is_active" class="ep-sync-indicator" @click="curSync.open = !curSync.open"
-            :title="`${t('mod.sync.active')} #${curSync.conf.sync_from}`">
-            <span class="ep-sync-dot"></span>{{ t("mod.sync.active") }} #{{ curSync.conf.sync_from }}
-            <span class="ep-sync-chevron" :class="{ open: curSync.open }"></span>
-          </button>
-          <button v-else class="ep-sync-config-btn" @click="curSync.open = !curSync.open">
+        <div class="ep-sync-wrap" ref="syncWrapEl">
+          <ColumnMenu v-if="activeTab !== 'nukes'" :columns="modColItems" :hidden="modHidden"
+            :has-extra="botPresent" :extra-label="t('cols.import')"
+            @set="(k: string, h: boolean) => modSetColHidden(k, h)" @show-all="modResetHidden()">
+            <button type="button" class="col-menu-item" @click="openModSyncPanel('import')">
+              <span v-html="iconSvgFor('download')"></span>{{ t('cols.import_once') }}
+            </button>
+            <button type="button" class="col-menu-item" @click="openModSyncPanel('ongoing')">
+              <span v-if="curSync.conf?.is_active" class="ep-sync-dot"></span>
+              <span v-else v-html="iconSvgFor('refresh-cw')"></span>{{ t('cols.import_auto') }}
+            </button>
+          </ColumnMenu>
+          <button v-else-if="botPresent" class="ep-sync-config-btn" @click="curSync.open = !curSync.open">
             {{ t("mod.sync.config") }} <span class="ep-sync-chevron" :class="{ open: curSync.open }"></span>
           </button>
           <div v-if="curSync.open" class="ep-sync-panel">
-            <div class="ep-sync-modes">
-              <button class="ep-sync-mode-btn" :class="{ active: curSync.mode === 'ongoing' }"
-                @click="curSync.mode = 'ongoing'">Sync (ongoing)</button>
-              <button class="ep-sync-mode-btn" :class="{ active: curSync.mode === 'import' }"
-                @click="curSync.mode = 'import'">Import (one-time)</button>
+            <div class="ep-sync-panel-title">
+              {{ curSync.mode === 'import' ? t('cols.import_once') : t('cols.import_auto') }}
             </div>
             <div class="ep-sync-row">
               <select v-model="curSync.from" class="ep-field-select-sm">
@@ -963,11 +1177,11 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
             </div>
           </div>
         </div>
-        <button class="ep-btn-reload" @click="reload" :disabled="reloading" :title="t('mod.reload')">
+        <button class="ep-btn-reload icon-only" @click="reload" :disabled="reloading" :title="t('mod.reload')">
           <template v-if="reloading">…</template>
           <span v-else v-html="iconSvgFor('refresh-cw')"></span>
         </button>
-        <button v-if="canManage" class="ep-btn-cancel" @click="openNewGroup(activeTab)">
+        <button v-if="canManage" class="ep-btn-reload" @click="openNewGroup(activeTab)">
           + {{ t("mod.group.new") }}
         </button>
         <button class="ep-btn-new" @click="
@@ -1010,11 +1224,12 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <template v-else>
         <div class="mod-table">
           <div class="ep-row-header mod-item-row" :style="{ gridTemplateColumns: modGridTemplateColumns }">
-            <div v-for="(col, i) in modColumns" :key="col.key" class="ep-row-header-cell" :class="{
+            <div v-for="(col, i) in modVisibleColumns" :key="col.key" class="ep-row-header-cell" :class="{
               dragging: modColDraggingIndex === i, 'drag-over': modColDragOverIndex === i,
               'mod-header-action': col.key === 'action', 'mod-header-actions': col.key === 'manage',
               sortable: col.sortable, 'sort-active': modSortKey === col.key,
             }" :style="{ order: i }" draggable="true" @mousedown="modOnHeaderPointerDown"
+              @contextmenu.prevent="openModColCtx($event, col.key, col.hideable)"
               @click="modOnHeaderClick(i, $event)" @dragstart="modColDragStart(i)"
               @dragenter.prevent="modColDragEnterCell(i)" @dragover.prevent @drop="modColDrop(i)"
               @dragend="modColDragEnd()" @mouseenter="modSetHover(col.key)" @mouseleave="modClearHover()">
@@ -1032,7 +1247,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <div v-if="section.group" class="mod-group-header"
                 :class="{ inactive: !groupAnyActive('blocked', section.group.id) }"
                 :style="{ gridTemplateColumns: modGridTemplateColumns }"
-                @click="toggleGroupOpen(section.group.id)">
+                @click="toggleGroupOpen(section.group.id)"
+                @contextmenu.prevent="openGroupCtx($event, 'blocked', section.group.id, section.group.name)">
                 <div class="mod-group-title" :style="modCellStyle('term')">
                   <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"></span>
                   <span class="mod-group-name">{{ t("mod.group.reason_prefix") }}{{ section.group.name }}</span>
@@ -1040,9 +1256,6 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 </div>
                 <div :style="modCellStyle('action')"></div>
                 <div v-if="canManage" class="ep-row-actions" :style="modCellStyle('manage')">
-                  <button class="ep-btn-action share" :title="t('mod.share')"
-                    @click.stop="openShareGroup('blocked', section.group.id, section.group.name)"
-                    v-html="iconSvgFor('corner-up-right')"></button>
                   <button class="ep-btn-action del" @click.stop="deleteGroup('blocked', section.group.id)"
                     v-html="iconSvgFor('trash')"></button>
                 </div>
@@ -1056,11 +1269,20 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <div v-if="!section.group || openGroups.has(section.group.id)" class="mod-group-rows"
                 :class="{ 'mod-group-members': section.group }">
                 <div v-for="term in section.items" :key="term.id" class="ep-row-grid mod-item-row"
-                  :style="{ gridTemplateColumns: modGridTemplateColumns }" :class="{ inactive: !term.is_active }"
-                  draggable="true" @dragstart="onDragStart(term.id)">
+                  :data-sel-key="String(term.id)"
+                  :style="{ gridTemplateColumns: modGridTemplateColumns }" :class="{
+                    inactive: !term.is_active,
+                    editing: editOpen && !isNew && editTab === 'blocked' && fTermId === term.id,
+                    selected: sel.isSelected(String(term.id)),
+                  }"
+                  draggable="true" @dragstart="onDragStart(term.id)"
+                  @pointerdown="sel.onRowPointerDown($event, String(term.id))"
+                  @click.capture="sel.onRowClickCapture($event, String(term.id))"
+                  @contextmenu.prevent="modRowCtx($event, 'blocked', term, term.term)">
                   <div class="mod-item-main ep-row-cell-hover" :style="modCellStyle('term')"
                     @click="canManage && openEditBlocked(term)">
                     <div class="mod-item-title">
+                      <span class="row-color-dot" :style="{ background: rowColors.colorOf(String(term.id)) }"></span>
                       <span v-if="term.is_regex" class="ep-tag keyword">{{ t("mod.badge.regex") }}</span>
                       <span v-if="term.action === 'automod' && !term.twitch_term_id" class="ep-tag arg"
                         :title="t('mod.badge.automod_pending_hint')">
@@ -1077,13 +1299,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                       fmtDur(term.duration) }}</span>
                   </div>
                   <div class="ep-row-actions" :style="modCellStyle('manage')">
-                    <button v-if="canManage && term.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
-                      @click.stop="removeFromGroup('blocked', term.id)" v-html="iconSvgFor('corner-up-left')"></button>
                     <button v-if="canManage" class="ep-btn-action edit" @click="openEditBlocked(term)">{{ t("mod.edit")
                       }}</button>
-                    <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
-                      @click.stop="openShare('blocked', term.id, term.term)"
-                      v-html="iconSvgFor('corner-up-right')"></button>
                     <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('blocked', term.id)"
                       v-html="iconSvgFor('trash')"></button>
                   </div>
@@ -1110,11 +1327,12 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
       <template v-else>
         <div class="mod-table">
           <div class="ep-row-header mod-item-row" :style="{ gridTemplateColumns: modGridTemplateColumns }">
-            <div v-for="(col, i) in modColumns" :key="col.key" class="ep-row-header-cell" :class="{
+            <div v-for="(col, i) in modVisibleColumns" :key="col.key" class="ep-row-header-cell" :class="{
               dragging: modColDraggingIndex === i, 'drag-over': modColDragOverIndex === i,
               'mod-header-action': col.key === 'action', 'mod-header-actions': col.key === 'manage',
               sortable: col.sortable, 'sort-active': modSortKey === col.key,
             }" :style="{ order: i }" draggable="true" @mousedown="modOnHeaderPointerDown"
+              @contextmenu.prevent="openModColCtx($event, col.key, col.hideable)"
               @click="modOnHeaderClick(i, $event)" @dragstart="modColDragStart(i)"
               @dragenter.prevent="modColDragEnterCell(i)" @dragover.prevent @drop="modColDrop(i)"
               @dragend="modColDragEnd()" @mouseenter="modSetHover(col.key)" @mouseleave="modClearHover()">
@@ -1132,7 +1350,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <div v-if="section.group" class="mod-group-header"
                 :class="{ inactive: !groupAnyActive('spam', section.group.id) }"
                 :style="{ gridTemplateColumns: modGridTemplateColumns }"
-                @click="toggleGroupOpen(section.group.id)">
+                @click="toggleGroupOpen(section.group.id)"
+                @contextmenu.prevent="openGroupCtx($event, 'spam', section.group.id, section.group.name)">
                 <div class="mod-group-title" :style="modCellStyle('term')">
                   <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"></span>
                   <span class="mod-group-name">{{ t("mod.group.reason_prefix") }}{{ section.group.name }}</span>
@@ -1140,9 +1359,6 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 </div>
                 <div :style="modCellStyle('action')"></div>
                 <div v-if="canManage" class="ep-row-actions" :style="modCellStyle('manage')">
-                  <button class="ep-btn-action share" :title="t('mod.share')"
-                    @click.stop="openShareGroup('spam', section.group.id, section.group.name)"
-                    v-html="iconSvgFor('corner-up-right')"></button>
                   <button class="ep-btn-action del" @click.stop="deleteGroup('spam', section.group.id)"
                     v-html="iconSvgFor('trash')"></button>
                 </div>
@@ -1156,11 +1372,20 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <div v-if="!section.group || openGroups.has(section.group.id)" class="mod-group-rows"
                 :class="{ 'mod-group-members': section.group }">
                 <div v-for="f in section.items" :key="f.id" class="ep-row-grid mod-item-row"
-                  :style="{ gridTemplateColumns: modGridTemplateColumns }" :class="{ inactive: !f.is_active }"
-                  draggable="true" @dragstart="onDragStart(f.id)">
+                  :data-sel-key="String(f.id)"
+                  :style="{ gridTemplateColumns: modGridTemplateColumns }" :class="{
+                    inactive: !f.is_active,
+                    editing: editOpen && !isNew && editTab === 'spam' && fSpamId === f.id,
+                    selected: sel.isSelected(String(f.id)),
+                  }"
+                  draggable="true" @dragstart="onDragStart(f.id)"
+                  @pointerdown="sel.onRowPointerDown($event, String(f.id))"
+                  @click.capture="sel.onRowClickCapture($event, String(f.id))"
+                  @contextmenu.prevent="modRowCtx($event, 'spam', f, spamLabel(f).name)">
                   <div class="mod-item-main ep-row-cell-hover" :style="modCellStyle('term')"
                     @click="canManage && openEditSpam(f)">
                     <div class="spam-label">
+                      <span class="row-color-dot" :style="{ background: rowColors.colorOf(String(f.id)) }"></span>
                       <span class="spam-name">{{ spamLabel(f).name }}</span>
                       <span class="spam-detail">· {{ spamLabel(f).detail }}</span>
                     </div>
@@ -1172,13 +1397,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     <span v-if="f.action !== 'delete'" class="ep-tag cooldown">{{ fmtDur(f.duration) }}</span>
                   </div>
                   <div class="ep-row-actions" :style="modCellStyle('manage')">
-                    <button v-if="canManage && f.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
-                      @click.stop="removeFromGroup('spam', f.id)" v-html="iconSvgFor('corner-up-left')"></button>
                     <button v-if="canManage" class="ep-btn-action edit" @click="openEditSpam(f)">{{ t("mod.edit")
                       }}</button>
-                    <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
-                      @click.stop="openShare('spam', f.id, spamLabel(f).name)"
-                      v-html="iconSvgFor('corner-up-right')"></button>
                     <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('spam', f.id)"
                       v-html="iconSvgFor('trash')"></button>
                   </div>
@@ -1208,7 +1428,8 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               @drop="assignGroup('nukes', section.group ? section.group.id : null)">
               <div v-if="section.group" class="mod-group-header"
                 :style="{ gridTemplateColumns: modGridTemplateColumns }"
-                @click="toggleGroupOpen(section.group.id)">
+                @click="toggleGroupOpen(section.group.id)"
+                @contextmenu.prevent="openGroupCtx($event, 'nukes', section.group.id, section.group.name)">
                 <div class="mod-group-title" :style="modCellStyle('term')">
                   <span class="mod-group-chevron" :class="{ open: openGroups.has(section.group.id) }"></span>
                   <span class="mod-group-name">{{ t("mod.group.reason_prefix") }}{{ section.group.name }}</span>
@@ -1216,9 +1437,6 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                 </div>
                 <div :style="modCellStyle('action')"></div>
                 <div v-if="canManage" class="ep-row-actions" :style="modCellStyle('manage')">
-                  <button class="ep-btn-action share" :title="t('mod.share')"
-                    @click.stop="openShareGroup('nukes', section.group.id, section.group.name)"
-                    v-html="iconSvgFor('corner-up-right')"></button>
                   <button class="ep-btn-action del" @click.stop="deleteGroup('nukes', section.group.id)"
                     v-html="iconSvgFor('trash')"></button>
                 </div>
@@ -1226,7 +1444,13 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
               <div v-if="!section.group || openGroups.has(section.group.id)" class="mod-group-rows"
                 :class="{ 'mod-group-members': section.group }">
                 <div v-for="n in section.items" :key="n.id" class="ep-list-row nuke-item-row" draggable="true"
-                  @dragstart="onDragStart(n.id)">
+                  :data-sel-key="String(n.id)"
+                  :class="{ editing: editOpen && !isNew && editTab === 'nukes' && fNukeId === n.id, selected: sel.isSelected(String(n.id)) }"
+                  @dragstart="onDragStart(n.id)"
+                  @pointerdown="sel.onRowPointerDown($event, String(n.id))"
+                  @click.capture="sel.onRowClickCapture($event, String(n.id))"
+                  @contextmenu.prevent="modRowCtx($event, 'nukes', n, n.label)">
+                  <span class="row-color-dot" :style="{ background: rowColors.colorOf(String(n.id)) }"></span>
                   <div class="nuke-row-badges">
                     <span v-if="n.stay_active" class="ep-tag action" :title="t('mod.nuke.stay_hint')">{{
                       t("mod.badge.stay") }}</span>
@@ -1268,8 +1492,6 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     </select>
                   </div>
                   <div class="ep-row-actions">
-                    <button v-if="canManage && n.group_id" class="ep-btn-action" :title="t('mod.remove_from_group')"
-                      @click.stop="removeFromGroup('nukes', n.id)" v-html="iconSvgFor('corner-up-left')"></button>
                     <button v-if="canManage" class="nuke-fire-btn" :class="{ confirm: nukeConfirm === n.id }"
                       @click="fireNuke(n.id)">
                       <template v-if="nukeConfirm === n.id"><span v-html="iconSvgFor('alert-triangle')"></span> {{
@@ -1278,8 +1500,6 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
                     </button>
                     <button v-if="canManage" class="ep-btn-action edit" @click="openEditNuke(n)">{{ t("mod.edit")
                       }}</button>
-                    <button v-if="canManage" class="ep-btn-action share" :title="t('mod.share')"
-                      @click.stop="openShare('nukes', n.id, n.label)" v-html="iconSvgFor('corner-up-right')"></button>
                     <button v-if="canManage" class="ep-btn-action del" @click.stop="deleteRow('nukes', n.id)"
                       v-html="iconSvgFor('trash')"></button>
                   </div>
@@ -1296,7 +1516,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 
   <!-- vvv edit panel vvv -->
   <Teleport to="body">
-    <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => editOpen = false)">
+    <div v-if="editOpen" class="ep-overlay ep-overlay--dock" v-bind="overlay.handlers(() => editOpen = false)">
       <div class="ep-panel">
 
         <div class="ep-panel-header">
@@ -1552,7 +1772,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 
   <!-- vvv group panel vvv -->
   <Teleport to="body">
-    <div v-if="groupPanelOpen" class="ep-overlay" @click.self="groupPanelOpen = false">
+    <div v-if="groupPanelOpen" class="ep-overlay ep-overlay--dock" @click.self="groupPanelOpen = false">
       <div class="ep-panel">
         <div class="ep-panel-header">
           <div>
@@ -1613,6 +1833,11 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
     </div>
   </Teleport>
   <!-- ^^^ share modal ^^^ -->
+
+  <RowContextMenu :open="ctxOpen" :x="ctxX" :y="ctxY" :items="ctxItems" :cooldowns="ctxCooldowns" :swatch="ctxSwatch"
+    :title="ctxTitle" @close="ctxOpen = false" />
+  <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
+    :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
 </template>
 
 <style scoped>
@@ -1683,6 +1908,10 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
 }
 .mod-group-header.inactive {
   opacity: 0.45;
+}
+/* >>> whole-header hover, matches the whole-row hover on .ep-row-grid */
+.mod-group-header:hover {
+  background: #202028;
 }
 
 /* >>> holds chevron+name+count, sits in the term column so the group's

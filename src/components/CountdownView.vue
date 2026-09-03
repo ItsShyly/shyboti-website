@@ -9,14 +9,103 @@ import {
   setEditorContent,
 } from "../composables/useContentEditableScript";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import { useEscClose } from "../composables/useEscClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import { useResizableColumns } from "../composables/useResizableColumns";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
 import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
+import RowContextMenu from "./shared/RowContextMenu.vue";
+import ColumnMenu from "./shared/ColumnMenu.vue";
+import { useRowContextMenu } from "../composables/useRowContextMenu";
+import { useRowSelection } from "../composables/useRowSelection";
+import { useConfirm } from "../composables/useConfirm";
+import { useRowColors } from "../composables/useRowColors";
+import { useTabActive } from "../composables/useTabActive";
+import ConfirmDialog from "./shared/ConfirmDialog.vue";
+
+const tabActive = useTabActive();
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
+const { ctxOpen, ctxX, ctxY, ctxItems, ctxCooldowns, ctxSwatch, ctxTitle, openContext } =
+  useRowContextMenu();
+const rowColors = useRowColors(() => session.value?.channel, "countdown", "#7c83ff");
+const cdBarColors = computed(() =>
+  rowColors.usedColors(countdowns.value.map((x) => x.name)),
+);
+const shownCountdowns = computed(() =>
+  countdowns.value.filter((x) => rowColors.matchesFilter(x.name)),
+);
+
+const { confirmOpen, confirmData, ask: askConfirm, onConfirm, onCancel } = useConfirm();
+const sel = useRowSelection<Countdown>(() => shownCountdowns.value, (x) => x.name, {
+  isActive: () => tabActive.value,
+  onDelete: (items) => bulkDeleteCountdowns(items),
+});
+async function bulkDeleteCountdowns(items: Countdown[]) {
+  if (
+    !(await askConfirm({
+      title: t("confirm.delete_title"),
+      message: t("sel.delete_confirm", { n: items.length }),
+      confirmLabel: t("sel.delete"),
+      danger: true,
+    }))
+  )
+    return;
+  for (const x of items) await deleteCountdown(x.name);
+  sel.clear();
+}
+function countdownRowCtx(e: MouseEvent, cd: Countdown) {
+  if (!(sel.count.value > 1 && sel.isSelected(cd.name)))
+    return openCountdownCtx(e, cd);
+  const items = sel.selectedItems.value;
+  const n = items.length;
+  const canManage = canEdit.value || isBroadcaster.value;
+  openContext(e, {
+    title: t("sel.n_selected", { n }),
+    items: [
+      ...(canToggle.value
+        ? [
+          { key: "on", label: `${t("sel.activate")} (${n})`, icon: "check",
+            onClick: () => { items.filter((x) => !x.is_active).forEach(toggleActive); sel.clear(); } },
+          { key: "off", label: `${t("sel.deactivate")} (${n})`,
+            onClick: () => { items.filter((x) => x.is_active).forEach(toggleActive); sel.clear(); } },
+        ]
+        : []),
+      ...(canManage
+        ? [{ key: "del", label: `${t("sel.delete")} (${n})`, icon: "trash", danger: true,
+          onClick: () => bulkDeleteCountdowns(items) }]
+        : []),
+    ],
+    swatch: {
+      label: t("cmd.dot_colour"),
+      current: "",
+      used: cdBarColors.value,
+      onPick: (hex: string) => items.forEach((x) => rowColors.setColor(x.name, hex)),
+    },
+  });
+}
+function openCountdownCtx(e: MouseEvent, cd: Countdown) {
+  openContext(e, {
+    items: canEdit.value
+      ? [
+          {
+            key: "share",
+            label: t("countdown.share"),
+            icon: "corner-up-right",
+            onClick: () => openShare(cd.name),
+          },
+        ]
+      : [],
+    swatch: {
+      label: t("cmd.dot_colour"),
+      current: rowColors.colorOf(cd.name),
+      used: cdBarColors.value,
+      onPick: (hex: string) => rowColors.setColor(cd.name, hex),
+    },
+  });
+}
 
 // vvv resizable/draggable columns vvv
 const COUNTDOWN_COL_LABEL: Record<string, () => string> = {
@@ -32,6 +121,10 @@ function countdownColLabel(key: string): string {
 }
 const {
   columns: countdownColumns,
+  visibleColumns: countdownVisibleColumns,
+  hidden: countdownHidden,
+  setColumnHidden: countdownSetColHidden,
+  resetHidden: countdownResetHidden,
   gridTemplateColumns: countdownGridTemplateColumns,
   orderOf: countdownOrderOf,
   cellStyle: countdownCellStyle,
@@ -47,12 +140,25 @@ const {
   onDragEnd: countdownColDragEnd,
 } = useResizableColumns("countdown-row", [
   { key: "controls", label: "", width: 160, minWidth: 120 },
-  { key: "name", label: "", width: 2, minWidth: 120, flex: true },
+  { key: "name", label: "", width: 2, minWidth: 120, flex: true, hideable: false },
   { key: "status", label: "", width: 140, minWidth: 100 },
   { key: "duration", label: "", width: 240, minWidth: 150 },
   { key: "manage", label: "", width: 150, minWidth: 120 },
-  { key: "switch", label: "", width: 50, minWidth: 50 },
+  { key: "switch", label: "", width: 50, minWidth: 50, hideable: false },
 ]);
+const countdownColItems = computed(() =>
+  countdownColumns.value
+    .filter((c) => c.key !== "name")
+    .map((c) => ({ key: c.key, label: countdownColLabel(c.key), hideable: c.hideable })),
+);
+function openCountdownColCtx(e: MouseEvent, key: string, hideable?: boolean) {
+  if (hideable === false) return;
+  openContext(e, {
+    items: [
+      { key: "hide", label: t("cols.hide"), icon: "eye-off", onClick: () => countdownSetColHidden(key, true) },
+    ],
+  });
+}
 // ^^^ resizable/draggable columns ^^^
 
 const canToggle = computed(
@@ -332,6 +438,10 @@ async function deleteCountdown(name: string) {
 
 // vvv share vvv
 const shareOpen = ref(false);
+useEscClose(() => {
+  editOpen.value = false;
+  shareOpen.value = false;
+});
 const shareCountdown = ref("");
 const shareTarget = ref("");
 const shareSaving = ref(false);
@@ -467,6 +577,8 @@ defineExpose({
     createLabel: t("countdown.new"),
     canCreate: canEdit.value || isBroadcaster.value,
   })),
+  // >>> drives the docked-panel shift on the parent's outer .ep-view
+  panelOpen: editOpen,
   reload: load,
   create: () => {
     (canEdit.value || isBroadcaster.value) && openNew();
@@ -474,11 +586,27 @@ defineExpose({
   close: () => {
     editOpen.value = false;
   },
+  // >>> selection hint shows in the parent's header sub-line
+  selCount: sel.count,
+  clearSel: sel.clear,
 });
 </script>
 
 <template>
   <div class="ep-view">
+    <Teleport to="#auto-color-bar" :disabled="!tabActive">
+      <div v-if="cdBarColors.length > 1" class="cmd-color-bar" :class="{ dim: rowColors.filter.value }">
+        <button v-for="c in cdBarColors" :key="c" type="button" class="cmd-color-sw"
+          :class="{ active: rowColors.filter.value === c }" :style="{ background: c }"
+          :title="t('cmd.filter_by_colour')" @click="rowColors.toggleFilter(c)"></button>
+        <button v-if="rowColors.filter.value" type="button" class="cmd-color-clear"
+          @click="rowColors.filter.value = null">{{ t('cmd.filter_clear') }}</button>
+      </div>
+    </Teleport>
+    <Teleport to="#auto-header-tools" :disabled="!tabActive">
+      <ColumnMenu :columns="countdownColItems" :hidden="countdownHidden"
+        @set="(k: string, h: boolean) => countdownSetColHidden(k, h)" @show-all="countdownResetHidden()" />
+    </Teleport>
     <div v-if="success" class="ep-toast success">{{ success }}</div>
     <div v-if="error" class="ep-toast error">{{ error }}</div>
 
@@ -502,9 +630,10 @@ defineExpose({
 
     <div v-else class="countdown-table">
       <div class="ep-row-header countdown-row" :style="{ gridTemplateColumns: countdownGridTemplateColumns }">
-        <div v-for="(col, i) in countdownColumns" :key="col.key" class="ep-row-header-cell"
+        <div v-for="(col, i) in countdownVisibleColumns" :key="col.key" class="ep-row-header-cell"
           :class="{ dragging: countdownColDraggingIndex === i, 'drag-over': countdownColDragOverIndex === i }"
           :style="{ order: i }" draggable="true" @dragstart="countdownColDragStart(i)"
+          @contextmenu.prevent="openCountdownColCtx($event, col.key, col.hideable)"
           @dragenter.prevent="countdownColDragEnterCell(i)" @dragover.prevent @drop="countdownColDrop(i)"
           @dragend="countdownColDragEnd()" @mouseenter="countdownSetHover(col.key)" @mouseleave="countdownClearHover()">
           {{ countdownColLabel(col.key) }}
@@ -513,9 +642,17 @@ defineExpose({
         </div>
       </div>
       <div class="ep-row-list">
-      <div v-for="cd in countdowns" :key="cd.id" class="ep-row-grid countdown-row"
-        :style="{ gridTemplateColumns: countdownGridTemplateColumns }" :class="{ inactive: !cd.is_active }">
-        <div class="ep-cell-name" :style="countdownCellStyle('name')">
+      <div v-for="cd in shownCountdowns" :key="cd.id" class="ep-row-grid countdown-row"
+        :data-sel-key="cd.name"
+        :style="{ gridTemplateColumns: countdownGridTemplateColumns }" :class="{
+          inactive: !cd.is_active,
+          editing: editOpen && !isNew && editOrigName === cd.name,
+          selected: sel.isSelected(cd.name),
+        }" @pointerdown="sel.onRowPointerDown($event, cd.name)"
+        @click.capture="sel.onRowClickCapture($event, cd.name)"
+        @contextmenu.prevent="countdownRowCtx($event, cd)">
+        <div class="ep-cell-name ep-row-cell-hover" :style="countdownCellStyle('name')" @click="openEdit(cd)">
+          <span class="row-color-dot" :style="{ background: rowColors.colorOf(cd.name) }"></span>
           <span class="cd-status-dot" :class="cd.status ?? 'idle'"></span>
           <span class="cd-name-text">{{ cd.name }}</span>
         </div>
@@ -569,10 +706,6 @@ defineExpose({
           <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(cd)" :class="{ disabled: !canEdit }">
             {{ canEdit ? t("countdown.edit") : t("countdown.view") }}
           </button>
-          <button v-if="canEdit" class="ep-btn-action share" @click.stop="openShare(cd.name)"
-            :title="t('countdown.share')">
-            <span v-html="iconSvgFor('corner-up-right')"></span>
-          </button>
           <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteCountdown(cd.name)"
             :disabled="saving === cd.name">
             <span v-html="iconSvgFor('trash')"></span>
@@ -590,7 +723,7 @@ defineExpose({
 
     <!-- vvv edit panel vvv -->
     <Teleport to="body">
-      <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => (editOpen = false))">
+      <div v-if="editOpen" class="ep-overlay ep-overlay--dock" v-bind="overlay.handlers(() => (editOpen = false))">
         <div class="ep-panel">
           <div class="ep-panel-header">
             <div>
@@ -733,6 +866,11 @@ defineExpose({
       </div>
     </Teleport>
     <!-- ^^^ share modal ^^^ -->
+
+    <RowContextMenu :open="ctxOpen" :x="ctxX" :y="ctxY" :items="ctxItems" :cooldowns="ctxCooldowns" :swatch="ctxSwatch"
+      :title="ctxTitle" @close="ctxOpen = false" />
+    <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
+      :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
   </div>
 </template>
 

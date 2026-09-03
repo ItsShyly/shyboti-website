@@ -9,7 +9,7 @@ import { COMMAND_FLAGS } from '../composables/commandFlags'
 import EditableNameHeader from './shared/EditableNameHeader.vue'
 import RefPanel from './shared/RefPanel.vue'
 import { useI18n } from '../i18n'
-import { iconSvg as iconSvgFor } from '../composables/icons'
+import { iconSvg as iconSvgFor, MOD_BADGE_PLACEHOLDER, BC_BADGE_PLACEHOLDER } from '../composables/icons'
 
 export interface CustomCommand {
   name: string; response: string; rule: string; alias: string
@@ -33,6 +33,9 @@ const { t } = useI18n()
 const overlay = useOverlayClose()
 
 const loading = ref(true)
+// >>> full-panel loading state only for the first open - later target switches
+// (docked panel stays open) refresh in place so the layout doesn't flash
+const everLoaded = ref(false)
 const saving = ref(false)
 const saved = ref(false)
 const saveError = ref('')
@@ -95,6 +98,17 @@ function argAccessLabel(access: string): string {
   if (access === 'broadcaster') return t('cmd.access.bc')
   if (access === 'mod') return t('cmd.access.mod')
   return t('cmd.access.everyone')
+}
+// >>> badge placeholder shown on the access button per level, '' for everyone
+function accessBadge(modOnly: boolean, broadcasterOnly: boolean): string {
+  if (broadcasterOnly) return BC_BADGE_PLACEHOLDER
+  if (modOnly) return MOD_BADGE_PLACEHOLDER
+  return ''
+}
+function argAccessBadge(access: string): string {
+  if (access === 'broadcaster') return BC_BADGE_PLACEHOLDER
+  if (access === 'mod') return MOD_BADGE_PLACEHOLDER
+  return ''
 }
 function cycleBuiltinAccess() {
   if (!builtinModOnly.value && !builtinBroadcasterOnly.value) {
@@ -340,6 +354,7 @@ async function load() {
       description: '', arg_descs: [], flags: []
     }
     loading.value = false
+    everLoaded.value = true
     return
   }
   loading.value = true
@@ -390,6 +405,7 @@ async function load() {
     await loadKeywords()
   } catch { }
   loading.value = false
+  everLoaded.value = true
 
   // >>> seeds preview with real counter/var values
   try {
@@ -487,8 +503,26 @@ function updateLineNumbers(text: string) {
   lineCount.value = (text.match(/\n/g) || []).length + 1
 }
 
-watch(() => props.open, v => { if (v) { load(); deleteConfirm.value = false; saveError.value = ''; activeTab.value = props.initialTab ?? 'response'; closeConfirmOpen.value = false } })
-onMounted(() => { if (props.open) load() })
+function applyOpen() {
+  load()
+  deleteConfirm.value = false
+  saveError.value = ''
+  activeTab.value = props.initialTab ?? 'response'
+  closeConfirmOpen.value = false
+}
+// >>> docked panel stays open, so react to the target changing too - not just
+// to opening. one exception: after saving a NEW command its name goes '' -> real
+// while still open, that's a light refresh, not a full reload
+watch(
+  () => [props.open, props.cmdName, props.isBuiltIn] as const,
+  ([open, name], [prevOpen, prevName]) => {
+    if (!open) return
+    if (!prevOpen) { applyOpen(); return }
+    if (name && !prevName) { loadAliases(); loadKeywords(); return }
+    applyOpen()
+  },
+)
+onMounted(() => { if (props.open) applyOpen() })
 
 // >>> the response tab's v-if unmounts the contenteditable - repopulate it
 // >>> from form.value.response when switching back, else it renders empty
@@ -532,8 +566,6 @@ function onKeydown(e: KeyboardEvent) {
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 // ^^^ close confirm + shortcuts ^^^
-// >>> unlocks aliases right after the first save of a new command, no full reload
-watch(() => props.cmdName, (name, old) => { if (name && !old && props.open) { loadAliases(); loadKeywords() } })
 
 watch(() => form.value.response, (src) => {
   if (props.isBuiltIn) return
@@ -941,7 +973,7 @@ function onNormalKeydown(e: KeyboardEvent) {
 
 <template>
   <Teleport to="body">
-    <div v-if="open" class="ep-overlay" v-bind="overlay.handlers(requestClose)">
+    <div v-if="open" class="ep-overlay ep-overlay--dock" v-bind="overlay.handlers(requestClose)">
       <div class="ep-panel">
 
         <div class="ep-panel-header">
@@ -962,7 +994,7 @@ function onNormalKeydown(e: KeyboardEvent) {
           </div>
         </div>
 
-        <div v-if="loading" class="ep-panel-loading">{{ t('edit.saving').replace('…', '…') || 'Loading…' }}</div>
+        <div v-if="loading && !everLoaded" class="ep-panel-loading">{{ t('edit.loading') }}</div>
         <div v-else class="ep-panel-body">
           <div v-if="saveError" class="ep-toast error">{{ saveError }}</div>
 
@@ -1163,6 +1195,8 @@ function onNormalKeydown(e: KeyboardEvent) {
               <button type="button" class="access-cycle-btn" :class="{
                 'access-mod': builtinModOnly, 'access-bc': builtinBroadcasterOnly,
               }" @click="cycleBuiltinAccess">
+                <span v-if="accessBadge(builtinModOnly, builtinBroadcasterOnly)" class="access-cycle-badge"
+                  v-html="accessBadge(builtinModOnly, builtinBroadcasterOnly)"></span>
                 {{ accessLabel(builtinModOnly, builtinBroadcasterOnly) }}
               </button>
             </div>
@@ -1172,6 +1206,8 @@ function onNormalKeydown(e: KeyboardEvent) {
               <button type="button" class="access-cycle-btn" :class="{
                 'access-mod': form.modOnly, 'access-bc': form.broadcasterOnly,
               }" @click="cycleFormAccess">
+                <span v-if="accessBadge(form.modOnly, form.broadcasterOnly)" class="access-cycle-badge"
+                  v-html="accessBadge(form.modOnly, form.broadcasterOnly)"></span>
                 {{ accessLabel(form.modOnly, form.broadcasterOnly) }}
               </button>
             </div>
@@ -1183,7 +1219,10 @@ function onNormalKeydown(e: KeyboardEvent) {
                   <code class="arg-access-usage">{{ v.usage }}</code>
                   <button type="button" class="access-cycle-btn" :class="{
                     'access-mod': v.access === 'mod', 'access-bc': v.access === 'broadcaster',
-                  }" @click="cycleBuiltinArgAccess(v)">{{ argAccessLabel(v.access) }}</button>
+                  }" @click="cycleBuiltinArgAccess(v)">
+                    <span v-if="argAccessBadge(v.access)" class="access-cycle-badge" v-html="argAccessBadge(v.access)"></span>
+                    {{ argAccessLabel(v.access) }}
+                  </button>
                 </div>
               </div>
             </div>
@@ -1313,6 +1352,9 @@ function onNormalKeydown(e: KeyboardEvent) {
 }
 
 .access-cycle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   height: 28px;
   padding: 0 12px;
   border: 1px solid #2a2a30;
@@ -1323,6 +1365,15 @@ function onNormalKeydown(e: KeyboardEvent) {
   cursor: pointer;
   white-space: nowrap;
   transition: all 0.15s;
+}
+.access-cycle-badge {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+}
+.access-cycle-badge :deep(svg) {
+  width: 100%;
+  height: 100%;
 }
 
 .access-cycle-btn:hover {

@@ -17,16 +17,144 @@ import {
   setEditorContent,
 } from "../composables/useContentEditableScript";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import { useEscClose } from "../composables/useEscClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import { useClickAway } from "../composables/useClickAway";
 import { useResizableColumns } from "../composables/useResizableColumns";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
 import TypeaheadInput from "./shared/TypeaheadInput.vue";
 import type { TypeaheadItem } from "./shared/TypeaheadInput.vue";
 import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
+import RowContextMenu from "./shared/RowContextMenu.vue";
+import ColumnMenu from "./shared/ColumnMenu.vue";
+import { useRowContextMenu } from "../composables/useRowContextMenu";
+import { useRowSelection } from "../composables/useRowSelection";
+import { useConfirm } from "../composables/useConfirm";
+import { useRowColors } from "../composables/useRowColors";
+import { useTabActive } from "../composables/useTabActive";
+import ConfirmDialog from "./shared/ConfirmDialog.vue";
+
+const tabActive = useTabActive();
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
+const { ctxOpen, ctxX, ctxY, ctxItems, ctxCooldowns, ctxSwatch, ctxTitle, openContext } =
+  useRowContextMenu();
+const rowColors = useRowColors(() => session.value?.channel, "trigger", "#7c83ff");
+const trigBarColors = computed(() =>
+  rowColors.usedColors(triggers.value.map((x) => x.name)),
+);
+
+const { confirmOpen, confirmData, ask: askConfirm, onConfirm, onCancel } = useConfirm();
+function askDelete(n: number): Promise<boolean> {
+  return askConfirm({
+    title: t("confirm.delete_title"),
+    message: t("sel.delete_confirm", { n }),
+    confirmLabel: t("sel.delete"),
+    danger: true,
+  });
+}
+const sel = useRowSelection<Trigger>(() => sortedTriggers.value, (x) => x.name, {
+  isActive: () => tabActive.value,
+  onDelete: (items) => bulkDeleteTriggers(items),
+});
+async function setTriggerActive(trigger: Trigger, active: boolean) {
+  if (!session.value || !!trigger.is_active === active) return;
+  const next = active ? 1 : 0;
+  await fetch(`${API}/triggers/${session.value.channel}/${trigger.name}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.value.token}`,
+    },
+    body: JSON.stringify({ is_active: next }),
+  });
+  trigger.is_active = next;
+}
+async function bulkDeleteTriggers(items: Trigger[]) {
+  if (!(await askDelete(items.length))) return;
+  for (const x of items) await deleteTrigger(x.name);
+  sel.clear();
+}
+function triggerRowCtx(e: MouseEvent, trigger: Trigger) {
+  if (!(sel.count.value > 1 && sel.isSelected(trigger.name)))
+    return openTriggerCtx(e, trigger);
+  const items = sel.selectedItems.value;
+  const n = items.length;
+  const cds = new Set(items.map((x) => x.cooldown_sec));
+  openContext(e, {
+    title: t("sel.n_selected", { n }),
+    items: [
+      ...(canEdit.value
+        ? [
+          { key: "on", label: `${t("sel.activate")} (${n})`, icon: "check",
+            onClick: () => { items.forEach((x) => setTriggerActive(x, true)); sel.clear(); } },
+          { key: "off", label: `${t("sel.deactivate")} (${n})`,
+            onClick: () => { items.forEach((x) => setTriggerActive(x, false)); sel.clear(); } },
+        ]
+        : []),
+      ...(canDelete.value
+        ? [{ key: "del", label: `${t("sel.delete")} (${n})`, icon: "trash", danger: true,
+          onClick: () => bulkDeleteTriggers(items) }]
+        : []),
+    ],
+    cooldowns: canEdit.value
+      ? [{ key: "cd", label: t("ctx.cd"), value: cds.size === 1 ? [...cds][0]! : null,
+        onSave: (v: number) => items.forEach((x) => saveTriggerCd(x, v)) }]
+      : [],
+    swatch: {
+      label: t("cmd.dot_colour"),
+      current: "",
+      used: trigBarColors.value,
+      onPick: (hex: string) => items.forEach((x) => rowColors.setColor(x.name, hex)),
+    },
+  });
+}
+
+async function saveTriggerCd(trigger: Trigger, v: number) {
+  if (!session.value || !canEdit.value) return;
+  trigger.cooldown_sec = v;
+  await fetch(`${API}/triggers/${session.value.channel}/${trigger.name}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.value.token}`,
+    },
+    body: JSON.stringify(trigger),
+  }).catch(() => { });
+}
+
+function openTriggerCtx(e: MouseEvent, trigger: Trigger) {
+  openContext(e, {
+    items: canEdit.value
+      ? [
+          {
+            key: "share",
+            label: t("trigger.share"),
+            icon: "corner-up-right",
+            onClick: () => openShare(trigger.name),
+          },
+        ]
+      : [],
+    cooldowns: canEdit.value
+      ? [
+          {
+            key: "cd",
+            label: t("ctx.cd"),
+            value: trigger.cooldown_sec,
+            onSave: (v) => saveTriggerCd(trigger, v),
+          },
+        ]
+      : [],
+    swatch: {
+      label: t("cmd.dot_colour"),
+      current: rowColors.colorOf(trigger.name),
+      used: trigBarColors.value,
+      onPick: (hex: string) => rowColors.setColor(trigger.name, hex),
+    },
+  });
+}
 
 // vvv resizable/draggable columns vvv
 const TRIGGER_COL_LABEL: Record<string, () => string> = {
@@ -42,6 +170,10 @@ function triggerColLabel(key: string): string {
 }
 const {
   columns: triggerColumns,
+  visibleColumns: triggerVisibleColumns,
+  hidden: triggerHidden,
+  setColumnHidden: triggerSetColHidden,
+  resetHidden: triggerResetHidden,
   gridTemplateColumns: triggerGridTemplateColumns,
   orderOf: triggerOrderOf,
   cellStyle: triggerCellStyle,
@@ -61,23 +193,39 @@ const {
   onHeaderPointerDown: triggerOnHeaderPointerDown,
   onHeaderClick: triggerOnHeaderClick,
 } = useResizableColumns("trigger-row", [
-  { key: "name", label: "", width: 2, minWidth: 120, flex: true, sortable: true },
+  { key: "name", label: "", width: 2, minWidth: 120, flex: true, sortable: true, hideable: false },
   { key: "response", label: "", width: 4, minWidth: 150, flex: true, sortable: true },
   { key: "event", label: "", width: 190, minWidth: 120, sortable: true },
   { key: "action", label: "", width: 220, minWidth: 140, sortable: true },
   { key: "manage", label: "", width: 180, minWidth: 150 },
-  { key: "switch", label: "", width: 50, minWidth: 50 },
+  { key: "switch", label: "", width: 50, minWidth: 50, hideable: false },
 ]);
+const triggerColItems = computed(() =>
+  triggerColumns.value
+    .filter((c) => c.key !== "name")
+    .map((c) => ({ key: c.key, label: triggerColLabel(c.key), hideable: c.hideable })),
+);
+function openTriggerColCtx(e: MouseEvent, key: string, hideable?: boolean) {
+  if (hideable === false) return;
+  openContext(e, {
+    items: [
+      { key: "hide", label: t("cols.hide"), icon: "eye-off", onClick: () => triggerSetColHidden(key, true) },
+    ],
+  });
+}
 // ^^^ resizable/draggable columns ^^^
 
 const sortedTriggers = computed(() =>
-  triggerApplySort(triggers.value, (tr: Trigger, k) => {
-    if (k === "name") return tr.name;
-    if (k === "response") return tr.response;
-    if (k === "event") return eventLabel(tr.event_type ?? "message");
-    if (k === "action") return actionLabel(tr.action_type ?? "");
-    return null;
-  }),
+  triggerApplySort(
+    triggers.value.filter((x) => rowColors.matchesFilter(x.name)),
+    (tr: Trigger, k) => {
+      if (k === "name") return tr.name;
+      if (k === "response") return tr.response;
+      if (k === "event") return eventLabel(tr.event_type ?? "message");
+      if (k === "action") return actionLabel(tr.action_type ?? "");
+      return null;
+    },
+  ),
 );
 
 // >>> opens edit panel from global search
@@ -602,6 +750,10 @@ async function toggleActive(trigger: Trigger) {
 
 // vvv share vvv
 const shareOpen = ref(false);
+useEscClose(() => {
+  editOpen.value = false;
+  shareOpen.value = false;
+});
 const shareTrigger = ref("");
 const shareTarget = ref("");
 const shareSaving = ref(false);
@@ -680,6 +832,12 @@ const syncConf = ref<{
 } | null>(null);
 const syncOpen = ref(false);
 const syncMode = ref<"ongoing" | "import">("ongoing");
+const syncWrapEl = ref<HTMLElement | null>(null);
+function openSync(mode: "ongoing" | "import") {
+  syncMode.value = mode;
+  syncOpen.value = true;
+}
+useClickAway(() => syncOpen.value, syncWrapEl, () => (syncOpen.value = false));
 const syncFrom = ref("");
 const syncSaving = ref(false);
 const syncRunning = ref(false);
@@ -823,6 +981,8 @@ defineExpose({
     createLabel: t("trigger.new"),
     canCreate: canEdit.value,
   })),
+  // >>> drives the docked-panel shift on the parent's outer .ep-view
+  panelOpen: editOpen,
   reload: () => {
     load();
     fetchSync();
@@ -834,27 +994,38 @@ defineExpose({
     editOpen.value = false;
     shareOpen.value = false;
   },
+  // >>> selection hint shows in the parent's header sub-line
+  selCount: sel.count,
+  clearSel: sel.clear,
 });
 </script>
 
 <template>
   <div class="ep-view">
-    <Teleport to="#auto-sync-slot-triggers">
-      <div class="ep-sync-wrap">
-        <button v-if="syncConf?.is_active" class="ep-sync-indicator" @click="syncOpen = !syncOpen"
-          :title="`${t('trigger.sync.active')} #${syncConf.sync_from}`">
-          <span class="ep-sync-dot"></span>{{ t("trigger.sync.active") }} #{{ syncConf.sync_from }}
-          <span class="ep-sync-chevron" :class="{ open: syncOpen }"></span>
-        </button>
-        <button v-else class="ep-sync-config-btn" @click="syncOpen = !syncOpen">
-          {{ t("trigger.sync.config") }} <span class="ep-sync-chevron" :class="{ open: syncOpen }"></span>
-        </button>
+    <Teleport to="#auto-color-bar" :disabled="!tabActive">
+      <div v-if="trigBarColors.length > 1" class="cmd-color-bar" :class="{ dim: rowColors.filter.value }">
+        <button v-for="c in trigBarColors" :key="c" type="button" class="cmd-color-sw"
+          :class="{ active: rowColors.filter.value === c }" :style="{ background: c }"
+          :title="t('cmd.filter_by_colour')" @click="rowColors.toggleFilter(c)"></button>
+        <button v-if="rowColors.filter.value" type="button" class="cmd-color-clear"
+          @click="rowColors.filter.value = null">{{ t('cmd.filter_clear') }}</button>
+      </div>
+    </Teleport>
+    <Teleport to="#auto-header-tools" :disabled="!tabActive">
+      <div class="ep-sync-wrap" ref="syncWrapEl">
+        <ColumnMenu :columns="triggerColItems" :hidden="triggerHidden" :has-extra="true" :extra-label="t('cols.import')"
+          @set="(k: string, h: boolean) => triggerSetColHidden(k, h)" @show-all="triggerResetHidden()">
+          <button type="button" class="col-menu-item" @click="openSync('import')">
+            <span v-html="iconSvgFor('download')"></span>{{ t('cols.import_once') }}
+          </button>
+          <button type="button" class="col-menu-item" @click="openSync('ongoing')">
+            <span v-if="syncConf?.is_active" class="ep-sync-dot"></span>
+            <span v-else v-html="iconSvgFor('refresh-cw')"></span>{{ t('cols.import_auto') }}
+          </button>
+        </ColumnMenu>
         <div v-if="syncOpen" class="ep-sync-panel">
-          <div class="ep-sync-modes">
-            <button class="ep-sync-mode-btn" :class="{ active: syncMode === 'ongoing' }"
-              @click="syncMode = 'ongoing'">Sync (ongoing)</button>
-            <button class="ep-sync-mode-btn" :class="{ active: syncMode === 'import' }"
-              @click="syncMode = 'import'">Import (one-time)</button>
+          <div class="ep-sync-panel-title">
+            {{ syncMode === 'import' ? t('cols.import_once') : t('cols.import_auto') }}
           </div>
           <div class="ep-sync-row">
             <select v-model="syncFrom" class="ep-field-select-sm">
@@ -907,10 +1078,11 @@ defineExpose({
 
     <div v-else class="trigger-table">
       <div class="ep-row-header trigger-row" :style="{ gridTemplateColumns: triggerGridTemplateColumns }">
-        <div v-for="(col, i) in triggerColumns" :key="col.key" class="ep-row-header-cell"
+        <div v-for="(col, i) in triggerVisibleColumns" :key="col.key" class="ep-row-header-cell"
           :class="{ dragging: triggerColDraggingIndex === i, 'drag-over': triggerColDragOverIndex === i,
             sortable: col.sortable, 'sort-active': triggerSortKey === col.key }"
           :style="{ order: i }" draggable="true" @mousedown="triggerOnHeaderPointerDown"
+          @contextmenu.prevent="openTriggerColCtx($event, col.key, col.hideable)"
           @click="triggerOnHeaderClick(i, $event)" @dragstart="triggerColDragStart(i)"
           @dragenter.prevent="triggerColDragEnterCell(i)" @dragover.prevent @drop="triggerColDrop(i)"
           @dragend="triggerColDragEnd()" @mouseenter="triggerSetHover(col.key)" @mouseleave="triggerClearHover()">
@@ -924,8 +1096,16 @@ defineExpose({
       </div>
       <div class="ep-row-list">
       <div v-for="trigger in sortedTriggers" :key="trigger.id" class="ep-row-grid trigger-row"
-        :style="{ gridTemplateColumns: triggerGridTemplateColumns }" :class="{ inactive: !trigger.is_active }">
-        <div class="ep-cell-name" :style="triggerCellStyle('name')">
+        :data-sel-key="trigger.name"
+        :style="{ gridTemplateColumns: triggerGridTemplateColumns }" :class="{
+          inactive: !trigger.is_active,
+          editing: editOpen && !isNew && editOrigName === trigger.name,
+          selected: sel.isSelected(trigger.name),
+        }" @pointerdown="sel.onRowPointerDown($event, trigger.name)"
+        @click.capture="sel.onRowClickCapture($event, trigger.name)"
+        @contextmenu.prevent="triggerRowCtx($event, trigger)">
+        <div class="ep-cell-name ep-row-cell-hover" :style="triggerCellStyle('name')" @click="openEdit(trigger)">
+          <span class="row-color-dot" :style="{ background: rowColors.colorOf(trigger.name) }"></span>
           <span v-if="isAutoNamed(trigger)" class="ep-tag keyword"><span v-html="iconSvgFor('link')"></span> {{
             autoNamedTagLabel(trigger) }}</span>
           <span v-else class="trigger-name-text">{{ trigger.name }}</span>
@@ -948,15 +1128,12 @@ defineExpose({
             actionLabel(trigger.action_type) }}</span>
           <span v-if="trigger.enabled_when !== 'always'" class="ep-tag condition">{{ trigger.enabled_when }}</span>
           <span v-if="trigger.required_game" class="ep-tag condition">{{ trigger.required_game }}</span>
-          <span v-if="trigger.cooldown_sec" class="ep-tag cooldown"><span v-html="iconSvgFor('clock')"></span> {{
-            trigger.cooldown_sec }}s</span>
+          <span v-if="trigger.cooldown_sec" class="ep-tag cooldown"><span class="cd-mark">G</span><span
+              v-html="iconSvgFor('clock')"></span> {{ trigger.cooldown_sec }}s</span>
         </div>
         <div class="ep-row-actions" :style="triggerCellStyle('manage')">
           <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(trigger)" :class="{ disabled: !canEdit }">
             {{ canEdit ? t("trigger.edit") : t("trigger.view") }}
-          </button>
-          <button class="ep-btn-action share" @click.stop="openShare(trigger.name)" :title="t('trigger.share')">
-            <span v-html="iconSvgFor('corner-up-right')"></span>
           </button>
           <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteTrigger(trigger.name)"
             :disabled="saving === trigger.name">
@@ -973,7 +1150,7 @@ defineExpose({
     </div>
 
     <Teleport to="body">
-      <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => (editOpen = false))">
+      <div v-if="editOpen" class="ep-overlay ep-overlay--dock" v-bind="overlay.handlers(() => (editOpen = false))">
         <div class="ep-panel">
           <div class="ep-panel-header">
             <div>
@@ -1246,6 +1423,11 @@ defineExpose({
         </div>
       </div>
     </Teleport>
+
+    <RowContextMenu :open="ctxOpen" :x="ctxX" :y="ctxY" :items="ctxItems" :cooldowns="ctxCooldowns" :swatch="ctxSwatch"
+      :title="ctxTitle" @close="ctxOpen = false" />
+    <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
+      :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
   </div>
 </template>
 

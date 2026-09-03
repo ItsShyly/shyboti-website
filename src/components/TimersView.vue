@@ -18,14 +18,113 @@ import {
   setEditorContent,
 } from "../composables/useContentEditableScript";
 import { useOverlayClose } from "../composables/useOverlayClose";
+import { useEscClose } from "../composables/useEscClose";
 import { iconSvg as iconSvgFor } from "../composables/icons";
+import { useClickAway } from "../composables/useClickAway";
 import { useResizableColumns } from "../composables/useResizableColumns";
 import EditableNameHeader from "./shared/EditableNameHeader.vue";
 import RefPanel from "./shared/RefPanel.vue";
 import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
+import RowContextMenu from "./shared/RowContextMenu.vue";
+import ColumnMenu from "./shared/ColumnMenu.vue";
+import { useRowContextMenu } from "../composables/useRowContextMenu";
+import { useRowSelection } from "../composables/useRowSelection";
+import { useConfirm } from "../composables/useConfirm";
+import { useRowColors } from "../composables/useRowColors";
+import { useTabActive } from "../composables/useTabActive";
+import ConfirmDialog from "./shared/ConfirmDialog.vue";
+
+const tabActive = useTabActive();
 
 const { session, availableChannels, channelRole } = useAuth();
+const { ctxOpen, ctxX, ctxY, ctxItems, ctxCooldowns, ctxSwatch, ctxTitle, openContext } =
+  useRowContextMenu();
 const { t } = useI18n();
+const rowColors = useRowColors(() => session.value?.channel, "timer", "#7c83ff");
+const timerBarColors = computed(() =>
+  rowColors.usedColors(timers.value.map((x) => x.name)),
+);
+
+const { confirmOpen, confirmData, ask: askConfirm, onConfirm, onCancel } = useConfirm();
+function askDelete(n: number): Promise<boolean> {
+  return askConfirm({
+    title: t("confirm.delete_title"),
+    message: t("sel.delete_confirm", { n }),
+    confirmLabel: t("sel.delete"),
+    danger: true,
+  });
+}
+const sel = useRowSelection<Timer>(() => sortedTimers.value, (x) => x.name, {
+  isActive: () => tabActive.value,
+  onDelete: (items) => bulkDeleteTimers(items),
+});
+async function setTimerActive(timer: Timer, active: boolean) {
+  if (!session.value || !!timer.is_active === active) return;
+  const next = active ? 1 : 0;
+  await fetch(`${API}/timers/${session.value.channel}/${timer.name}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.value.token}`,
+    },
+    body: JSON.stringify({ is_active: next }),
+  });
+  timer.is_active = next;
+}
+async function bulkDeleteTimers(items: Timer[]) {
+  if (!(await askDelete(items.length))) return;
+  for (const x of items) await deleteTimer(x.name);
+  sel.clear();
+}
+function timerRowCtx(e: MouseEvent, timer: Timer) {
+  if (!(sel.count.value > 1 && sel.isSelected(timer.name)))
+    return openTimerCtx(e, timer);
+  const items = sel.selectedItems.value;
+  const n = items.length;
+  openContext(e, {
+    title: t("sel.n_selected", { n }),
+    items: [
+      ...(canEdit.value
+        ? [
+          { key: "on", label: `${t("sel.activate")} (${n})`, icon: "check",
+            onClick: () => { items.forEach((x) => setTimerActive(x, true)); sel.clear(); } },
+          { key: "off", label: `${t("sel.deactivate")} (${n})`,
+            onClick: () => { items.forEach((x) => setTimerActive(x, false)); sel.clear(); } },
+        ]
+        : []),
+      ...(canDelete.value
+        ? [{ key: "del", label: `${t("sel.delete")} (${n})`, icon: "trash", danger: true,
+          onClick: () => bulkDeleteTimers(items) }]
+        : []),
+    ],
+    swatch: {
+      label: t("cmd.dot_colour"),
+      current: "",
+      used: timerBarColors.value,
+      onPick: (hex: string) => items.forEach((x) => rowColors.setColor(x.name, hex)),
+    },
+  });
+}
+function openTimerCtx(e: MouseEvent, timer: Timer) {
+  openContext(e, {
+    items: canEdit.value
+      ? [
+          {
+            key: "share",
+            label: t("timer.share"),
+            icon: "corner-up-right",
+            onClick: () => openShare(timer.name),
+          },
+        ]
+      : [],
+    swatch: {
+      label: t("cmd.dot_colour"),
+      current: rowColors.colorOf(timer.name),
+      used: timerBarColors.value,
+      onPick: (hex: string) => rowColors.setColor(timer.name, hex),
+    },
+  });
+}
 
 // vvv resizable/draggable columns vvv
 const TIMER_COL_LABEL: Record<string, () => string> = {
@@ -41,6 +140,10 @@ function timerColLabel(key: string): string {
 }
 const {
   columns: timerColumns,
+  visibleColumns: timerVisibleColumns,
+  hidden: timerHidden,
+  setColumnHidden: timerSetColHidden,
+  resetHidden: timerResetHidden,
   gridTemplateColumns: timerGridTemplateColumns,
   orderOf: timerOrderOf,
   cellStyle: timerCellStyle,
@@ -60,18 +163,33 @@ const {
   onHeaderPointerDown: timerOnHeaderPointerDown,
   onHeaderClick: timerOnHeaderClick,
 } = useResizableColumns("timer-row", [
-  { key: "name", label: "", width: 2, minWidth: 120, flex: true, sortable: true },
+  { key: "name", label: "", width: 2, minWidth: 120, flex: true, sortable: true, hideable: false },
   { key: "response", label: "", width: 4, minWidth: 150, flex: true, sortable: true },
   { key: "interval", label: "", width: 150, minWidth: 100 },
   { key: "condition", label: "", width: 190, minWidth: 120 },
   { key: "manage", label: "", width: 150, minWidth: 150 },
-  { key: "switch", label: "", width: 50, minWidth: 50 },
+  { key: "switch", label: "", width: 50, minWidth: 50, hideable: false },
 ]);
+const timerColItems = computed(() =>
+  timerColumns.value
+    .filter((c) => c.key !== "name")
+    .map((c) => ({ key: c.key, label: timerColLabel(c.key), hideable: c.hideable })),
+);
+function openTimerColCtx(e: MouseEvent, key: string, hideable?: boolean) {
+  if (hideable === false) return;
+  openContext(e, {
+    items: [
+      { key: "hide", label: t("cols.hide"), icon: "eye-off", onClick: () => timerSetColHidden(key, true) },
+    ],
+  });
+}
 // ^^^ resizable/draggable columns ^^^
 
 const sortedTimers = computed(() =>
-  timerApplySort(timers.value, (ti: Timer, k) =>
-    k === "name" ? ti.name : k === "response" ? ti.response : null,
+  timerApplySort(
+    timers.value.filter((x) => rowColors.matchesFilter(x.name)),
+    (ti: Timer, k) =>
+      k === "name" ? ti.name : k === "response" ? ti.response : null,
   ),
 );
 
@@ -311,6 +429,10 @@ async function toggleActive(timer: Timer) {
 
 // vvv share vvv
 const shareOpen = ref(false);
+useEscClose(() => {
+  editOpen.value = false;
+  shareOpen.value = false;
+});
 const shareTimer = ref("");
 const shareTarget = ref("");
 const shareSaving = ref(false);
@@ -389,6 +511,12 @@ const syncConf = ref<{
 } | null>(null);
 const syncOpen = ref(false);
 const syncMode = ref<"ongoing" | "import">("ongoing");
+const syncWrapEl = ref<HTMLElement | null>(null);
+function openSync(mode: "ongoing" | "import") {
+  syncMode.value = mode;
+  syncOpen.value = true;
+}
+useClickAway(() => syncOpen.value, syncWrapEl, () => (syncOpen.value = false));
 const syncFrom = ref("");
 const syncSaving = ref(false);
 const syncRunning = ref(false);
@@ -516,6 +644,8 @@ defineExpose({
     createLabel: t("timer.new"),
     canCreate: canEdit.value,
   })),
+  // >>> drives the docked-panel shift on the parent's outer .ep-view
+  panelOpen: editOpen,
   reload: () => {
     load();
     fetchSync();
@@ -527,27 +657,38 @@ defineExpose({
     editOpen.value = false;
     shareOpen.value = false;
   },
+  // >>> selection hint shows in the parent's header sub-line
+  selCount: sel.count,
+  clearSel: sel.clear,
 });
 </script>
 
 <template>
   <div class="ep-view">
-    <Teleport to="#auto-sync-slot-timers">
-      <div class="ep-sync-wrap">
-        <button v-if="syncConf?.is_active" class="ep-sync-indicator" @click="syncOpen = !syncOpen"
-          :title="`${t('timer.sync.active')} #${syncConf.sync_from}`">
-          <span class="ep-sync-dot"></span>{{ t("timer.sync.active") }} #{{ syncConf.sync_from }}
-          <span class="ep-sync-chevron" :class="{ open: syncOpen }"></span>
-        </button>
-        <button v-else class="ep-sync-config-btn" @click="syncOpen = !syncOpen">
-          {{ t("timer.sync.config") }} <span class="ep-sync-chevron" :class="{ open: syncOpen }"></span>
-        </button>
+    <Teleport to="#auto-color-bar" :disabled="!tabActive">
+      <div v-if="timerBarColors.length > 1" class="cmd-color-bar" :class="{ dim: rowColors.filter.value }">
+        <button v-for="c in timerBarColors" :key="c" type="button" class="cmd-color-sw"
+          :class="{ active: rowColors.filter.value === c }" :style="{ background: c }"
+          :title="t('cmd.filter_by_colour')" @click="rowColors.toggleFilter(c)"></button>
+        <button v-if="rowColors.filter.value" type="button" class="cmd-color-clear"
+          @click="rowColors.filter.value = null">{{ t('cmd.filter_clear') }}</button>
+      </div>
+    </Teleport>
+    <Teleport to="#auto-header-tools" :disabled="!tabActive">
+      <div class="ep-sync-wrap" ref="syncWrapEl">
+        <ColumnMenu :columns="timerColItems" :hidden="timerHidden" :has-extra="true" :extra-label="t('cols.import')"
+          @set="(k: string, h: boolean) => timerSetColHidden(k, h)" @show-all="timerResetHidden()">
+          <button type="button" class="col-menu-item" @click="openSync('import')">
+            <span v-html="iconSvgFor('download')"></span>{{ t('cols.import_once') }}
+          </button>
+          <button type="button" class="col-menu-item" @click="openSync('ongoing')">
+            <span v-if="syncConf?.is_active" class="ep-sync-dot"></span>
+            <span v-else v-html="iconSvgFor('refresh-cw')"></span>{{ t('cols.import_auto') }}
+          </button>
+        </ColumnMenu>
         <div v-if="syncOpen" class="ep-sync-panel">
-          <div class="ep-sync-modes">
-            <button class="ep-sync-mode-btn" :class="{ active: syncMode === 'ongoing' }"
-              @click="syncMode = 'ongoing'">Sync (ongoing)</button>
-            <button class="ep-sync-mode-btn" :class="{ active: syncMode === 'import' }"
-              @click="syncMode = 'import'">Import (one-time)</button>
+          <div class="ep-sync-panel-title">
+            {{ syncMode === 'import' ? t('cols.import_once') : t('cols.import_auto') }}
           </div>
           <div class="ep-sync-row">
             <select v-model="syncFrom" class="ep-field-select-sm">
@@ -600,10 +741,11 @@ defineExpose({
 
     <div v-else class="timer-table">
       <div class="ep-row-header timer-row" :style="{ gridTemplateColumns: timerGridTemplateColumns }">
-        <div v-for="(col, i) in timerColumns" :key="col.key" class="ep-row-header-cell"
+        <div v-for="(col, i) in timerVisibleColumns" :key="col.key" class="ep-row-header-cell"
           :class="{ dragging: timerColDraggingIndex === i, 'drag-over': timerColDragOverIndex === i,
             sortable: col.sortable, 'sort-active': timerSortKey === col.key }"
           :style="{ order: i }" draggable="true" @mousedown="timerOnHeaderPointerDown"
+          @contextmenu.prevent="openTimerColCtx($event, col.key, col.hideable)"
           @click="timerOnHeaderClick(i, $event)" @dragstart="timerColDragStart(i)"
           @dragenter.prevent="timerColDragEnterCell(i)" @dragover.prevent @drop="timerColDrop(i)"
           @dragend="timerColDragEnd()" @mouseenter="timerSetHover(col.key)" @mouseleave="timerClearHover()">
@@ -617,8 +759,16 @@ defineExpose({
       </div>
       <div class="ep-row-list">
         <div v-for="timer in sortedTimers" :key="timer.id" class="ep-row-grid timer-row"
-          :style="{ gridTemplateColumns: timerGridTemplateColumns }" :class="{ inactive: !timer.is_active }">
-          <div class="ep-cell-name" :style="timerCellStyle('name')">
+          :data-sel-key="timer.name"
+          :style="{ gridTemplateColumns: timerGridTemplateColumns }" :class="{
+            inactive: !timer.is_active,
+            editing: editOpen && !!editOrigName && editOrigName === timer.name,
+            selected: sel.isSelected(timer.name),
+          }" @pointerdown="sel.onRowPointerDown($event, timer.name)"
+          @click.capture="sel.onRowClickCapture($event, timer.name)"
+          @contextmenu.prevent="timerRowCtx($event, timer)">
+          <div class="ep-cell-name ep-row-cell-hover" :style="timerCellStyle('name')" @click="openEdit(timer)">
+            <span class="row-color-dot" :style="{ background: rowColors.colorOf(timer.name) }"></span>
             <span class="timer-name-text">{{ timer.name }}</span>
           </div>
           <div class="ep-cell-text timer-resp-cell ep-row-cell-hover" :style="timerCellStyle('response')"
@@ -643,9 +793,6 @@ defineExpose({
             <button class="ep-btn-action edit" @click.stop="canEdit && openEdit(timer)" :class="{ disabled: !canEdit }">
               {{ canEdit ? t("timer.edit") : t("timer.view") }}
             </button>
-            <button class="ep-btn-action share" @click.stop="openShare(timer.name)" :title="t('timer.share')">
-              <span v-html="iconSvgFor('corner-up-right')"></span>
-            </button>
             <button v-if="canDelete" class="ep-btn-action del" @click.stop="deleteTimer(timer.name)"
               :disabled="saving === timer.name">
               <span v-html="iconSvgFor('trash')"></span>
@@ -663,7 +810,7 @@ defineExpose({
 
     <!-- >>> edit panel -->
     <Teleport to="body">
-      <div v-if="editOpen" class="ep-overlay" v-bind="overlay.handlers(() => (editOpen = false))">
+      <div v-if="editOpen" class="ep-overlay ep-overlay--dock" v-bind="overlay.handlers(() => (editOpen = false))">
         <div class="ep-panel">
           <div class="ep-panel-header">
             <div>
@@ -792,6 +939,11 @@ defineExpose({
         </div>
       </div>
     </Teleport>
+
+    <RowContextMenu :open="ctxOpen" :x="ctxX" :y="ctxY" :items="ctxItems" :cooldowns="ctxCooldowns" :swatch="ctxSwatch"
+      :title="ctxTitle" @close="ctxOpen = false" />
+    <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
+      :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
   </div>
 </template>
 

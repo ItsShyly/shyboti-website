@@ -73,17 +73,6 @@ function resetAllHiddenInfos() {
   setTimeout(() => (tipsResetMsg.value = ""), 3000);
 }
 
-// >>> wipes every saved table layout (widths/order) + sort, then reloads so the
-// tables pick up the code defaults
-function resetTableColumns() {
-  Object.keys(localStorage)
-    .filter(
-      (k) => k.startsWith("ep-table-cols-") || k.startsWith("ep-table-sort-"),
-    )
-    .forEach((k) => localStorage.removeItem(k));
-  window.location.reload();
-}
-
 async function load() {
   if (!session.value) return;
   const ch = session.value.channel;
@@ -546,17 +535,6 @@ async function doDeleteAllData() {
               <div class="setting-control">
                 <button class="btn btn-secondary" @click="resetAllHiddenInfos">
                   {{ t("settings.tips.btn") }}
-                </button>
-              </div>
-            </div>
-            <div class="setting-row">
-              <div class="setting-info">
-                <div class="setting-label">{{ t("settings.cols.label") }}</div>
-                <div class="setting-desc">{{ t("settings.cols.desc") }}</div>
-              </div>
-              <div class="setting-control">
-                <button class="btn btn-secondary" @click="resetTableColumns">
-                  {{ t("settings.cols.btn") }}
                 </button>
               </div>
             </div>

@@ -6,10 +6,20 @@ import ObsRuleEditPanel from "./ObsRuleEditPanel.vue";
 import type { ObsRule } from "./ObsRuleEditPanel.vue";
 import { iconSvg as iconSvgFor } from "../composables/icons";
 import { useResizableColumns } from "../composables/useResizableColumns";
+import ColumnMenu from "./shared/ColumnMenu.vue";
+import RowContextMenu from "./shared/RowContextMenu.vue";
+import { useRowContextMenu } from "../composables/useRowContextMenu";
+import { useRowSelection } from "../composables/useRowSelection";
+import { useConfirm } from "../composables/useConfirm";
+import { useTabActive } from "../composables/useTabActive";
+import ConfirmDialog from "./shared/ConfirmDialog.vue";
 import { useI18n } from "../i18n";
+
+const tabActive = useTabActive();
 
 const { t } = useI18n();
 const { session, channelRole } = useAuth();
+const { ctxOpen, ctxX, ctxY, ctxItems, ctxCooldowns, ctxTitle, openContext } = useRowContextMenu();
 
 // vvv resizable/draggable columns vvv
 const OBSAUTO_COL_LABEL: Record<string, () => string> = {
@@ -23,6 +33,10 @@ function obsAutoColLabel(key: string): string {
 }
 const {
   columns: obsAutoColumns,
+  visibleColumns: obsAutoVisibleColumns,
+  hidden: obsAutoHidden,
+  setColumnHidden: obsAutoSetColHidden,
+  resetHidden: obsAutoResetHidden,
   gridTemplateColumns: obsAutoGridTemplateColumns,
   orderOf: obsAutoOrderOf,
   cellStyle: obsAutoCellStyle,
@@ -37,11 +51,24 @@ const {
   onDrop: obsAutoColDrop,
   onDragEnd: obsAutoColDragEnd,
 } = useResizableColumns("obsauto-row", [
-  { key: "trigger", label: "", width: 3, minWidth: 130, flex: true },
+  { key: "trigger", label: "", width: 3, minWidth: 130, flex: true, hideable: false },
   { key: "action", label: "", width: 3, minWidth: 130, flex: true },
   { key: "manage", label: "", width: 160, minWidth: 130 },
-  { key: "switch", label: "", width: 46, minWidth: 46 },
+  { key: "switch", label: "", width: 46, minWidth: 46, hideable: false },
 ]);
+const obsAutoColItems = computed(() =>
+  obsAutoColumns.value
+    .filter((c) => c.key !== "trigger")
+    .map((c) => ({ key: c.key, label: obsAutoColLabel(c.key), hideable: c.hideable })),
+);
+function openObsAutoColCtx(e: MouseEvent, key: string, hideable?: boolean) {
+  if (hideable === false) return;
+  openContext(e, {
+    items: [
+      { key: "hide", label: t("cols.hide"), icon: "eye-off", onClick: () => obsAutoSetColHidden(key, true) },
+    ],
+  });
+}
 // ^^^ resizable/draggable columns ^^^
 
 
@@ -177,6 +204,59 @@ async function toggleRule(rule: ObsRule) {
   });
 }
 
+const { confirmOpen, confirmData, ask: askConfirm, onConfirm, onCancel } = useConfirm();
+const sel = useRowSelection<ObsRule>(() => rules.value, (x) => x.id, {
+  isActive: () => tabActive.value,
+  onDelete: (items) => bulkDeleteRules(items),
+});
+async function putRules() {
+  if (!session.value) return;
+  await fetch(`${API}/obs/${session.value.channel}/rules`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session.value.token}`,
+    },
+    body: JSON.stringify({ rules: rules.value }),
+  });
+}
+async function bulkRulesEnabled(items: ObsRule[], enabled: boolean) {
+  items.forEach((r) => (r.enabled = enabled));
+  await putRules();
+  sel.clear();
+}
+async function bulkDeleteRules(items: ObsRule[]) {
+  if (
+    !(await askConfirm({
+      title: t("confirm.delete_title"),
+      message: t("sel.delete_confirm", { n: items.length }),
+      confirmLabel: t("sel.delete"),
+      danger: true,
+    }))
+  )
+    return;
+  const ids = new Set(items.map((r) => r.id));
+  rules.value = rules.value.filter((r) => !ids.has(r.id));
+  await putRules();
+  sel.clear();
+}
+function ruleRowCtx(e: MouseEvent, rule: ObsRule) {
+  if (!canEdit.value || !(sel.count.value > 1 && sel.isSelected(rule.id))) return;
+  const items = sel.selectedItems.value;
+  const n = items.length;
+  openContext(e, {
+    title: t("sel.n_selected", { n }),
+    items: [
+      { key: "on", label: `${t("sel.activate")} (${n})`, icon: "check",
+        onClick: () => bulkRulesEnabled(items, true) },
+      { key: "off", label: `${t("sel.deactivate")} (${n})`,
+        onClick: () => bulkRulesEnabled(items, false) },
+      { key: "del", label: `${t("sel.delete")} (${n})`, icon: "trash", danger: true,
+        onClick: () => bulkDeleteRules(items) },
+    ],
+  });
+}
+
 async function deleteRule(id: string) {
   if (!session.value) return;
   saving.value = id;
@@ -217,15 +297,28 @@ defineExpose({
     createLabel: t("obsauto.create_label"),
     canCreate: canEdit.value && paired.value,
   })),
+  // >>> drives the docked-panel shift on the parent's outer .ep-view
+  panelOpen: editOpen,
   reload: fetchRules,
   create: () => {
     canEdit.value && paired.value && openEdit(null);
   },
+  // >>> selection hint shows in the parent's header sub-line
+  selCount: sel.count,
+  clearSel: sel.clear,
 });
 </script>
 
 <template>
   <div class="ep-view">
+    <Teleport to="#auto-header-tools" :disabled="!tabActive">
+      <ColumnMenu :columns="obsAutoColItems" :hidden="obsAutoHidden"
+        @set="(k: string, h: boolean) => obsAutoSetColHidden(k, h)" @show-all="obsAutoResetHidden()" />
+    </Teleport>
+    <RowContextMenu :open="ctxOpen" :x="ctxX" :y="ctxY" :items="ctxItems" :cooldowns="ctxCooldowns" :title="ctxTitle"
+      @close="ctxOpen = false" />
+    <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
+      :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
     <div v-if="loading" class="ep-row-list">
       <div class="ep-skeleton-row" v-for="i in 6" :key="i">
         <div class="ep-skeleton-block ep-skeleton-square"></div>
@@ -253,9 +346,10 @@ defineExpose({
       <template v-else>
         <div class="obsauto-table">
           <div class="ep-row-header obsauto-row" :style="{ gridTemplateColumns: obsAutoGridTemplateColumns }">
-            <div v-for="(col, i) in obsAutoColumns" :key="col.key" class="ep-row-header-cell"
+            <div v-for="(col, i) in obsAutoVisibleColumns" :key="col.key" class="ep-row-header-cell"
               :class="{ dragging: obsAutoColDraggingIndex === i, 'drag-over': obsAutoColDragOverIndex === i }"
               :style="{ order: i }" draggable="true" @dragstart="obsAutoColDragStart(i)"
+              @contextmenu.prevent="openObsAutoColCtx($event, col.key, col.hideable)"
               @dragenter.prevent="obsAutoColDragEnterCell(i)" @dragover.prevent @drop="obsAutoColDrop(i)"
               @dragend="obsAutoColDragEnd()" @mouseenter="obsAutoSetHover(col.key)" @mouseleave="obsAutoClearHover()">
               {{ obsAutoColLabel(col.key) }}
@@ -264,8 +358,12 @@ defineExpose({
             </div>
           </div>
           <div class="ep-row-list">
-            <div v-for="rule in rules" :key="rule.id" class="ep-row-grid obsauto-row"
-              :style="{ gridTemplateColumns: obsAutoGridTemplateColumns }" :class="{ inactive: !rule.enabled }">
+            <div v-for="rule in rules" :key="rule.id" class="ep-row-grid obsauto-row" :data-sel-key="rule.id"
+              :style="{ gridTemplateColumns: obsAutoGridTemplateColumns }"
+              :class="{ inactive: !rule.enabled, selected: sel.isSelected(rule.id) }"
+              @pointerdown="sel.onRowPointerDown($event, rule.id)"
+              @click.capture="sel.onRowClickCapture($event, rule.id)"
+              @contextmenu.prevent="ruleRowCtx($event, rule)">
               <!-- >>> both cells open the same edit panel -->
               <div class="obsauto-trigger ep-row-cell-hover" :style="obsAutoCellStyle('trigger')"
                 @click="canEdit && openEdit(rule.id)">
