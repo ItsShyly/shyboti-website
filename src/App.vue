@@ -886,7 +886,8 @@ provide("searchOpenTrigger", searchOpenTrigger);
           <span class="hide-mobile">{{ t("nav.login") }}</span>
           <span class="show-mobile">{{ t("nav.login_short") }}</span>
         </button>
-        <button class="hamburger show-mobile" @click="sidebarOpen = !sidebarOpen" :class="{ open: sidebarOpen }">
+        <button v-if="!session" class="hamburger show-mobile" @click="sidebarOpen = !sidebarOpen"
+          :class="{ open: sidebarOpen }">
           <span></span><span></span><span></span>
         </button>
       </div>
@@ -1090,6 +1091,9 @@ provide("searchOpenTrigger", searchOpenTrigger);
             + {{ t("nav.add_channel") }}
           </button>
         </div>
+        <router-link to="/privacy" class="sidebar-privacy show-mobile" @click="sidebarOpen = false">
+          {{ t("footer.privacy") }}
+        </router-link>
       </aside>
 
       <main class="main-panel" ref="mainPanelRef">
@@ -1108,6 +1112,31 @@ provide("searchOpenTrigger", searchOpenTrigger);
         </footer>
       </main>
     </div>
+
+    <!-- >>> phone-only bottom tab bar (app shell) - desktop keeps the sidebar -->
+    <nav v-if="session" class="mobile-nav show-mobile">
+      <button class="mobile-nav-btn" :class="{ active: activeRoute === 'dashboard' }" @click="nav('dashboard')">
+        <span v-html="iconSvg('activity')"></span>
+        <span class="mobile-nav-label">{{ t('nav.dashboard') }}</span>
+      </button>
+      <button class="mobile-nav-btn" :class="{ active: activeRoute === 'commands' }" @click="nav('commands')">
+        <span v-html="iconSvg('message-circle')"></span>
+        <span class="mobile-nav-label">{{ t('nav.commands') }}</span>
+      </button>
+      <button class="mobile-nav-btn" :class="{ active: activeRoute === 'automations' }" @click="nav('automations')">
+        <span v-html="iconSvg('zap')"></span>
+        <span class="mobile-nav-label">{{ t('nav.automations') }}</span>
+      </button>
+      <button class="mobile-nav-btn" :class="{ active: activeRoute === 'moderation' }" @click="nav('moderation')">
+        <span v-html="iconSvg('ban')"></span>
+        <span class="mobile-nav-label">{{ t('nav.moderation') }}</span>
+      </button>
+      <button class="mobile-nav-btn" :class="{ active: sidebarOpen }" @click="sidebarOpen = !sidebarOpen">
+        <span v-html="iconSvg('grip')"></span>
+        <span class="mobile-nav-label">{{ t('nav.more') }}</span>
+      </button>
+    </nav>
+
     <span v-if="toast" class="toast toast-float"><span class="toast-icon" v-html="iconSvg('check')"></span>{{ toast
     }}</span>
   </div>
@@ -2187,6 +2216,58 @@ body.snippet-dragging * {
   transition: color 0.15s;
 }
 
+/* vvv phone bottom tab bar - hidden on desktop via .show-mobile vvv */
+.mobile-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 90;
+  background: #101014;
+  border-top: 1px solid #1e1e24;
+  padding: 4px 2px calc(4px + env(safe-area-inset-bottom, 0px));
+}
+
+.mobile-nav-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 7px 2px;
+  border: none;
+  background: transparent;
+  color: #666;
+  font-family: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-nav-btn :deep(svg),
+.mobile-nav-btn svg {
+  width: 21px;
+  height: 21px;
+}
+
+.mobile-nav-btn.active {
+  color: #9d6cff;
+}
+
+.mobile-nav-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.sidebar-privacy {
+  display: none;
+  padding: 14px 18px;
+  font-size: 12px;
+  color: #555;
+  text-decoration: none;
+}
+
 .footer-link:hover {
   color: #9d6cff;
 }
@@ -2216,7 +2297,7 @@ body.snippet-dragging * {
     overflow: hidden !important;
     height: calc(100dvh - 52px) !important;
     min-height: 0 !important;
-    padding-bottom: 38px !important;
+    padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
     flex: none;
   }
 }
@@ -2251,9 +2332,30 @@ body.snippet-dragging * {
     display: flex !important;
   }
 
+  /* >>> app-scale base: readable text, no iOS zoom-on-focus, bigger sidebar rows */
+  .main-panel {
+    font-size: 14px;
+  }
+
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+
+  .sidebar-btn {
+    padding: 15px 18px;
+    font-size: 15px;
+  }
+
+  .channel-btn,
+  .auth-btn {
+    height: 34px;
+  }
+
   .add-banner {
-    padding: 8px 14px;
-    font-size: 11px;
+    padding: 10px 14px;
+    font-size: 12px;
   }
 
   .body {
@@ -2285,20 +2387,12 @@ body.snippet-dragging * {
     padding: 14px;
     flex: none;
     min-height: calc(100dvh - 52px);
-    padding-bottom: 38px;
+    padding-bottom: calc(58px + env(safe-area-inset-bottom, 0px));
   }
 
+  /* >>> footer replaced by the bottom nav; privacy link lives in the More sheet */
   .site-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    padding: 6px 14px;
-    background: #141418;
-    border-top: 1px solid #1e1e24;
-    justify-content: center;
-    z-index: 50;
-    margin-top: 0;
+    display: none;
   }
 }
 

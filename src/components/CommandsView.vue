@@ -31,6 +31,7 @@ import { useDashboardColors } from "../composables/useDashboardColors";
 import { useConfirm } from "../composables/useConfirm";
 import ConfirmDialog from "./shared/ConfirmDialog.vue";
 import SelectionHint from "./shared/SelectionHint.vue";
+import SelectionActionBar, { type BarAction } from "./shared/SelectionActionBar.vue";
 
 const { session, channelRole, adminMode } = useAuth();
 const { t } = useI18n();
@@ -857,6 +858,34 @@ function obsRowCtx(
     },
   });
 }
+// >>> mobile bulk bar - mirrors the desktop right-click bulk menu per tab
+const bulkBarActions = computed<BarAction[]>(() => {
+  if (activeTab.value === "Custom") {
+    const items = selCustom.selectedItems.value;
+    return [
+      { key: "on", label: t("sel.activate"), icon: "check",
+        onClick: () => bulkActive(items, true, updateCustomActive, selCustom.clear) },
+      { key: "off", label: t("sel.deactivate"), icon: "pause",
+        onClick: () => bulkActive(items, false, updateCustomActive, selCustom.clear) },
+      { key: "del", label: t("sel.delete"), icon: "trash", danger: true,
+        onClick: () => bulkDeleteCustom(items) },
+    ];
+  }
+  if (activeTab.value === "Obs") {
+    const rows = selObs.selectedItems.value;
+    return [
+      { key: "del", label: t("sel.delete"), icon: "trash", danger: true,
+        onClick: () => bulkDeleteObs(rows) },
+    ];
+  }
+  const items = selDefault.selectedItems.value;
+  return [
+    { key: "on", label: t("sel.activate"), icon: "check",
+      onClick: () => bulkActive(items, true, updateCommand, selDefault.clear) },
+    { key: "off", label: t("sel.deactivate"), icon: "pause",
+      onClick: () => bulkActive(items, false, updateCommand, selDefault.clear) },
+  ];
+});
 const activeSel = computed(() =>
   activeTab.value === "Custom"
     ? selCustom
@@ -2540,6 +2569,8 @@ onUnmounted(() => {
 
   <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
     :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
+
+  <SelectionActionBar :count="activeSel.count.value" :actions="bulkBarActions" @clear="activeSel.clear()" />
 </template>
 
 <style scoped>
@@ -3175,58 +3206,8 @@ onUnmounted(() => {
 }
 
 @media (max-width: 680px) {
-  .ep-row-header {
-    display: none;
-  }
-
-  /* >>> single line on phone: chevron, toggle, name, kebab. access/edit/share/
-     delete move into the kebab, cooldowns live in the edit panel only */
-  .ep-row-grid.cmd-default-row,
-  .ep-row-grid.cmd-custom-row {
-    display: flex;
-    align-items: center;
-    height: auto;
-    padding: 10px 12px;
-    gap: 8px;
-  }
-
-  /* >>> fixed width regardless of content - was collapsing on rows with no
-     arg variants, shifting the toggle left/right row to row */
-  .ep-row-grid.cmd-default-row>.row-chevron-cell,
-  .ep-row-grid.cmd-custom-row>.row-chevron-cell {
-    width: 20px;
-    flex-shrink: 0;
-  }
-
-  .ep-row-grid.cmd-default-row>.ep-cell-name,
-  .ep-row-grid.cmd-custom-row>.ep-cell-name {
-    flex: 1;
-    min-width: 0;
-  }
-
-  .cmd-name-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
-  }
-
-  /* >>> row is now color(1) name(2) desc(3) tags(4) access(5) manage(6) switch(7)
-     kebab(8) - hide 3..7, keep the colour dot, name + kebab */
-  .ep-row-grid.cmd-default-row>.ep-cell-text,
-  .ep-row-grid.cmd-default-row>*:nth-child(4),
-  .ep-row-grid.cmd-default-row>*:nth-child(5),
-  .ep-row-grid.cmd-default-row>*:nth-child(6),
-  .ep-row-grid.cmd-default-row>*:nth-child(7),
-  .ep-row-grid.cmd-custom-row>.ep-cell-text,
-  .ep-row-grid.cmd-custom-row>*:nth-child(4),
-  .ep-row-grid.cmd-custom-row>*:nth-child(5),
-  .ep-row-grid.cmd-custom-row>*:nth-child(6),
-  .ep-row-grid.cmd-custom-row>*:nth-child(7),
-  .ep-row-grid.cmd-custom-row>*:nth-child(8) {
-    display: none;
-  }
-
+  /* >>> row layout is the shared mobile card (shared.css) - only the
+     command-specific header bits are tuned here */
   .custom-header {
     flex-wrap: wrap;
     gap: 8px;

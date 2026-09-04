@@ -58,6 +58,7 @@
   .ep-panel {
     width: 100vw !important;
     height: 100vh;
+    height: 100dvh;
   }
   /* >>> title block wouldn't shrink, pushing the close X off-screen */
   .ep-panel-header {
@@ -743,6 +744,12 @@
   .ep-kebab {
     display: inline-flex !important;
   }
+  /* >>> above the fixed bottom nav (z 90) so a bottom-row menu isn't hidden */
+  .ep-kebab-menu {
+    z-index: 100;
+    max-height: 60vh;
+    overflow-y: auto;
+  }
 }
 
 /* Toggle switch - single shared component, every boolean toggle uses this */
@@ -1179,6 +1186,293 @@
   border-color: #8a8a9633;
   background: #8a8a960a;
   font-family: monospace;
+}
+
+/* ============================================================
+   MOBILE: every list turns into a tappable card stack. no
+   horizontal scroll, no column grid, bigger tap targets.
+   tap a card = open its editor, long-press = multi-select.
+   ============================================================ */
+@media (max-width: 680px) {
+  /* column header + its resize/drag chrome is meaningless on a phone */
+  .ep-row-header,
+  .ep-table-scroll {
+    display: none !important;
+  }
+  .ep-table-scroll ~ *,
+  .ep-table-scroll + * {
+    overflow-x: visible !important;
+  }
+
+  /* grid rows -> flex cards; kill the inline grid-template-columns */
+  .ep-row-grid,
+  .mod-group-header {
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    grid-template-columns: none !important;
+    row-gap: 3px;
+    column-gap: 8px;
+    min-height: 58px;
+    padding: 11px 16px;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .mod-group-header {
+    min-height: 44px;
+    background: #101014;
+  }
+  .mod-group-header > .mod-group-title {
+    flex: 1 1 auto;
+  }
+  .ep-list-row {
+    padding: 12px 16px;
+    gap: 10px;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* the name/title cell owns line 1 and grows */
+  .ep-row-grid > .ep-cell-name,
+  .ep-row-grid > .mod-item-main,
+  .ep-row-grid > .mod-group-title,
+  .ep-row-grid > .cp-reward,
+  .ep-row-grid > .obsauto-trigger {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 15px;
+    padding-left: 2px;
+  }
+  .ep-cell-name .cmd-name-text,
+  .ep-cell-name .timer-name-text,
+  .ep-cell-name .trigger-name-text,
+  .ep-cell-name .cd-name-text,
+  .mod-item-title .item-term,
+  .spam-label .spam-name,
+  .cp-reward .cp-title,
+  .obsauto-trigger .obsauto-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* free-text secondary cell (description / response preview) - it's in the
+     editor, no room for it on the card */
+  .ep-row-grid > .ep-cell-text,
+  .ep-row-grid > .cp-cost,
+  .ep-row-grid > .cp-actions-cell {
+    display: none !important;
+  }
+
+  /* non-toggle icon columns (access / manage / actions) fold into the kebab */
+  .ep-row-grid > .ep-row-cell-center:not(.ep-row-cell-end) {
+    display: none !important;
+  }
+
+  /* chip cells drop to their own full-width line below the title, muted */
+  .ep-row-grid > .ep-cell-tags {
+    flex: 1 1 100%;
+    order: 90 !important;
+    padding: 0 2px;
+    gap: 4px;
+    row-gap: 4px;
+  }
+  .ep-row-grid > .ep-cell-tags:empty {
+    display: none;
+  }
+
+  /* inline action buttons are replaced by the kebab everywhere */
+  .ep-row-grid > .ep-row-actions,
+  .ep-list-row > .ep-row-actions {
+    display: none !important;
+  }
+
+  /* the toggle stays on line 1, pinned to the right */
+  .ep-row-grid > .ep-row-cell-end {
+    order: 70 !important;
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+  .ep-row-grid > .ep-kebab,
+  .ep-list-row > .ep-kebab {
+    order: 75 !important;
+    flex: 0 0 auto;
+  }
+  .ep-row-grid > .ep-cell-color,
+  .ep-list-row > .row-color-dot:first-child {
+    order: 0 !important;
+    flex: 0 0 auto;
+  }
+
+  /* fat-finger sizes */
+  .ep-switch {
+    width: 46px;
+    height: 26px;
+    flex-shrink: 0;
+  }
+  .ep-switch-knob {
+    width: 20px;
+    height: 20px;
+  }
+  .ep-kebab-btn {
+    width: 40px;
+    height: 40px;
+  }
+  .ep-kebab-menu {
+    min-width: 200px;
+  }
+  .ep-kebab-item {
+    padding: 13px 14px;
+    font-size: 14px;
+  }
+  .ep-tag {
+    font-size: 11px;
+    padding: 2px 7px;
+  }
+
+  /* selected card: solid left rail so it reads in a scroll */
+  .ep-row-grid.selected,
+  .ep-list-row.selected {
+    box-shadow: inset 4px 0 0 #9d6cff;
+  }
+
+  /* view shell: full-bleed rows (break out of .main-panel's 14px), tight header.
+     only the top-level view breaks out - nested ones (Automations tabs) don't */
+  .ep-view {
+    gap: 10px;
+  }
+  .main-panel > .ep-view {
+    margin: 0 -14px;
+    width: calc(100% + 28px);
+  }
+  .ep-view-header {
+    padding: 0 12px;
+  }
+  .ep-view-title {
+    font-size: 16px;
+  }
+  .ep-view-sub {
+    font-size: 13px;
+  }
+  .ep-view-header-right {
+    gap: 6px;
+  }
+  .ep-view-header-right > button {
+    height: 36px;
+  }
+  .ep-tabs {
+    padding: 0 8px;
+  }
+  .ep-empty {
+    padding: 32px 20px;
+    font-size: 14px;
+  }
+  /* no right-click on a phone - the selection hint drops that half */
+  .sel-hint-more {
+    display: none;
+  }
+  .sel-hint {
+    font-size: 13px;
+  }
+  .sel-hint-x {
+    font-size: 15px;
+    padding: 4px 8px;
+  }
+
+  /* ---- edit panel = full-screen sheet, app-sized controls ---- */
+  .ep-panel {
+    border-left: none;
+  }
+  .ep-panel-header {
+    padding: 16px 16px 12px;
+  }
+  .ep-panel-title {
+    font-size: 18px;
+  }
+  .ep-panel-sub {
+    font-size: 12px;
+  }
+  .ep-panel-close {
+    width: 40px;
+    height: 40px;
+  }
+  .ep-panel-body {
+    padding: 16px;
+    gap: 16px;
+  }
+  .ep-panel-footer {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* forms: 44px targets, readable text */
+  .ep-field-label {
+    font-size: 12px;
+  }
+  .ep-field-hint {
+    font-size: 12px;
+  }
+  .ep-field-input,
+  .ep-field-textarea,
+  .ep-field-select {
+    /* >>> 16px stops iOS auto-zooming the page on focus */
+    font-size: 16px;
+    height: 44px;
+    padding: 10px 12px;
+  }
+  .ep-field-textarea {
+    height: auto;
+    min-height: 72px;
+  }
+  .ep-field-select-sm {
+    height: 40px;
+    font-size: 14px;
+  }
+  .ep-script-editor {
+    font-size: 14px;
+    min-height: 120px;
+    max-height: 300px;
+    padding: 12px 14px;
+  }
+
+  /* panel + generic buttons: bigger, thumb-friendly */
+  .ep-btn-save,
+  .ep-btn-cancel,
+  .ep-btn-delete,
+  .ep-btn-new {
+    height: 44px;
+    font-size: 14px;
+    padding: 0 18px;
+  }
+  .ep-btn-action {
+    height: 38px;
+    font-size: 13px;
+    padding: 0 14px;
+  }
+
+  /* tab strips: scrollable, bigger hit area */
+  .ep-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .ep-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .ep-tab {
+    padding: 12px 16px;
+    font-size: 14px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* the shared card system for slide-in panels */
+  .ep-details {
+    font-size: 14px;
+  }
+  .ep-toggle-btn {
+    transform: scale(1.15);
+  }
 }
 
 /* Toasts */

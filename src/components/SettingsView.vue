@@ -1077,17 +1077,42 @@ async function doDeleteAllData() {
   border-color: #f14949;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 680px) {
 
   .setting-row,
   .danger-row {
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
+    padding: 16px 14px;
   }
 
   .setting-control,
   .danger-control {
-    align-self: flex-end;
+    align-self: stretch;
+  }
+
+  .settings-title {
+    font-size: 20px;
+  }
+
+  .setting-label {
+    font-size: 15px;
+  }
+
+  .setting-desc {
+    font-size: 13px;
+  }
+
+  .setting-desc-detects {
+    font-size: 12px;
+  }
+
+  .settings-section {
+    padding: 0;
+  }
+
+  .settings-body {
+    gap: 18px;
   }
 }
 </style>

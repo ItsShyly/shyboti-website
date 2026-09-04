@@ -22,11 +22,31 @@ export function useRowSelection<T>(
 ) {
   const selected = ref<Set<string>>(new Set());
   const anchor = ref<string | null>(null);
+  // >>> touch: a long-press enters multi-select mode; after that plain taps
+  // toggle rows instead of opening the editor. desktop is unaffected.
+  const selectMode = ref(false);
 
   let downKey: string | null = null;
   let downX = 0;
   let downY = 0;
   let dragging = false;
+  let isTouch = false;
+  let longPressed = false;
+  let holdTimer: ReturnType<typeof setTimeout> | null = null;
+  const HOLD_MS = 420;
+  function cancelHold() {
+    if (holdTimer) {
+      clearTimeout(holdTimer);
+      holdTimer = null;
+    }
+  }
+  function toggleKey(key: string) {
+    const s = new Set(selected.value);
+    s.has(key) ? s.delete(key) : s.add(key);
+    selected.value = s;
+    anchor.value = key;
+    selectMode.value = s.size > 0;
+  }
   // >>> per-gesture state: key order cached at drag start (list can't change
   // mid-drag), last row we were over, and rAF-coalesced move handling so a
   // fast mousemove doesn't rebuild the Set + re-render every row per event
@@ -72,6 +92,11 @@ export function useRowSelection<T>(
   }
   function onMove(e: PointerEvent) {
     if (!downKey) return;
+    // >>> movement past a few px = a scroll, not a long-press
+    if (holdTimer && Math.hypot(e.clientX - downX, e.clientY - downY) > 10)
+      cancelHold();
+    // >>> touch never drag-selects (bad on a phone) - long-press handles it
+    if (isTouch) return;
     pendingMove = e;
     if (!rafId) rafId = requestAnimationFrame(processMove);
   }
@@ -79,6 +104,7 @@ export function useRowSelection<T>(
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
     window.removeEventListener("dragstart", onNativeDrag, true);
+    cancelHold();
     if (rafId) cancelAnimationFrame(rafId);
     rafId = 0;
     pendingMove = null;
@@ -94,13 +120,15 @@ export function useRowSelection<T>(
   }
 
   function onRowPointerDown(e: PointerEvent, key: string) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 && e.button !== -1) return;
     if (
       (e.target as HTMLElement).closest(
         "button, input, a, select, textarea, .ep-switch, [data-no-sel]",
       )
     )
       return;
+    isTouch = e.pointerType === "touch" || e.pointerType === "pen";
+    longPressed = false;
     // >>> a modifier is held (range / toggle) - stop the browser also
     // selecting text from the shift-click / drag
     if (e.shiftKey || e.ctrlKey || e.metaKey || e.altKey) {
@@ -111,6 +139,15 @@ export function useRowSelection<T>(
     downX = e.clientX;
     downY = e.clientY;
     dragging = false;
+    if (isTouch) {
+      cancelHold();
+      holdTimer = setTimeout(() => {
+        holdTimer = null;
+        longPressed = true;
+        toggleKey(key);
+        window.getSelection()?.removeAllRanges();
+      }, HOLD_MS);
+    }
     window.addEventListener("pointermove", onMove, { passive: true });
     window.addEventListener("pointerup", onUp);
     window.addEventListener("dragstart", onNativeDrag, true);
@@ -133,8 +170,18 @@ export function useRowSelection<T>(
       )
     )
       return false;
+    // >>> the long-press already toggled this row - swallow the trailing click
+    if (longPressed) {
+      longPressed = false;
+      return true;
+    }
     if (dragging) {
       dragging = false;
+      return true;
+    }
+    // >>> touch multi-select mode: a plain tap toggles instead of opening
+    if (selectMode.value && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      toggleKey(key);
       return true;
     }
     if (e.shiftKey && anchor.value) {
@@ -159,6 +206,15 @@ export function useRowSelection<T>(
   function clear() {
     selected.value = new Set();
     anchor.value = null;
+    selectMode.value = false;
+  }
+  // >>> on touch, the browser fires contextmenu mid long-press - kill it so the
+  // desktop right-click menu never pops on a phone (kebab is the mobile path)
+  function onContextMenu(e: Event) {
+    if (isTouch) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
   }
   function isSelected(k: string): boolean {
     return selected.value.has(k);
@@ -212,10 +268,12 @@ export function useRowSelection<T>(
   function bind() {
     window.addEventListener("keydown", onKey);
     window.addEventListener("pointerdown", onDocDown, true);
+    window.addEventListener("contextmenu", onContextMenu, true);
   }
   function unbind() {
     window.removeEventListener("keydown", onKey);
     window.removeEventListener("pointerdown", onDocDown, true);
+    window.removeEventListener("contextmenu", onContextMenu, true);
   }
   onMounted(bind);
   onUnmounted(() => {
@@ -234,6 +292,7 @@ export function useRowSelection<T>(
     isSelected,
     selectedItems,
     anchor,
+    selectMode,
     clear,
     onRowPointerDown,
     onRowClickCapture,

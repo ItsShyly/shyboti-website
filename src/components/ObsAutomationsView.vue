@@ -13,6 +13,8 @@ import { useRowSelection } from "../composables/useRowSelection";
 import { useConfirm } from "../composables/useConfirm";
 import { useTabActive } from "../composables/useTabActive";
 import ConfirmDialog from "./shared/ConfirmDialog.vue";
+import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
+import SelectionActionBar, { type BarAction } from "./shared/SelectionActionBar.vue";
 import { useI18n } from "../i18n";
 
 const tabActive = useTabActive();
@@ -240,6 +242,25 @@ async function bulkDeleteRules(items: ObsRule[]) {
   await putRules();
   sel.clear();
 }
+const bulkBarActions = computed<BarAction[]>(() => {
+  const items = sel.selectedItems.value;
+  if (!canEdit.value) return [];
+  return [
+    { key: "on", label: t("sel.activate"), icon: "check", onClick: () => bulkRulesEnabled(items, true) },
+    { key: "off", label: t("sel.deactivate"), icon: "pause", onClick: () => bulkRulesEnabled(items, false) },
+    { key: "del", label: t("sel.delete"), icon: "trash", danger: true, onClick: () => bulkDeleteRules(items) },
+  ];
+});
+function ruleKebabItems(rule: ObsRule): KebabMenuItem[] {
+  return [
+    { key: "edit", label: canEdit.value ? t("obsauto.edit_btn") : t("obsauto.view_btn"), icon: "edit",
+      onClick: () => openEdit(rule.id) },
+    ...(canEdit.value
+      ? [{ key: "del", label: t("sel.delete"), icon: "trash", danger: true,
+        onClick: () => deleteRule(rule.id) }]
+      : []),
+  ];
+}
 function ruleRowCtx(e: MouseEvent, rule: ObsRule) {
   if (!canEdit.value || !(sel.count.value > 1 && sel.isSelected(rule.id))) return;
   const items = sel.selectedItems.value;
@@ -390,11 +411,13 @@ defineExpose({
                   :title="rule.enabled ? t('obsauto.disable_title') : t('obsauto.enable_title')"><span
                     class="ep-switch-knob"></span></button>
               </div>
+              <RowKebabMenu :items="ruleKebabItems(rule)" @click.stop />
             </div>
           </div>
         </div>
       </template>
     </template>
+    <SelectionActionBar :count="sel.count.value" :actions="bulkBarActions" @clear="sel.clear()" />
   </div>
 
   <ObsRuleEditPanel :open="editOpen" :channel="session?.channel ?? ''" :rules="rules" :editTarget="editTarget"

@@ -16,6 +16,7 @@ import { useRowContextMenu } from "../composables/useRowContextMenu";
 import { useRowSelection } from "../composables/useRowSelection";
 import { useConfirm } from "../composables/useConfirm";
 import ConfirmDialog from "./shared/ConfirmDialog.vue";
+import SelectionActionBar, { type BarAction } from "./shared/SelectionActionBar.vue";
 import SelectionHint from "./shared/SelectionHint.vue";
 import {
   blankAction,
@@ -110,6 +111,19 @@ async function bulkDeleteRewards(items: Reward[]) {
   sel.clear();
   await load();
 }
+const bulkBarActions = computed<BarAction[]>(() => {
+  if (!canEdit.value) return [];
+  const items = sel.selectedItems.value;
+  const managed = items.filter((x) => x.manageable);
+  return [
+    { key: "on", label: t("sel.activate"), icon: "check",
+      onClick: () => { managed.forEach((x) => setRewardEnabled(x, true)); sel.clear(); } },
+    { key: "off", label: t("sel.deactivate"), icon: "pause",
+      onClick: () => { managed.forEach((x) => setRewardEnabled(x, false)); sel.clear(); } },
+    { key: "del", label: t("sel.delete"), icon: "trash", danger: true,
+      onClick: () => bulkDeleteRewards(items) },
+  ];
+});
 function rewardRowCtx(e: MouseEvent, r: Reward) {
   if (!(sel.count.value > 1 && sel.isSelected(r.id))) return openRewardCtx(e, r);
   const items = sel.selectedItems.value;
@@ -1490,6 +1504,7 @@ async function saveActions() {
       @close="ctxOpen = false" />
     <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
       :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
+    <SelectionActionBar :count="sel.count.value" :actions="bulkBarActions" @clear="sel.clear()" />
   </div>
 </template>
 
@@ -1693,38 +1708,11 @@ async function saveActions() {
    ChannelPointActionsEditor.vue, which owns that markup */
 
 @media (max-width: 680px) {
-  .ep-row-header {
-    display: none;
-  }
-
-  /* >>> single line: swatch, title, toggle, kebab. price/edit/delete/actions/
-     copy move into the kebab so titles keep full width. !important beats the
-     inline grid-template-columns from useResizableColumns */
-  .cp-row {
-    grid-template-columns: 32px 1fr auto !important;
-  }
-
+  /* >>> row layout is the shared mobile card (shared.css); price/actions/edit
+     fold into the kebab, swatch + title + toggle stay on line 1 */
   .cp-swatch {
-    width: 32px;
-    height: 32px;
-  }
-
-  /* >>> only 3 tracks on mobile - pin the reward to the middle one */
-  .cp-reward {
-    grid-column: 2;
-  }
-
-  .cp-cost {
-    display: none;
-  }
-
-  .cp-actions-cell {
-    display: none;
-  }
-
-  /* >>> edit/delete/actions move into the kebab; the enable switch stays */
-  .cp-row>.ep-row-actions {
-    display: none;
+    width: 28px;
+    height: 28px;
   }
 }
 </style>
