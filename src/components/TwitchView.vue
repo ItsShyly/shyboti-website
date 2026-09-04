@@ -16,7 +16,7 @@ import { useRowContextMenu } from "../composables/useRowContextMenu";
 import { useRowSelection } from "../composables/useRowSelection";
 import { useConfirm } from "../composables/useConfirm";
 import ConfirmDialog from "./shared/ConfirmDialog.vue";
-import SelectionActionBar, { type BarAction } from "./shared/SelectionActionBar.vue";
+import SelectionActionBar from "./shared/SelectionActionBar.vue";
 import SelectionHint from "./shared/SelectionHint.vue";
 import {
   blankAction,
@@ -111,21 +111,7 @@ async function bulkDeleteRewards(items: Reward[]) {
   sel.clear();
   await load();
 }
-const bulkBarActions = computed<BarAction[]>(() => {
-  if (!canEdit.value) return [];
-  const items = sel.selectedItems.value;
-  const managed = items.filter((x) => x.manageable);
-  return [
-    { key: "on", label: t("sel.activate"), icon: "check",
-      onClick: () => { managed.forEach((x) => setRewardEnabled(x, true)); sel.clear(); } },
-    { key: "off", label: t("sel.deactivate"), icon: "pause",
-      onClick: () => { managed.forEach((x) => setRewardEnabled(x, false)); sel.clear(); } },
-    { key: "del", label: t("sel.delete"), icon: "trash", danger: true,
-      onClick: () => bulkDeleteRewards(items) },
-  ];
-});
-function rewardRowCtx(e: MouseEvent, r: Reward) {
-  if (!(sel.count.value > 1 && sel.isSelected(r.id))) return openRewardCtx(e, r);
+function openRewardBulkCtx(e: MouseEvent) {
   const items = sel.selectedItems.value;
   const managed = items.filter((x) => x.manageable);
   const n = items.length;
@@ -156,6 +142,10 @@ function rewardRowCtx(e: MouseEvent, r: Reward) {
       ]
       : [],
   });
+}
+function rewardRowCtx(e: MouseEvent, r: Reward) {
+  if (!(sel.count.value > 1 && sel.isSelected(r.id))) return openRewardCtx(e, r);
+  openRewardBulkCtx(e);
 }
 // ^^^ row multi-select ^^^
 
@@ -1504,7 +1494,7 @@ async function saveActions() {
       @close="ctxOpen = false" />
     <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
       :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
-    <SelectionActionBar :count="sel.count.value" :actions="bulkBarActions" @clear="sel.clear()" />
+    <SelectionActionBar :count="sel.count.value" @clear="sel.clear()" @more="openRewardBulkCtx($event)" />
   </div>
 </template>
 

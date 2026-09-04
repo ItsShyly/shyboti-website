@@ -14,7 +14,7 @@ import { useConfirm } from "../composables/useConfirm";
 import { useTabActive } from "../composables/useTabActive";
 import ConfirmDialog from "./shared/ConfirmDialog.vue";
 import RowKebabMenu, { type KebabMenuItem } from "./shared/RowKebabMenu.vue";
-import SelectionActionBar, { type BarAction } from "./shared/SelectionActionBar.vue";
+import SelectionActionBar from "./shared/SelectionActionBar.vue";
 import { useI18n } from "../i18n";
 
 const tabActive = useTabActive();
@@ -242,15 +242,6 @@ async function bulkDeleteRules(items: ObsRule[]) {
   await putRules();
   sel.clear();
 }
-const bulkBarActions = computed<BarAction[]>(() => {
-  const items = sel.selectedItems.value;
-  if (!canEdit.value) return [];
-  return [
-    { key: "on", label: t("sel.activate"), icon: "check", onClick: () => bulkRulesEnabled(items, true) },
-    { key: "off", label: t("sel.deactivate"), icon: "pause", onClick: () => bulkRulesEnabled(items, false) },
-    { key: "del", label: t("sel.delete"), icon: "trash", danger: true, onClick: () => bulkDeleteRules(items) },
-  ];
-});
 function ruleKebabItems(rule: ObsRule): KebabMenuItem[] {
   return [
     { key: "edit", label: canEdit.value ? t("obsauto.edit_btn") : t("obsauto.view_btn"), icon: "edit",
@@ -261,8 +252,8 @@ function ruleKebabItems(rule: ObsRule): KebabMenuItem[] {
       : []),
   ];
 }
-function ruleRowCtx(e: MouseEvent, rule: ObsRule) {
-  if (!canEdit.value || !(sel.count.value > 1 && sel.isSelected(rule.id))) return;
+function openObsAutoBulkCtx(e: MouseEvent) {
+  if (!canEdit.value) return;
   const items = sel.selectedItems.value;
   const n = items.length;
   openContext(e, {
@@ -384,7 +375,7 @@ defineExpose({
               :class="{ inactive: !rule.enabled, selected: sel.isSelected(rule.id) }"
               @pointerdown="sel.onRowPointerDown($event, rule.id)"
               @click.capture="sel.onRowClickCapture($event, rule.id)"
-              @contextmenu.prevent="ruleRowCtx($event, rule)">
+              @contextmenu.prevent="openObsAutoBulkCtx($event)">
               <!-- >>> both cells open the same edit panel -->
               <div class="obsauto-trigger ep-row-cell-hover" :style="obsAutoCellStyle('trigger')"
                 @click="canEdit && openEdit(rule.id)">
@@ -417,7 +408,7 @@ defineExpose({
         </div>
       </template>
     </template>
-    <SelectionActionBar :count="sel.count.value" :actions="bulkBarActions" @clear="sel.clear()" />
+    <SelectionActionBar :count="sel.count.value" @clear="sel.clear()" @more="openObsAutoBulkCtx($event)" />
   </div>
 
   <ObsRuleEditPanel :open="editOpen" :channel="session?.channel ?? ''" :rules="rules" :editTarget="editTarget"

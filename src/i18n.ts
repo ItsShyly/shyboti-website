@@ -149,6 +149,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cols.reset": "Reset table columns",
     "cols.local_only": "local",
     "sel.n_selected": "{n} selected",
+    "sel.actions": "Actions",
     "sel.delete": "Delete",
     "sel.delete_confirm": "Delete {n} items? This can't be undone.",
     "sel.activate": "Activate",
@@ -1920,6 +1921,7 @@ const translations: Record<Locale, Record<string, string>> = {
     "cols.reset": "Tabellenspalten zurücksetzen",
     "cols.local_only": "nur lokal",
     "sel.n_selected": "{n} ausgewählt",
+    "sel.actions": "Aktionen",
     "sel.delete": "Löschen",
     "sel.delete_confirm":
       "{n} Einträge löschen? Kann nicht rückgängig gemacht werden.",

@@ -69,24 +69,27 @@ function resetTables() {
 </script>
 
 <template>
-  <div ref="rootEl" class="col-menu">
+  <div ref="rootEl" class="col-menu" :class="{ 'no-extra': !hasExtra }">
     <button type="button" class="col-menu-trigger" :class="{ open }" @click="toggle"
       :title="hasExtra ? t('cols.menu') : t('cols.columns')">
       <span v-html="iconSvgFor('sliders')"></span>
       <span v-if="!hasExtra" class="col-menu-label">{{ t('cols.columns') }}</span>
     </button>
     <div v-if="open" class="col-menu-panel" @click.stop>
-      <div class="col-menu-section">{{ t('cols.columns') }}</div>
-      <label v-for="c in columns" :key="c.key" class="col-menu-row" :class="{ locked: c.hideable === false }">
-        <input type="checkbox" :checked="!hidden.has(c.key)" :disabled="c.hideable === false" @change="onCheck(c)" />
-        <span>{{ c.label }}</span>
-      </label>
-      <button type="button" class="col-menu-showall" @click="emit('show-all'); close()">
-        {{ t('cols.show_all') }}
-      </button>
-      <button type="button" class="col-menu-showall col-menu-reset" @click="resetTables">
-        {{ t('cols.reset') }} <span class="col-menu-local">· {{ t('cols.local_only') }}</span>
-      </button>
+      <!-- >>> column show/hide is meaningless on the phone card layout -->
+      <div class="col-menu-columns-only">
+        <div class="col-menu-section">{{ t('cols.columns') }}</div>
+        <label v-for="c in columns" :key="c.key" class="col-menu-row" :class="{ locked: c.hideable === false }">
+          <input type="checkbox" :checked="!hidden.has(c.key)" :disabled="c.hideable === false" @change="onCheck(c)" />
+          <span>{{ c.label }}</span>
+        </label>
+        <button type="button" class="col-menu-showall" @click="emit('show-all'); close()">
+          {{ t('cols.show_all') }}
+        </button>
+        <button type="button" class="col-menu-showall col-menu-reset" @click="resetTables">
+          {{ t('cols.reset') }} <span class="col-menu-local">· {{ t('cols.local_only') }}</span>
+        </button>
+      </div>
 
       <div v-if="hasExtra" class="col-menu-extra">
         <div class="col-menu-divider">{{ extraLabel ?? t('cols.import') }}</div>
@@ -102,6 +105,16 @@ function resetTables() {
 .col-menu {
   position: relative;
   display: inline-flex;
+}
+@media (max-width: 680px) {
+  /* >>> column show/hide doesn't apply to the mobile card layout - the
+     trigger disappears entirely unless it also carries Import/sync */
+  .col-menu.no-extra {
+    display: none;
+  }
+  .col-menu-columns-only {
+    display: none;
+  }
 }
 .col-menu-trigger {
   height: 32px;

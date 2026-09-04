@@ -34,7 +34,7 @@ import { useConfirm } from "../composables/useConfirm";
 import { useRowColors } from "../composables/useRowColors";
 import { useTabActive } from "../composables/useTabActive";
 import ConfirmDialog from "./shared/ConfirmDialog.vue";
-import SelectionActionBar, { type BarAction } from "./shared/SelectionActionBar.vue";
+import SelectionActionBar from "./shared/SelectionActionBar.vue";
 
 const tabActive = useTabActive();
 
@@ -78,23 +78,7 @@ async function bulkDeleteTriggers(items: Trigger[]) {
   for (const x of items) await deleteTrigger(x.name);
   sel.clear();
 }
-const bulkBarActions = computed<BarAction[]>(() => {
-  const items = sel.selectedItems.value;
-  const a: BarAction[] = [];
-  if (canEdit.value) {
-    a.push({ key: "on", label: t("sel.activate"), icon: "check",
-      onClick: () => { items.forEach((x) => setTriggerActive(x, true)); sel.clear(); } });
-    a.push({ key: "off", label: t("sel.deactivate"), icon: "pause",
-      onClick: () => { items.forEach((x) => setTriggerActive(x, false)); sel.clear(); } });
-  }
-  if (canDelete.value)
-    a.push({ key: "del", label: t("sel.delete"), icon: "trash", danger: true,
-      onClick: () => bulkDeleteTriggers(items) });
-  return a;
-});
-function triggerRowCtx(e: MouseEvent, trigger: Trigger) {
-  if (!(sel.count.value > 1 && sel.isSelected(trigger.name)))
-    return openTriggerCtx(e, trigger);
+function openTriggerBulkCtx(e: MouseEvent) {
   const items = sel.selectedItems.value;
   const n = items.length;
   const cds = new Set(items.map((x) => x.cooldown_sec));
@@ -125,6 +109,11 @@ function triggerRowCtx(e: MouseEvent, trigger: Trigger) {
       onPick: (hex: string) => items.forEach((x) => rowColors.setColor(x.name, hex)),
     },
   });
+}
+function triggerRowCtx(e: MouseEvent, trigger: Trigger) {
+  if (!(sel.count.value > 1 && sel.isSelected(trigger.name)))
+    return openTriggerCtx(e, trigger);
+  openTriggerBulkCtx(e);
 }
 
 async function saveTriggerCd(trigger: Trigger, v: number) {
@@ -1470,7 +1459,7 @@ defineExpose({
       :title="ctxTitle" @close="ctxOpen = false" />
     <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
       :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
-    <SelectionActionBar :count="sel.count.value" :actions="bulkBarActions" @clear="sel.clear()" />
+    <SelectionActionBar :count="sel.count.value" @clear="sel.clear()" @more="openTriggerBulkCtx($event)" />
   </div>
 </template>
 

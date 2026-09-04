@@ -1208,13 +1208,12 @@
   .ep-row-grid,
   .mod-group-header {
     display: flex !important;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     grid-template-columns: none !important;
-    row-gap: 3px;
     column-gap: 8px;
-    min-height: 58px;
-    padding: 11px 16px;
+    min-height: 50px;
+    padding: 10px 14px;
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
@@ -1258,29 +1257,19 @@
     white-space: nowrap;
   }
 
-  /* free-text secondary cell (description / response preview) - it's in the
-     editor, no room for it on the card */
+  /* free-text secondary cell (description / response preview) AND the chip
+     cells (cooldowns/aliases/event-pattern/etc) - both made the card a tall,
+     wrapped, cramped mess. one clean line; open the row for the detail. */
   .ep-row-grid > .ep-cell-text,
   .ep-row-grid > .cp-cost,
-  .ep-row-grid > .cp-actions-cell {
+  .ep-row-grid > .cp-actions-cell,
+  .ep-row-grid > .ep-cell-tags {
     display: none !important;
   }
 
   /* non-toggle icon columns (access / manage / actions) fold into the kebab */
   .ep-row-grid > .ep-row-cell-center:not(.ep-row-cell-end) {
     display: none !important;
-  }
-
-  /* chip cells drop to their own full-width line below the title, muted */
-  .ep-row-grid > .ep-cell-tags {
-    flex: 1 1 100%;
-    order: 90 !important;
-    padding: 0 2px;
-    gap: 4px;
-    row-gap: 4px;
-  }
-  .ep-row-grid > .ep-cell-tags:empty {
-    display: none;
   }
 
   /* inline action buttons are replaced by the kebab everywhere */
@@ -1300,10 +1289,20 @@
     order: 75 !important;
     flex: 0 0 auto;
   }
-  .ep-row-grid > .ep-cell-color,
+  /* colour dot: bigger tap target than the 8px dot itself so it's actually
+     hittable with a thumb, still pinned to the row's left edge */
+  .ep-row-grid > .ep-cell-color {
+    order: 0 !important;
+    flex: 0 0 auto;
+    width: 40px;
+    height: 40px;
+    margin-left: -8px;
+  }
   .ep-list-row > .row-color-dot:first-child {
     order: 0 !important;
     flex: 0 0 auto;
+    width: 14px;
+    height: 14px;
   }
 
   /* fat-finger sizes */

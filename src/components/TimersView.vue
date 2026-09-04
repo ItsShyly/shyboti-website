@@ -33,7 +33,7 @@ import { useConfirm } from "../composables/useConfirm";
 import { useRowColors } from "../composables/useRowColors";
 import { useTabActive } from "../composables/useTabActive";
 import ConfirmDialog from "./shared/ConfirmDialog.vue";
-import SelectionActionBar, { type BarAction } from "./shared/SelectionActionBar.vue";
+import SelectionActionBar from "./shared/SelectionActionBar.vue";
 
 const tabActive = useTabActive();
 
@@ -77,24 +77,10 @@ async function bulkDeleteTimers(items: Timer[]) {
   for (const x of items) await deleteTimer(x.name);
   sel.clear();
 }
-// >>> mobile bulk bar - same actions as the desktop right-click menu
-const bulkBarActions = computed<BarAction[]>(() => {
-  const items = sel.selectedItems.value;
-  const a: BarAction[] = [];
-  if (canEdit.value) {
-    a.push({ key: "on", label: t("sel.activate"), icon: "check",
-      onClick: () => { items.forEach((x) => setTimerActive(x, true)); sel.clear(); } });
-    a.push({ key: "off", label: t("sel.deactivate"), icon: "pause",
-      onClick: () => { items.forEach((x) => setTimerActive(x, false)); sel.clear(); } });
-  }
-  if (canDelete.value)
-    a.push({ key: "del", label: t("sel.delete"), icon: "trash", danger: true,
-      onClick: () => bulkDeleteTimers(items) });
-  return a;
-});
-function timerRowCtx(e: MouseEvent, timer: Timer) {
-  if (!(sel.count.value > 1 && sel.isSelected(timer.name)))
-    return openTimerCtx(e, timer);
+// >>> the bulk menu itself - shared by the row right-click AND the mobile
+// SelectionActionBar's "Actions" sheet, so mobile never has fewer bulk
+// actions than desktop
+function openTimerBulkCtx(e: MouseEvent) {
   const items = sel.selectedItems.value;
   const n = items.length;
   openContext(e, {
@@ -120,6 +106,11 @@ function timerRowCtx(e: MouseEvent, timer: Timer) {
       onPick: (hex: string) => items.forEach((x) => rowColors.setColor(x.name, hex)),
     },
   });
+}
+function timerRowCtx(e: MouseEvent, timer: Timer) {
+  if (!(sel.count.value > 1 && sel.isSelected(timer.name)))
+    return openTimerCtx(e, timer);
+  openTimerBulkCtx(e);
 }
 // >>> left-click the colour cell -> just the colour picker
 function openColorPicker(e: MouseEvent, name: string) {
@@ -992,7 +983,7 @@ defineExpose({
       :title="ctxTitle" @close="ctxOpen = false" />
     <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
       :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
-    <SelectionActionBar :count="sel.count.value" :actions="bulkBarActions" @clear="sel.clear()" />
+    <SelectionActionBar :count="sel.count.value" @clear="sel.clear()" @more="openTimerBulkCtx($event)" />
   </div>
 </template>
 

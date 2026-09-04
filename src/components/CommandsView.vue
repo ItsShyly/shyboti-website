@@ -31,7 +31,7 @@ import { useDashboardColors } from "../composables/useDashboardColors";
 import { useConfirm } from "../composables/useConfirm";
 import ConfirmDialog from "./shared/ConfirmDialog.vue";
 import SelectionHint from "./shared/SelectionHint.vue";
-import SelectionActionBar, { type BarAction } from "./shared/SelectionActionBar.vue";
+import SelectionActionBar from "./shared/SelectionActionBar.vue";
 
 const { session, channelRole, adminMode } = useAuth();
 const { t } = useI18n();
@@ -694,10 +694,9 @@ async function bulkActive<X extends { isActive: boolean }>(
   }
   done();
 }
-// >>> Default: activate / deactivate + cooldown (no delete, no recolour)
-function defaultRowCtx(e: MouseEvent, cmd: Command) {
-  if (!(selDefault.count.value > 1 && selDefault.isSelected(cmd.name)))
-    return openDefaultCtx(e, cmd);
+// >>> Default: activate / deactivate + cooldown (no delete, no recolour - a
+// built-in command structurally can't be deleted, desktop or mobile)
+function openDefaultBulkCtx(e: MouseEvent) {
   const items = selDefault.selectedItems.value;
   const n = items.length;
   openContext(e, {
@@ -714,6 +713,11 @@ function defaultRowCtx(e: MouseEvent, cmd: Command) {
       : undefined,
   });
 }
+function defaultRowCtx(e: MouseEvent, cmd: Command) {
+  if (!(selDefault.count.value > 1 && selDefault.isSelected(cmd.name)))
+    return openDefaultCtx(e, cmd);
+  openDefaultBulkCtx(e);
+}
 
 // >>> Custom: delete + activate/deactivate + recolour + cooldown
 async function bulkDeleteCustom(items: CustomCommand[]) {
@@ -727,9 +731,7 @@ async function bulkDeleteCustom(items: CustomCommand[]) {
   selCustom.clear();
   await fetchCustomCommands();
 }
-function customRowCtx(e: MouseEvent, cmd: CustomCommand) {
-  if (!(selCustom.count.value > 1 && selCustom.isSelected(cmd.name)))
-    return openCustomCtx(e, cmd);
+function openCustomBulkCtx(e: MouseEvent) {
   const items = selCustom.selectedItems.value;
   const n = items.length;
   openContext(e, {
@@ -751,6 +753,11 @@ function customRowCtx(e: MouseEvent, cmd: CustomCommand) {
       onPick: (hex: string) => items.forEach((c) => setDotColor(c.name, hex)),
     },
   });
+}
+function customRowCtx(e: MouseEvent, cmd: CustomCommand) {
+  if (!(selCustom.count.value > 1 && selCustom.isSelected(cmd.name)))
+    return openCustomCtx(e, cmd);
+  openCustomBulkCtx(e);
 }
 
 // >>> OBS bindings: delete + recolour + cooldown (no active flag)
@@ -827,14 +834,7 @@ async function bulkDeleteObs(rows: ObsRowRef[]) {
 function obsRowKey(kind: ObsRowRef["kind"], command: string): string {
   return `${kind}:${command}`;
 }
-function obsRowCtx(
-  e: MouseEvent,
-  kind: ObsRowRef["kind"],
-  command: string,
-  single: () => void,
-) {
-  if (!(selObs.count.value > 1 && selObs.isSelected(obsRowKey(kind, command))))
-    return single();
+function openObsBulkCtx(e: MouseEvent) {
   const rows = selObs.selectedItems.value;
   const n = rows.length;
   openContext(e, {
@@ -858,34 +858,22 @@ function obsRowCtx(
     },
   });
 }
-// >>> mobile bulk bar - mirrors the desktop right-click bulk menu per tab
-const bulkBarActions = computed<BarAction[]>(() => {
-  if (activeTab.value === "Custom") {
-    const items = selCustom.selectedItems.value;
-    return [
-      { key: "on", label: t("sel.activate"), icon: "check",
-        onClick: () => bulkActive(items, true, updateCustomActive, selCustom.clear) },
-      { key: "off", label: t("sel.deactivate"), icon: "pause",
-        onClick: () => bulkActive(items, false, updateCustomActive, selCustom.clear) },
-      { key: "del", label: t("sel.delete"), icon: "trash", danger: true,
-        onClick: () => bulkDeleteCustom(items) },
-    ];
-  }
-  if (activeTab.value === "Obs") {
-    const rows = selObs.selectedItems.value;
-    return [
-      { key: "del", label: t("sel.delete"), icon: "trash", danger: true,
-        onClick: () => bulkDeleteObs(rows) },
-    ];
-  }
-  const items = selDefault.selectedItems.value;
-  return [
-    { key: "on", label: t("sel.activate"), icon: "check",
-      onClick: () => bulkActive(items, true, updateCommand, selDefault.clear) },
-    { key: "off", label: t("sel.deactivate"), icon: "pause",
-      onClick: () => bulkActive(items, false, updateCommand, selDefault.clear) },
-  ];
-});
+function obsRowCtx(
+  e: MouseEvent,
+  kind: ObsRowRef["kind"],
+  command: string,
+  single: () => void,
+) {
+  if (!(selObs.count.value > 1 && selObs.isSelected(obsRowKey(kind, command))))
+    return single();
+  openObsBulkCtx(e);
+}
+// >>> mobile "Actions" sheet - same bulk menu as the desktop right-click, per tab
+function openMobileBulkCtx(e: MouseEvent) {
+  if (activeTab.value === "Custom") return openCustomBulkCtx(e);
+  if (activeTab.value === "Obs") return openObsBulkCtx(e);
+  return openDefaultBulkCtx(e);
+}
 const activeSel = computed(() =>
   activeTab.value === "Custom"
     ? selCustom
@@ -2570,7 +2558,7 @@ onUnmounted(() => {
   <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
     :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
 
-  <SelectionActionBar :count="activeSel.count.value" :actions="bulkBarActions" @clear="activeSel.clear()" />
+  <SelectionActionBar :count="activeSel.count.value" @clear="activeSel.clear()" @more="openMobileBulkCtx($event)" />
 </template>
 
 <style scoped>

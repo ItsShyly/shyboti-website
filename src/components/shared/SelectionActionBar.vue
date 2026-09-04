@@ -1,32 +1,22 @@
 <script setup lang="ts">
-// >>> phone-only bottom action bar for a multi-selection. desktop keeps the
-// header sub-line count + the right-click bulk menu. actions reuse the exact
-// same ContextMenuItem shape the views already build for that menu.
+// >>> phone-only bottom bar for a multi-selection. "Actions" opens the exact
+// same bulk menu (RowContextMenu, rendered as a bottom sheet on mobile) the
+// view already builds for desktop right-click - so delete/recolour/access/
+// move-to-group etc. are never missing on mobile, just one tap further in.
 import { useI18n } from "../../i18n";
 import { iconSvg as iconSvgFor } from "../../composables/icons";
 
-export interface BarAction {
-  key: string;
-  label: string;
-  icon?: string;
-  danger?: boolean;
-  onClick: () => void;
-}
-
-defineProps<{ count: number; actions: BarAction[] }>();
-const emit = defineEmits<{ clear: [] }>();
+defineProps<{ count: number }>();
+const emit = defineEmits<{ clear: []; more: [MouseEvent] }>();
 const { t } = useI18n();
 </script>
 
 <template>
   <div v-if="count" class="sel-bar">
     <span class="sel-bar-count">{{ t("sel.n_selected", { n: count }) }}</span>
-    <div class="sel-bar-actions">
-      <button v-for="a in actions" :key="a.key" type="button" class="sel-bar-btn" :class="{ danger: a.danger }"
-        @click="a.onClick()">
-        <span v-if="a.icon" v-html="iconSvgFor(a.icon)"></span>{{ a.label }}
-      </button>
-    </div>
+    <button type="button" class="sel-bar-more" @click="emit('more', $event)">
+      <span v-html="iconSvgFor('more-vertical')"></span>{{ t("sel.actions") }}
+    </button>
     <button type="button" class="sel-bar-x" :title="t('confirm.cancel')" @click="emit('clear')">✕</button>
   </div>
 </template>
@@ -53,37 +43,23 @@ const { t } = useI18n();
     font-weight: 700;
     font-size: 13px;
     color: #9d6cff;
-    flex-shrink: 0;
-  }
-  .sel-bar-actions {
-    display: flex;
-    gap: 8px;
     flex: 1;
-    overflow-x: auto;
-    scrollbar-width: none;
   }
-  .sel-bar-actions::-webkit-scrollbar {
-    display: none;
-  }
-  .sel-bar-btn {
+  .sel-bar-more {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: 6px;
     height: 40px;
-    padding: 0 14px;
-    white-space: nowrap;
-    border: 1px solid #3a3a44;
-    background: transparent;
-    color: #ddd;
+    padding: 0 16px;
+    border: 1px solid #6f2bff66;
+    background: #6f2bff15;
+    color: #c4a0ff;
     font-family: inherit;
     font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
   }
-  .sel-bar-btn.danger {
-    border-color: #f1494966;
-    color: #f14949;
-  }
-  .sel-bar-btn :deep(svg) {
+  .sel-bar-more :deep(svg) {
     width: 15px;
     height: 15px;
   }

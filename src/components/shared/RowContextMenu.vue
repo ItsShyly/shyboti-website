@@ -1,5 +1,8 @@
 <script setup lang="ts">
-// >>> desktop right-click menu for a table row. mobile keeps RowKebabMenu.
+// >>> desktop: positioned right-click menu for a table row/selection. on
+// mobile this same menu (single-row swatch picker, and the multi-select
+// "actions" sheet from SelectionActionBar) renders as a bottom sheet instead
+// - see the @media block in the style below.
 import { ref, watch, nextTick, onBeforeUnmount } from "vue";
 import { iconSvg as iconSvgFor } from "../../composables/icons";
 
@@ -364,5 +367,45 @@ onBeforeUnmount(() => {
   cursor: pointer;
   /* >>> the native picker's own swatch never paints, only our chip does */
   color-scheme: dark;
+}
+
+@media (max-width: 680px) {
+  /* >>> bottom sheet instead of a positioned popup - fixed at the pointer
+     coordinates would either sit under a thumb or clip off a small screen */
+  .ep-ctx-menu {
+    left: 0 !important;
+    right: 0;
+    top: auto !important;
+    bottom: 0;
+    width: 100%;
+    max-height: 70vh;
+    overflow-y: auto;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .ep-ctx-item {
+    padding: 14px 16px;
+    font-size: 14px;
+  }
+  .ep-ctx-cd,
+  .ep-ctx-access,
+  .ep-ctx-swatch {
+    padding: 12px 16px;
+  }
+  .ep-ctx-cd input {
+    width: 64px;
+    height: 34px;
+    font-size: 14px;
+  }
+  .ep-ctx-seg button {
+    height: 38px;
+  }
+  .ep-ctx-sw,
+  .ep-ctx-sw-new {
+    width: 26px;
+    height: 26px;
+  }
 }
 </style>

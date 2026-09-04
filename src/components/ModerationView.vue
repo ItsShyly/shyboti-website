@@ -19,7 +19,7 @@ import { useConfirm } from "../composables/useConfirm";
 import { useRowColors } from "../composables/useRowColors";
 import ConfirmDialog from "./shared/ConfirmDialog.vue";
 import SelectionHint from "./shared/SelectionHint.vue";
-import SelectionActionBar, { type BarAction } from "./shared/SelectionActionBar.vue";
+import SelectionActionBar from "./shared/SelectionActionBar.vue";
 
 const { session, availableChannels, channelRole } = useAuth();
 const { t } = useI18n();
@@ -112,37 +112,7 @@ async function bulkAssignGroup(
   }
   sel.clear();
 }
-const bulkBarActions = computed<BarAction[]>(() => {
-  if (!canManage.value) return [];
-  const items = sel.selectedItems.value as { id: number; is_active?: number }[];
-  const kind = activeTab.value;
-  const a: BarAction[] = [];
-  if (kind !== "nukes") {
-    a.push({ key: "on", label: t("sel.activate"), icon: "check",
-      onClick: () => {
-        items.filter((x) => !x.is_active)
-          .forEach((x) => toggleActive(kind as "blocked" | "spam", x as never));
-        sel.clear();
-      } });
-    a.push({ key: "off", label: t("sel.deactivate"), icon: "pause",
-      onClick: () => {
-        items.filter((x) => x.is_active)
-          .forEach((x) => toggleActive(kind as "blocked" | "spam", x as never));
-        sel.clear();
-      } });
-  }
-  a.push({ key: "del", label: t("sel.delete"), icon: "trash", danger: true,
-    onClick: () => bulkModDelete(items) });
-  return a;
-});
-function modRowCtx(
-  e: MouseEvent,
-  tab: Tab,
-  item: { id: number; group_id: number | null; is_active?: number },
-  label: string,
-) {
-  if (!(sel.count.value > 1 && sel.isSelected(String(item.id))))
-    return openModCtx(e, tab, item, label);
+function openModBulkCtx(e: MouseEvent) {
   const items = sel.selectedItems.value as {
     id: number;
     is_active?: number;
@@ -192,6 +162,16 @@ function modRowCtx(
       onPick: (hex: string) => items.forEach((x) => rowColors.setColor(String(x.id), hex)),
     },
   });
+}
+function modRowCtx(
+  e: MouseEvent,
+  tab: Tab,
+  item: { id: number; group_id: number | null; is_active?: number },
+  label: string,
+) {
+  if (!(sel.count.value > 1 && sel.isSelected(String(item.id))))
+    return openModCtx(e, tab, item, label);
+  openModBulkCtx(e);
 }
 // ^^^ row multi-select ^^^
 
@@ -1895,7 +1875,7 @@ onUnmounted(() => { _sseDisposed = true; _sseSource?.close() });
   <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
     :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
 
-  <SelectionActionBar :count="sel.count.value" :actions="bulkBarActions" @clear="sel.clear()" />
+  <SelectionActionBar :count="sel.count.value" @clear="sel.clear()" @more="openModBulkCtx($event)" />
 </template>
 
 <style scoped>

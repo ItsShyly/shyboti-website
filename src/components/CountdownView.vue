@@ -23,7 +23,7 @@ import { useConfirm } from "../composables/useConfirm";
 import { useRowColors } from "../composables/useRowColors";
 import { useTabActive } from "../composables/useTabActive";
 import ConfirmDialog from "./shared/ConfirmDialog.vue";
-import SelectionActionBar, { type BarAction } from "./shared/SelectionActionBar.vue";
+import SelectionActionBar from "./shared/SelectionActionBar.vue";
 
 const tabActive = useTabActive();
 
@@ -66,24 +66,7 @@ async function bulkDeleteCountdowns(items: Countdown[]) {
   for (const x of items) await deleteCountdown(x.name);
   sel.clear();
 }
-const bulkBarActions = computed<BarAction[]>(() => {
-  const items = sel.selectedItems.value;
-  const canManage = canEdit.value || isBroadcaster.value;
-  const a: BarAction[] = [];
-  if (canToggle.value) {
-    a.push({ key: "on", label: t("sel.activate"), icon: "check",
-      onClick: () => { items.filter((x) => !x.is_active).forEach(toggleActive); sel.clear(); } });
-    a.push({ key: "off", label: t("sel.deactivate"), icon: "pause",
-      onClick: () => { items.filter((x) => x.is_active).forEach(toggleActive); sel.clear(); } });
-  }
-  if (canManage)
-    a.push({ key: "del", label: t("sel.delete"), icon: "trash", danger: true,
-      onClick: () => bulkDeleteCountdowns(items) });
-  return a;
-});
-function countdownRowCtx(e: MouseEvent, cd: Countdown) {
-  if (!(sel.count.value > 1 && sel.isSelected(cd.name)))
-    return openCountdownCtx(e, cd);
+function openCountdownBulkCtx(e: MouseEvent) {
   const items = sel.selectedItems.value;
   const n = items.length;
   const canManage = canEdit.value || isBroadcaster.value;
@@ -110,6 +93,11 @@ function countdownRowCtx(e: MouseEvent, cd: Countdown) {
       onPick: (hex: string) => items.forEach((x) => rowColors.setColor(x.name, hex)),
     },
   });
+}
+function countdownRowCtx(e: MouseEvent, cd: Countdown) {
+  if (!(sel.count.value > 1 && sel.isSelected(cd.name)))
+    return openCountdownCtx(e, cd);
+  openCountdownBulkCtx(e);
 }
 // >>> left-click the colour cell -> just the colour picker
 function openColorPicker(e: MouseEvent, name: string) {
@@ -926,7 +914,7 @@ defineExpose({
       :title="ctxTitle" @close="ctxOpen = false" />
     <ConfirmDialog :open="confirmOpen" :title="confirmData.title" :message="confirmData.message"
       :confirm-label="confirmData.confirmLabel" :danger="confirmData.danger" @confirm="onConfirm" @cancel="onCancel" />
-    <SelectionActionBar :count="sel.count.value" :actions="bulkBarActions" @clear="sel.clear()" />
+    <SelectionActionBar :count="sel.count.value" @clear="sel.clear()" @more="openCountdownBulkCtx($event)" />
   </div>
 </template>
 
