@@ -69,7 +69,7 @@ async function switchTab(tab: Tab) {
         <div class="ep-view-sub">
           <SelectionHint v-if="activeChild?.selCount" :count="activeChild.selCount" @clear="activeChild.clearSel()" />
           <template v-else-if="activeChild?.header">{{ activeChild.header.count }} {{ activeChild.header.countLabel
-          }}</template>
+            }}</template>
           <template v-else>&mdash;</template>
         </div>
         <!-- >>> the active tab teleports its colour filter bar here -->
@@ -78,7 +78,8 @@ async function switchTab(tab: Tab) {
       <div class="ep-view-header-right">
         <!-- >>> the active tab teleports its column/sync menu here -->
         <div id="auto-header-tools"></div>
-        <button class="ep-btn-reload icon-only" @click="activeChild?.reload?.()" :title="t('auto.reload')" v-html="iconSvgFor('refresh-cw')"></button>
+        <button class="ep-btn-reload icon-only" @click="activeChild?.reload?.()" :title="t('auto.reload')"
+          v-html="iconSvgFor('refresh-cw')"></button>
         <button class="ep-btn-new" :disabled="!activeChild?.header?.canCreate" @click="activeChild?.create?.()">
           + {{ activeChild?.header?.createLabel ?? t('auto.new') }}
         </button>
@@ -122,5 +123,11 @@ async function switchTab(tab: Tab) {
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+}
+
+
+#auto-color-bar,
+#auto-header-tools {
+  display: contents;
 }
 </style>
